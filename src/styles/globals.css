@@ -1,0 +1,133 @@
+/**
+ * Global styles for GTD Space markdown editor
+ * Implements dark theme with CSS variables for Phase 0
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === CSS VARIABLES FOR THEMING === */
+:root {
+  /* Light theme colors */
+  --background: 255 255 255;
+  --foreground: 23 23 23;
+  --card: 255 255 255;
+  --card-foreground: 23 23 23;
+  --primary: 24 24 27;
+  --primary-foreground: 250 250 250;
+  --secondary: 244 244 245;
+  --secondary-foreground: 39 39 42;
+  --muted: 244 244 245;
+  --muted-foreground: 113 113 122;
+  --accent: 244 244 245;
+  --accent-foreground: 39 39 42;
+  --border: 228 228 231;
+  --input: 228 228 231;
+  --ring: 24 24 27;
+}
+
+.dark {
+  /* Dark theme colors */
+  --background: 9 9 11;
+  --foreground: 250 250 250;
+  --card: 9 9 11;
+  --card-foreground: 250 250 250;
+  --primary: 250 250 250;
+  --primary-foreground: 9 9 11;
+  --secondary: 39 39 42;
+  --secondary-foreground: 250 250 250;
+  --muted: 39 39 42;
+  --muted-foreground: 161 161 170;
+  --accent: 39 39 42;
+  --accent-foreground: 250 250 250;
+  --border: 39 39 42;
+  --input: 39 39 42;
+  --ring: 212 212 216;
+}
+
+/* === BASE STYLES === */
+* {
+  border-color: rgb(var(--border));
+}
+
+body {
+  background-color: rgb(var(--background));
+  color: rgb(var(--foreground));
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* === COMPONENT BASE STYLES === */
+
+/* Sidebar styles */
+.sidebar {
+  background-color: rgb(var(--card));
+  border-right: 1px solid rgb(var(--border));
+}
+
+.sidebar-item {
+  color: rgb(var(--muted-foreground));
+  transition: color 0.2s ease;
+}
+
+.sidebar-item:hover {
+  color: rgb(var(--foreground));
+  background-color: rgb(var(--accent));
+}
+
+/* Editor area styles */
+.editor-area {
+  background-color: rgb(var(--background));
+}
+
+/* Scrollbar styles for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(var(--background));
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--border));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--muted-foreground));
+}
+
+/* === UTILITY CLASSES === */
+
+/* Loading spinner */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Fade in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Focus styles */
+.focus-visible {
+  outline: 2px solid rgb(var(--ring));
+  outline-offset: 2px;
+}

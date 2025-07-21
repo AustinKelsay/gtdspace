@@ -38,6 +38,7 @@ export const App: React.FC = () => {
   const {
     state,
     selectFolder,
+    loadFolder,
     loadFile,
     saveCurrentFile,
     handleFileOperation,
@@ -177,7 +178,7 @@ export const App: React.FC = () => {
         <div className="w-80 border-r border-border">
           <FileBrowserSidebar
             state={state}
-            onFolderSelect={selectFolder}
+            onFolderSelect={loadFolder}
             onFileSelect={loadFile}
             onFileOperation={handleFileOperation}
             onSearchChange={setSearchQuery}

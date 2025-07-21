@@ -29,6 +29,7 @@ use std::path::Path;
 use std::fs;
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_store::{StoreExt, StoreBuilder};
 
 /// Response structure for permission check command
 #[derive(Debug, Serialize, Deserialize)]
@@ -681,31 +682,37 @@ pub async fn delete_file(path: String) -> Result<FileOperationResult, String> {
 pub async fn load_settings(app: AppHandle) -> Result<UserSettings, String> {
     log::info!("Loading user settings");
     
-    // Get store and load settings
-    match tauri_plugin_store::StoreExt::get_store(&app, std::path::PathBuf::from("settings.json")) {
-        Some(store) => {
-            // Try to get existing settings
-            match store.get("user_settings") {
-                Some(value) => {
-                    match serde_json::from_value::<UserSettings>(value) {
-                        Ok(settings) => {
-                            log::info!("Loaded existing settings");
-                            Ok(settings)
-                        }
-                        Err(e) => {
-                            log::warn!("Failed to parse settings, using defaults: {}", e);
-                            Ok(get_default_settings())
-                        }
-                    }
+    // Get or create store
+    let store = match tauri_plugin_store::StoreExt::get_store(&app, std::path::PathBuf::from("settings.json")) {
+        Some(store) => store,
+        None => {
+            // Create new store if it doesn't exist
+            match StoreBuilder::new(&app, std::path::PathBuf::from("settings.json")).build() {
+                Ok(store) => store,
+                Err(e) => {
+                    log::error!("Failed to create settings store: {}", e);
+                    return Ok(get_default_settings());
                 }
-                None => {
-                    log::info!("No existing settings found, using defaults");
+            }
+        }
+    };
+    
+    // Load settings from store
+    match store.get("user_settings") {
+        Some(value) => {
+            match serde_json::from_value::<UserSettings>(value) {
+                Ok(settings) => {
+                    log::info!("Loaded existing settings");
+                    Ok(settings)
+                }
+                Err(e) => {
+                    log::warn!("Failed to parse settings, using defaults: {}", e);
                     Ok(get_default_settings())
                 }
             }
         }
         None => {
-            log::error!("Failed to access settings store");
+            log::info!("No existing settings found, using defaults");
             Ok(get_default_settings())
         }
     }
@@ -741,28 +748,36 @@ pub async fn load_settings(app: AppHandle) -> Result<UserSettings, String> {
 pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<String, String> {
     log::info!("Saving user settings");
     
-    match tauri_plugin_store::StoreExt::get_store(&app, std::path::PathBuf::from("settings.json")) {
-        Some(store) => {
-            match serde_json::to_value(&settings) {
-                Ok(value) => {
-                    store.set("user_settings", value);
-                    
-                    if let Err(e) = store.save() {
-                        return Err(format!("Failed to persist settings: {}", e));
-                    }
-                    
-                    log::info!("Settings saved successfully");
-                    Ok("Settings saved successfully".to_string())
-                }
+    // Get or create store
+    let store = match tauri_plugin_store::StoreExt::get_store(&app, std::path::PathBuf::from("settings.json")) {
+        Some(store) => store,
+        None => {
+            // Create new store if it doesn't exist
+            match StoreBuilder::new(&app, std::path::PathBuf::from("settings.json")).build() {
+                Ok(store) => store,
                 Err(e) => {
-                    log::error!("Failed to serialize settings: {}", e);
-                    Err(format!("Failed to serialize settings: {}", e))
+                    log::error!("Failed to create settings store: {}", e);
+                    return Err(format!("Failed to create settings store: {}", e));
                 }
             }
         }
-        None => {
-            log::error!("Failed to access settings store");
-            Err("Failed to access settings store".to_string())
+    };
+    
+    // Save settings to store
+    match serde_json::to_value(&settings) {
+        Ok(value) => {
+            store.set("user_settings", value);
+            
+            if let Err(e) = store.save() {
+                return Err(format!("Failed to persist settings: {}", e));
+            }
+            
+            log::info!("Settings saved successfully");
+            Ok("Settings saved successfully".to_string())
+        }
+        Err(e) => {
+            log::error!("Failed to serialize settings: {}", e);
+            Err(format!("Failed to serialize settings: {}", e))
         }
     }
 }

@@ -65,15 +65,13 @@ export const useFileManager = () => {
   // === FOLDER OPERATIONS ===
   
   /**
-   * Select a folder and load its markdown files
+   * Load a folder by path and display its markdown files
    */
-  const selectFolder = useCallback(async () => {
+  const loadFolder = useCallback(async (folderPath: string) => {
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       
-      console.log('Opening folder selection dialog...');
-      const folderPath = await invoke<string>('select_folder');
-      console.log('Folder selected:', folderPath);
+      console.log('Loading folder:', folderPath);
       
       // Load files from selected folder
       const files = await invoke<MarkdownFile[]>('list_markdown_files', { 
@@ -95,14 +93,34 @@ export const useFileManager = () => {
       await setLastFolder(folderPath);
       
     } catch (error) {
-      console.log('Folder selection cancelled or failed:', error);
+      console.log('Failed to load folder:', error);
       setState(prev => ({
         ...prev,
         isLoading: false,
         error: typeof error === 'string' ? error : 'Failed to load folder',
       }));
     }
-  }, []);
+  }, [setLastFolder]);
+  
+  /**
+   * Select a folder and load its markdown files
+   */
+  const selectFolder = useCallback(async () => {
+    try {
+      console.log('Opening folder selection dialog...');
+      const folderPath = await invoke<string>('select_folder');
+      console.log('Folder selected:', folderPath);
+      
+      await loadFolder(folderPath);
+      
+    } catch (error) {
+      console.log('Folder selection cancelled or failed:', error);
+      setState(prev => ({
+        ...prev,
+        error: typeof error === 'string' ? error : 'Folder selection cancelled',
+      }));
+    }
+  }, [loadFolder]);
 
   /**
    * Refresh the current folder's file list
@@ -367,6 +385,7 @@ export const useFileManager = () => {
   return {
     state,
     selectFolder,
+    loadFolder,
     loadFile,
     saveCurrentFile,
     handleFileOperation,

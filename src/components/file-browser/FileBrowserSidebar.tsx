@@ -23,7 +23,7 @@ interface FileBrowserSidebarProps {
   /** Current application state */
   state: AppStatePhase1;
   /** Callback when folder is selected */
-  onFolderSelect: () => void;
+  onFolderSelect: (folderPath: string) => void;
   /** Callback when file is selected */
   onFileSelect: (file: MarkdownFile) => void;
   /** Callback for file operations */

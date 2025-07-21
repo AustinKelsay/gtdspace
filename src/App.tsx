@@ -2,40 +2,48 @@
  * @fileoverview Main App component for GTD Space markdown editor
  * @author Development Team
  * @created 2024-01-XX
- * @phase 0 - Basic app shell with theme management and backend communication
+ * @phase 1 - Complete MVP with file management and editing functionality
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Layout } from './components/Layout';
-import type { AppState, PermissionStatus, Theme } from '@/types';
+import { Save, Menu } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { FileBrowserSidebar } from '@/components/file-browser/FileBrowserSidebar';
+import { TextEditor } from '@/components/editor/TextEditor';
+import { useFileManager } from '@/hooks/useFileManager';
+import type { PermissionStatus, Theme } from '@/types';
 import './styles/globals.css';
 
 /**
- * Main application component
+ * Main application component for Phase 1 MVP
  * 
- * Manages global application state, theme, and initializes backend communication.
- * Provides the root component structure for the entire application.
+ * Integrates file management, editing, and all Phase 1 functionality.
+ * Provides a complete markdown editing experience with file browser,
+ * text editor, and file operations.
  * 
- * In Phase 0, this handles:
- * - Theme management (dark/light mode)
- * - Backend connectivity testing
- * - Basic application state
- * - Error boundary setup
+ * Phase 1 Features:
+ * - Folder selection and file listing
+ * - File operations (create, rename, delete)
+ * - Basic text editor with preview
+ * - Auto-save functionality
+ * - File search and filtering
+ * - Theme management
  * 
- * @returns Main application JSX structure
+ * @returns Complete Phase 1 application
  */
 export const App: React.FC = () => {
-  // === APPLICATION STATE ===
-  const [appState, setAppState] = useState<AppState>({
-    theme: 'dark', // Default to dark theme
-    isReady: false,
-    isLoading: true,
-    error: null
-  });
-
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [permissions, setPermissions] = useState<PermissionStatus | null>(null);
+  // === FILE MANAGEMENT ===
+  
+  const {
+    state,
+    selectFolder,
+    loadFile,
+    saveCurrentFile,
+    handleFileOperation,
+    updateContent,
+    setSearchQuery,
+  } = useFileManager();
 
   // === THEME MANAGEMENT ===
   
@@ -64,149 +72,180 @@ export const App: React.FC = () => {
    * Toggle between light and dark themes
    */
   const toggleTheme = () => {
-    const newTheme: Theme = appState.theme === 'dark' ? 'light' : 'dark';
-    setAppState(prev => ({ ...prev, theme: newTheme }));
+    // For now, just toggle between light and dark
+    // In Phase 2, we'll add proper theme management
+    const newTheme: Theme = state.theme === 'dark' ? 'light' : 'dark';
+    applyTheme(newTheme);
   };
 
-  // === BACKEND COMMUNICATION ===
+  // === INITIALIZATION ===
+  
+  useEffect(() => {
+    // Apply initial theme
+    applyTheme(state.theme);
+    
+    // Test backend connectivity on startup
+    const testBackend = async () => {
+      try {
+        console.log('Testing backend connectivity...');
+        const pingResponse = await invoke<string>('ping');
+        console.log('Backend connected:', pingResponse);
+        
+        const permissions = await invoke<PermissionStatus>('check_permissions');
+        console.log('Permissions:', permissions);
+      } catch (error) {
+        console.error('Backend connection failed:', error);
+      }
+    };
+    
+    testBackend();
+  }, [state.theme]);
+
+  // === RENDER HELPERS ===
   
   /**
-   * Test backend connectivity and get app version
+   * Get save status indicator
    */
-  const initializeApp = async () => {
-    try {
-      setAppState(prev => ({ ...prev, isLoading: true, error: null }));
-
-      // Test basic connectivity
-      console.log('Testing backend connectivity...');
-      const pingResponse = await invoke<string>('ping');
-      console.log('Ping response:', pingResponse);
-
-      // Get app version
-      const version = await invoke<string>('get_app_version');
-      console.log('App version:', version);
-
-      // Check permissions
-      const permissionStatus = await invoke<PermissionStatus>('check_permissions');
-      console.log('Permissions:', permissionStatus);
-      setPermissions(permissionStatus);
-
-      // Mark app as ready
-      setAppState(prev => ({
-        ...prev,
-        isReady: true,
-        isLoading: false,
-        error: null
-      }));
-
-      console.log('App initialization completed successfully');
-      
-    } catch (error) {
-      console.error('Failed to initialize app:', error);
-      setAppState(prev => ({
-        ...prev,
-        isReady: false,
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
-      }));
+  const getSaveStatus = () => {
+    switch (state.autoSaveStatus) {
+      case 'saving':
+        return 'Saving...';
+      case 'saved':
+        return 'Saved';
+      case 'error':
+        return 'Save failed';
+      default:
+        return state.hasUnsavedChanges ? 'Unsaved changes' : '';
     }
   };
 
-  // === EFFECTS ===
-
   /**
-   * Initialize app on mount
+   * Get current file display name
    */
-  useEffect(() => {
-    initializeApp();
-  }, []);
+  const getCurrentFileName = () => {
+    if (!state.currentFile) return 'GTD Space';
+    return state.currentFile.name.replace(/\.(md|markdown)$/i, '');
+  };
 
-  /**
-   * Apply theme when it changes
-   */
-  useEffect(() => {
-    applyTheme(appState.theme);
-  }, [appState.theme]);
-
-  /**
-   * Listen for system theme changes when in auto mode
-   */
-  useEffect(() => {
-    if (appState.theme === 'auto') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleChange = () => applyTheme('auto');
-      
-      mediaQuery.addEventListener('change', handleChange);
-      return () => mediaQuery.removeEventListener('change', handleChange);
-    }
-  }, [appState.theme]);
-
-  // === LOADING STATE ===
-  
-  if (appState.isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-background text-foreground">
-        <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-sm text-muted-foreground">Initializing GTD Space...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // === ERROR STATE ===
-  
-  if (appState.error) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-background text-foreground">
-        <div className="text-center max-w-md p-6">
-          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/20 rounded-lg flex items-center justify-center">
-            <span className="text-red-600 dark:text-red-400 text-2xl">⚠️</span>
-          </div>
-          <h2 className="text-lg font-semibold text-foreground mb-2">
-            Initialization Failed
-          </h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            {appState.error}
-          </p>
-          <button
-            onClick={initializeApp}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // === MAIN APPLICATION ===
+  // === MAIN APPLICATION LAYOUT ===
   
   return (
-    <div className="App">
-      <Layout
-        sidebarOpen={sidebarOpen}
-        onSidebarToggle={() => setSidebarOpen(!sidebarOpen)}
-      >
-        {/* Theme toggle button - temporary for Phase 0 testing */}
-        <button
-          onClick={toggleTheme}
-          className="fixed top-4 right-4 z-50 p-2 bg-card border border-border rounded-lg shadow-lg hover:bg-accent transition-colors"
-          title={`Switch to ${appState.theme === 'dark' ? 'light' : 'dark'} theme`}
-        >
-          {appState.theme === 'dark' ? '☀️' : '🌙'}
-        </button>
+    <div className="h-screen flex flex-col bg-background text-foreground">
+      {/* Header Bar */}
+      <header className="h-12 border-b border-border flex items-center justify-between px-4 bg-card">
+        <div className="flex items-center space-x-4">
+          <h1 className="text-lg font-semibold">
+            {getCurrentFileName()}
+          </h1>
+          {state.hasUnsavedChanges && (
+            <span className="w-2 h-2 rounded-full bg-orange-500" title="Unsaved changes" />
+          )}
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          {/* Save Status */}
+          <span className="text-xs text-muted-foreground">
+            {getSaveStatus()}
+          </span>
+          
+          {/* Manual Save Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={saveCurrentFile}
+            disabled={!state.hasUnsavedChanges}
+            title="Save file (Ctrl+S)"
+          >
+            <Save className="h-4 w-4" />
+          </Button>
+          
+          {/* Theme Toggle */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleTheme}
+            title={`Switch to ${state.theme === 'dark' ? 'light' : 'dark'} theme`}
+          >
+            {state.theme === 'dark' ? '☀️' : '🌙'}
+          </Button>
+        </div>
+      </header>
 
-        {/* Debug info - temporary for Phase 0 */}
-        {import.meta.env.DEV && permissions && (
-          <div className="fixed bottom-4 right-4 z-50 p-3 bg-card border border-border rounded-lg shadow-lg text-xs max-w-xs">
-            <h4 className="font-semibold mb-1">Debug Info (Phase 0)</h4>
-            <p>Backend: Connected ✅</p>
-            <p>Theme: {appState.theme}</p>
-            <p>Permissions: {permissions.can_read_files ? '✅' : '❌'} Read, {permissions.can_write_files ? '✅' : '❌'} Write</p>
+      {/* Main Content Area */}
+      <div className="flex-1 flex min-h-0">
+        {/* File Browser Sidebar */}
+        <div className="w-80 border-r border-border">
+          <FileBrowserSidebar
+            state={state}
+            onFolderSelect={selectFolder}
+            onFileSelect={loadFile}
+            onFileOperation={handleFileOperation}
+            onSearchChange={setSearchQuery}
+          />
+        </div>
+
+        {/* Editor Area */}
+        <div className="flex-1 min-w-0">
+          {state.currentFile ? (
+            <TextEditor
+              content={state.fileContent}
+              onChange={updateContent}
+              mode={state.editorMode}
+              showLineNumbers={false}
+              readOnly={false}
+              autoFocus={true}
+              className="h-full"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center max-w-md">
+                <div className="w-24 h-24 mx-auto mb-6 bg-muted/50 rounded-lg flex items-center justify-center">
+                  <Menu className="h-12 w-12 text-muted-foreground" />
+                </div>
+                <h2 className="text-xl font-semibold mb-3">
+                  Welcome to GTD Space
+                </h2>
+                <p className="text-muted-foreground mb-6">
+                  Select a folder from the sidebar to get started with your markdown files.
+                </p>
+                {!state.currentFolder && (
+                  <Button onClick={selectFolder}>
+                    Select Folder
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Status Bar */}
+      {state.currentFile && (
+        <footer className="h-8 border-t border-border flex items-center justify-between px-4 text-xs text-muted-foreground bg-card">
+          <div className="flex items-center space-x-4">
+            <span>
+              {state.files.length} file{state.files.length !== 1 ? 's' : ''}
+            </span>
+            <span>
+              {state.fileContent.length} characters
+            </span>
+            <span>
+              {state.fileContent.split('\n').length} lines
+            </span>
           </div>
-        )}
-      </Layout>
+          
+          <div className="flex items-center space-x-4">
+            <span>
+              Mode: {state.editorMode}
+            </span>
+            {state.currentFile && (
+              <span>
+                {state.currentFile.path}
+              </span>
+            )}
+          </div>
+        </footer>
+      )}
     </div>
   );
 };

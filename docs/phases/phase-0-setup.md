@@ -145,14 +145,14 @@
 ## Testing & Validation
 
 ### Manual Testing Checklist
-- [ ] Application starts without errors
-- [ ] Window opens with correct size and title
-- [ ] Dark theme is properly applied
-- [ ] Sidebar and main content areas are visible
-- [ ] Hot reload works when editing React components
-- [ ] Frontend can call Rust commands and receive responses
-- [ ] Application can be built for production
-- [ ] Built application runs independently
+- [x] Application starts without errors
+- [x] Window opens with correct size and title
+- [x] Dark theme is properly applied
+- [x] Sidebar and main content areas are visible
+- [x] Hot reload works when editing React components
+- [x] Frontend can call Rust commands and receive responses
+- [x] Application can be built for production
+- [x] Built application runs independently
 
 ### Development Commands
 ```bash

@@ -4,130 +4,182 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Tauri Markdown Editor** project - a cross-platform desktop application for viewing, editing, and managing Markdown files. The project combines a Rust backend with a React TypeScript frontend to create a Notion-like experience for local markdown file management.
+**GTD Space** is a cross-platform desktop markdown editor built with Tauri. It combines a React 18 + TypeScript frontend with a Rust backend to create a local-first markdown editing experience.
 
-**Key Characteristics:**
-- Desktop application using Tauri framework
-- React 18 + TypeScript frontend
-- Rust backend for file operations
-- Local-first approach (no cloud dependencies)
-- Currently in planning/documentation phase (no code yet)
+**Current Status:**
+- **Phase 1 MVP Complete**: Functional markdown editor with file management
+- File browser with folder selection, file listing, and search
+- Basic text editor with source/preview/split modes and auto-save
+- Complete file operations (create, read, save, rename, delete)
+- shadcn/ui component system with Tailwind CSS styling
+- Working Tauri 2.x backend with comprehensive file management commands
+
+**Key Technologies:**
+- **Frontend**: React 18, TypeScript, Tailwind CSS, Vite, shadcn/ui, Radix UI
+- **Backend**: Rust, Tauri 2.x with fs and dialog plugins
+- **Build System**: Vite for frontend, Cargo for backend
 
 ## Development Commands
 
-Since this project is in the planning phase, no build commands exist yet. Based on the tech stack documentation, the expected commands will be:
-
 ```bash
-# Development server (when implemented)
-npm run tauri dev
+# Start development server (runs both frontend and Tauri backend)
+npm run tauri:dev
 
-# Production build (when implemented)  
-npm run tauri build
+# Build for production
+npm run tauri:build
 
-# Type checking (when implemented)
+# Frontend-only development server
+npm run dev
+
+# Type checking
 npm run type-check
 
-# Linting (when implemented)
+# Linting
 npm run lint
+npm run lint:fix
+
+# Build frontend only
+npm run build
+
+# Preview built frontend
+npm run preview
 ```
 
 ## Architecture & Structure
 
-### Phase-Based Development Approach
+### Frontend Architecture (`src/`)
 
-The project follows a structured 3-phase development approach:
+**Core Application:**
+- `App.tsx`: Main Phase 1 app with integrated file management, editor, and sidebar
+- `hooks/useFileManager.ts`: Central state management for all file operations and auto-save
+- `types/index.ts`: Complete TypeScript definitions for Phase 1 MVP
 
-1. **Phase 0 (Setup)**: Barebones Tauri app with basic UI shell - establishes foundation
-2. **Phase 1 (MVP)**: Core file management and basic markdown editing
-3. **Phase 2**: Rich WYSIWYG editing with Tiptap integration
-4. **Phase 3**: Advanced features (search, templates, system integration)
+**Component Structure:**
+- `components/file-browser/`: Complete file management UI
+  - `FileBrowserSidebar.tsx`: Main sidebar integrating folder selection, search, and file list
+  - `FolderSelector.tsx`: Folder selection with manual path input fallback
+  - `FileList.tsx`: File listing with search, create, and operations
+  - `FileItem.tsx`: Individual file items with context menus for rename/delete
+  - `FileSearch.tsx`: Real-time file search and filtering
+- `components/editor/`: Text editing functionality
+  - `TextEditor.tsx`: Main editor with source/preview/split modes and toolbar
+  - `MarkdownPreview.tsx`: React-markdown based preview component
+- `components/ui/`: shadcn/ui components (Button, Dialog, Input, Card, etc.)
 
-### Planned Directory Structure
+**Key Integration Points:**
+- `useFileManager` hook centralizes all file state and operations
+- `invoke()` calls for all Rust backend communication
+- Absolute imports using `@/` prefix for clean module resolution
 
-**Frontend (`src/`):**
-```
-src/
-├── app/                     # Application shell and routing
-├── components/              # Reusable UI components
-│   ├── ui/                  # shadcn/ui components
-│   ├── file-browser/        # File management components
-│   ├── editors/             # Editor components
-│   └── search/              # Search components
-├── features/                # Feature-based modules by phase
-│   ├── file-management/     # Phase 1: File operations
-│   ├── markdown-editing/    # Phase 1-2: Editor functionality
-│   ├── rich-editing/        # Phase 2: WYSIWYG features
-│   └── advanced-features/   # Phase 3: Search, templates, etc.
-├── hooks/                   # Custom React hooks
-├── services/                # API and external service integrations
-├── types/                   # TypeScript type definitions
-└── utils/                   # Utility functions
-```
+### Backend Architecture (`src-tauri/`)
 
-**Backend (`src-tauri/`):**
-```
-src-tauri/src/
-├── commands/                # Tauri command handlers by feature
-├── services/                # Business logic services
-├── models/                  # Data models and types
-└── utils/                   # Utility functions
-```
+**File Operations Core:**
+- `commands/mod.rs`: Complete Phase 1 command handlers
+  - File management: `select_folder`, `list_markdown_files`, `read_file`, `save_file`
+  - File operations: `create_file`, `rename_file`, `delete_file`
+  - System: `ping`, `get_app_version`, `check_permissions`
+- `lib.rs`: Tauri app initialization with all Phase 1 commands registered
+- All commands return `Result<T, String>` for consistent error handling
 
-### Core Technologies
+**Data Structures:**
+- `MarkdownFile`: File metadata with id, name, path, size, last_modified
+- `FileOperationResult`: Standardized result type for file operations
+- `PermissionStatus`: System permission verification
 
-- **Framework**: Tauri 2.x for cross-platform desktop
-- **Frontend**: React 18 + TypeScript + Tailwind CSS
-- **Rich Editor**: Tiptap (ProseMirror-based) for WYSIWYG editing
-- **Build System**: Vite for development and production builds
-- **Backend**: Rust for file system operations
+### Communication Pattern
 
-### Key Design Principles
+The app uses Tauri's `invoke()` system for frontend-backend communication:
+- Frontend: `invoke<ReturnType>('command_name', { params })`
+- Backend: `#[tauri::command]` annotated functions
+- All commands return `Result<T, String>` for consistent error handling
 
-1. **AI-First Development**: 500-line file limit, comprehensive documentation
-2. **Modular Architecture**: Feature-based organization, clear separation of concerns
-3. **Local-First**: All files remain on user's machine, no cloud dependencies
-4. **Cross-Platform**: Native performance on Windows, macOS, and Linux
-5. **Privacy-Focused**: No data collection or external dependencies
+### Phase-Based Development
+
+**Completed:**
+- **Phase 0**: Basic Tauri shell with working React frontend and Rust backend
+- **Phase 1**: Complete MVP with file management, basic editing, auto-save, and file operations
+
+**Next Phases:**
+- **Phase 2**: Rich WYSIWYG editing with Tiptap, syntax highlighting, and advanced editor features
+- **Phase 3**: Advanced features (global search, templates, settings persistence, system integration)
+
+## Key Implementation Details
+
+### Tauri Configuration
+- **App ID**: `com.gtdspace.app`
+- **Window**: 1200x800 default, 800x600 minimum, resizable
+- **Plugins**: `tauri-plugin-fs` for file operations, `tauri-plugin-dialog` for system dialogs
+- **Dev Tools**: Automatically opens in debug mode
+
+### Frontend Features
+- **File Management**: Complete folder selection, file listing, search, and CRUD operations
+- **Editor Modes**: Source, preview, and split-view modes with mode switching toolbar
+- **Auto-Save**: Debounced auto-save every 2 seconds with visual feedback
+- **Theme System**: Dark/light mode toggle with system preference detection
+- **Error Handling**: Comprehensive error states with user-friendly messages
+- **shadcn/ui Integration**: Complete design system with Radix UI primitives
+
+### Backend Capabilities
+- **File System**: Read/write permissions checked via `check_permissions` command
+- **Logging**: `env_logger` for development debugging
+- **Error Types**: `thiserror` for structured error handling
+- **Async Support**: `tokio` runtime for async operations
 
 ## Development Workflow
 
-### File Organization Standards
+### Adding New Features
+1. **Backend**: Add command handlers in `src-tauri/src/commands/mod.rs` and register in `lib.rs`
+2. **Types**: Define TypeScript interfaces in `src/types/index.ts` for new data structures
+3. **Frontend**: Import commands via `invoke()` from `@tauri-apps/api/core`
+4. **State Management**: Extend `useFileManager` hook for complex state operations
+5. **Components**: Follow shadcn/ui patterns for new UI components
+6. **Testing**: Use `npm run tauri:dev` to test full-stack functionality
 
-- **File Naming**: Descriptive kebab-case names (e.g., `file-list-item.tsx`, `use-file-manager.ts`)
-- **Documentation**: Every file must have purpose description and comprehensive JSDoc/TSDoc
-- **Type Safety**: Explicit TypeScript interfaces and types for all data structures
-- **Import Organization**: Structured imports with absolute paths using aliases
+### Code Architecture Patterns
+- **State Management**: `useFileManager` hook centralizes file operations and auto-save logic
+- **Component Props**: All components extend `BaseComponentProps` with className and standard props
+- **Error Handling**: All Tauri commands return `Result<T, String>` with user-friendly error messages
+- **File Operations**: Use standardized `FileOperationResult` type for create/rename/delete operations
+- **Auto-Save**: Debounced pattern with visual feedback via `autoSaveStatus` state
 
-### Code Quality Standards
+### Working with Phase 1 MVP
+- **File Browser**: All file operations go through `FileBrowserSidebar` → `FileList` → `FileItem` hierarchy
+- **Editor Integration**: `TextEditor` component handles three modes (source/preview/split) with toolbar
+- **Manual Folder Selection**: `FolderSelector` includes fallback manual path input for Tauri dialog limitations
+- **Search**: Real-time filtering implemented in `FileList` component with `useMemo` optimization
 
-- **Single Responsibility**: Each file serves one clear purpose
-- **Comprehensive Documentation**: All functions documented with examples
-- **Error Handling**: Proper error types and handling patterns
-- **Performance**: Bundle size targets and memory management considerations
+### Key Configuration Files
+- `package.json`: Frontend dependencies and npm scripts
+- `src-tauri/Cargo.toml`: Rust dependencies and Tauri plugins
+- `src-tauri/tauri.conf.json`: Tauri app configuration and window settings
+- `tailwind.config.js`: Tailwind CSS configuration
+- `vite.config.ts`: Vite bundler configuration with Tauri integration and path aliases
 
-### Testing Approach
+## Important Implementation Details
 
-- Component tests using standard React testing patterns
-- Unit tests for hooks and utilities
-- Integration tests for Tauri commands
-- E2E tests for critical user workflows
+### Known Limitations and Workarounds
+- **Folder Selection**: Tauri 2.x dialog API has changed - current implementation includes manual path input fallback
+- **File Watching**: No external file change detection - users must manually refresh
+- **Syntax Highlighting**: Basic textarea editor, no advanced highlighting yet (planned for Phase 2)
+- **Settings Persistence**: Not yet implemented (low priority Phase 1 feature)
 
-## Important Notes
+### Auto-Save System
+The auto-save implementation uses a debounced pattern in `useFileManager`:
+- Triggers 2 seconds after user stops typing
+- Visual feedback through `autoSaveStatus` state ('saving', 'saved', 'error')
+- Prevents data loss without overwhelming the file system
+- Status indicator in header shows save state to user
 
-⚠️ **Current Status**: This project is in the documentation/planning phase. No actual code implementation exists yet.
+### File Operation Flow
+All file operations follow this pattern:
+1. User action in UI (FileList, FileItem components)
+2. Operation request via `handleFileOperation` in `useFileManager`
+3. Backend Rust command execution with error handling
+4. State update and UI refresh
+5. User feedback via notifications or visual state changes
 
-When development begins:
-1. Start with Phase 0 (Setup) - basic Tauri app with empty UI shell
-2. Focus on file system permissions and basic Rust-React communication
-3. Implement core file management before moving to rich editing features
-4. Follow the established directory structure and naming conventions
-
-## Key Files to Reference
-
-- `docs/project-overview.md` - Comprehensive project goals and features
-- `docs/tech-stack.md` - Detailed technology choices and best practices
-- `docs/project-rules.md` - Complete coding standards and conventions
-- `docs/phases/phase-0-setup.md` - Initial development phase plan
-- `docs/design-rules.md` - UI/UX guidelines and styling conventions
-
-This project emphasizes thorough planning and documentation before implementation, ensuring a solid foundation for building a professional-grade markdown editor.
+### Phase Documentation
+The `docs/phases/` directory contains detailed specifications for all development phases:
+- Current implementation status tracked in `phase-1-mvp.md`
+- Future features planned in subsequent phase documents
+- Use these for understanding project roadmap and requirements

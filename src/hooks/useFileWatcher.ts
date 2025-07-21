@@ -1,0 +1,200 @@
+/**
+ * @fileoverview File watcher hook for detecting external file changes
+ * @author Development Team
+ * @created 2024-01-XX
+ * @phase 2 - File watching service integration
+ */
+
+import { useEffect, useCallback, useState, useRef } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import type { FileChangeEvent } from '@/types';
+
+export interface FileWatcherState {
+  /** Whether the watcher is currently active */
+  isWatching: boolean;
+  /** Currently watched folder path */
+  watchedPath: string | null;
+  /** Recent file change events */
+  recentEvents: FileChangeEvent[];
+  /** Error message if watcher failed */
+  error: string | null;
+}
+
+export interface FileWatcherHookResult {
+  /** Current watcher state */
+  state: FileWatcherState;
+  /** Start watching a folder */
+  startWatching: (folderPath: string) => Promise<void>;
+  /** Stop watching */
+  stopWatching: () => Promise<void>;
+  /** Clear recent events */
+  clearEvents: () => void;
+  /** Get events for a specific file */
+  getEventsForFile: (filePath: string) => FileChangeEvent[];
+}
+
+/**
+ * Custom hook for managing file watching functionality
+ * 
+ * Provides integration with the Rust file watcher service and handles
+ * file change events from the backend. Includes debouncing and event
+ * management for smooth UX.
+ * 
+ * @returns File watcher hook result with state and control functions
+ */
+export function useFileWatcher(): FileWatcherHookResult {
+  // === STATE ===
+  
+  const [state, setState] = useState<FileWatcherState>({
+    isWatching: false,
+    watchedPath: null,
+    recentEvents: [],
+    error: null,
+  });
+  
+  const unlistenRef = useRef<(() => void) | null>(null);
+  
+  // === EVENT HANDLERS ===
+  
+  /**
+   * Handle file change events from the backend
+   */
+  const handleFileChange = useCallback((event: FileChangeEvent) => {
+    console.log('File change detected:', event);
+    
+    setState(prev => {
+      const newEvents = [...prev.recentEvents, event];
+      
+      // Keep only the last 50 events to prevent memory issues
+      const trimmedEvents = newEvents.slice(-50);
+      
+      return {
+        ...prev,
+        recentEvents: trimmedEvents,
+      };
+    });
+  }, []);
+  
+  // === WATCHER CONTROL FUNCTIONS ===
+  
+  /**
+   * Stop the file watcher
+   */
+  const stopWatching = useCallback(async () => {
+    try {
+      // Stop listening to events
+      if (unlistenRef.current) {
+        unlistenRef.current();
+        unlistenRef.current = null;
+      }
+      
+      // Stop the backend watcher
+      if (state.isWatching) {
+        await invoke('stop_file_watcher');
+      }
+      
+      setState(prev => ({
+        ...prev,
+        isWatching: false,
+        watchedPath: null,
+        error: null,
+      }));
+      
+      console.log('File watcher stopped');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Failed to stop file watcher:', errorMessage);
+      
+      setState(prev => ({
+        ...prev,
+        error: errorMessage,
+      }));
+    }
+  }, [state.isWatching]);
+
+  /**
+   * Start watching a folder for file changes
+   */
+  const startWatching = useCallback(async (folderPath: string) => {
+    try {
+      // Stop existing watcher if running
+      if (state.isWatching) {
+        await stopWatching();
+      }
+      
+      setState(prev => ({
+        ...prev,
+        error: null,
+      }));
+      
+      // Start the backend file watcher
+      await invoke('start_file_watcher', { folder_path: folderPath });
+      
+      // Listen for file change events
+      const unlisten = await listen<FileChangeEvent>('file-changed', (event) => {
+        handleFileChange(event.payload);
+      });
+      
+      unlistenRef.current = unlisten;
+      
+      setState(prev => ({
+        ...prev,
+        isWatching: true,
+        watchedPath: folderPath,
+        recentEvents: [], // Clear previous events
+      }));
+      
+      console.log('File watcher started for:', folderPath);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Failed to start file watcher:', errorMessage);
+      
+      setState(prev => ({
+        ...prev,
+        error: errorMessage,
+        isWatching: false,
+        watchedPath: null,
+      }));
+    }
+  }, [state.isWatching, stopWatching, handleFileChange]);
+  
+  /**
+   * Clear recent events
+   */
+  const clearEvents = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      recentEvents: [],
+    }));
+  }, []);
+  
+  /**
+   * Get events for a specific file path
+   */
+  const getEventsForFile = useCallback((filePath: string) => {
+    return state.recentEvents.filter(event => event.file_path === filePath);
+  }, [state.recentEvents]);
+  
+  // === CLEANUP ON UNMOUNT ===
+  
+  useEffect(() => {
+    return () => {
+      if (unlistenRef.current) {
+        unlistenRef.current();
+      }
+    };
+  }, []);
+  
+  // === HOOK RESULT ===
+  
+  return {
+    state,
+    startWatching,
+    stopWatching,
+    clearEvents,
+    getEventsForFile,
+  };
+}
+
+export default useFileWatcher;

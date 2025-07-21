@@ -7,7 +7,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+import AppPhase2 from './AppPhase2';
 
 // Ensure we're running in a Tauri environment
 if (typeof window !== 'undefined' && !(window as any).__TAURI__) {
@@ -32,7 +32,7 @@ const initializeApp = () => {
     
     root.render(
       <React.StrictMode>
-        <App />
+        <AppPhase2 />
       </React.StrictMode>
     );
 

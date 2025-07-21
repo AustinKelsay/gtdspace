@@ -104,7 +104,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
           placeholder={placeholder}
           value={value}
           onChange={handleChange}
-          className="pl-10 pr-10 border-none bg-muted/50 focus:bg-background"
+          className="pl-10 pr-10"
           autoFocus={autoFocus}
         />
         {value && (

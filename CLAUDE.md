@@ -7,16 +7,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **GTD Space** is a cross-platform desktop markdown editor built with Tauri. It combines a React 18 + TypeScript frontend with a Rust backend to create a local-first markdown editing experience.
 
 **Current Status:**
-- **Phase 1 MVP Complete**: Functional markdown editor with file management
+- **Phase 2 In Progress**: Enhanced multi-file editing with tabbed interface
+- **Phase 1 Complete**: Full MVP with file management and basic editing
+- Tabbed interface supporting multiple open files with tab management
+- Enhanced CodeMirror editor with syntax highlighting and markdown shortcuts
+- Advanced editor modes (source/preview/split) with toolbar controls
 - File browser with folder selection, file listing, and search
-- Basic text editor with source/preview/split modes and auto-save
 - Complete file operations (create, read, save, rename, delete)
 - shadcn/ui component system with Tailwind CSS styling
 - Working Tauri 2.x backend with comprehensive file management commands
 
 **Key Technologies:**
 - **Frontend**: React 18, TypeScript, Tailwind CSS, Vite, shadcn/ui, Radix UI
-- **Backend**: Rust, Tauri 2.x with fs and dialog plugins
+- **Editor**: CodeMirror 6 with markdown language support and themes
+- **Backend**: Rust, Tauri 2.x with fs and dialog plugins  
 - **Build System**: Vite for frontend, Cargo for backend
 
 ## Development Commands
@@ -180,6 +184,10 @@ All file operations follow this pattern:
 
 ### Phase Documentation
 The `docs/phases/` directory contains detailed specifications for all development phases:
-- Current implementation status tracked in `phase-1-mvp.md`
-- Future features planned in subsequent phase documents
-- Use these for understanding project roadmap and requirements
+- **Phase 1 Complete**: Basic MVP documented in `phase-1-mvp.md` 
+- **Phase 2 Active**: Enhanced UX and tabbed interface from `phase-2-enhancement.md`
+  - ✅ Tabbed file interface with TabManager and FileTab components
+  - ✅ Enhanced CodeMirror editor with markdown support and shortcuts
+  - 🔄 File watching service (in progress)
+  - 🔄 Advanced file operations and global search (planned)
+- Use these documents for understanding current progress and upcoming features

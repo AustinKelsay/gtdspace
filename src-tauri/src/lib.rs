@@ -36,7 +36,9 @@ pub fn run() {
             commands::rename_file,
             commands::delete_file,
             commands::load_settings,
-            commands::save_settings
+            commands::save_settings,
+            commands::start_file_watcher,
+            commands::stop_file_watcher
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -217,6 +217,119 @@ export interface TextEditorProps extends BaseComponentProps {
   autoFocus?: boolean;
 }
 
+// === PHASE 2 TAB MANAGEMENT TYPES ===
+
+/**
+ * File tab representing an open file
+ */
+export interface FileTab {
+  /** Unique tab identifier */
+  id: string;
+  /** File associated with this tab */
+  file: MarkdownFile;
+  /** Current content in the editor for this tab */
+  content: string;
+  /** Whether this tab has unsaved changes */
+  hasUnsavedChanges: boolean;
+  /** Whether this tab is currently active */
+  isActive: boolean;
+  /** Cursor position in the editor */
+  cursorPosition?: number;
+  /** Scroll position in the editor */
+  scrollPosition?: number;
+}
+
+/**
+ * Tab context menu actions
+ */
+export type TabAction = 
+  | 'close'
+  | 'close-others'
+  | 'close-all'
+  | 'close-to-right'
+  | 'copy-path'
+  | 'reveal-in-folder';
+
+/**
+ * Tab manager state
+ */
+export interface TabManagerState {
+  /** All open tabs */
+  openTabs: FileTab[];
+  /** ID of the currently active tab */
+  activeTabId: string | null;
+  /** Maximum number of tabs allowed */
+  maxTabs: number;
+  /** Recently closed tabs for reopen functionality */
+  recentlyClosed: FileTab[];
+}
+
+/**
+ * Enhanced application state for Phase 2
+ */
+export interface AppStatePhase2 extends AppState {
+  /** Currently selected folder path */
+  currentFolder: string | null;
+  /** List of markdown files in current folder */
+  files: MarkdownFile[];
+  /** Search query for file filtering */
+  searchQuery: string;
+  /** Tab management state */
+  tabs: TabManagerState;
+  /** Current editor mode */
+  editorMode: EditorMode;
+}
+
+/**
+ * Tab component props
+ */
+export interface FileTabProps extends BaseComponentProps {
+  /** Tab data */
+  tab: FileTab;
+  /** Whether this tab is active */
+  isActive: boolean;
+  /** Callback when tab is clicked */
+  onActivate: (tabId: string) => void;
+  /** Callback when tab close button is clicked */
+  onClose: (tabId: string) => void;
+  /** Callback when tab context menu is requested */
+  onContextMenu?: (tabId: string, action: TabAction) => void;
+  /** Whether tab can be closed */
+  closable?: boolean;
+}
+
+/**
+ * Tab manager component props
+ */
+export interface TabManagerProps extends BaseComponentProps {
+  /** Tab manager state */
+  tabState: TabManagerState;
+  /** Callback when tab is activated */
+  onTabActivate: (tabId: string) => void;
+  /** Callback when tab is closed */
+  onTabClose: (tabId: string) => void;
+  /** Callback when new tab is requested */
+  onNewTab?: () => void;
+  /** Callback for tab context menu actions */
+  onTabAction?: (tabId: string, action: TabAction) => void;
+}
+
+// === FILE WATCHING TYPES ===
+
+/**
+ * File change event from file watcher service
+ */
+export interface FileChangeEvent {
+  /** Type of change that occurred */
+  event_type: 'created' | 'modified' | 'deleted' | 'changed';
+  /** Full path of the affected file */
+  file_path: string;
+  /** File name without path */
+  file_name: string;
+  /** Timestamp of the event (Unix timestamp) */
+  timestamp: number;
+}
+
 // === SETTINGS TYPES ===
 
 /**
@@ -239,4 +352,8 @@ export interface UserSettings {
   window_width?: number | null;
   /** Window height (for future use) */
   window_height?: number | null;
+  /** Maximum number of tabs to keep open */
+  max_tabs?: number;
+  /** Whether to restore tabs on startup */
+  restore_tabs?: boolean;
 }

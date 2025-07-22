@@ -8,7 +8,7 @@
 // === IMPORTS ===
 // External library imports
 import React, { useCallback, useState, useRef, useEffect } from 'react';
-import { Check, Square, ChevronDown } from 'lucide-react';
+import { Check, Square, ChevronDown, Copy, Check as CheckIcon } from 'lucide-react';
 import { createLowlight, common } from 'lowlight';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime';
@@ -181,59 +181,6 @@ function getLanguageInfo(input: string) {
     lang.id === normalizedInput ||
     lang.aliases.includes(normalizedInput)
   ) || SUPPORTED_LANGUAGES.find(lang => lang.id === 'plaintext');
-}
-
-/**
- * Renders syntax-highlighted code using lowlight
- */
-function renderHighlightedCode(code: string, language: string): React.ReactNode {
-  try {
-    // Check if the language is registered with lowlight
-    const registeredLanguages = lowlight.listLanguages();
-    const langInfo = getLanguageInfo(language);
-    const langId = langInfo?.id || 'plaintext';
-
-    if (!registeredLanguages.includes(langId) && langId !== 'plaintext') {
-      // Fallback to plaintext if language is not supported
-      return (
-        <pre className="font-mono text-sm leading-relaxed">
-          <code>{code}</code>
-        </pre>
-      );
-    }
-
-    // Highlight the code
-    const tree = lowlight.highlight(langId === 'plaintext' ? 'text' : langId, code);
-
-    // Convert to React JSX
-    const highlighted = toJsxRuntime(tree, {
-      jsx,
-      jsxs,
-      Fragment,
-      components: {
-        // Custom styling for syntax highlighting
-        pre: ({ children, ...props }) => (
-          <pre className="font-mono text-sm leading-relaxed" {...props}>
-            {children}
-          </pre>
-        ),
-        code: ({ children, ...props }) => (
-          <code {...props}>
-            {children}
-          </code>
-        ),
-      },
-    });
-
-    return highlighted;
-  } catch (error) {
-    // Fallback to plain text on error
-    return (
-      <pre className="font-mono text-sm leading-relaxed">
-        <code>{code}</code>
-      </pre>
-    );
-  }
 }
 
 // === BLOCK TYPE RENDERERS ===
@@ -607,6 +554,140 @@ const DividerBlock: React.FC<BlockTypeRendererProps> = () => {
     </div>
   );
 };
+
+// === COMPONENTS ===
+
+/**
+ * HighlightedCodeBlock component with syntax highlighting and copy functionality
+ */
+interface HighlightedCodeBlockProps {
+  code: string;
+  language: string;
+}
+
+function HighlightedCodeBlock({ code, language }: HighlightedCodeBlockProps) {
+  const [copied, setCopied] = useState(false);
+
+  // Debug: Log the raw code to see if formatting is preserved
+  console.log('🔍 HighlightedCodeBlock received code:', {
+    rawCode: JSON.stringify(code),
+    length: code.length,
+    hasLineBreaks: code.includes('\n'),
+    language
+  });
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy code:', error);
+    }
+  }, [code]);
+
+  const langInfo = getLanguageInfo(language);
+  const displayName = langInfo?.name || language || 'plaintext';
+
+  return (
+    <div className="code-block-container">
+      <div className="code-block-header">
+        <span>{displayName}</span>
+        <button
+          className="code-block-copy-btn"
+          onClick={handleCopy}
+          title={copied ? 'Copied!' : 'Copy code'}
+        >
+          {copied ? (
+            <>
+              <CheckIcon className="w-3 h-3 inline mr-1" />
+              Copied!
+            </>
+          ) : (
+            <>
+              <Copy className="w-3 h-3 inline mr-1" />
+              Copy
+            </>
+          )}
+        </button>
+      </div>
+      <div className="hljs">
+        {renderHighlightedCodeContent(code, language)}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Renders syntax-highlighted code content (internal function)
+ */
+function renderHighlightedCodeContent(code: string, language: string): React.ReactNode {
+  console.log('🎨 renderHighlightedCodeContent called with:', { code: code.substring(0, 50) + '...', language });
+
+  try {
+    // Check if the language is registered with lowlight
+    const registeredLanguages = lowlight.listLanguages();
+    console.log('🔍 Registered languages:', registeredLanguages);
+
+    const langInfo = getLanguageInfo(language);
+    const langId = langInfo?.id || 'plaintext';
+    console.log('🎯 Language info:', { langInfo, langId });
+
+    if (!registeredLanguages.includes(langId) && langId !== 'plaintext') {
+      console.log('⚠️ Language not registered, falling back to plaintext');
+      // Fallback to plaintext if language is not supported
+      return (
+        <pre>
+          <code>{code}</code>
+        </pre>
+      );
+    }
+
+    console.log('✨ Attempting to highlight code with language:', langId);
+    // Highlight the code
+    const tree = lowlight.highlight(langId === 'plaintext' ? 'text' : langId, code);
+    console.log('🌳 Lowlight tree result:', tree);
+
+    // Convert to React JSX
+    console.log('🔄 Converting to JSX...');
+    const highlighted = toJsxRuntime(tree, {
+      jsx,
+      jsxs,
+      Fragment,
+      components: {
+        // Custom styling for syntax highlighting
+        pre: ({ children, ...props }) => (
+          <pre {...props}>
+            {children}
+          </pre>
+        ),
+        code: ({ children, ...props }) => (
+          <code {...props}>
+            {children}
+          </code>
+        ),
+      },
+    });
+
+    console.log('✅ JSX conversion successful:', highlighted);
+    return highlighted;
+  } catch (error) {
+    console.error('❌ Error in renderHighlightedCodeContent:', error);
+    // Fallback to plain text on error
+    return (
+      <pre>
+        <code>{code}</code>
+      </pre>
+    );
+  }
+}
+
+/**
+ * Renders syntax-highlighted code using lowlight (updated to use HighlightedCodeBlock component)
+ */
+function renderHighlightedCode(code: string, language: string): React.ReactNode {
+  return <HighlightedCodeBlock code={code} language={language} />;
+}
 
 // === MAIN COMPONENT ===
 

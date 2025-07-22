@@ -6,11 +6,13 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Eye, Edit3, Columns2, Settings, Code } from 'lucide-react';
+import { Eye, Edit3, Columns2, Settings, Code, Navigation, BarChart3, BookOpen, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { MarkdownPreview } from './MarkdownPreview';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
+import { DocumentOutline, TableOfContents, DocumentStats } from '@/components/navigation';
+import { ExportManager } from '@/components/export';
 import type { TextEditorProps, EditorMode } from '@/types';
 
 /**
@@ -38,6 +40,9 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
   const [currentMode, setCurrentMode] = useState<EditorMode>(mode);
   const [useAdvancedEditor, setUseAdvancedEditor] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showNavigation, setShowNavigation] = useState(false);
+  const [navigationView, setNavigationView] = useState<'outline' | 'toc' | 'stats'>('outline');
+  const [showExportDialog, setShowExportDialog] = useState(false);
   // Future: synchronized scrolling state
   // const [previewScrollTop, setPreviewScrollTop] = useState(0);
   // const [editorScrollTop, setEditorScrollTop] = useState(0);
@@ -85,6 +90,34 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
     setUseAdvancedEditor(prev => !prev);
   }, []);
 
+  /**
+   * Toggle navigation panel
+   */
+  const toggleNavigation = useCallback(() => {
+    setShowNavigation(prev => !prev);
+  }, []);
+
+  /**
+   * Handle navigation view change
+   */
+  const handleNavigationViewChange = useCallback((view: 'outline' | 'toc' | 'stats') => {
+    setNavigationView(view);
+  }, []);
+
+  /**
+   * Toggle export dialog
+   */
+  const toggleExportDialog = useCallback(() => {
+    setShowExportDialog(prev => !prev);
+  }, []);
+
+  /**
+   * Handle export completion
+   */
+  const handleExportComplete = useCallback(() => {
+    setShowExportDialog(false);
+  }, []);
+
   // === SYNCHRONIZED SCROLLING (Future Enhancement) ===
   
   // const handleEditorScroll = useCallback((scrollTop: number) => {
@@ -100,7 +133,7 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
   // === TOOLBAR ===
   
   const renderToolbar = () => (
-    <div className="flex items-center justify-between p-2 border-b border-border bg-muted/30">
+    <div className="flex items-center justify-between p-2 border-b bg-muted">
       {/* Mode Switcher */}
       <div className="flex items-center space-x-1">
         <Button
@@ -144,6 +177,30 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
         >
           <Code className="h-3 w-3 mr-1" />
           {useAdvancedEditor ? 'Advanced' : 'Simple'}
+        </Button>
+
+        {/* Navigation Toggle */}
+        <Button
+          variant={showNavigation ? 'default' : 'ghost'}
+          size="sm"
+          onClick={toggleNavigation}
+          title="Toggle navigation panel"
+          className="text-xs"
+        >
+          <Navigation className="h-3 w-3 mr-1" />
+          Nav
+        </Button>
+
+        {/* Export Button */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={toggleExportDialog}
+          title="Export document"
+          className="text-xs"
+        >
+          <Download className="h-3 w-3 mr-1" />
+          Export
         </Button>
 
         {/* Settings (placeholder for future enhancement) */}
@@ -197,6 +254,84 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
     );
   };
 
+  // === NAVIGATION PANEL ===
+  
+  const renderNavigationPanel = () => {
+    if (!showNavigation) return null;
+
+    return (
+      <div className="w-80 border-l border-border bg-card flex flex-col">
+        {/* Navigation Header */}
+        <div className="p-2 border-b border-border bg-muted/20">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">NAVIGATION</span>
+            <div className="flex items-center space-x-1">
+              <Button
+                variant={navigationView === 'outline' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => handleNavigationViewChange('outline')}
+                className="h-6 px-2 text-xs"
+                title="Document Outline"
+              >
+                <Navigation className="h-3 w-3" />
+              </Button>
+              <Button
+                variant={navigationView === 'toc' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => handleNavigationViewChange('toc')}
+                className="h-6 px-2 text-xs"
+                title="Table of Contents"
+              >
+                <BookOpen className="h-3 w-3" />
+              </Button>
+              <Button
+                variant={navigationView === 'stats' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => handleNavigationViewChange('stats')}
+                className="h-6 px-2 text-xs"
+                title="Document Statistics"
+              >
+                <BarChart3 className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Content */}
+        <div className="flex-1 min-h-0">
+          {navigationView === 'outline' && (
+            <DocumentOutline
+              content={content}
+              showLineNumbers={true}
+              allowCollapse={true}
+              maxDepth={6}
+              autoExpand={true}
+            />
+          )}
+          
+          {navigationView === 'toc' && (
+            <TableOfContents
+              content={content}
+              showNumbers={true}
+              showLevelIndicators={true}
+              maxDepth={6}
+              minLevel={1}
+            />
+          )}
+          
+          {navigationView === 'stats' && (
+            <DocumentStats
+              content={content}
+              showDetailed={true}
+              showAnalytics={true}
+              compact={false}
+            />
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // === MAIN LAYOUT ===
   
   return (
@@ -206,6 +341,8 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
 
       {/* Content Area */}
       <div className="flex-1 flex min-h-0">
+        {/* Main Editor Area */}
+        <div className="flex-1 flex min-h-0">
         {/* Source Editor */}
         {(currentMode === 'source' || currentMode === 'split') && (
           <div className={`${currentMode === 'split' ? 'w-1/2 border-r border-border' : 'w-full'} flex flex-col`}>
@@ -236,7 +373,20 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
             </div>
           </div>
         )}
+        </div>
+        
+        {/* Navigation Panel */}
+        {renderNavigationPanel()}
       </div>
+
+      {/* Export Manager Dialog */}
+      <ExportManager
+        content={content}
+        title="Document"
+        isOpen={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        onExportComplete={handleExportComplete}
+      />
 
       {/* Status Bar */}
       <div className="p-2 border-t border-border bg-muted/20 flex items-center justify-between text-xs text-muted-foreground">

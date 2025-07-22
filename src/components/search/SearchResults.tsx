@@ -59,7 +59,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
     return (
       <span>
         {before}
-        <mark className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">
+        <mark className="bg-accent px-0.5 rounded">
           {match}
         </mark>
         {after}
@@ -87,7 +87,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
         {Object.entries(groupedResults).map(([filePath, fileResults]) => (
           <Card key={filePath} className="overflow-hidden">
             {/* File header */}
-            <div className="bg-muted/30 px-4 py-2 border-b flex items-center gap-2">
+            <div className="bg-muted px-4 py-2 border-b flex items-center gap-2">
               <File className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium text-sm truncate">
                 {fileResults[0].file_name}
@@ -103,7 +103,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                 <button
                   key={`${result.file_path}-${result.line_number}-${index}`}
                   onClick={() => onResultClick(result)}
-                  className="w-full text-left p-3 hover:bg-accent/50 transition-colors focus:outline-none focus:bg-accent/50"
+                  className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground transition-colors focus:outline-none focus:bg-accent focus:text-accent-foreground"
                 >
                   <div className="flex items-start gap-3">
                     {getResultIcon(result)}

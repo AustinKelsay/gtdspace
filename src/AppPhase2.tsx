@@ -21,6 +21,7 @@ import { useFileManager } from '@/hooks/useFileManager';
 import { useTabManager } from '@/hooks/useTabManager';
 import { useFileWatcher } from '@/hooks/useFileWatcher';
 import { useCommands } from '@/hooks/useCommands';
+import { useSettings } from '@/hooks/useSettings';
 import type { PermissionStatus, Theme, MarkdownFile, FileOperation } from '@/types';
 import './styles/globals.css';
 
@@ -79,6 +80,7 @@ export const AppPhase2: React.FC = () => {
 
   // === SETTINGS MANAGEMENT ===
   
+  const { settings, setTheme } = useSettings();
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
 
   // === GLOBAL SEARCH ===
@@ -153,8 +155,9 @@ export const AppPhase2: React.FC = () => {
     }
   };
 
-  const toggleTheme = () => {
-    const newTheme: Theme = fileState.theme === 'dark' ? 'light' : 'dark';
+  const toggleTheme = async () => {
+    const newTheme: Theme = settings.theme === 'dark' ? 'light' : 'dark';
+    await setTheme(newTheme);
     applyTheme(newTheme);
   };
 
@@ -288,7 +291,7 @@ export const AppPhase2: React.FC = () => {
     hasUnsavedChanges,
     hasActiveTab: !!activeTab,
     hasFolderSelected: !!fileState.currentFolder,
-    theme: fileState.theme,
+    theme: settings.theme,
     handlers: commandHandlers,
   });
 
@@ -368,7 +371,7 @@ export const AppPhase2: React.FC = () => {
   // === INITIALIZATION ===
   
   useEffect(() => {
-    applyTheme(fileState.theme);
+    applyTheme(settings.theme);
     
     const testBackend = async () => {
       try {
@@ -384,7 +387,7 @@ export const AppPhase2: React.FC = () => {
     };
     
     testBackend();
-  }, [fileState.theme]);
+  }, [settings.theme]);
 
   // === KEYBOARD SHORTCUTS ===
   
@@ -465,7 +468,7 @@ export const AppPhase2: React.FC = () => {
             {getCurrentFileName()}
           </h1>
           {activeTab?.hasUnsavedChanges && (
-            <span className="w-2 h-2 rounded-full bg-orange-500" title="Unsaved changes" />
+            <span className="w-2 h-2 rounded-full bg-destructive" title="Unsaved changes" />
           )}
           {getTabCount() > 0 && (
             <span className="text-xs text-muted-foreground">
@@ -519,9 +522,9 @@ export const AppPhase2: React.FC = () => {
             variant="ghost"
             size="sm"
             onClick={toggleTheme}
-            title={`Switch to ${fileState.theme === 'dark' ? 'light' : 'dark'} theme`}
+            title={`Switch to ${settings.theme === 'dark' ? 'light' : 'dark'} theme`}
           >
-            {fileState.theme === 'dark' ? '☀️' : '🌙'}
+            {settings.theme === 'dark' ? '☀️' : '🌙'}
           </Button>
         </div>
       </header>
@@ -537,7 +540,7 @@ export const AppPhase2: React.FC = () => {
 
       {/* File Change Notifications */}
       {watcherState.recentEvents.length > 0 && (
-        <div className="px-4 py-2 border-b border-border bg-muted/30">
+        <div className="px-4 py-2 border-b bg-muted">
           <FileChangeManager
             events={watcherState.recentEvents}
             openTabs={tabState.openTabs}
@@ -576,7 +579,7 @@ export const AppPhase2: React.FC = () => {
           ) : (
             <div className="flex items-center justify-center h-full">
               <div className="text-center max-w-md">
-                <div className="w-24 h-24 mx-auto mb-6 bg-muted/50 rounded-lg flex items-center justify-center">
+                <div className="w-24 h-24 mx-auto mb-6 bg-muted rounded-lg flex items-center justify-center">
                   <Menu className="h-12 w-12 text-muted-foreground" />
                 </div>
                 <h2 className="text-xl font-semibold mb-3">

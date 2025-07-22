@@ -2,13 +2,15 @@
 
 A cross-platform desktop markdown editor built with Tauri, React, and TypeScript. GTD Space provides a local-first markdown editing experience with a focus on simplicity and performance.
 
-![Status](https://img.shields.io/badge/Phase%201%20MVP-100%25%20Complete-success)
+![Status](https://img.shields.io/badge/Phase%203-100%25%20Complete-success)
+![Phase 2](https://img.shields.io/badge/Phase%202-100%25%20Complete-success)
+![Phase 1](https://img.shields.io/badge/Phase%201%20MVP-100%25%20Complete-success)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
 ![Tech Stack](https://img.shields.io/badge/Stack-Tauri%202.x%20%7C%20React%2018%20%7C%20Rust-orange)
 
 ## 🚀 Features
 
-### Current (Phase 1 MVP - Complete)
+### Phase 1: MVP (Complete ✅)
 - ✅ **Native File Management** - Browse and manage markdown files with native folder selection
 - ✅ **Markdown Editor** - Source, preview, and split-view modes
 - ✅ **Auto-Save** - Automatic saving with visual feedback
@@ -18,11 +20,24 @@ A cross-platform desktop markdown editor built with Tauri, React, and TypeScript
 - ✅ **Keyboard Shortcuts** - Ctrl/Cmd+S to save, Ctrl/Cmd+O to open folder
 - ✅ **Dark Theme** - Beautiful dark mode interface with shadcn/ui components
 
-### Coming Soon (Phase 2)
-- 🔄 Rich WYSIWYG editing with Tiptap
-- 🔄 Syntax highlighting for code blocks
-- 🔄 Advanced search and replace
-- 🔄 File templates and snippets
+### Phase 2: Enhanced UX (Complete ✅)
+- ✅ **Tabbed Interface** - Multiple files open simultaneously with tab management
+- ✅ **Enhanced CodeMirror Editor** - Advanced markdown editing with syntax highlighting
+- ✅ **File Watching** - Real-time detection of external file changes
+- ✅ **Advanced Editor Modes** - Improved preview synchronization and split-view
+- ✅ **Keyboard Shortcuts** - Ctrl+Tab navigation, Ctrl+W close, and more
+
+### Phase 3: Advanced Features (Complete ✅)
+- ✅ **WYSIWYG Editor** - Rich text editing with Tiptap integration and ProseMirror backend
+- ✅ **Mode Switching** - Seamless switching between WYSIWYG, source, preview, and split modes
+- ✅ **Advanced Tables** - Full table creation, editing, and manipulation capabilities
+- ✅ **Block-Based Editing** - Notion-style content blocks with drag-and-drop reordering
+- ✅ **Mathematical Equations** - LaTeX support with KaTeX rendering and interactive toolbar
+- ✅ **Diagrams** - Mermaid.js integration for flowcharts, sequence diagrams, and more
+- ✅ **Rich Code Highlighting** - Syntax highlighting for 25+ programming languages
+- ✅ **Export System** - PDF and HTML export with multiple themes and styling options
+- ✅ **Document Navigation** - Complete outline, table of contents, and document statistics
+- ✅ **Media Management** - Advanced image editing, file attachments, and external embeds
 
 ## 🛠️ Tech Stack
 
@@ -31,6 +46,11 @@ A cross-platform desktop markdown editor built with Tauri, React, and TypeScript
 - **TypeScript** - Type-safe development
 - **Tailwind CSS** - Utility-first styling
 - **shadcn/ui** - High-quality UI components
+- **Tiptap** - Rich text editor with ProseMirror backend
+- **CodeMirror 6** - Advanced code editing with markdown support
+- **KaTeX** - Mathematical equation rendering
+- **Mermaid.js** - Diagram and flowchart generation
+- **Lowlight** - Syntax highlighting for code blocks
 - **Vite** - Lightning-fast build tool
 
 ### Backend
@@ -68,14 +88,26 @@ npm run tauri:build
 
 1. **Select a Folder**: Click "Select Folder" to choose a directory containing markdown files
 2. **Browse Files**: View all markdown files in the sidebar
-3. **Edit Content**: Click any file to open it in the editor
-4. **Switch Modes**: Toggle between source, preview, and split view
-5. **Auto-Save**: Your changes are automatically saved every 2 seconds
-6. **Search Files**: Use the search bar to filter files by name
+3. **Edit Content**: Click any file to open it in a new tab
+4. **Switch Modes**: Choose between WYSIWYG, source, preview, and split view
+5. **Rich Editing**: Use the WYSIWYG mode for visual editing with tables, math equations, diagrams, and more
+6. **Block Editing**: Create Notion-style content blocks and reorder with drag-and-drop
+7. **Media Management**: Insert images, attach files, and embed external content
+8. **Export Documents**: Export to PDF or HTML with multiple themes and styling options
+9. **Auto-Save**: Your changes are automatically saved every 2 seconds
+10. **Search Files**: Use the search bar to filter files by name
+11. **Multi-File Editing**: Work with multiple files simultaneously using tabs
 
 ### Keyboard Shortcuts
 - `Ctrl/Cmd + S` - Save current file
 - `Ctrl/Cmd + O` - Open folder selection
+- `Ctrl + Tab` - Switch between tabs
+- `Ctrl + W` - Close current tab
+- `Ctrl + Shift + W` - Switch to WYSIWYG mode
+- `Ctrl + Shift + S` - Switch to source mode
+- `Ctrl + Shift + P` - Switch to split mode
+- `Ctrl + E` - Open export dialog
+- `Ctrl + Shift + O` - Toggle document outline
 - `Escape` - Close dialogs
 
 ## 🏗️ Architecture
@@ -86,10 +118,18 @@ gtdspace/
 │   ├── components/         # UI components
 │   │   ├── file-browser/   # File management UI
 │   │   ├── editor/         # Text editor components
+│   │   ├── wysiwyg/        # WYSIWYG editor components
+│   │   ├── blocks/         # Block-based editing system
+│   │   ├── navigation/     # Document outline and navigation
+│   │   ├── export/         # Export system (PDF, HTML)
+│   │   ├── media/          # Media management and image editing
+│   │   ├── tabs/           # Tab management
 │   │   └── ui/             # shadcn/ui components
 │   ├── hooks/              # Custom React hooks
-│   │   ├── useFileManager.ts
-│   │   └── useSettings.ts
+│   │   ├── useFileManager.ts    # File operations & state
+│   │   ├── useTabManager.ts     # Tab management (Phase 2)
+│   │   ├── useFileWatcher.ts    # File change detection (Phase 2)
+│   │   └── useSettings.ts       # Settings persistence
 │   └── types/              # TypeScript definitions
 ├── src-tauri/              # Rust backend
 │   ├── src/
@@ -118,8 +158,15 @@ npm run tauri:build      # Production build
 
 ### Project Structure
 - **Frontend-Backend Communication**: Uses Tauri's `invoke()` system
-- **State Management**: Custom hooks for file and settings management
-- **File Operations**: All file I/O handled by Rust backend
+- **State Management**: Custom hooks for file, tab, and settings management
+- **File Operations**: All file I/O handled by Rust backend with file watching
+- **Rich Editing**: Tiptap/ProseMirror for WYSIWYG with markdown serialization
+- **Block System**: Notion-style content blocks with drag-and-drop functionality
+- **Mathematical Content**: KaTeX integration for LaTeX equation rendering
+- **Diagrams**: Mermaid.js for flowcharts, sequence diagrams, and visualizations
+- **Export System**: PDF and HTML generation with multiple themes
+- **Media Management**: Advanced image editing and file attachment system
+- **Multi-File Support**: Tab-based interface with per-tab state management
 - **Settings**: Persistent storage using tauri-plugin-store
 
 ## 📝 Development Phases
@@ -131,16 +178,35 @@ npm run tauri:build      # Production build
 
 ### ✅ Phase 1: MVP (Complete)
 - File browser with folder selection
-- Basic markdown editor
+- Basic markdown editor with CodeMirror
 - File operations (CRUD)
 - Auto-save functionality
 - Settings persistence
 
-### 🔄 Phase 2: Enhancement (Planned)
-- Rich text editing with Tiptap
-- Advanced editor features
-- Global search across files
-- Templates and snippets
+### ✅ Phase 2: Enhanced UX (Complete)
+- Tabbed interface with multi-file editing
+- Enhanced CodeMirror editor with syntax highlighting
+- File watching service with real-time change detection
+- Advanced editor modes (source/preview/split)
+- Keyboard shortcuts for tab navigation
+
+### ✅ Phase 3: Advanced Features (Complete)
+- ✅ WYSIWYG editor with Tiptap integration and ProseMirror backend
+- ✅ Mode switching between WYSIWYG/source/preview/split
+- ✅ Advanced table editing and rich text formatting
+- ✅ Block-based editing system (Notion-style) with drag-and-drop
+- ✅ Mathematical equations with KaTeX rendering and interactive toolbar
+- ✅ Diagram creation with Mermaid.js integration
+- ✅ Rich syntax highlighting for 25+ programming languages
+- ✅ Export system (PDF, HTML) with multiple themes and styling options
+- ✅ Document navigation with outline, table of contents, and statistics
+- ✅ Advanced media management with image editing, file attachments, and external embeds
+
+### 📋 Phase 4: Polish & Performance (Planned)
+- UI/UX refinements and animations
+- Performance optimizations
+- Accessibility improvements
+- Plugin system architecture
 
 See [docs/phases/](docs/phases/) for detailed phase specifications.
 
@@ -162,12 +228,19 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - Built with [Tauri](https://tauri.app/) - Build smaller, faster, and more secure desktop applications
 - UI components from [shadcn/ui](https://ui.shadcn.com/) - Beautifully designed components
+- Rich text editing powered by [Tiptap](https://tiptap.dev/) - The headless editor framework
+- Code editing with [CodeMirror 6](https://codemirror.net/) - Extensible code editor
+- Mathematical rendering with [KaTeX](https://katex.org/) - Fast math typesetting
+- Diagrams with [Mermaid.js](https://mermaid.js.org/) - Generation of diagrams and flowcharts
+- Export functionality with [marked](https://marked.js.org/) - Markdown parser and compiler
 - Icons by [Lucide](https://lucide.dev/) - Beautiful & consistent icons
 
 ## 🐛 Known Issues
 
-- File watching not implemented - external changes require manual refresh
-- Cross-platform testing pending for Windows and Linux
+- Cross-platform testing pending for Windows and Linux builds
+- Bundle size increased due to rich editor dependencies (~2.5MB gzipped)
+- Some advanced table features (CSV import/export, sorting) not yet implemented
+- Focus mode and batch export features planned for future releases
 
 ## 📞 Support
 

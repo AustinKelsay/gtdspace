@@ -228,7 +228,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
           {/* Tab Bar */}
           <div className="border-b">
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'search' | 'replace')} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 rounded-none bg-muted/30">
+              <TabsList className="grid w-full grid-cols-2 rounded-none bg-muted">
                 <TabsTrigger value="search" className="flex items-center gap-2">
                   <Search className="h-4 w-4" />
                   Search
@@ -241,7 +241,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
               
               {/* Search Tab Content */}
               <TabsContent value="search" className="mt-0">
-                <div className="p-4 border-b bg-muted/30">
+                <div className="p-4 border-b bg-muted">
                   <form onSubmit={handleSearch} className="flex gap-2">
                     <div className="flex-1 relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -375,7 +375,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
               
               {/* Replace Tab Content */}
               <TabsContent value="replace" className="mt-0">
-                <div className="p-4 border-b bg-muted/30 space-y-3">
+                <div className="p-4 border-b bg-muted space-y-3">
                   <form onSubmit={handleSearch} className="flex gap-2">
                     <div className="flex-1 relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -437,8 +437,8 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
                       <p className="font-medium mb-2">Replace Results:</p>
                       <ul className="space-y-1">
                         {replaceResults.map((result, index) => (
-                          <li key={index} className={`flex items-center gap-2 ${result.success ? 'text-green-600' : 'text-red-600'}`}>
-                            <span className={`w-2 h-2 rounded-full ${result.success ? 'bg-green-500' : 'bg-red-500'}`} />
+                          <li key={index} className={`flex items-center gap-2 ${result.success ? 'text-foreground' : 'text-destructive'}`}>
+                            <span className={`w-2 h-2 rounded-full ${result.success ? 'bg-primary' : 'bg-destructive'}`} />
                             {result.filePath.split('/').pop()} {result.success ? 'updated' : 'failed'}
                           </li>
                         ))}

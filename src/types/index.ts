@@ -121,9 +121,9 @@ export interface FileOperationResult {
 }
 
 /**
- * Editor mode options for Phase 1
+ * Editor mode options for Phase 1-3
  */
-export type EditorMode = 'source' | 'preview' | 'split';
+export type EditorMode = 'source' | 'preview' | 'split' | 'wysiwyg';
 
 /**
  * File operation types
@@ -342,8 +342,8 @@ export interface FileChangeEvent {
  * User settings structure for persistence
  */
 export interface UserSettings {
-  /** Theme preference: 'light', 'dark', or 'system' */
-  theme: string;
+  /** Theme preference: 'light', 'dark', or 'auto' */
+  theme: Theme;
   /** Editor font size in pixels */
   font_size: number;
   /** Tab size for indentation */

@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import type { UserSettings } from '@/types';
+import type { UserSettings, Theme, EditorMode } from '@/types';
 
 /**
  * Settings manager hook for handling user preferences
@@ -103,14 +103,14 @@ export const useSettings = () => {
   /**
    * Set theme preference
    */
-  const setTheme = useCallback(async (theme: string) => {
+  const setTheme = useCallback(async (theme: Theme) => {
     await updateSettings({ theme });
   }, [updateSettings]);
 
   /**
    * Set editor mode preference
    */
-  const setEditorMode = useCallback(async (editor_mode: 'source' | 'preview' | 'split') => {
+  const setEditorMode = useCallback(async (editor_mode: EditorMode) => {
     await updateSettings({ editor_mode });
   }, [updateSettings]);
 

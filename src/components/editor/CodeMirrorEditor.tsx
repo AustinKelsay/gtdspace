@@ -8,23 +8,28 @@
 import React, { useCallback, useMemo } from 'react';
 import CodeMirror, { Extension } from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
+import { javascript } from '@codemirror/lang-javascript';
+import { python } from '@codemirror/lang-python';
+import { html } from '@codemirror/lang-html';
+import { css } from '@codemirror/lang-css';
+import { json } from '@codemirror/lang-json';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
-import { 
-  defaultKeymap, 
-  history, 
+import {
+  defaultKeymap,
+  history,
   historyKeymap,
-  indentWithTab 
+  indentWithTab
 } from '@codemirror/commands';
-import { 
+import {
   bracketMatching,
   indentOnInput,
-  indentUnit 
+  indentUnit
 } from '@codemirror/language';
-import { 
+import {
   highlightSelectionMatches,
-  searchKeymap 
+  searchKeymap
 } from '@codemirror/search';
 import { keymap } from '@codemirror/view';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
@@ -82,20 +87,65 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
   // === EDITOR CONFIGURATION ===
 
   const extensions = useMemo(() => {
+    // Create a direct language mapping function
+    const getLanguageSupport = (info: string) => {
+      const langName = info.toLowerCase();
+      console.log('Requesting language highlighting for:', info);
+
+      switch (langName) {
+        case 'javascript':
+        case 'js':
+        case 'jsx':
+          console.log('Found language support: JavaScript');
+          return javascript().language;
+        case 'typescript':
+        case 'ts':
+        case 'tsx':
+          console.log('Found language support: TypeScript');
+          return javascript({ typescript: true }).language;
+        case 'python':
+        case 'py':
+          console.log('Found language support: Python');
+          return python().language;
+        case 'html':
+        case 'htm':
+          console.log('Found language support: HTML');
+          return html().language;
+        case 'css':
+        case 'scss':
+        case 'sass':
+          console.log('Found language support: CSS');
+          return css().language;
+        case 'json':
+          console.log('Found language support: JSON');
+          return json().language;
+        case 'bash':
+        case 'sh':
+        case 'shell':
+          console.log('Found language support: Shell (using JavaScript fallback)');
+          return javascript().language; // Fallback for shell scripts
+        default:
+          console.log('No language support found for:', info);
+          return null;
+      }
+    };
+
     const exts: Extension[] = [
-      // Language support
-      markdown(),
-      
+      // Language support with code block highlighting
+      markdown({
+        codeLanguages: getLanguageSupport,
+      }),
+
       // Editor behavior
       history(),
       indentOnInput(),
       bracketMatching(),
       highlightSelectionMatches(),
       autocompletion(),
-      
+
       // Indentation
       indentUnit.of(' '.repeat(tabSize)),
-      
+
       // Keybindings
       keymap.of([
         ...defaultKeymap,
@@ -104,15 +154,16 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
         ...completionKeymap,
         indentWithTab,
       ]),
-      
+
       // Editor appearance
       EditorView.theme({
         '&': {
           fontSize: `${fontSize}px`,
+          height: '100%',
         },
         '.cm-content': {
           padding: '16px',
-          minHeight: '100%',
+          minHeight: '200px',
         },
         '.cm-focused': {
           outline: 'none',
@@ -122,6 +173,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
         },
         '.cm-scroller': {
           fontFamily: 'ui-monospace, "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace',
+          height: '100%',
+          overflow: 'auto',
         },
       }),
     ];
@@ -170,10 +223,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
           const { state, dispatch } = view;
           const selection = state.selection.main;
           const selectedText = state.doc.sliceString(selection.from, selection.to);
-          
+
           let newText;
           let newSelection;
-          
+
           if (selectedText) {
             // Toggle bold on selected text
             if (selectedText.startsWith('**') && selectedText.endsWith('**')) {
@@ -188,12 +241,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
             newText = '****';
             newSelection = { anchor: selection.from + 2, head: selection.from + 2 };
           }
-          
+
           dispatch({
             changes: { from: selection.from, to: selection.to, insert: newText },
             selection: newSelection,
           });
-          
+
           return true;
         },
       },
@@ -205,10 +258,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
           const { state, dispatch } = view;
           const selection = state.selection.main;
           const selectedText = state.doc.sliceString(selection.from, selection.to);
-          
+
           let newText;
           let newSelection;
-          
+
           if (selectedText) {
             // Toggle italic on selected text
             if (selectedText.startsWith('*') && selectedText.endsWith('*') && !selectedText.startsWith('**')) {
@@ -223,12 +276,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
             newText = '**';
             newSelection = { anchor: selection.from + 1, head: selection.from + 1 };
           }
-          
+
           dispatch({
             changes: { from: selection.from, to: selection.to, insert: newText },
             selection: newSelection,
           });
-          
+
           return true;
         },
       },
@@ -240,17 +293,17 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
           const { state, dispatch } = view;
           const selection = state.selection.main;
           const selectedText = state.doc.sliceString(selection.from, selection.to);
-          
-          const newText = selectedText 
+
+          const newText = selectedText
             ? `[${selectedText}](url)`
             : '[text](url)';
           const cursorPos = selection.from + newText.indexOf('url');
-          
+
           dispatch({
             changes: { from: selection.from, to: selection.to, insert: newText },
             selection: { anchor: cursorPos, head: cursorPos + 3 },
           });
-          
+
           return true;
         },
       },
@@ -262,7 +315,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
           const { state, dispatch } = view;
           const selection = state.selection.main;
           const selectedText = state.doc.sliceString(selection.from, selection.to);
-          
+
           if (selectedText) {
             const newText = `\`\`\`\n${selectedText}\n\`\`\``;
             dispatch({
@@ -276,7 +329,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
               selection: { anchor: selection.from + 4, head: selection.from + 4 },
             });
           }
-          
+
           return true;
         },
       },

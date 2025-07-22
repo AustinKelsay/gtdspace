@@ -256,6 +256,24 @@ export const useFileManager = () => {
           });
           break;
           
+        case 'copy':
+          console.log('Copying file from:', operation.sourcePath, 'to:', operation.destPath);
+          const copyResult = await invoke<string>('copy_file', {
+            source_path: operation.sourcePath,
+            dest_path: operation.destPath,
+          });
+          result = { success: true, message: copyResult };
+          break;
+          
+        case 'move':
+          console.log('Moving file from:', operation.sourcePath, 'to:', operation.destPath);
+          const moveResult = await invoke<string>('move_file', {
+            source_path: operation.sourcePath,
+            dest_path: operation.destPath,
+          });
+          result = { success: true, message: moveResult };
+          break;
+          
         default:
           throw new Error('Unknown file operation');
       }

@@ -131,7 +131,9 @@ export type EditorMode = 'source' | 'preview' | 'split';
 export type FileOperation = 
   | { type: 'create'; name: string }
   | { type: 'rename'; oldPath: string; newName: string }
-  | { type: 'delete'; path: string };
+  | { type: 'delete'; path: string }
+  | { type: 'copy'; sourcePath: string; destPath: string }
+  | { type: 'move'; sourcePath: string; destPath: string };
 
 /**
  * Extended application state for Phase 1
@@ -229,6 +231,8 @@ export interface FileTab {
   file: MarkdownFile;
   /** Current content in the editor for this tab */
   content: string;
+  /** Original content when the tab was opened (for conflict detection) */
+  originalContent?: string;
   /** Whether this tab has unsaved changes */
   hasUnsavedChanges: boolean;
   /** Whether this tab is currently active */
@@ -312,6 +316,8 @@ export interface TabManagerProps extends BaseComponentProps {
   onNewTab?: () => void;
   /** Callback for tab context menu actions */
   onTabAction?: (tabId: string, action: TabAction) => void;
+  /** Callback when tabs are reordered */
+  onTabReorder?: (newTabs: FileTab[]) => void;
 }
 
 // === FILE WATCHING TYPES ===
@@ -356,4 +362,72 @@ export interface UserSettings {
   max_tabs?: number;
   /** Whether to restore tabs on startup */
   restore_tabs?: boolean;
+}
+
+// === SEARCH TYPES ===
+
+/**
+ * Search result item
+ */
+export interface SearchResult {
+  /** File path where match was found */
+  file_path: string;
+  /** File name without path */
+  file_name: string;
+  /** Line number (0-based) */
+  line_number: number;
+  /** Line content containing the match */
+  line_content: string;
+  /** Start position of match within the line */
+  match_start: number;
+  /** End position of match within the line */
+  match_end: number;
+  /** Context lines before the match */
+  context_before?: string[];
+  /** Context lines after the match */
+  context_after?: string[];
+}
+
+/**
+ * Search filters and options
+ */
+export interface SearchFilters {
+  /** Case sensitive search */
+  case_sensitive: boolean;
+  /** Whole word matching */
+  whole_word: boolean;
+  /** Use regular expressions */
+  use_regex: boolean;
+  /** Include file names in search */
+  include_file_names: boolean;
+  /** Maximum number of results */
+  max_results: number;
+}
+
+/**
+ * Search request parameters
+ */
+export interface SearchRequest {
+  /** Search query */
+  query: string;
+  /** Directory to search in */
+  directory: string;
+  /** Search filters */
+  filters: SearchFilters;
+}
+
+/**
+ * Search response from backend
+ */
+export interface SearchResponse {
+  /** Search results */
+  results: SearchResult[];
+  /** Total number of matches found */
+  total_matches: number;
+  /** Number of files searched */
+  files_searched: number;
+  /** Search duration in milliseconds */
+  duration_ms: number;
+  /** Whether search was truncated due to limits */
+  truncated: boolean;
 }

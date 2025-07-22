@@ -109,6 +109,57 @@ pub struct FileChangeEvent {
     pub timestamp: u64,
 }
 
+/// Search result item
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SearchResult {
+    /// File path where match was found
+    pub file_path: String,
+    /// File name without path
+    pub file_name: String,
+    /// Line number (0-based)
+    pub line_number: usize,
+    /// Line content containing the match
+    pub line_content: String,
+    /// Start position of match within the line
+    pub match_start: usize,
+    /// End position of match within the line
+    pub match_end: usize,
+    /// Context lines before the match
+    pub context_before: Option<Vec<String>>,
+    /// Context lines after the match
+    pub context_after: Option<Vec<String>>,
+}
+
+/// Search filters and options
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SearchFilters {
+    /// Case sensitive search
+    pub case_sensitive: bool,
+    /// Whole word matching
+    pub whole_word: bool,
+    /// Use regular expressions
+    pub use_regex: bool,
+    /// Include file names in search
+    pub include_file_names: bool,
+    /// Maximum number of results
+    pub max_results: usize,
+}
+
+/// Search response from backend
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SearchResponse {
+    /// Search results
+    pub results: Vec<SearchResult>,
+    /// Total number of matches found
+    pub total_matches: usize,
+    /// Number of files searched
+    pub files_searched: usize,
+    /// Search duration in milliseconds
+    pub duration_ms: u64,
+    /// Whether search was truncated due to limits
+    pub truncated: bool,
+}
+
 // Global file watcher state - stores handle to watcher task
 lazy_static::lazy_static! {
     static ref WATCHER_HANDLE: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>> = Arc::new(Mutex::new(None));
@@ -944,6 +995,359 @@ pub async fn stop_file_watcher() -> Result<String, String> {
     }
 }
 
+/// Search for text across all markdown files in a directory
+///
+/// Performs full-text search across all markdown files in the specified directory.
+/// Supports various search options including regex, case sensitivity, and whole word matching.
+///
+/// # Arguments
+///
+/// * `query` - Search query string
+/// * `directory` - Directory path to search in
+/// * `filters` - Search filters and options
+///
+/// # Returns
+///
+/// SearchResponse with results and metadata
+///
+/// Copy a file to a new location
+///
+/// Creates a copy of the specified file at a new location.
+/// Handles directory creation if needed.
+///
+/// # Arguments
+///
+/// * `source_path` - Full path to the source file
+/// * `dest_path` - Full path to the destination file
+///
+/// # Returns
+///
+/// Success status or error message if copy fails
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// await invoke('copy_file', { 
+///   sourcePath: '/path/to/source.md',
+///   destPath: '/path/to/destination.md'
+/// });
+/// ```
+#[tauri::command]
+pub async fn copy_file(source_path: String, dest_path: String) -> Result<String, String> {
+    log::info!("Copying file from {} to {}", source_path, dest_path);
+    
+    let source = Path::new(&source_path);
+    let dest = Path::new(&dest_path);
+    
+    // Validate source file exists
+    if !source.exists() {
+        return Err("Source file does not exist".to_string());
+    }
+    
+    if !source.is_file() {
+        return Err("Source path is not a file".to_string());
+    }
+    
+    // Ensure destination directory exists
+    if let Some(parent) = dest.parent() {
+        if let Err(e) = fs::create_dir_all(parent) {
+            log::error!("Failed to create destination directory {}: {}", parent.display(), e);
+            return Err(format!("Failed to create destination directory: {}", e));
+        }
+    }
+    
+    // Check if destination already exists
+    if dest.exists() {
+        return Err("Destination file already exists".to_string());
+    }
+    
+    // Perform the copy
+    match fs::copy(source, dest) {
+        Ok(bytes_copied) => {
+            log::info!("Successfully copied file: {} ({} bytes)", dest_path, bytes_copied);
+            Ok(format!("File copied successfully ({} bytes)", bytes_copied))
+        }
+        Err(e) => {
+            log::error!("Failed to copy file from {} to {}: {}", source_path, dest_path, e);
+            Err(format!("Failed to copy file: {}", e))
+        }
+    }
+}
+
+/// Move a file to a new location
+///
+/// Moves the specified file to a new location, effectively renaming/relocating it.
+/// Handles directory creation if needed.
+///
+/// # Arguments
+///
+/// * `source_path` - Full path to the source file
+/// * `dest_path` - Full path to the destination file
+///
+/// # Returns
+///
+/// Success status or error message if move fails
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// await invoke('move_file', { 
+///   sourcePath: '/path/to/source.md',
+///   destPath: '/path/to/destination.md'
+/// });
+/// ```
+#[tauri::command]
+pub async fn move_file(source_path: String, dest_path: String) -> Result<String, String> {
+    log::info!("Moving file from {} to {}", source_path, dest_path);
+    
+    let source = Path::new(&source_path);
+    let dest = Path::new(&dest_path);
+    
+    // Validate source file exists
+    if !source.exists() {
+        return Err("Source file does not exist".to_string());
+    }
+    
+    if !source.is_file() {
+        return Err("Source path is not a file".to_string());
+    }
+    
+    // Ensure destination directory exists
+    if let Some(parent) = dest.parent() {
+        if let Err(e) = fs::create_dir_all(parent) {
+            log::error!("Failed to create destination directory {}: {}", parent.display(), e);
+            return Err(format!("Failed to create destination directory: {}", e));
+        }
+    }
+    
+    // Check if destination already exists
+    if dest.exists() {
+        return Err("Destination file already exists".to_string());
+    }
+    
+    // Perform the move
+    match fs::rename(source, dest) {
+        Ok(()) => {
+            log::info!("Successfully moved file to: {}", dest_path);
+            Ok("File moved successfully".to_string())
+        }
+        Err(e) => {
+            log::error!("Failed to move file from {} to {}: {}", source_path, dest_path, e);
+            Err(format!("Failed to move file: {}", e))
+        }
+    }
+}
+
+/// Search across markdown files in a directory
+///
+/// Performs full-text search across all markdown files in the specified directory
+/// with support for various filters and options.
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// const response = await invoke('search_files', {
+///   query: 'TODO',
+///   directory: '/path/to/markdown/files',
+///   filters: {
+///     case_sensitive: false,
+///     whole_word: true,
+///     use_regex: false,
+///     include_file_names: true,
+///     max_results: 100
+///   }
+/// });
+/// ```
+#[tauri::command]
+pub async fn search_files(
+    query: String,
+    directory: String,
+    filters: SearchFilters,
+) -> Result<SearchResponse, String> {
+    let start_time = std::time::Instant::now();
+    
+    log::info!("Searching for '{}' in directory: {}", query, directory);
+    
+    let dir_path = Path::new(&directory);
+    if !dir_path.exists() || !dir_path.is_dir() {
+        return Err("Directory does not exist or is not a directory".to_string());
+    }
+
+    if query.trim().is_empty() {
+        return Ok(SearchResponse {
+            results: vec![],
+            total_matches: 0,
+            files_searched: 0,
+            duration_ms: start_time.elapsed().as_millis() as u64,
+            truncated: false,
+        });
+    }
+
+    let mut results = Vec::new();
+    let mut files_searched = 0;
+    let mut total_matches = 0;
+    let markdown_extensions = ["md", "markdown"];
+
+    // Prepare regex if needed
+    let regex_pattern = if filters.use_regex {
+        match regex::Regex::new(&query) {
+            Ok(re) => Some(re),
+            Err(e) => return Err(format!("Invalid regex pattern: {}", e)),
+        }
+    } else {
+        None
+    };
+
+    // Search through all markdown files
+    if let Ok(entries) = fs::read_dir(dir_path) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                
+                if path.is_file() {
+                    if let Some(extension) = path.extension() {
+                        let ext_str = extension.to_string_lossy().to_lowercase();
+                        if markdown_extensions.contains(&ext_str.as_str()) {
+                            files_searched += 1;
+                            
+                            if let Ok(content) = fs::read_to_string(&path) {
+                                let file_name = path.file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy()
+                                    .to_string();
+                                let file_path = path.to_string_lossy().to_string();
+
+                                // Search in file name if enabled
+                                if filters.include_file_names {
+                                    if let Some(match_result) = search_in_text(&file_name, &query, &filters, &regex_pattern) {
+                                        results.push(SearchResult {
+                                            file_path: file_path.clone(),
+                                            file_name: file_name.clone(),
+                                            line_number: 0,
+                                            line_content: format!("📁 {}", file_name),
+                                            match_start: match_result.0,
+                                            match_end: match_result.1,
+                                            context_before: None,
+                                            context_after: None,
+                                        });
+                                        total_matches += 1;
+                                    }
+                                }
+
+                                // Search in file content
+                                let lines: Vec<&str> = content.lines().collect();
+                                for (line_number, line) in lines.iter().enumerate() {
+                                    if let Some(match_result) = search_in_text(line, &query, &filters, &regex_pattern) {
+                                        let context_before = if line_number > 0 {
+                                            Some(lines.get(line_number.saturating_sub(2)..line_number)
+                                                .unwrap_or(&[])
+                                                .iter()
+                                                .map(|s| s.to_string())
+                                                .collect())
+                                        } else {
+                                            None
+                                        };
+
+                                        let context_after = if line_number < lines.len() - 1 {
+                                            Some(lines.get(line_number + 1..std::cmp::min(line_number + 3, lines.len()))
+                                                .unwrap_or(&[])
+                                                .iter()
+                                                .map(|s| s.to_string())
+                                                .collect())
+                                        } else {
+                                            None
+                                        };
+
+                                        results.push(SearchResult {
+                                            file_path: file_path.clone(),
+                                            file_name: file_name.clone(),
+                                            line_number,
+                                            line_content: line.to_string(),
+                                            match_start: match_result.0,
+                                            match_end: match_result.1,
+                                            context_before,
+                                            context_after,
+                                        });
+                                        total_matches += 1;
+
+                                        // Check max results limit
+                                        if results.len() >= filters.max_results {
+                                            let duration = start_time.elapsed().as_millis() as u64;
+                                            log::info!("Search completed with {} results in {}ms (truncated)", results.len(), duration);
+                                            return Ok(SearchResponse {
+                                                results,
+                                                total_matches,
+                                                files_searched,
+                                                duration_ms: duration,
+                                                truncated: true,
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let duration = start_time.elapsed().as_millis() as u64;
+    log::info!("Search completed with {} results in {}ms", results.len(), duration);
+
+    Ok(SearchResponse {
+        results,
+        total_matches,
+        files_searched,
+        duration_ms: duration,
+        truncated: false,
+    })
+}
+
+/// Search for a pattern in text with various options
+fn search_in_text(
+    text: &str,
+    query: &str,
+    filters: &SearchFilters,
+    regex_pattern: &Option<regex::Regex>,
+) -> Option<(usize, usize)> {
+    if filters.use_regex {
+        if let Some(re) = regex_pattern {
+            if let Some(mat) = re.find(text) {
+                return Some((mat.start(), mat.end()));
+            }
+        }
+        return None;
+    }
+
+    let search_text = if filters.case_sensitive { text } else { &text.to_lowercase() };
+    let search_query = if filters.case_sensitive { query } else { &query.to_lowercase() };
+
+    if filters.whole_word {
+        // Find word boundaries
+        let words: Vec<&str> = search_text.split_whitespace().collect();
+        for (i, word) in words.iter().enumerate() {
+            if word == &search_query {
+                // Calculate position in original text
+                let mut pos = 0;
+                for j in 0..i {
+                    pos += words[j].len() + 1; // +1 for space
+                }
+                return Some((pos, pos + query.len()));
+            }
+        }
+        None
+    } else {
+        search_text.find(search_query).map(|start| (start, start + query.len()))
+    }
+}
+
 /// Handle individual file system events
 ///
 /// Processes file change events and emits appropriate events to the frontend.
@@ -982,5 +1386,85 @@ async fn handle_file_event(app: &AppHandle, path: &std::path::Path, _kind: &Debo
     // Emit event to frontend
     if let Err(e) = app.emit("file-changed", &change_event) {
         log::error!("Failed to emit file change event: {}", e);
+    }
+}
+
+/// Replace text in a file with new content
+///
+/// Replaces all occurrences of a search term with a replacement term in the specified file.
+/// Supports both simple string replacement and regex patterns.
+///
+/// # Arguments
+///
+/// * `file_path` - Path to the file to modify
+/// * `search_term` - Text to search for (can be regex if contains regex characters)
+/// * `replace_term` - Text to replace matches with
+///
+/// # Returns
+///
+/// Success message with number of replacements or error details
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// await invoke('replace_in_file', {
+///   file_path: '/path/to/file.md',
+///   search_term: 'TODO',
+///   replace_term: 'DONE'
+/// });
+/// ```
+#[tauri::command]
+pub async fn replace_in_file(file_path: String, search_term: String, replace_term: String) -> Result<String, String> {
+    log::info!("Replacing '{}' with '{}' in file: {}", search_term, replace_term, file_path);
+    
+    // Validate file path
+    let path = Path::new(&file_path);
+    
+    if !path.exists() {
+        return Err(format!("File does not exist: {}", file_path));
+    }
+    
+    if !path.is_file() {
+        return Err(format!("Path is not a file: {}", file_path));
+    }
+    
+    // Read the file content
+    let content = match fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(e) => return Err(format!("Failed to read file: {}", e)),
+    };
+    
+    // Perform replacement
+    let new_content = if search_term.contains("\\") || search_term.contains(".*") || search_term.contains("+") {
+        // Treat as regex if it contains regex special characters
+        match regex::Regex::new(&search_term) {
+            Ok(regex) => regex.replace_all(&content, replace_term.as_str()).to_string(),
+            Err(e) => return Err(format!("Invalid regex pattern: {}", e)),
+        }
+    } else {
+        // Simple string replacement
+        content.replace(&search_term, &replace_term)
+    };
+    
+    // Count replacements made
+    let original_matches = content.matches(&search_term).count();
+    let new_matches = new_content.matches(&search_term).count();
+    let replacements_made = original_matches - new_matches;
+    
+    if replacements_made == 0 {
+        return Ok(format!("No matches found for '{}' in {}", search_term, path.file_name().unwrap_or_default().to_string_lossy()));
+    }
+    
+    // Write the updated content back to the file
+    match fs::write(path, new_content) {
+        Ok(_) => {
+            log::info!("Successfully replaced {} occurrence(s) in {}", replacements_made, file_path);
+            Ok(format!("Replaced {} occurrence(s) of '{}' with '{}' in {}", 
+                       replacements_made, search_term, replace_term, 
+                       path.file_name().unwrap_or_default().to_string_lossy()))
+        }
+        Err(e) => Err(format!("Failed to write file: {}", e)),
     }
 }

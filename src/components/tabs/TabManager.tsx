@@ -11,6 +11,21 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { FileTab } from './FileTab';
 import type { TabManagerProps } from '@/types';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+} from '@dnd-kit/sortable';
 
 /**
  * Tab manager component that handles all tab operations
@@ -24,6 +39,7 @@ export const TabManager: React.FC<TabManagerProps> = ({
   onTabClose,
   onNewTab,
   onTabAction,
+  onTabReorder,
   className = '',
   ...props
 }) => {
@@ -32,6 +48,19 @@ export const TabManager: React.FC<TabManagerProps> = ({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // === DRAG AND DROP SENSORS ===
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // === COMPUTED VALUES ===
 
@@ -96,6 +125,20 @@ export const TabManager: React.FC<TabManagerProps> = ({
 
   const handleNewTab = () => {
     onNewTab?.();
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id && onTabReorder) {
+      const oldIndex = tabState.openTabs.findIndex(tab => tab.id === active.id);
+      const newIndex = tabState.openTabs.findIndex(tab => tab.id === over?.id);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newTabs = arrayMove(tabState.openTabs, oldIndex, newIndex);
+        onTabReorder(newTabs);
+      }
+    }
   };
 
   // === KEYBOARD SHORTCUTS ===
@@ -192,20 +235,31 @@ export const TabManager: React.FC<TabManagerProps> = ({
           className="h-full"
           onScroll={updateScrollButtons}
         >
-          <div className="flex h-full">
-            {tabState.openTabs.map((tab) => (
-              <FileTab
-                key={tab.id}
-                tab={tab}
-                isActive={tab.id === tabState.activeTabId}
-                onActivate={handleTabActivate}
-                onClose={onTabClose}
-                onContextMenu={onTabAction}
-                data-tab-id={tab.id}
-                className="flex-shrink-0"
-              />
-            ))}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={tabState.openTabs.map(tab => tab.id)}
+              strategy={horizontalListSortingStrategy}
+            >
+              <div className="flex h-full">
+                {tabState.openTabs.map((tab) => (
+                  <FileTab
+                    key={tab.id}
+                    tab={tab}
+                    isActive={tab.id === tabState.activeTabId}
+                    onActivate={handleTabActivate}
+                    onClose={onTabClose}
+                    onContextMenu={onTabAction}
+                    data-tab-id={tab.id}
+                    className="flex-shrink-0"
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         </ScrollArea>
       </div>
 

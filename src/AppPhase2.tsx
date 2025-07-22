@@ -7,14 +7,20 @@
 
 import React, { useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Save, Menu, FolderOpen } from 'lucide-react';
+import { Save, Menu, FolderOpen, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FileBrowserSidebar } from '@/components/file-browser/FileBrowserSidebar';
+import { FileChangeManager } from '@/components/file-browser/FileChangeManager';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
 import { TabManager } from '@/components/tabs';
+import { SettingsManager } from '@/components/settings';
+import { GlobalSearch } from '@/components/search';
+import { CommandPalette } from '@/components/command-palette';
+import { WritingMode } from '@/components/editor/WritingMode';
 import { useFileManager } from '@/hooks/useFileManager';
 import { useTabManager } from '@/hooks/useTabManager';
 import { useFileWatcher } from '@/hooks/useFileWatcher';
+import { useCommands } from '@/hooks/useCommands';
 import type { PermissionStatus, Theme, MarkdownFile, FileOperation } from '@/types';
 import './styles/globals.css';
 
@@ -57,6 +63,8 @@ export const AppPhase2: React.FC = () => {
     saveTab,
     handleTabAction,
     saveAllTabs,
+    clearPersistedTabs,
+    reorderTabs,
   } = useTabManager();
 
   // === FILE WATCHER (Phase 2) ===
@@ -68,6 +76,62 @@ export const AppPhase2: React.FC = () => {
     // clearEvents, // TODO: Add UI to clear event history  
     // getEventsForFile, // TODO: Show events for specific files
   } = useFileWatcher();
+
+  // === SETTINGS MANAGEMENT ===
+  
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+
+  // === GLOBAL SEARCH ===
+  
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = React.useState(false);
+
+  // === COMMAND PALETTE ===
+  
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState(false);
+
+  // === WRITING MODE ===
+  
+  const [isWritingModeActive, setIsWritingModeActive] = React.useState(false);
+
+  // Create new file handler
+  const createNewFile = async () => {
+    if (!fileState.currentFolder) return;
+    
+    try {
+      const fileName = `new-file-${Date.now()}.md`;
+      await handleFileOperation({
+        type: 'create',
+        name: fileName,
+      });
+    } catch (error) {
+      console.error('Failed to create new file:', error);
+    }
+  };
+
+  // Close all tabs handler
+  const closeAllTabs = async () => {
+    try {
+      const tabIds = tabState.openTabs.map(tab => tab.id);
+      for (const tabId of tabIds) {
+        await closeTab(tabId);
+      }
+    } catch (error) {
+      console.error('Failed to close all tabs:', error);
+    }
+  };
+
+  // Reopen last closed tab handler (placeholder)
+  const reopenLastClosedTab = async () => {
+    // TODO: Implement closed tab tracking
+    console.log('Reopen last closed tab - not yet implemented');
+  };
+
+  // Refresh file list handler
+  const refreshFileList = async () => {
+    if (fileState.currentFolder) {
+      await loadFolder(fileState.currentFolder);
+    }
+  };
 
   // === THEME MANAGEMENT ===
   
@@ -195,6 +259,112 @@ export const AppPhase2: React.FC = () => {
     }
   };
 
+  // Command handlers for the command palette
+  const commandHandlers = {
+    saveActiveTab,
+    saveAllTabs: async () => {
+      await saveAllTabs();
+    },
+    selectFolder,
+    createNewFile,
+    openGlobalSearch: () => setIsGlobalSearchOpen(true),
+    openSettings: () => setIsSettingsOpen(true),
+    toggleTheme,
+    closeActiveTab: async () => {
+      if (activeTab) {
+        await closeTab(activeTab.id);
+      }
+    },
+    closeAllTabs,
+    reopenLastClosedTab,
+    refreshFileList,
+    clearPersistedTabs,
+    enterWritingMode: () => setIsWritingModeActive(true),
+    exitWritingMode: () => setIsWritingModeActive(false),
+  };
+
+  // Available commands
+  const commands = useCommands({
+    hasUnsavedChanges,
+    hasActiveTab: !!activeTab,
+    hasFolderSelected: !!fileState.currentFolder,
+    theme: fileState.theme,
+    handlers: commandHandlers,
+  });
+
+  /**
+   * Handle search result selection - open file in tab and jump to line
+   */
+  const handleSearchResultSelect = async (file: MarkdownFile, lineNumber?: number) => {
+    try {
+      // Open the file in a tab
+      const tabId = await openTab(file);
+      
+      // If line number provided, we could scroll to it (future enhancement)
+      if (lineNumber !== undefined) {
+        console.log(`TODO: Scroll to line ${lineNumber + 1} in tab ${tabId}`);
+      }
+    } catch (error) {
+      console.error('Failed to open search result:', error);
+    }
+  };
+
+  /**
+   * Handle replace in file operation
+   */
+  const handleReplaceInFile = async (filePath: string, searchTerm: string, replaceTerm: string): Promise<boolean> => {
+    try {
+      console.log('Replacing in file:', filePath, searchTerm, '->', replaceTerm);
+      const result = await invoke<string>('replace_in_file', {
+        file_path: filePath,
+        search_term: searchTerm,
+        replace_term: replaceTerm,
+      });
+      
+      console.log('Replace result:', result);
+      
+      // Update any open tabs with this file
+      const affectedTab = tabState.openTabs.find(tab => tab.file.path === filePath);
+      if (affectedTab) {
+        // Re-read the file content
+        const newContent = await invoke<string>('read_file', { path: filePath });
+        updateTabContent(affectedTab.id, newContent);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to replace in file:', error);
+      return false;
+    }
+  };
+
+  /**
+   * Reload a file's content in its tab (for external changes)
+   */
+  const reloadFileInTab = async (filePath: string) => {
+    try {
+      console.log('Reloading file in tab:', filePath);
+      
+      // Find the tab with this file
+      const tab = tabState.openTabs.find(t => t.file.path === filePath);
+      if (!tab) {
+        console.warn('No tab found for file:', filePath);
+        return;
+      }
+
+      // Read the latest file content
+      const content = await invoke<string>('read_file', { path: filePath });
+      
+      // Update the tab content
+      updateTabContent(tab.id, content);
+      
+      console.log('File reloaded successfully in tab:', tab.file.name);
+    } catch (error) {
+      console.error('Failed to reload file in tab:', error);
+      throw new Error(`Failed to reload file: ${error}`);
+    }
+  };
+
   // === INITIALIZATION ===
   
   useEffect(() => {
@@ -238,6 +408,22 @@ export const AppPhase2: React.FC = () => {
             // Ctrl+O: Open folder
             e.preventDefault();
             selectFolder();
+            break;
+          case 'f':
+          case 'F':
+            // Ctrl+Shift+F: Global search
+            if (e.shiftKey) {
+              e.preventDefault();
+              setIsGlobalSearchOpen(true);
+            }
+            break;
+          case 'p':
+          case 'P':
+            // Ctrl+Shift+P: Command palette
+            if (e.shiftKey) {
+              e.preventDefault();
+              setIsCommandPaletteOpen(true);
+            }
             break;
         }
       }
@@ -318,6 +504,16 @@ export const AppPhase2: React.FC = () => {
             </Button>
           )}
           
+          {/* Settings Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsSettingsOpen(true)}
+            title="Open settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+          
           {/* Theme Toggle */}
           <Button
             variant="ghost"
@@ -336,7 +532,21 @@ export const AppPhase2: React.FC = () => {
         onTabActivate={activateTab}
         onTabClose={closeTab}
         onTabAction={handleTabAction}
+        onTabReorder={reorderTabs}
       />
+
+      {/* File Change Notifications */}
+      {watcherState.recentEvents.length > 0 && (
+        <div className="px-4 py-2 border-b border-border bg-muted/30">
+          <FileChangeManager
+            events={watcherState.recentEvents}
+            openTabs={tabState.openTabs}
+            onReloadFile={reloadFileInTab}
+            onCloseTab={closeTab}
+            onRefreshFileList={() => fileState.currentFolder ? loadFolder(fileState.currentFolder) : Promise.resolve()}
+          />
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex min-h-0">
@@ -426,6 +636,43 @@ export const AppPhase2: React.FC = () => {
           </div>
         </footer>
       )}
+
+      {/* Settings Dialog */}
+      <SettingsManager
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
+
+      {/* Global Search Dialog */}
+      <GlobalSearch
+        isOpen={isGlobalSearchOpen}
+        onClose={() => setIsGlobalSearchOpen(false)}
+        currentFolder={fileState.currentFolder}
+        onResultSelect={handleSearchResultSelect}
+        onReplaceInFile={handleReplaceInFile}
+      />
+
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        commands={commands}
+      />
+
+      {/* Writing Mode */}
+      <WritingMode
+        isActive={isWritingModeActive}
+        content={activeTab?.content || ''}
+        fileName={activeTab?.file.name}
+        hasUnsavedChanges={activeTab?.hasUnsavedChanges}
+        onChange={(content: string) => {
+          if (activeTab) {
+            updateTabContent(activeTab.id, content);
+          }
+        }}
+        onExit={() => setIsWritingModeActive(false)}
+        onSave={saveActiveTab}
+      />
     </div>
   );
 };

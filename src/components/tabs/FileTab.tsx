@@ -16,6 +16,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { FileTabProps, TabAction } from '@/types';
+import {
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 /**
  * Individual file tab component
@@ -33,6 +37,24 @@ export const FileTab: React.FC<FileTabProps> = ({
   className = '',
   ...props
 }) => {
+  // === SORTABLE SETUP ===
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: tab.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 1000 : 'auto',
+    opacity: isDragging ? 0.8 : 1,
+  };
+
   // === LOCAL STATE ===
 
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
@@ -84,8 +106,11 @@ export const FileTab: React.FC<FileTabProps> = ({
 
   return (
     <div
-      className={`relative group ${className}`}
+      ref={setNodeRef}
+      style={style}
+      className={`relative group ${className} ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
       onContextMenu={handleContextMenu}
+      {...attributes}
       {...props}
     >
       <Button
@@ -104,7 +129,9 @@ export const FileTab: React.FC<FileTabProps> = ({
             : 'bg-muted/30 text-muted-foreground hover:bg-muted/60 hover:text-foreground'
           }
           ${tab.hasUnsavedChanges ? 'italic' : ''}
+          ${isDragging ? 'shadow-lg ring-2 ring-primary/20' : ''}
         `}
+        {...listeners}
       >
         {/* File name */}
         <span className="truncate flex-1 text-left">

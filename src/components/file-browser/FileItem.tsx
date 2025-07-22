@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { FileText, MoreHorizontal, Edit3, Trash2 } from 'lucide-react';
+import { FileText, MoreHorizontal, Edit3, Trash2, Copy, Move } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -69,7 +69,10 @@ export const FileItem: React.FC<FileItemProps> = ({
   
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [showCopyDialog, setShowCopyDialog] = useState(false);
+  const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [newFileName, setNewFileName] = useState('');
+  const [newFilePath, setNewFilePath] = useState('');
 
   // === FILE METADATA FORMATTERS ===
   
@@ -162,6 +165,62 @@ export const FileItem: React.FC<FileItemProps> = ({
     setShowDeleteDialog(false);
   };
 
+  /**
+   * Handle copy operation
+   */
+  const handleCopy = () => {
+    const displayName = getDisplayName(file.name);
+    setNewFilePath(`${displayName}_copy.md`);
+    setShowCopyDialog(true);
+  };
+
+  /**
+   * Confirm copy operation
+   */
+  const handleConfirmCopy = () => {
+    if (newFilePath.trim() && onFileOperation) {
+      // Get the parent directory of the source file
+      const parentDir = file.path.substring(0, file.path.lastIndexOf('/'));
+      const destPath = `${parentDir}/${newFilePath.trim()}`;
+      
+      onFileOperation({
+        type: 'copy',
+        sourcePath: file.path,
+        destPath: destPath,
+      });
+    }
+    setShowCopyDialog(false);
+    setNewFilePath('');
+  };
+
+  /**
+   * Handle move operation
+   */
+  const handleMove = () => {
+    const displayName = getDisplayName(file.name);
+    setNewFilePath(displayName);
+    setShowMoveDialog(true);
+  };
+
+  /**
+   * Confirm move operation
+   */
+  const handleConfirmMove = () => {
+    if (newFilePath.trim() && onFileOperation) {
+      // Get the parent directory of the source file
+      const parentDir = file.path.substring(0, file.path.lastIndexOf('/'));
+      const destPath = `${parentDir}/${newFilePath.trim()}`;
+      
+      onFileOperation({
+        type: 'move',
+        sourcePath: file.path,
+        destPath: destPath,
+      });
+    }
+    setShowMoveDialog(false);
+    setNewFilePath('');
+  };
+
   // === RENDER ===
 
   return (
@@ -212,6 +271,21 @@ export const FileItem: React.FC<FileItemProps> = ({
                   }}>
                     <Edit3 className="h-4 w-4 mr-2" />
                     Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={(e) => {
+                    e.stopPropagation();
+                    handleCopy();
+                  }}>
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e) => {
+                    e.stopPropagation();
+                    handleMove();
+                  }}>
+                    <Move className="h-4 w-4 mr-2" />
+                    Move
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
@@ -295,6 +369,92 @@ export const FileItem: React.FC<FileItemProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Copy Dialog */}
+      <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Copy File</DialogTitle>
+            <DialogDescription>
+              Enter a name for the copy of "{getDisplayName(file.name)}"
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="copyFileName">File Name</Label>
+            <Input
+              id="copyFileName"
+              value={newFilePath}
+              onChange={(e) => setNewFilePath(e.target.value)}
+              placeholder="Enter file name..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleConfirmCopy();
+                if (e.key === 'Escape') setShowCopyDialog(false);
+              }}
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">
+              The file will be copied to the same directory
+            </p>
+          </div>
+          <DialogFooter className="flex space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowCopyDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleConfirmCopy}
+              disabled={!newFilePath.trim()}
+            >
+              Copy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Move Dialog */}
+      <Dialog open={showMoveDialog} onOpenChange={setShowMoveDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Move File</DialogTitle>
+            <DialogDescription>
+              Enter a new name for "{getDisplayName(file.name)}"
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="moveFileName">File Name</Label>
+            <Input
+              id="moveFileName"
+              value={newFilePath}
+              onChange={(e) => setNewFilePath(e.target.value)}
+              placeholder="Enter file name..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleConfirmMove();
+                if (e.key === 'Escape') setShowMoveDialog(false);
+              }}
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">
+              The file will be moved within the same directory
+            </p>
+          </div>
+          <DialogFooter className="flex space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowMoveDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleConfirmMove}
+              disabled={!newFilePath.trim()}
+            >
+              Move
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

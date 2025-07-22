@@ -1,8 +1,8 @@
 /**
- * @fileoverview Settings management hook for Phase 1 functionality
+ * @fileoverview Settings management hook for Phase 2 functionality
  * @author Development Team
  * @created 2024-01-XX
- * @phase 1 - Settings persistence and management
+ * @phase 2 - Enhanced settings persistence and management
  */
 
 import { useState, useCallback, useEffect } from 'react';

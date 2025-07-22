@@ -5,7 +5,7 @@
  * @phase 2 - Tab management and multi-file state
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { 
   MarkdownFile, 
@@ -55,6 +55,96 @@ export const useTabManager = () => {
     return tabState.openTabs.find(tab => tab.file.path === file.path) || null;
   }, [tabState.openTabs]);
 
+  // === TAB PERSISTENCE ===
+
+  /**
+   * Save current tab state to localStorage
+   */
+  const saveTabsToStorage = useCallback((state: TabManagerState) => {
+    try {
+      const persistedState = {
+        openTabs: state.openTabs.map(tab => ({
+          id: tab.id,
+          filePath: tab.file.path,
+          fileName: tab.file.name,
+          hasUnsavedChanges: tab.hasUnsavedChanges,
+          isActive: tab.isActive,
+          // Don't persist the actual content, we'll reload it
+        })),
+        activeTabId: state.activeTabId,
+        maxTabs: state.maxTabs,
+      };
+      localStorage.setItem('gtdspace-tabs', JSON.stringify(persistedState));
+    } catch (error) {
+      console.warn('Failed to save tabs to localStorage:', error);
+    }
+  }, []);
+
+  /**
+   * Load tab state from localStorage
+   */
+  const loadTabsFromStorage = useCallback(async (): Promise<TabManagerState | null> => {
+    try {
+      const stored = localStorage.getItem('gtdspace-tabs');
+      if (!stored) return null;
+
+      const persistedState = JSON.parse(stored);
+      const validTabs: FileTab[] = [];
+
+      // Validate and restore each tab
+      for (const tabInfo of persistedState.openTabs || []) {
+        try {
+          // Check if file still exists and get updated metadata
+          const fileContent = await invoke<string>('read_file', { path: tabInfo.filePath });
+          
+          // Create a minimal MarkdownFile object (we might not have all metadata)
+          const file: MarkdownFile = {
+            id: tabInfo.filePath,
+            name: tabInfo.fileName,
+            path: tabInfo.filePath,
+            size: fileContent.length,
+            last_modified: Date.now(), // We don't have the real timestamp
+            extension: tabInfo.fileName.split('.').pop() || 'md',
+          };
+
+          const tab: FileTab = {
+            id: tabInfo.id,
+            file,
+            content: fileContent,
+            hasUnsavedChanges: false, // Reset unsaved changes on restore
+            isActive: tabInfo.id === persistedState.activeTabId,
+          };
+
+          validTabs.push(tab);
+        } catch (error) {
+          console.warn(`Failed to restore tab for file: ${tabInfo.filePath}`, error);
+          // Skip this tab if file no longer exists or can't be read
+        }
+      }
+
+      return {
+        openTabs: validTabs,
+        activeTabId: validTabs.length > 0 ? (persistedState.activeTabId || validTabs[0].id) : null,
+        maxTabs: persistedState.maxTabs || 10,
+        recentlyClosed: [],
+      };
+    } catch (error) {
+      console.warn('Failed to load tabs from localStorage:', error);
+      return null;
+    }
+  }, []);
+
+  /**
+   * Clear persisted tab state
+   */
+  const clearPersistedTabs = useCallback(() => {
+    try {
+      localStorage.removeItem('gtdspace-tabs');
+    } catch (error) {
+      console.warn('Failed to clear persisted tabs:', error);
+    }
+  }, []);
+
   // === TAB OPERATIONS ===
 
   /**
@@ -87,6 +177,7 @@ export const useTabManager = () => {
         id: tabId,
         file,
         content,
+        originalContent: content,
         hasUnsavedChanges: false,
         isActive: true,
         cursorPosition: 0,
@@ -197,12 +288,13 @@ export const useTabManager = () => {
           ? { 
               ...tab, 
               content,
-              hasUnsavedChanges: tab.content !== content,
+              hasUnsavedChanges: (tab.originalContent || tab.content) !== content,
             }
           : tab
       ),
     }));
   }, []);
+
 
   /**
    * Save content for a specific tab
@@ -236,6 +328,93 @@ export const useTabManager = () => {
       throw new Error(`Failed to save file: ${error}`);
     }
   }, [tabState.openTabs]);
+
+  /**
+   * Check if a tab has conflicts with external file changes
+   */
+  const checkForConflicts = useCallback(async (tabId: string): Promise<boolean> => {
+    const tab = tabState.openTabs.find(t => t.id === tabId);
+    if (!tab || !tab.hasUnsavedChanges) return false;
+
+    try {
+      // Read the current file content from disk
+      const currentFileContent = await invoke<string>('read_file', { 
+        path: tab.file.path 
+      });
+
+      // Compare with original content when the tab was opened
+      const originalContent = tab.originalContent || tab.content;
+      return currentFileContent !== originalContent;
+    } catch (error) {
+      console.error('Failed to check for conflicts:', error);
+      return false;
+    }
+  }, [tabState.openTabs]);
+
+  /**
+   * Get external file content for conflict resolution
+   */
+  const getExternalContent = useCallback(async (tabId: string): Promise<string | null> => {
+    const tab = tabState.openTabs.find(t => t.id === tabId);
+    if (!tab) return null;
+
+    try {
+      return await invoke<string>('read_file', { path: tab.file.path });
+    } catch (error) {
+      console.error('Failed to read external content:', error);
+      return null;
+    }
+  }, [tabState.openTabs]);
+
+  /**
+   * Resolve conflict by applying chosen resolution
+   */
+  const resolveConflict = useCallback(async (tabId: string, resolution: any): Promise<boolean> => {
+    const tab = tabState.openTabs.find(t => t.id === tabId);
+    if (!tab) return false;
+
+    try {
+      let contentToUse: string;
+      
+      switch (resolution.action) {
+        case 'keep-local':
+          contentToUse = tab.content;
+          break;
+        case 'use-external':
+          const externalContent = await getExternalContent(tabId);
+          if (externalContent === null) return false;
+          contentToUse = externalContent;
+          break;
+        case 'manual-merge':
+          contentToUse = resolution.content;
+          break;
+        default:
+          return false;
+      }
+
+      // Update the tab with resolved content
+      setTabState(prev => ({
+        ...prev,
+        openTabs: prev.openTabs.map(t =>
+          t.id === tabId
+            ? {
+                ...t,
+                content: contentToUse,
+                originalContent: contentToUse,
+                hasUnsavedChanges: false,
+              }
+            : t
+        ),
+      }));
+
+      // Save the resolved content to file
+      await saveTab(tabId);
+      return true;
+    } catch (error) {
+      console.error('Failed to resolve conflict:', error);
+      return false;
+    }
+  }, [tabState.openTabs, getExternalContent, saveTab]);
 
   /**
    * Handle tab context menu actions
@@ -332,6 +511,67 @@ export const useTabManager = () => {
     }
   }, [tabState.openTabs, saveTab]);
 
+  /**
+   * Reorder tabs based on new order
+   */
+  const reorderTabs = useCallback((newTabs: FileTab[]) => {
+    setTabState(prev => ({
+      ...prev,
+      openTabs: newTabs,
+    }));
+    console.log('Tabs reordered');
+  }, []);
+
+  // === PERSISTENCE EFFECTS ===
+
+  /**
+   * Initialize tabs from localStorage on mount
+   */
+  useEffect(() => {
+    const initializeTabs = async () => {
+      try {
+        const restoredState = await loadTabsFromStorage();
+        if (restoredState && restoredState.openTabs.length > 0) {
+          setTabState(restoredState);
+          console.log(`Restored ${restoredState.openTabs.length} tabs from previous session`);
+        }
+      } catch (error) {
+        console.warn('Failed to initialize tabs from storage:', error);
+      }
+    };
+
+    initializeTabs();
+  }, []); // Only run on mount
+
+  /**
+   * Save tabs to localStorage whenever tab state changes
+   */
+  useEffect(() => {
+    // Only save if we have tabs to save
+    if (tabState.openTabs.length > 0) {
+      saveTabsToStorage(tabState);
+    } else {
+      // Clear storage if no tabs are open
+      clearPersistedTabs();
+    }
+  }, [tabState, saveTabsToStorage, clearPersistedTabs]);
+
+  /**
+   * Save tabs before page unload
+   */
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (tabState.openTabs.length > 0) {
+        saveTabsToStorage(tabState);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [tabState, saveTabsToStorage]);
+
   // === RETURN STATE AND OPERATIONS ===
 
   return {
@@ -350,9 +590,18 @@ export const useTabManager = () => {
     reopenLastClosedTab,
     closeAllTabs,
     saveAllTabs,
+    reorderTabs,
+    
+    // Conflict resolution
+    checkForConflicts,
+    getExternalContent,
+    resolveConflict,
     
     // Utilities
     findTabByFile,
+    
+    // Persistence
+    clearPersistedTabs,
   };
 };
 

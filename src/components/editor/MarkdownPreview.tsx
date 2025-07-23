@@ -311,7 +311,7 @@ export const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
     ),
 
     // Code elements with syntax highlighting
-    code({ node, inline, className, children, ...props }: any) {
+    code({ inline, className, children }: any) {
       if (inline) {
         return (
           <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-foreground">

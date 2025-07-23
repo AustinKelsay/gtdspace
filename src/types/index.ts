@@ -52,16 +52,6 @@ export interface BaseComponentProps {
   children?: React.ReactNode;
 }
 
-/**
- * Props for layout components
- */
-export interface LayoutProps extends BaseComponentProps {
-  /** Whether sidebar is open */
-  sidebarOpen?: boolean;
-  /** Callback when sidebar toggle is requested */
-  onSidebarToggle?: () => void;
-}
-
 // === ASYNC OPERATION TYPES ===
 
 /**

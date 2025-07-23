@@ -7,8 +7,9 @@
 
 import React, { useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Save, Menu, FolderOpen, Settings } from 'lucide-react';
+import { Menu, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { AppHeader } from '@/components/app/AppHeader';
 import { FileBrowserSidebar } from '@/components/file-browser/FileBrowserSidebar';
 import { FileChangeManager } from '@/components/file-browser/FileChangeManager';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
@@ -22,6 +23,8 @@ import { useTabManager } from '@/hooks/useTabManager';
 import { useFileWatcher } from '@/hooks/useFileWatcher';
 import { useCommands } from '@/hooks/useCommands';
 import { useSettings } from '@/hooks/useSettings';
+import { useModalManager } from '@/hooks/useModalManager';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import type { PermissionStatus, Theme, MarkdownFile, FileOperation } from '@/types';
 import './styles/globals.css';
 
@@ -42,7 +45,7 @@ import './styles/globals.css';
  */
 export const AppPhase2: React.FC = () => {
   // === FILE MANAGEMENT (Phase 1) ===
-  
+
   const {
     state: fileState,
     selectFolder,
@@ -52,7 +55,7 @@ export const AppPhase2: React.FC = () => {
   } = useFileManager();
 
   // === TAB MANAGEMENT (Phase 2) ===
-  
+
   const {
     tabState,
     activeTab,
@@ -69,7 +72,7 @@ export const AppPhase2: React.FC = () => {
   } = useTabManager();
 
   // === FILE WATCHER (Phase 2) ===
-  
+
   const {
     state: watcherState,
     startWatching,
@@ -79,26 +82,21 @@ export const AppPhase2: React.FC = () => {
   } = useFileWatcher();
 
   // === SETTINGS MANAGEMENT ===
-  
+
   const { settings, setTheme } = useSettings();
-  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
 
-  // === GLOBAL SEARCH ===
-  
-  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = React.useState(false);
+  // === MODAL MANAGEMENT ===
 
-  // === COMMAND PALETTE ===
-  
-  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState(false);
-
-  // === WRITING MODE ===
-  
-  const [isWritingModeActive, setIsWritingModeActive] = React.useState(false);
+  const {
+    isModalOpen,
+    openModal,
+    closeModal,
+  } = useModalManager();
 
   // Create new file handler
   const createNewFile = async () => {
     if (!fileState.currentFolder) return;
-    
+
     try {
       const fileName = `new-file-${Date.now()}.md`;
       await handleFileOperation({
@@ -136,10 +134,10 @@ export const AppPhase2: React.FC = () => {
   };
 
   // === THEME MANAGEMENT ===
-  
+
   const applyTheme = (theme: Theme) => {
     const root = document.documentElement;
-    
+
     if (theme === 'dark') {
       root.classList.add('dark');
     } else if (theme === 'light') {
@@ -162,7 +160,7 @@ export const AppPhase2: React.FC = () => {
   };
 
   // === INTEGRATED FILE OPERATIONS ===
-  
+
   /**
    * Handle file selection from sidebar - opens in new tab
    */
@@ -179,7 +177,7 @@ export const AppPhase2: React.FC = () => {
    */
   const handleSidebarFileOperation = async (operation: FileOperation) => {
     await handleFileOperation(operation);
-    
+
     // If we renamed or deleted a file that's open in a tab, we should handle it
     if (operation.type === 'delete') {
       const openTab = tabState.openTabs.find(tab => tab.file.path === operation.path);
@@ -206,9 +204,9 @@ export const AppPhase2: React.FC = () => {
    */
   React.useEffect(() => {
     if (watcherState.recentEvents.length === 0) return;
-    
+
     const latestEvent = watcherState.recentEvents[watcherState.recentEvents.length - 1];
-    
+
     // Handle different types of file changes
     switch (latestEvent.event_type) {
       case 'created':
@@ -217,7 +215,7 @@ export const AppPhase2: React.FC = () => {
           loadFolder(fileState.currentFolder);
         }
         break;
-      
+
       case 'deleted':
         // File deleted - close tab if open and refresh file list
         const deletedTab = tabState.openTabs.find(tab => tab.file.path === latestEvent.file_path);
@@ -228,7 +226,7 @@ export const AppPhase2: React.FC = () => {
           loadFolder(fileState.currentFolder);
         }
         break;
-      
+
       case 'modified':
         // File modified externally - show notification if tab is open
         const modifiedTab = tabState.openTabs.find(tab => tab.file.path === latestEvent.file_path);
@@ -270,8 +268,8 @@ export const AppPhase2: React.FC = () => {
     },
     selectFolder,
     createNewFile,
-    openGlobalSearch: () => setIsGlobalSearchOpen(true),
-    openSettings: () => setIsSettingsOpen(true),
+    openGlobalSearch: () => openModal('globalSearch'),
+    openSettings: () => openModal('settings'),
     toggleTheme,
     closeActiveTab: async () => {
       if (activeTab) {
@@ -282,8 +280,8 @@ export const AppPhase2: React.FC = () => {
     reopenLastClosedTab,
     refreshFileList,
     clearPersistedTabs,
-    enterWritingMode: () => setIsWritingModeActive(true),
-    exitWritingMode: () => setIsWritingModeActive(false),
+    enterWritingMode: () => openModal('writingMode'),
+    exitWritingMode: () => closeModal(),
   };
 
   // Available commands
@@ -302,7 +300,7 @@ export const AppPhase2: React.FC = () => {
     try {
       // Open the file in a tab
       const tabId = await openTab(file);
-      
+
       // If line number provided, we could scroll to it (future enhancement)
       if (lineNumber !== undefined) {
         console.log(`TODO: Scroll to line ${lineNumber + 1} in tab ${tabId}`);
@@ -323,9 +321,9 @@ export const AppPhase2: React.FC = () => {
         search_term: searchTerm,
         replace_term: replaceTerm,
       });
-      
+
       console.log('Replace result:', result);
-      
+
       // Update any open tabs with this file
       const affectedTab = tabState.openTabs.find(tab => tab.file.path === filePath);
       if (affectedTab) {
@@ -333,7 +331,7 @@ export const AppPhase2: React.FC = () => {
         const newContent = await invoke<string>('read_file', { path: filePath });
         updateTabContent(affectedTab.id, newContent);
       }
-      
+
       return true;
     } catch (error) {
       console.error('Failed to replace in file:', error);
@@ -347,7 +345,7 @@ export const AppPhase2: React.FC = () => {
   const reloadFileInTab = async (filePath: string) => {
     try {
       console.log('Reloading file in tab:', filePath);
-      
+
       // Find the tab with this file
       const tab = tabState.openTabs.find(t => t.file.path === filePath);
       if (!tab) {
@@ -357,10 +355,10 @@ export const AppPhase2: React.FC = () => {
 
       // Read the latest file content
       const content = await invoke<string>('read_file', { path: filePath });
-      
+
       // Update the tab content
       updateTabContent(tab.id, content);
-      
+
       console.log('File reloaded successfully in tab:', tab.file.name);
     } catch (error) {
       console.error('Failed to reload file in tab:', error);
@@ -369,165 +367,58 @@ export const AppPhase2: React.FC = () => {
   };
 
   // === INITIALIZATION ===
-  
+
   useEffect(() => {
     applyTheme(settings.theme);
-    
+
     const testBackend = async () => {
       try {
         console.log('Testing backend connectivity...');
         const pingResponse = await invoke<string>('ping');
         console.log('Backend connected:', pingResponse);
-        
+
         const permissions = await invoke<PermissionStatus>('check_permissions');
         console.log('Permissions:', permissions);
       } catch (error) {
         console.error('Backend connection failed:', error);
       }
     };
-    
+
     testBackend();
   }, [settings.theme]);
 
   // === KEYBOARD SHORTCUTS ===
-  
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key) {
-          case 's':
-          case 'S':
-            e.preventDefault();
-            if (e.shiftKey) {
-              // Ctrl+Shift+S: Save all
-              saveAllTabs();
-            } else {
-              // Ctrl+S: Save current
-              saveActiveTab();
-            }
-            break;
-          case 'o':
-          case 'O':
-            // Ctrl+O: Open folder
-            e.preventDefault();
-            selectFolder();
-            break;
-          case 'f':
-          case 'F':
-            // Ctrl+Shift+F: Global search
-            if (e.shiftKey) {
-              e.preventDefault();
-              setIsGlobalSearchOpen(true);
-            }
-            break;
-          case 'p':
-          case 'P':
-            // Ctrl+Shift+P: Command palette
-            if (e.shiftKey) {
-              e.preventDefault();
-              setIsCommandPaletteOpen(true);
-            }
-            break;
-        }
-      }
-    };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, saveAllTabs, saveActiveTab, selectFolder]);
+  useKeyboardShortcuts({
+    onSaveActive: async () => { await saveActiveTab(); },
+    onSaveAll: async () => { await saveAllTabs(); },
+    onOpenFolder: selectFolder,
+    onOpenGlobalSearch: () => openModal('globalSearch'),
+    onOpenCommandPalette: () => openModal('commandPalette'),
+  });
 
   // === RENDER HELPERS ===
-  
-  const getSaveStatus = () => {
-    if (!activeTab) return '';
-    
-    if (activeTab.hasUnsavedChanges) {
-      return 'Unsaved changes';
-    }
-    
-    return hasUnsavedChanges ? `${tabState.openTabs.filter(tab => tab.hasUnsavedChanges).length} files unsaved` : 'All saved';
-  };
-
-  const getCurrentFileName = () => {
-    if (!activeTab) return 'GTD Space';
-    return activeTab.file.name.replace(/\.(md|markdown)$/i, '');
-  };
 
   const getTabCount = () => {
     return tabState.openTabs.length;
   };
 
   // === MAIN APPLICATION LAYOUT ===
-  
+
   return (
     <div className="h-screen flex flex-col bg-background text-foreground">
       {/* Header Bar */}
-      <header className="h-12 border-b border-border flex items-center justify-between px-4 bg-card">
-        <div className="flex items-center space-x-4">
-          <h1 className="text-lg font-semibold">
-            {getCurrentFileName()}
-          </h1>
-          {activeTab?.hasUnsavedChanges && (
-            <span className="w-2 h-2 rounded-full bg-destructive" title="Unsaved changes" />
-          )}
-          {getTabCount() > 0 && (
-            <span className="text-xs text-muted-foreground">
-              ({getTabCount()} file{getTabCount() !== 1 ? 's' : ''})
-            </span>
-          )}
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          {/* Save Status */}
-          <span className="text-xs text-muted-foreground">
-            {getSaveStatus()}
-          </span>
-          
-          {/* Save Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={saveActiveTab}
-            disabled={!activeTab?.hasUnsavedChanges}
-            title="Save file (Ctrl+S)"
-          >
-            <Save className="h-4 w-4" />
-          </Button>
-          
-          {/* Save All Button */}
-          {hasUnsavedChanges && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={saveAllTabs}
-              title="Save all files (Ctrl+Shift+S)"
-              className="text-xs"
-            >
-              Save All
-            </Button>
-          )}
-          
-          {/* Settings Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsSettingsOpen(true)}
-            title="Open settings"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
-          
-          {/* Theme Toggle */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={toggleTheme}
-            title={`Switch to ${settings.theme === 'dark' ? 'light' : 'dark'} theme`}
-          >
-            {settings.theme === 'dark' ? '☀️' : '🌙'}
-          </Button>
-        </div>
-      </header>
+      <AppHeader
+        fileName={activeTab?.file.name || ''}
+        hasCurrentFileUnsavedChanges={!!activeTab?.hasUnsavedChanges}
+        hasAnyUnsavedChanges={hasUnsavedChanges}
+        tabCount={getTabCount()}
+        theme={settings.theme}
+        onSaveActiveFile={async () => { await saveActiveTab(); }}
+        onSaveAllFiles={async () => { await saveAllTabs(); }}
+        onOpenSettings={() => openModal('settings')}
+        onToggleTheme={toggleTheme}
+      />
 
       {/* Tab Bar */}
       <TabManager
@@ -586,7 +477,7 @@ export const AppPhase2: React.FC = () => {
                   Welcome to GTD Space
                 </h2>
                 <p className="text-muted-foreground mb-6">
-                  {!fileState.currentFolder 
+                  {!fileState.currentFolder
                     ? "Select a folder from the sidebar to get started with your markdown files."
                     : "Click on a file in the sidebar to open it in a new tab."
                   }
@@ -628,7 +519,7 @@ export const AppPhase2: React.FC = () => {
               {activeTab.content.split('\n').length} lines
             </span>
           </div>
-          
+
           <div className="flex items-center space-x-4">
             <span>
               Mode: {fileState.editorMode}
@@ -642,14 +533,14 @@ export const AppPhase2: React.FC = () => {
 
       {/* Settings Dialog */}
       <SettingsManager
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        isOpen={isModalOpen('settings')}
+        onClose={closeModal}
       />
 
       {/* Global Search Dialog */}
       <GlobalSearch
-        isOpen={isGlobalSearchOpen}
-        onClose={() => setIsGlobalSearchOpen(false)}
+        isOpen={isModalOpen('globalSearch')}
+        onClose={closeModal}
         currentFolder={fileState.currentFolder}
         onResultSelect={handleSearchResultSelect}
         onReplaceInFile={handleReplaceInFile}
@@ -657,14 +548,14 @@ export const AppPhase2: React.FC = () => {
 
       {/* Command Palette */}
       <CommandPalette
-        isOpen={isCommandPaletteOpen}
-        onClose={() => setIsCommandPaletteOpen(false)}
+        isOpen={isModalOpen('commandPalette')}
+        onClose={closeModal}
         commands={commands}
       />
 
       {/* Writing Mode */}
       <WritingMode
-        isActive={isWritingModeActive}
+        isActive={isModalOpen('writingMode')}
         content={activeTab?.content || ''}
         fileName={activeTab?.file.name}
         hasUnsavedChanges={activeTab?.hasUnsavedChanges}
@@ -673,7 +564,7 @@ export const AppPhase2: React.FC = () => {
             updateTabContent(activeTab.id, content);
           }
         }}
-        onExit={() => setIsWritingModeActive(false)}
+        onExit={closeModal}
         onSave={saveActiveTab}
       />
     </div>

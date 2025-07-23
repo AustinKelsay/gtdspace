@@ -48,7 +48,6 @@ import dockerfile from 'highlight.js/lib/languages/dockerfile';
 // Internal imports
 import { cn } from '@/lib/utils';
 import { htmlToMarkdown, markdownToHtml } from './MarkdownSerializer';
-// import { Mathematics, Mermaid } from '@/extensions/tiptap';
 
 // === TYPES ===
 /**

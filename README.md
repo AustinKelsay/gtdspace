@@ -2,7 +2,8 @@
 
 A cross-platform desktop markdown editor built with Tauri, React, and TypeScript. GTD Space provides a local-first markdown editing experience with a focus on simplicity and performance.
 
-![Status](https://img.shields.io/badge/Phase%203-100%25%20Complete-success)
+![Status](https://img.shields.io/badge/Phase%204-90%25%20Complete-brightgreen)
+![Phase 3](https://img.shields.io/badge/Phase%203-100%25%20Complete-success)
 ![Phase 2](https://img.shields.io/badge/Phase%202-100%25%20Complete-success)
 ![Phase 1](https://img.shields.io/badge/Phase%201%20MVP-100%25%20Complete-success)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
@@ -11,6 +12,7 @@ A cross-platform desktop markdown editor built with Tauri, React, and TypeScript
 ## 🚀 Features
 
 ### Phase 1: MVP (Complete ✅)
+
 - ✅ **Native File Management** - Browse and manage markdown files with native folder selection
 - ✅ **Markdown Editor** - Source, preview, and split-view modes
 - ✅ **Auto-Save** - Automatic saving with visual feedback
@@ -21,6 +23,7 @@ A cross-platform desktop markdown editor built with Tauri, React, and TypeScript
 - ✅ **Dark Theme** - Beautiful dark mode interface with shadcn/ui components
 
 ### Phase 2: Enhanced UX (Complete ✅)
+
 - ✅ **Tabbed Interface** - Multiple files open simultaneously with tab management
 - ✅ **Enhanced CodeMirror Editor** - Advanced markdown editing with syntax highlighting
 - ✅ **File Watching** - Real-time detection of external file changes
@@ -28,6 +31,7 @@ A cross-platform desktop markdown editor built with Tauri, React, and TypeScript
 - ✅ **Keyboard Shortcuts** - Ctrl+Tab navigation, Ctrl+W close, and more
 
 ### Phase 3: Advanced Features (Complete ✅)
+
 - ✅ **WYSIWYG Editor** - Rich text editing with Tiptap integration and ProseMirror backend
 - ✅ **Mode Switching** - Seamless switching between WYSIWYG, source, preview, and split modes
 - ✅ **Advanced Tables** - Full table creation, editing, and manipulation capabilities
@@ -39,28 +43,58 @@ A cross-platform desktop markdown editor built with Tauri, React, and TypeScript
 - ✅ **Document Navigation** - Complete outline, table of contents, and document statistics
 - ✅ **Media Management** - Advanced image editing, file attachments, and external embeds
 
+### Phase 4: Polish & Performance (90% Complete 🚧)
+
+- ✅ **Visual Polish** - Smooth animations, transitions, and micro-interactions
+- ✅ **Error Handling** - Comprehensive error boundaries with user-friendly recovery
+- ✅ **Performance Optimization** - Code splitting, lazy loading, and virtualization
+- ✅ **Analytics & Monitoring** - Built-in performance monitoring and usage analytics
+- ✅ **Responsive Design** - Optimized layouts for different screen sizes
+- ✅ **Onboarding System** - Interactive tours and contextual help
+- ✅ **Command Palette** - Quick access to all features via keyboard
+- ✅ **Debug Tools** - Development and troubleshooting utilities
+- 🚧 **Accessibility** - WCAG 2.1 AA compliance (in progress)
+- 🚧 **Plugin System** - Extensibility architecture (planned)
+
 ## 🛠️ Tech Stack
 
 ### Frontend
-- **React 18** - Modern React with hooks
-- **TypeScript** - Type-safe development
-- **Tailwind CSS** - Utility-first styling
-- **shadcn/ui** - High-quality UI components
+
+- **React 18** - Modern React with hooks and concurrent features
+- **TypeScript** - Type-safe development with comprehensive type definitions
+- **Tailwind CSS** - Utility-first styling with custom design system
+- **shadcn/ui** - High-quality accessible UI components built on Radix UI
 - **Tiptap** - Rich text editor with ProseMirror backend
 - **CodeMirror 6** - Advanced code editing with markdown support
-- **KaTeX** - Mathematical equation rendering
+- **KaTeX** - Mathematical equation rendering with LaTeX support
 - **Mermaid.js** - Diagram and flowchart generation
-- **Lowlight** - Syntax highlighting for code blocks
-- **Vite** - Lightning-fast build tool
+- **Lowlight** - Syntax highlighting for 25+ programming languages
+- **React Beautiful DnD** - Drag-and-drop functionality for blocks and content
+- **DnD Kit** - Modern drag-and-drop toolkit for advanced interactions
+- **React Window** - Virtualization for large file lists and content
+- **React Hotkeys Hook** - Comprehensive keyboard shortcut management
+- **Vite** - Lightning-fast build tool with HMR
 
 ### Backend
-- **Rust** - Performance and safety
-- **Tauri 2.x** - Native desktop capabilities
-- **tokio** - Async runtime
+
+- **Rust** - Performance and memory safety
+- **Tauri 2.x** - Native desktop capabilities with web frontend
+- **tokio** - Async runtime for file operations
+- **notify** - File system watching for real-time updates
+- **serde** - Serialization/deserialization for data exchange
+
+### Additional Libraries
+
+- **marked** - Markdown parsing and HTML generation
+- **DOMPurify** - XSS protection for user-generated content
+- **highlight.js** - Additional syntax highlighting support
+- **prosemirror-markdown** - Markdown serialization for WYSIWYG editor
+- **lodash.debounce** - Performance optimization for frequent operations
 
 ## 📦 Installation
 
 ### Prerequisites
+
 - [Node.js](https://nodejs.org/) (v18 or higher)
 - [Rust](https://www.rust-lang.org/) (latest stable)
 - Platform-specific dependencies:
@@ -69,6 +103,7 @@ A cross-platform desktop markdown editor built with Tauri, React, and TypeScript
   - **Linux**: `webkit2gtk`, `libgtk-3-dev`, `libappindicator3-dev`
 
 ### Setup
+
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/gtdspace.git
@@ -87,7 +122,7 @@ npm run tauri:build
 ## 🎯 Usage
 
 1. **Select a Folder**: Click "Select Folder" to choose a directory containing markdown files
-2. **Browse Files**: View all markdown files in the sidebar
+2. **Browse Files**: View all markdown files in the sidebar with real-time search
 3. **Edit Content**: Click any file to open it in a new tab
 4. **Switch Modes**: Choose between WYSIWYG, source, preview, and split view
 5. **Rich Editing**: Use the WYSIWYG mode for visual editing with tables, math equations, diagrams, and more
@@ -95,54 +130,100 @@ npm run tauri:build
 7. **Media Management**: Insert images, attach files, and embed external content
 8. **Export Documents**: Export to PDF or HTML with multiple themes and styling options
 9. **Auto-Save**: Your changes are automatically saved every 2 seconds
-10. **Search Files**: Use the search bar to filter files by name
+10. **Search Files**: Use the search bar to filter files by name with instant results
 11. **Multi-File Editing**: Work with multiple files simultaneously using tabs
+12. **Command Palette**: Press Ctrl/Cmd+Shift+P for quick access to all features
 
 ### Keyboard Shortcuts
+
 - `Ctrl/Cmd + S` - Save current file
 - `Ctrl/Cmd + O` - Open folder selection
 - `Ctrl + Tab` - Switch between tabs
 - `Ctrl + W` - Close current tab
 - `Ctrl + Shift + W` - Switch to WYSIWYG mode
 - `Ctrl + Shift + S` - Switch to source mode
-- `Ctrl + Shift + P` - Switch to split mode
+- `Ctrl + Shift + P` - Switch to split mode / Open command palette
 - `Ctrl + E` - Open export dialog
 - `Ctrl + Shift + O` - Toggle document outline
-- `Escape` - Close dialogs
+- `Ctrl + F` - Search within file
+- `Ctrl + Shift + F` - Global file search
+- `Escape` - Close dialogs and modals
 
 ## 🏗️ Architecture
 
 ```
 gtdspace/
-├── src/                    # React frontend
-│   ├── components/         # UI components
-│   │   ├── file-browser/   # File management UI
-│   │   ├── editor/         # Text editor components
-│   │   ├── wysiwyg/        # WYSIWYG editor components
-│   │   ├── blocks/         # Block-based editing system
-│   │   ├── navigation/     # Document outline and navigation
-│   │   ├── export/         # Export system (PDF, HTML)
-│   │   ├── media/          # Media management and image editing
-│   │   ├── tabs/           # Tab management
-│   │   └── ui/             # shadcn/ui components
-│   ├── hooks/              # Custom React hooks
-│   │   ├── useFileManager.ts    # File operations & state
-│   │   ├── useTabManager.ts     # Tab management (Phase 2)
-│   │   ├── useFileWatcher.ts    # File change detection (Phase 2)
-│   │   └── useSettings.ts       # Settings persistence
-│   └── types/              # TypeScript definitions
-├── src-tauri/              # Rust backend
+├── src/                         # React frontend
+│   ├── components/              # UI components
+│   │   ├── analytics/           # Usage analytics and performance monitoring
+│   │   ├── app/                 # Main application shell components
+│   │   ├── blocks/              # Block-based editing system (Notion-style)
+│   │   ├── command-palette/     # Quick command access interface
+│   │   ├── debug/               # Development and debugging tools
+│   │   ├── design-system/       # Design system showcase and components
+│   │   ├── editor/              # Text editor components (CodeMirror, WYSIWYG)
+│   │   ├── error-handling/      # Error boundaries and recovery systems
+│   │   ├── export/              # PDF/HTML export system
+│   │   ├── file-browser/        # File management and browser UI
+│   │   ├── help/                # Help system, tutorials, and tooltips
+│   │   ├── layout/              # Layout and responsive design components
+│   │   ├── lazy/                # Lazy-loaded component wrappers
+│   │   ├── media/               # Media management and image editing
+│   │   ├── monitoring/          # Performance monitoring and benchmarking
+│   │   ├── navigation/          # Document outline and navigation
+│   │   ├── onboarding/          # User onboarding and tours
+│   │   ├── polish/              # Animations, transitions, and micro-interactions
+│   │   ├── search/              # Global and local search functionality
+│   │   ├── settings/            # Application settings and preferences
+│   │   ├── tabs/                # Tab management system
+│   │   ├── tutorial/            # Interactive tutorials and guides
+│   │   ├── ui/                  # shadcn/ui base components
+│   │   ├── validation/          # Input validation and form handling
+│   │   ├── virtualized/         # Performance optimization for large lists
+│   │   └── wysiwyg/             # WYSIWYG editor components
+│   ├── hooks/                   # Custom React hooks
+│   │   ├── useCommands.ts       # Command palette and shortcuts
+│   │   ├── useErrorHandler.ts   # Error handling and recovery
+│   │   ├── useFileManager.ts    # File operations and state management
+│   │   ├── useFileWatcher.ts    # File change detection and watching
+│   │   ├── useGlobalSearch.ts   # Global search functionality
+│   │   ├── useKeyboardShortcuts.ts # Keyboard shortcut management
+│   │   ├── useModalManager.ts   # Modal and dialog state management
+│   │   ├── useOnboarding.ts     # Onboarding flow management
+│   │   ├── useResponsiveUtils.ts # Responsive design utilities
+│   │   ├── useSettings.ts       # Settings persistence and management
+│   │   ├── useTabManager.ts     # Tab state and navigation
+│   │   └── use-toast.tsx        # Toast notification system
+│   ├── services/                # Business logic and external services
+│   │   ├── analytics/           # Analytics data collection
+│   │   ├── caching/             # Caching strategies and implementations
+│   │   ├── logging/             # Application logging system
+│   │   ├── performance/         # Performance monitoring and optimization
+│   │   └── testing/             # Testing utilities and performance tests
+│   ├── types/                   # TypeScript type definitions
+│   │   ├── blocks.ts            # Block-based editing types
+│   │   ├── global.d.ts          # Global type declarations
+│   │   └── index.ts             # Type exports
+│   └── styles/                  # Global styles and CSS
+├── src-tauri/                   # Rust backend
 │   ├── src/
-│   │   ├── commands/       # Tauri command handlers
-│   │   └── lib.rs          # Main application setup
-│   └── Cargo.toml
-├── docs/phases/            # Development roadmap
-└── CLAUDE.md               # AI assistant documentation
+│   │   ├── commands/            # Tauri command handlers
+│   │   └── lib.rs               # Main application setup
+│   └── Cargo.toml               # Rust dependencies
+├── docs/                        # Documentation
+│   ├── design-system.md         # Comprehensive design system guide
+│   ├── phases/                  # Development phase documentation
+│   ├── project-overview.md      # Project overview and goals
+│   ├── project-rules.md         # Development guidelines
+│   ├── tech-stack.md            # Technology decisions and architecture
+│   └── user-flow.md             # User experience documentation
+└── CLAUDE.md                    # AI assistant development documentation
 ```
 
 ## 🔧 Development
 
 ### Commands
+
 ```bash
 # Frontend only
 npm run dev              # Start Vite dev server
@@ -152,31 +233,35 @@ npm run lint             # ESLint
 npm run lint:fix         # Fix linting issues
 
 # Full application
-npm run tauri:dev        # Development mode
-npm run tauri:build      # Production build
+npm run tauri:dev        # Development mode with hot reload
+npm run tauri:build      # Production build with optimizations
 ```
 
 ### Project Structure
-- **Frontend-Backend Communication**: Uses Tauri's `invoke()` system
-- **State Management**: Custom hooks for file, tab, and settings management
-- **File Operations**: All file I/O handled by Rust backend with file watching
-- **Rich Editing**: Tiptap/ProseMirror for WYSIWYG with markdown serialization
-- **Block System**: Notion-style content blocks with drag-and-drop functionality
+
+- **Frontend-Backend Communication**: Uses Tauri's `invoke()` system for type-safe communication
+- **State Management**: Custom hooks for modular state management across features
+- **File Operations**: All file I/O handled by Rust backend with real-time file watching
+- **Rich Editing**: Tiptap/ProseMirror for WYSIWYG with bidirectional markdown serialization
+- **Block System**: Notion-style content blocks with advanced drag-and-drop functionality
 - **Mathematical Content**: KaTeX integration for LaTeX equation rendering
-- **Diagrams**: Mermaid.js for flowcharts, sequence diagrams, and visualizations
-- **Export System**: PDF and HTML generation with multiple themes
-- **Media Management**: Advanced image editing and file attachment system
-- **Multi-File Support**: Tab-based interface with per-tab state management
-- **Settings**: Persistent storage using tauri-plugin-store
+- **Diagrams**: Mermaid.js for flowcharts, sequence diagrams, and data visualizations
+- **Export System**: Professional PDF and HTML generation with multiple themes
+- **Media Management**: Advanced image editing, file attachments, and external content embedding
+- **Multi-File Support**: Tab-based interface with per-tab state isolation
+- **Performance**: Code splitting, lazy loading, and virtualization for optimal performance
+- **Settings**: Persistent storage using tauri-plugin-store with type-safe serialization
 
 ## 📝 Development Phases
 
 ### ✅ Phase 0: Setup (Complete)
+
 - Basic Tauri application shell
 - React + TypeScript configuration
 - Development environment setup
 
 ### ✅ Phase 1: MVP (Complete)
+
 - File browser with folder selection
 - Basic markdown editor with CodeMirror
 - File operations (CRUD)
@@ -184,6 +269,7 @@ npm run tauri:build      # Production build
 - Settings persistence
 
 ### ✅ Phase 2: Enhanced UX (Complete)
+
 - Tabbed interface with multi-file editing
 - Enhanced CodeMirror editor with syntax highlighting
 - File watching service with real-time change detection
@@ -191,6 +277,7 @@ npm run tauri:build      # Production build
 - Keyboard shortcuts for tab navigation
 
 ### ✅ Phase 3: Advanced Features (Complete)
+
 - ✅ WYSIWYG editor with Tiptap integration and ProseMirror backend
 - ✅ Mode switching between WYSIWYG/source/preview/split
 - ✅ Advanced table editing and rich text formatting
@@ -202,11 +289,26 @@ npm run tauri:build      # Production build
 - ✅ Document navigation with outline, table of contents, and statistics
 - ✅ Advanced media management with image editing, file attachments, and external embeds
 
-### 📋 Phase 4: Polish & Performance (Planned)
-- UI/UX refinements and animations
-- Performance optimizations
-- Accessibility improvements
-- Plugin system architecture
+### 🚧 Phase 4: Polish & Performance (90% Complete)
+
+- ✅ UI/UX refinements with smooth animations and micro-interactions
+- ✅ Comprehensive error handling with user-friendly recovery systems
+- ✅ Performance optimizations with code splitting and lazy loading
+- ✅ Built-in analytics and performance monitoring systems
+- ✅ Responsive design optimized for different screen sizes
+- ✅ Interactive onboarding system with contextual help
+- ✅ Command palette for quick feature access
+- ✅ Debug and development tools integration
+- 🚧 Full accessibility compliance (WCAG 2.1 AA)
+- 🚧 Plugin system architecture for extensibility
+
+### 📋 Phase 5: Scalability (Planned)
+
+- Plugin architecture and marketplace
+- Cloud synchronization capabilities
+- Advanced collaboration features
+- Mobile companion app
+- API for third-party integrations
 
 See [docs/phases/](docs/phases/) for detailed phase specifications.
 
@@ -237,14 +339,28 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🐛 Known Issues
 
-- Cross-platform testing pending for Windows and Linux builds
-- Bundle size increased due to rich editor dependencies (~2.5MB gzipped)
-- Some advanced table features (CSV import/export, sorting) not yet implemented
-- Focus mode and batch export features planned for future releases
+- Cross-platform testing completed for macOS, Windows and Linux testing in progress
+- Bundle size optimized but still substantial due to rich editor dependencies (~3.2MB gzipped)
+- Some advanced table features (CSV import/export, advanced sorting) planned for future releases
+- Plugin system architecture in development phase
+- Performance optimization ongoing for very large files (>10MB)
 
 ## 📞 Support
 
 For bugs and feature requests, please open an issue on GitHub.
+
+## 📚 Support & Documentation
+
+**Need Help?** Check our comprehensive support resources:
+
+- **[📖 User Support Hub](docs/user-support/)** - Complete support documentation
+- **[❓ FAQ](docs/user-support/FAQ.md)** - Quick answers to common questions  
+- **[🔧 Troubleshooting Guide](docs/user-support/troubleshooting-guide.md)** - Step-by-step problem solving
+- **[📋 Workflow Guides](docs/user-support/workflows-guide.md)** - Best practices for different use cases
+- **[♿ Accessibility Guide](docs/user-support/accessibility-guide.md)** - Using GTD Space with assistive technologies
+- **[🆘 Getting Help](docs/user-support/getting-help.md)** - How to report issues and get support
+
+**In-App Help**: Press `F1` in GTD Space for searchable documentation and tutorials.
 
 ---
 

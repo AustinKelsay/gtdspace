@@ -196,7 +196,7 @@ function analyzeContent(content: string): DocumentStatsData {
   const headingCount = headingMatches ? headingMatches.length : 0;
 
   // Word analysis
-  const words = plainText.toLowerCase().match(/\b[a-z]+\b/g) || [];
+  const words: string[] = plainText.toLowerCase().match(/\b[a-z]+\b/g) || [];
   const wordCount = words.length;
 
   // Sentence analysis
@@ -220,7 +220,7 @@ function analyzeContent(content: string): DocumentStatsData {
   const topWords = Object.entries(wordFreq)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 5)
-    .map(([word, count]) => ({ word, count }));
+    .map(([word, count]) => ({ word, count: count as number }));
 
   // Calculate difficulty score
   const totalSyllables = words.reduce((sum, word) => sum + countSyllables(word), 0);

@@ -66,7 +66,7 @@ export const FileBrowserSidebar: React.FC<FileBrowserSidebarProps> = ({
   // === RENDER ===
 
   return (
-    <Card className={`flex flex-col h-full border-r ${className}`}>
+    <Card className={`flex flex-col h-full border-r ${className}`} data-tour="file-browser">
       {/* Folder Selection */}
       <div className="p-3 border-b border-border">
         <FolderSelector

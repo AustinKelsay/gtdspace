@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useResourceCleanup, useMemoryLeakDetection, useLargeCollection } from '@/services/performance/memoryLeakPrevention';
 import type { 
   MarkdownFile, 
   FileTab, 
@@ -23,6 +24,12 @@ import type {
  * @returns Tab manager state and operations
  */
 export const useTabManager = () => {
+  // === MEMORY LEAK PREVENTION ===
+  const { safeAddEventListener } = useResourceCleanup();
+  // Memory leak detection for this hook
+  useMemoryLeakDetection('useTabManager');
+  const recentlyClosedCollection = useLargeCollection<FileTab>(10); // Limit recently closed tabs
+  
   // === TAB STATE ===
   
   const [tabState, setTabState] = useState<TabManagerState>({
@@ -192,13 +199,16 @@ export const useTabManager = () => {
           // Close the oldest non-active tab
           const oldestInactiveTab = newTabs.find(tab => !tab.isActive && !tab.hasUnsavedChanges);
           if (oldestInactiveTab) {
+            // Use managed collection for recently closed tabs
+            recentlyClosedCollection.add(oldestInactiveTab);
+            
             return {
               ...prev,
               openTabs: newTabs
                 .filter(tab => tab.id !== oldestInactiveTab.id)
                 .map(tab => ({ ...tab, isActive: tab.id === tabId })),
               activeTabId: tabId,
-              recentlyClosed: [oldestInactiveTab, ...prev.recentlyClosed].slice(0, 10),
+              recentlyClosed: recentlyClosedCollection.get(),
             };
           }
         }
@@ -269,7 +279,10 @@ export const useTabManager = () => {
           isActive: tab.id === newActiveTabId,
         })),
         activeTabId: newActiveTabId,
-        recentlyClosed: [tab, ...prev.recentlyClosed].slice(0, 10),
+        recentlyClosed: (() => {
+          recentlyClosedCollection.add(tab);
+          return recentlyClosedCollection.get();
+        })(),
       };
     });
 
@@ -473,9 +486,10 @@ export const useTabManager = () => {
       const tabId = await openTab(lastClosed.file);
       
       // Remove from recently closed
+      recentlyClosedCollection.remove(0);
       setTabState(prev => ({
         ...prev,
-        recentlyClosed: prev.recentlyClosed.slice(1),
+        recentlyClosed: recentlyClosedCollection.get(),
       }));
 
       return tabId;
@@ -566,10 +580,8 @@ export const useTabManager = () => {
       }
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
+    safeAddEventListener(window, 'beforeunload', handleBeforeUnload);
+    // Cleanup handled automatically by useResourceCleanup
   }, [tabState, saveTabsToStorage]);
 
   // === RETURN STATE AND OPERATIONS ===

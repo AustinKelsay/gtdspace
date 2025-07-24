@@ -10,7 +10,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { Folder, FolderOpen, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+// import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -21,6 +21,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ValidatedInput, ValidationRules } from '@/components/validation/ValidationSystem';
+import { SmartTooltip } from '@/components/help/TooltipManager';
 import type { FolderSelectorProps } from '@/types';
 
 /**
@@ -161,23 +163,32 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
                 Choose a folder containing your markdown files to get started
               </p>
             </div>
-            <Button 
-              onClick={handleSelectFolder}
-              disabled={loading}
-              className="w-full max-w-xs"
+            <SmartTooltip
+              id="folder-selector"
+              title="Select Workspace"
+              content="Choose a folder containing your markdown files. This becomes your workspace for editing and organizing documents."
+              type="feature"
+              shortcut="Ctrl+O"
             >
-              {loading ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Loading...
-                </>
-              ) : (
-                <>
-                  <Folder className="h-4 w-4 mr-2" />
-                  Select Folder
-                </>
-              )}
-            </Button>
+              <Button 
+                onClick={handleSelectFolder}
+                disabled={loading}
+                className="w-full max-w-xs"
+                data-tour="folder-selector"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <Folder className="h-4 w-4 mr-2" />
+                    Select Folder
+                  </>
+                )}
+              </Button>
+            </SmartTooltip>
           </div>
         </CardContent>
       </Card>
@@ -201,16 +212,16 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
           
           <div className="space-y-2">
             <Label htmlFor="folderPath">Folder Path</Label>
-            <Input
-              id="folderPath"
-              value={manualPath}
-              onChange={(e) => setManualPath(e.target.value)}
+            <ValidatedInput
+              fieldId="manualFolderPath"
+              rules={[
+                ValidationRules.folderPath.required(),
+                ValidationRules.folderPath.validPath(),
+              ]}
+              initialValue={manualPath}
               placeholder="/Users/username/Documents/markdown-files"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleManualSubmit();
-                if (e.key === 'Escape') setShowManualInput(false);
-              }}
-              autoFocus
+              onValueChange={setManualPath}
+              className="w-full"
             />
             <p className="text-xs text-muted-foreground">
               Examples: <br/>

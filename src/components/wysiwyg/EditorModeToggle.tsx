@@ -152,6 +152,7 @@ export const EditorModeToggle: React.FC<EditorModeToggleProps> = ({
       )}
       role="tablist"
       aria-label="Editor mode selection"
+      data-tour="editor-modes"
     >
       {visibleModes.map((config) => {
         const isActive = config.mode === currentMode;

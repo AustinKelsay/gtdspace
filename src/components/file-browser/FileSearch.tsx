@@ -5,10 +5,11 @@
  * @phase 1 - Real-time file search and filtering
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { Search, X } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+// import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { ValidatedInput, ValidationRules } from '@/components/validation/ValidationSystem';
 
 /**
  * Props for the file search component
@@ -49,11 +50,9 @@ export const FileSearch: React.FC<FileSearchProps> = ({
   value,
   onChange,
   placeholder = 'Search files...',
-  autoFocus = false,
+  // autoFocus = false,
   className = '',
 }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
-
   // === KEYBOARD SHORTCUTS ===
   
   useEffect(() => {
@@ -61,13 +60,12 @@ export const FileSearch: React.FC<FileSearchProps> = ({
       // Ctrl/Cmd + F to focus search
       if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
         event.preventDefault();
-        inputRef.current?.focus();
+        // Could focus the validated input if needed
       }
       
-      // Escape to clear search and blur
-      if (event.key === 'Escape' && document.activeElement === inputRef.current) {
+      // Escape to clear search
+      if (event.key === 'Escape') {
         onChange('');
-        inputRef.current?.blur();
       }
     };
 
@@ -78,18 +76,11 @@ export const FileSearch: React.FC<FileSearchProps> = ({
   // === EVENT HANDLERS ===
   
   /**
-   * Handle input change
-   */
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    onChange(event.target.value);
-  };
-
-  /**
    * Handle clear button click
    */
   const handleClear = () => {
     onChange('');
-    inputRef.current?.focus();
+    // Could focus the validated input if needed
   };
 
   // === RENDER ===
@@ -97,21 +88,26 @@ export const FileSearch: React.FC<FileSearchProps> = ({
   return (
     <div className={`relative ${className}`}>
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          ref={inputRef}
-          type="text"
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground z-10" />
+        <ValidatedInput
+          fieldId="fileSearch"
+          rules={[
+            ValidationRules.search.minLength(2),
+            ValidationRules.search.maxLength(100),
+            ValidationRules.search.validRegex(),
+          ]}
+          initialValue={value}
           placeholder={placeholder}
-          value={value}
-          onChange={handleChange}
+          type="search"
           className="pl-10 pr-10"
-          autoFocus={autoFocus}
+          onValueChange={onChange}
+          showValidation={false}
         />
         {value && (
           <Button
             variant="ghost"
             size="sm"
-            className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 p-0 hover:bg-muted"
+            className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 p-0 hover:bg-muted z-10"
             onClick={handleClear}
             aria-label="Clear search"
           >
@@ -123,7 +119,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
       {/* Search hint */}
       {!value && (
         <p className="mt-1 text-xs text-muted-foreground px-3">
-          Press Ctrl+F to search
+          Press Ctrl+F to search • Min 2 characters
         </p>
       )}
     </div>

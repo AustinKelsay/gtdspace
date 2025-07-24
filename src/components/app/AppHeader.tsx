@@ -6,8 +6,9 @@
  */
 
 import React from 'react';
-import { Save, Settings } from 'lucide-react';
+import { Save, Settings, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SmartTooltip } from '@/components/help/TooltipManager';
 import type { Theme } from '@/types';
 
 /**
@@ -30,6 +31,8 @@ export interface AppHeaderProps {
     onSaveAllFiles: () => Promise<void>;
     /** Callback to open settings */
     onOpenSettings: () => void;
+    /** Callback to open analytics */
+    onOpenAnalytics: () => void;
     /** Callback to toggle theme */
     onToggleTheme: () => Promise<void>;
 }
@@ -52,6 +55,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     onSaveActiveFile,
     onSaveAllFiles,
     onOpenSettings,
+    onOpenAnalytics,
     onToggleTheme,
 }) => {
     /**
@@ -101,48 +105,91 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 </span>
 
                 {/* Save Button */}
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onSaveActiveFile}
-                    disabled={!hasCurrentFileUnsavedChanges}
-                    title="Save file (Ctrl+S)"
+                <SmartTooltip
+                    id="save-active-file"
+                    title="Save File"
+                    content="Save the current file. Your changes are also auto-saved every few seconds."
+                    type="shortcut"
+                    shortcut="Ctrl+S"
                 >
-                    <Save className="h-4 w-4" />
-                </Button>
-
-                {/* Save All Button */}
-                {hasAnyUnsavedChanges && (
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={onSaveAllFiles}
-                        title="Save all files (Ctrl+Shift+S)"
-                        className="text-xs"
+                        onClick={onSaveActiveFile}
+                        disabled={!hasCurrentFileUnsavedChanges}
                     >
-                        Save All
+                        <Save className="h-4 w-4" />
                     </Button>
+                </SmartTooltip>
+
+                {/* Save All Button */}
+                {hasAnyUnsavedChanges && (
+                    <SmartTooltip
+                        id="save-all-files"
+                        title="Save All Files"
+                        content="Save all open files with unsaved changes at once."
+                        type="shortcut"
+                        shortcut="Ctrl+Shift+S"
+                    >
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={onSaveAllFiles}
+                            className="text-xs"
+                        >
+                            Save All
+                        </Button>
+                    </SmartTooltip>
                 )}
 
-                {/* Settings Button */}
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onOpenSettings}
-                    title="Open settings"
+                {/* Analytics Button */}
+                <SmartTooltip
+                    id="open-analytics"
+                    title="Analytics"
+                    content="View detailed insights about your writing habits, document metrics, and productivity."
+                    type="feature"
                 >
-                    <Settings className="h-4 w-4" />
-                </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onOpenAnalytics}
+                    >
+                        <BarChart3 className="h-4 w-4" />
+                    </Button>
+                </SmartTooltip>
+
+                {/* Settings Button */}
+                <SmartTooltip
+                    id="open-settings"
+                    title="Settings"
+                    content="Configure application preferences, keyboard shortcuts, and editor options."
+                    type="feature"
+                    shortcut="Ctrl+,"
+                >
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onOpenSettings}
+                    >
+                        <Settings className="h-4 w-4" />
+                    </Button>
+                </SmartTooltip>
 
                 {/* Theme Toggle */}
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onToggleTheme}
-                    title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+                <SmartTooltip
+                    id="toggle-theme"
+                    title="Toggle Theme"
+                    content={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme for better visibility and comfort.`}
+                    type="feature"
                 >
-                    {theme === 'dark' ? '☀️' : '🌙'}
-                </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onToggleTheme}
+                    >
+                        {theme === 'dark' ? '☀️' : '🌙'}
+                    </Button>
+                </SmartTooltip>
             </div>
         </header>
     );

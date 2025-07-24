@@ -21,6 +21,12 @@ export interface KeyboardShortcutHandlers {
   onOpenGlobalSearch?: () => void;
   /** Open command palette (Ctrl+Shift+P) */
   onOpenCommandPalette?: () => void;
+  /** Open debug panel (Ctrl+Shift+D) */
+  onOpenDebugPanel?: () => void;
+  /** Open help documentation (Ctrl+?) */
+  onOpenHelp?: () => void;
+  /** Open keyboard shortcuts reference (Ctrl+Shift+?) */
+  onOpenKeyboardShortcuts?: () => void;
 }
 
 /**
@@ -89,6 +95,25 @@ export function useKeyboardShortcuts(
           if (event.shiftKey) {
             event.preventDefault();
             handlers.onOpenCommandPalette?.();
+          }
+          break;
+
+        case 'd':
+          // Ctrl+Shift+D: Debug panel (development only)
+          if (event.shiftKey && process.env.NODE_ENV === 'development') {
+            event.preventDefault();
+            handlers.onOpenDebugPanel?.();
+          }
+          break;
+
+        case '?':
+          event.preventDefault();
+          if (event.shiftKey) {
+            // Ctrl+Shift+?: Keyboard shortcuts reference
+            handlers.onOpenKeyboardShortcuts?.();
+          } else {
+            // Ctrl+?: Help documentation
+            handlers.onOpenHelp?.();
           }
           break;
 

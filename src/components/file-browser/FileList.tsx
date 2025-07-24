@@ -6,9 +6,9 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { Search, Plus, RefreshCw, FileText } from 'lucide-react';
+import { Search, Plus, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+// import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
@@ -19,6 +19,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { FileListSkeleton } from '@/components/polish';
+import { ValidatedInput, ValidationRules } from '@/components/validation/ValidationSystem';
+import { VirtualizedFileList, useVirtualizedFileList } from '@/components/virtualized/VirtualizedFileList';
 import { FileItem } from './FileItem';
 import type { FileListProps, FileOperation } from '@/types';
 
@@ -59,6 +62,10 @@ export const FileList: React.FC<FileListProps> = ({
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   
+  // === VIRTUALIZATION ===
+  
+  const { shouldVirtualize, performanceMetrics } = useVirtualizedFileList(files);
+  
   // === FILTERED FILES ===
   
   /**
@@ -89,9 +96,15 @@ export const FileList: React.FC<FileListProps> = ({
    */
   const handleConfirmCreate = () => {
     if (newFileName.trim() && onFileOperation) {
+      // Add .md extension if not present
+      let fileName = newFileName.trim();
+      if (!fileName.endsWith('.md') && !fileName.includes('.')) {
+        fileName += '.md';
+      }
+      
       onFileOperation({
         type: 'create',
-        name: newFileName.trim(),
+        name: fileName,
       });
     }
     setShowCreateDialog(false);
@@ -115,10 +128,13 @@ export const FileList: React.FC<FileListProps> = ({
   const renderEmptyState = () => {
     if (loading) {
       return (
-        <div className="flex flex-col items-center justify-center py-8 text-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-          <p className="text-sm text-muted-foreground">Loading files...</p>
-        </div>
+        <FileListSkeleton 
+          count={6}
+          showIcon={true}
+          showMetadata={true}
+          animation="pulse"
+          className="py-2"
+        />
       );
     }
 
@@ -200,19 +216,42 @@ export const FileList: React.FC<FileListProps> = ({
       {/* File list content */}
       <div className="flex-1 min-h-0">
         {filteredFiles.length > 0 ? (
-          <ScrollArea className="h-full">
-            <div className="p-2 space-y-1">
-              {filteredFiles.map((file) => (
-                <FileItem
-                  key={file.id}
-                  file={file}
-                  isSelected={selectedFile?.id === file.id}
-                  onSelect={() => onFileSelect(file)}
-                  onFileOperation={onFileOperation ? handleFileOperation : undefined}
-                />
-              ))}
-            </div>
-          </ScrollArea>
+          shouldVirtualize ? (
+            <>
+              {/* Performance indicator for large lists */}
+              {performanceMetrics.totalFiles > 100 && (
+                <div className="px-3 py-1 bg-muted/50 border-b border-border">
+                  <p className="text-xs text-muted-foreground">
+                    {performanceMetrics.totalFiles.toLocaleString()} files • Virtualized view
+                  </p>
+                </div>
+              )}
+              <VirtualizedFileList
+                files={filteredFiles}
+                selectedFile={selectedFile || undefined}
+                onFileSelect={onFileSelect}
+                onFileOperation={onFileOperation ? handleFileOperation : undefined}
+                searchQuery={searchQuery}
+                loading={loading}
+                height={400} // Dynamic height could be calculated based on container
+                className="w-full"
+              />
+            </>
+          ) : (
+            <ScrollArea className="h-full">
+              <div className="p-2 space-y-1">
+                {filteredFiles.map((file) => (
+                  <FileItem
+                    key={file.id}
+                    file={file}
+                    isSelected={selectedFile?.id === file.id}
+                    onSelect={() => onFileSelect(file)}
+                    onFileOperation={onFileOperation ? handleFileOperation : undefined}
+                  />
+                ))}
+              </div>
+            </ScrollArea>
+          )
         ) : (
           renderEmptyState()
         )}
@@ -229,19 +268,21 @@ export const FileList: React.FC<FileListProps> = ({
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="newFileName">File Name</Label>
-            <Input
-              id="newFileName"
-              value={newFileName}
-              onChange={(e) => setNewFileName(e.target.value)}
+            <ValidatedInput
+              fieldId="createFileName"
+              rules={[
+                ValidationRules.fileName.required(),
+                ValidationRules.fileName.validCharacters(),
+                ValidationRules.fileName.length(1, 100),
+                ValidationRules.fileName.markdownExtension(),
+              ]}
+              initialValue=""
               placeholder="Enter file name..."
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleConfirmCreate();
-                if (e.key === 'Escape') setShowCreateDialog(false);
-              }}
-              autoFocus
+              onValueChange={setNewFileName}
+              className="w-full"
             />
             <p className="text-xs text-muted-foreground">
-              The .md extension will be added automatically
+              The .md extension will be added automatically if not specified
             </p>
           </div>
           <DialogFooter className="flex space-x-2">

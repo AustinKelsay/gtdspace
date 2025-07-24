@@ -7,7 +7,6 @@
 
 import { useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-// import debounce from 'lodash.debounce'; // Available for future use
 import type { SearchResponse, SearchFilters, SearchResult } from '@/types';
 
 export interface UseGlobalSearchResult {
@@ -106,13 +105,6 @@ export function useGlobalSearch(): UseGlobalSearchResult {
     }
   }, [query, filters]);
 
-  // Note: Debounced search could be implemented here if needed
-  // const debouncedSearch = useCallback(
-  //   debounce((directory: string, searchQuery: string) => {
-  //     performSearch(directory, searchQuery);
-  //   }, 300),
-  //   [performSearch]
-  // );
 
   /**
    * Update search query

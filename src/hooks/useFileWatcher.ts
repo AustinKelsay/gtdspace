@@ -8,6 +8,7 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { useMemoryLeakDetection, useLargeCollection } from '@/services/performance/memoryLeakPrevention';
 import type { FileChangeEvent } from '@/types';
 
 export interface FileWatcherState {
@@ -44,6 +45,11 @@ export interface FileWatcherHookResult {
  * @returns File watcher hook result with state and control functions
  */
 export function useFileWatcher(): FileWatcherHookResult {
+  // === MEMORY LEAK PREVENTION ===
+  // Memory leak detection for this hook
+  useMemoryLeakDetection('useFileWatcher');
+  const eventCollection = useLargeCollection<FileChangeEvent>(50); // Limit to 50 events
+  
   // === STATE ===
   
   const [state, setState] = useState<FileWatcherState>({
@@ -63,18 +69,14 @@ export function useFileWatcher(): FileWatcherHookResult {
   const handleFileChange = useCallback((event: FileChangeEvent) => {
     console.log('File change detected:', event);
     
-    setState(prev => {
-      const newEvents = [...prev.recentEvents, event];
-      
-      // Keep only the last 50 events to prevent memory issues
-      const trimmedEvents = newEvents.slice(-50);
-      
-      return {
-        ...prev,
-        recentEvents: trimmedEvents,
-      };
-    });
-  }, []);
+    // Use managed collection for better memory control
+    eventCollection.add(event);
+    
+    setState(prev => ({
+      ...prev,
+      recentEvents: eventCollection.get(),
+    }));
+  }, [eventCollection]);
   
   // === WATCHER CONTROL FUNCTIONS ===
   
@@ -138,11 +140,14 @@ export function useFileWatcher(): FileWatcherHookResult {
       
       unlistenRef.current = unlisten;
       
+      // Clear previous events
+      eventCollection.clear();
+      
       setState(prev => ({
         ...prev,
         isWatching: true,
         watchedPath: folderPath,
-        recentEvents: [], // Clear previous events
+        recentEvents: [],
       }));
       
       console.log('File watcher started for:', folderPath);
@@ -163,18 +168,19 @@ export function useFileWatcher(): FileWatcherHookResult {
    * Clear recent events
    */
   const clearEvents = useCallback(() => {
+    eventCollection.clear();
     setState(prev => ({
       ...prev,
       recentEvents: [],
     }));
-  }, []);
+  }, [eventCollection]);
   
   /**
    * Get events for a specific file path
    */
   const getEventsForFile = useCallback((filePath: string) => {
-    return state.recentEvents.filter(event => event.file_path === filePath);
-  }, [state.recentEvents]);
+    return eventCollection.get().filter(event => event.file_path === filePath);
+  }, [eventCollection]);
   
   // === CLEANUP ON UNMOUNT ===
   

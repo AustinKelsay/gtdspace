@@ -14,9 +14,18 @@ import { FileBrowserSidebar } from '@/components/file-browser/FileBrowserSidebar
 import { FileChangeManager } from '@/components/file-browser/FileChangeManager';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
 import { TabManager } from '@/components/tabs';
-import { SettingsManager } from '@/components/settings';
-import { GlobalSearch } from '@/components/search';
-import { CommandPalette } from '@/components/command-palette';
+import { 
+  SettingsManagerLazy,
+  GlobalSearchLazy,
+  CommandPaletteLazy,
+  DebugPanelLazy,
+  HelpDocumentationLazy,
+  KeyboardShortcutsReferenceLazy
+} from '@/components/lazy';
+import { AnalyticsModal } from '@/components/analytics/AnalyticsModal';
+import { OnboardingTour } from '@/components/onboarding/OnboardingTour';
+import { TooltipManagerProvider } from '@/components/help/TooltipManager';
+import { HelpHints } from '@/components/help/HelpHints';
 import { WritingMode } from '@/components/editor/WritingMode';
 import { useFileManager } from '@/hooks/useFileManager';
 import { useTabManager } from '@/hooks/useTabManager';
@@ -25,6 +34,10 @@ import { useCommands } from '@/hooks/useCommands';
 import { useSettings } from '@/hooks/useSettings';
 import { useModalManager } from '@/hooks/useModalManager';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useOnboarding } from '@/hooks/useOnboarding';
+import { TransitionManagerProvider, TransitionWrapper, EditorSkeleton } from '@/components/polish';
+import { ErrorBoundary, ErrorDialog, useErrorHandler } from '@/components/error-handling';
+import { ValidationProvider } from '@/components/validation/ValidationSystem';
 import type { PermissionStatus, Theme, MarkdownFile, FileOperation } from '@/types';
 import './styles/globals.css';
 
@@ -93,31 +106,58 @@ export const AppPhase2: React.FC = () => {
     closeModal,
   } = useModalManager();
 
+  // === ERROR HANDLING ===
+
+  const {
+    currentError,
+    isErrorDialogOpen,
+    closeErrorDialog,
+    reportError,
+    withErrorHandling,
+  } = useErrorHandler({
+    autoShowDialog: true,
+    autoShowSeverities: ['medium', 'high', 'critical'],
+  });
+
+  // === ONBOARDING ===
+
+  const {
+    state: onboardingState,
+    startTour,
+    completeTour,
+    skipTour,
+    isEligibleForTour,
+  } = useOnboarding();
+
   // Create new file handler
   const createNewFile = async () => {
     if (!fileState.currentFolder) return;
 
-    try {
-      const fileName = `new-file-${Date.now()}.md`;
-      await handleFileOperation({
-        type: 'create',
-        name: fileName,
-      });
-    } catch (error) {
-      console.error('Failed to create new file:', error);
-    }
+    await withErrorHandling(
+      async () => {
+        const fileName = `new-file-${Date.now()}.md`;
+        await handleFileOperation({
+          type: 'create',
+          name: fileName,
+        });
+      },
+      'Failed to create new file',
+      'file_operation'
+    );
   };
 
   // Close all tabs handler
   const closeAllTabs = async () => {
-    try {
-      const tabIds = tabState.openTabs.map(tab => tab.id);
-      for (const tabId of tabIds) {
-        await closeTab(tabId);
-      }
-    } catch (error) {
-      console.error('Failed to close all tabs:', error);
-    }
+    await withErrorHandling(
+      async () => {
+        const tabIds = tabState.openTabs.map(tab => tab.id);
+        for (const tabId of tabIds) {
+          await closeTab(tabId);
+        }
+      },
+      'Failed to close all tabs',
+      'file_operation'
+    );
   };
 
   // Reopen last closed tab handler (placeholder)
@@ -270,6 +310,9 @@ export const AppPhase2: React.FC = () => {
     createNewFile,
     openGlobalSearch: () => openModal('globalSearch'),
     openSettings: () => openModal('settings'),
+    openAnalytics: () => openModal('analytics'),
+    openHelp: () => openModal('helpDocumentation'),
+    openKeyboardShortcuts: () => openModal('keyboardShortcuts'),
     toggleTheme,
     closeActiveTab: async () => {
       if (activeTab) {
@@ -297,17 +340,19 @@ export const AppPhase2: React.FC = () => {
    * Handle search result selection - open file in tab and jump to line
    */
   const handleSearchResultSelect = async (file: MarkdownFile, lineNumber?: number) => {
-    try {
-      // Open the file in a tab
-      const tabId = await openTab(file);
+    await withErrorHandling(
+      async () => {
+        // Open the file in a tab
+        const tabId = await openTab(file);
 
-      // If line number provided, we could scroll to it (future enhancement)
-      if (lineNumber !== undefined) {
-        console.log(`TODO: Scroll to line ${lineNumber + 1} in tab ${tabId}`);
-      }
-    } catch (error) {
-      console.error('Failed to open search result:', error);
-    }
+        // If line number provided, we could scroll to it (future enhancement)
+        if (lineNumber !== undefined) {
+          console.log(`TODO: Scroll to line ${lineNumber + 1} in tab ${tabId}`);
+        }
+      },
+      'Failed to open search result',
+      'file_operation'
+    );
   };
 
   /**
@@ -379,13 +424,21 @@ export const AppPhase2: React.FC = () => {
 
         const permissions = await invoke<PermissionStatus>('check_permissions');
         console.log('Permissions:', permissions);
+
+        // Start onboarding tour if eligible
+        if (isEligibleForTour()) {
+          // Delay tour start to allow UI to render
+          setTimeout(() => {
+            startTour();
+          }, 1000);
+        }
       } catch (error) {
         console.error('Backend connection failed:', error);
       }
     };
 
     testBackend();
-  }, [settings.theme]);
+  }, [settings.theme, isEligibleForTour, startTour]);
 
   // === KEYBOARD SHORTCUTS ===
 
@@ -395,6 +448,9 @@ export const AppPhase2: React.FC = () => {
     onOpenFolder: selectFolder,
     onOpenGlobalSearch: () => openModal('globalSearch'),
     onOpenCommandPalette: () => openModal('commandPalette'),
+    onOpenDebugPanel: () => openModal('debugPanel'),
+    onOpenHelp: () => openModal('helpDocumentation'),
+    onOpenKeyboardShortcuts: () => openModal('keyboardShortcuts'),
   });
 
   // === RENDER HELPERS ===
@@ -406,7 +462,21 @@ export const AppPhase2: React.FC = () => {
   // === MAIN APPLICATION LAYOUT ===
 
   return (
-    <div className="h-screen flex flex-col bg-background text-foreground">
+    <ErrorBoundary 
+      enableRecovery={true}
+      onError={(error, errorInfo) => {
+        reportError(
+          `Application crash: ${error.message}`,
+          'system',
+          'critical',
+          error.stack || errorInfo.componentStack || undefined
+        );
+      }}
+    >
+      <TooltipManagerProvider>
+        <TransitionManagerProvider>
+          <ValidationProvider>
+            <div className="h-screen flex flex-col bg-background text-foreground">
       {/* Header Bar */}
       <AppHeader
         fileName={activeTab?.file.name || ''}
@@ -417,6 +487,7 @@ export const AppPhase2: React.FC = () => {
         onSaveActiveFile={async () => { await saveActiveTab(); }}
         onSaveAllFiles={async () => { await saveAllTabs(); }}
         onOpenSettings={() => openModal('settings')}
+        onOpenAnalytics={() => openModal('analytics')}
         onToggleTheme={toggleTheme}
       />
 
@@ -458,46 +529,59 @@ export const AppPhase2: React.FC = () => {
         {/* Editor Area */}
         <div className="flex-1 min-w-0">
           {activeTab ? (
-            <EnhancedTextEditor
-              content={activeTab.content}
-              onChange={handleContentChange}
-              mode={fileState.editorMode}
-              showLineNumbers={true}
-              readOnly={false}
-              autoFocus={true}
-              className="h-full"
-            />
+            <TransitionWrapper show={true} type="fade">
+              <EnhancedTextEditor
+                content={activeTab.content}
+                onChange={handleContentChange}
+                mode={fileState.editorMode}
+                showLineNumbers={true}
+                readOnly={false}
+                autoFocus={true}
+                className="h-full"
+              />
+            </TransitionWrapper>
+          ) : fileState.currentFolder && fileState.isLoading ? (
+            <TransitionWrapper show={true} type="fade">
+              <EditorSkeleton 
+                lines={12}
+                showToolbar={true}
+                animation="pulse"
+                className="h-full"
+              />
+            </TransitionWrapper>
           ) : (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center max-w-md">
-                <div className="w-24 h-24 mx-auto mb-6 bg-muted rounded-lg flex items-center justify-center">
-                  <Menu className="h-12 w-12 text-muted-foreground" />
+            <TransitionWrapper show={true} type="fade">
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center max-w-md">
+                  <div className="w-24 h-24 mx-auto mb-6 bg-muted rounded-lg flex items-center justify-center">
+                    <Menu className="h-12 w-12 text-muted-foreground" />
+                  </div>
+                  <h2 className="text-xl font-semibold mb-3">
+                    Welcome to GTD Space
+                  </h2>
+                  <p className="text-muted-foreground mb-6">
+                    {!fileState.currentFolder
+                      ? "Select a folder from the sidebar to get started with your markdown files."
+                      : "Click on a file in the sidebar to open it in a new tab."
+                    }
+                  </p>
+                  {!fileState.currentFolder ? (
+                    <Button onClick={selectFolder}>
+                      <FolderOpen className="h-4 w-4 mr-2" />
+                      Select Folder
+                    </Button>
+                  ) : fileState.files.length > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {fileState.files.length} markdown file{fileState.files.length !== 1 ? 's' : ''} available
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No markdown files found in this folder
+                    </p>
+                  )}
                 </div>
-                <h2 className="text-xl font-semibold mb-3">
-                  Welcome to GTD Space
-                </h2>
-                <p className="text-muted-foreground mb-6">
-                  {!fileState.currentFolder
-                    ? "Select a folder from the sidebar to get started with your markdown files."
-                    : "Click on a file in the sidebar to open it in a new tab."
-                  }
-                </p>
-                {!fileState.currentFolder ? (
-                  <Button onClick={selectFolder}>
-                    <FolderOpen className="h-4 w-4 mr-2" />
-                    Select Folder
-                  </Button>
-                ) : fileState.files.length > 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    {fileState.files.length} markdown file{fileState.files.length !== 1 ? 's' : ''} available
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No markdown files found in this folder
-                  </p>
-                )}
               </div>
-            </div>
+            </TransitionWrapper>
           )}
         </div>
       </div>
@@ -532,13 +616,13 @@ export const AppPhase2: React.FC = () => {
       )}
 
       {/* Settings Dialog */}
-      <SettingsManager
+      <SettingsManagerLazy
         isOpen={isModalOpen('settings')}
         onClose={closeModal}
       />
 
       {/* Global Search Dialog */}
-      <GlobalSearch
+      <GlobalSearchLazy
         isOpen={isModalOpen('globalSearch')}
         onClose={closeModal}
         currentFolder={fileState.currentFolder}
@@ -547,7 +631,7 @@ export const AppPhase2: React.FC = () => {
       />
 
       {/* Command Palette */}
-      <CommandPalette
+      <CommandPaletteLazy
         isOpen={isModalOpen('commandPalette')}
         onClose={closeModal}
         commands={commands}
@@ -567,7 +651,70 @@ export const AppPhase2: React.FC = () => {
         onExit={closeModal}
         onSave={saveActiveTab}
       />
-    </div>
+
+      {/* Error Dialog */}
+      {currentError && (
+        <ErrorDialog
+          isOpen={isErrorDialogOpen}
+          onClose={closeErrorDialog}
+          error={currentError}
+        />
+      )}
+
+      {/* Debug Panel (Development Only) */}
+      {typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' && (
+        <DebugPanelLazy
+          isOpen={isModalOpen('debugPanel')}
+          onClose={() => closeModal()}
+        />
+      )}
+
+      {/* Help Documentation */}
+      <HelpDocumentationLazy
+        isOpen={isModalOpen('helpDocumentation')}
+        onClose={closeModal}
+      />
+
+      {/* Keyboard Shortcuts Reference */}
+      <KeyboardShortcutsReferenceLazy
+        isOpen={isModalOpen('keyboardShortcuts')}
+        onClose={closeModal}
+        platform={navigator.userAgent.toLowerCase().includes('mac') ? 'mac' : 'windows'}
+      />
+
+      {/* Analytics Modal */}
+      <AnalyticsModal
+        isOpen={isModalOpen('analytics')}
+        onClose={closeModal}
+        currentFile={activeTab ? activeTab.file : null}
+      />
+
+      {/* Onboarding Tour */}
+      <OnboardingTour
+        isActive={onboardingState.isTourActive}
+        onComplete={completeTour}
+        onSkip={skipTour}
+      />
+
+      {/* Help Hints */}
+      <HelpHints
+        context={{
+          hasFiles: fileState.files.length > 0,
+          hasSelectedFolder: !!fileState.currentFolder,
+          currentMode: fileState.editorMode,
+          hasUnsavedChanges: hasUnsavedChanges,
+          recentError: fileState.error || undefined,
+        }}
+        onHintAction={(hintId, action) => {
+          console.log('Hint action:', hintId, action);
+        }}
+        className="fixed bottom-4 left-4 max-w-sm"
+      />
+            </div>
+          </ValidationProvider>
+        </TransitionManagerProvider>
+      </TooltipManagerProvider>
+    </ErrorBoundary>
   );
 };
 

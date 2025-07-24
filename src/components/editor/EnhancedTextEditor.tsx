@@ -11,8 +11,12 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { MarkdownPreview } from './MarkdownPreview';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
-import { DocumentOutline, TableOfContents, DocumentStats } from '@/components/navigation';
-import { ExportManager } from '@/components/export';
+import { 
+  DocumentOutlineLazy, 
+  TableOfContentsLazy, 
+  DocumentStatsLazy,
+  ExportManagerLazy 
+} from '@/components/lazy';
 import type { TextEditorProps, EditorMode } from '@/types';
 
 /**
@@ -119,16 +123,6 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
   }, []);
 
   // === SYNCHRONIZED SCROLLING (Future Enhancement) ===
-  
-  // const handleEditorScroll = useCallback((scrollTop: number) => {
-  //   setEditorScrollTop(scrollTop);
-  //   // In a future version, we could implement synchronized scrolling
-  //   // between editor and preview based on line numbers and content mapping
-  // }, []);
-
-  // const handlePreviewScroll = useCallback((scrollTop: number) => {
-  //   setPreviewScrollTop(scrollTop);
-  // }, []);
 
   // === TOOLBAR ===
   
@@ -300,7 +294,7 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
         {/* Navigation Content */}
         <div className="flex-1 min-h-0">
           {navigationView === 'outline' && (
-            <DocumentOutline
+            <DocumentOutlineLazy
               content={content}
               showLineNumbers={true}
               allowCollapse={true}
@@ -310,7 +304,7 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
           )}
           
           {navigationView === 'toc' && (
-            <TableOfContents
+            <TableOfContentsLazy
               content={content}
               showNumbers={true}
               showLevelIndicators={true}
@@ -320,7 +314,7 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
           )}
           
           {navigationView === 'stats' && (
-            <DocumentStats
+            <DocumentStatsLazy
               content={content}
               showDetailed={true}
               showAnalytics={true}
@@ -380,7 +374,7 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
       </div>
 
       {/* Export Manager Dialog */}
-      <ExportManager
+      <ExportManagerLazy
         content={content}
         title="Document"
         isOpen={showExportDialog}

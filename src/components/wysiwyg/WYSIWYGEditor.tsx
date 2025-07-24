@@ -169,36 +169,6 @@ const DEFAULT_EXTENSIONS = [
       class: 'text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300',
     },
   }),
-  // Mathematics.configure({
-  //   katexOptions: {
-  //     throwOnError: false,
-  //     displayMode: false,
-  //     strict: false,
-  //     trust: true,
-  //     macros: {
-  //       '\\RR': '\\mathbb{R}',
-  //       '\\ZZ': '\\mathbb{Z}',
-  //       '\\QQ': '\\mathbb{Q}',
-  //       '\\NN': '\\mathbb{N}',
-  //       '\\CC': '\\mathbb{C}',
-  //     },
-  //   },
-  //   allowInline: true,
-  //   allowBlock: true,
-  // }),
-  // Mermaid.configure({
-  //   mermaidConfig: {
-  //     theme: 'default',
-  //     logLevel: 'error',
-  //     securityLevel: 'loose',
-  //     flowchart: {
-  //       htmlLabels: true,
-  //       curve: 'basis',
-  //     },
-  //   },
-  //   autoRender: true,
-  //   cssClass: 'mermaid-diagram rounded-lg border border-gray-200 p-4 my-2',
-  // }),
 ];
 
 // === MAIN COMPONENT ===

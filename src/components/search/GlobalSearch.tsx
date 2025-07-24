@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchResults } from './SearchResults';
 import { SearchFilters } from './SearchFilters';
+import { SearchSkeleton } from '@/components/polish';
 import { useGlobalSearch } from '@/hooks/useGlobalSearch';
 import type { BaseComponentProps, MarkdownFile } from '@/types';
 
@@ -506,7 +507,15 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
               </div>
             )}
 
-            {results.length > 0 && (
+            {isSearching && (
+              <SearchSkeleton 
+                count={5}
+                animation="pulse"
+                className="p-4"
+              />
+            )}
+
+            {results.length > 0 && !isSearching && (
               <SearchResults
                 results={results}
                 query={query}

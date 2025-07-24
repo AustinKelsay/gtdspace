@@ -15,6 +15,10 @@ export type ModalType =
   | 'globalSearch'
   | 'commandPalette'
   | 'writingMode'
+  | 'debugPanel'
+  | 'helpDocumentation'
+  | 'keyboardShortcuts'
+  | 'analytics'
   | null;
 
 /**

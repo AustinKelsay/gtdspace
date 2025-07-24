@@ -6,6 +6,37 @@ export default {
   ],
   darkMode: 'class',
   theme: {
+    container: {
+      center: true,
+      padding: {
+        DEFAULT: '1rem',
+        sm: '1.5rem',
+        lg: '2rem',
+        xl: '2.5rem',
+        '2xl': '3rem',
+      },
+      screens: {
+        sm: '100%',
+        md: '100%',
+        lg: '1024px',
+        xl: '1280px',
+        '2xl': '1400px',
+      },
+    },
+    screens: {
+      'xs': '475px',
+      'sm': '640px',
+      'md': '768px',
+      'lg': '1024px',
+      'xl': '1280px',
+      '2xl': '1400px',
+      '3xl': '1600px',
+      // Custom breakpoints for editor layout
+      'editor-sm': '768px',
+      'editor-md': '1024px',
+      'editor-lg': '1280px',
+      'editor-xl': '1440px',
+    },
     extend: {
       colors: {
         // shadcn/ui color system
@@ -35,6 +66,26 @@ export default {
           hover: '#2a2d2e'
         }
       },
+      spacing: {
+        '18': '4.5rem',
+        '88': '22rem',
+        '112': '28rem',
+        '128': '32rem',
+        'sidebar': '280px',
+        'sidebar-sm': '256px',
+        'sidebar-lg': '320px',
+      },
+      maxWidth: {
+        'prose': '65ch',
+        'prose-sm': '55ch',
+        'prose-lg': '75ch',
+        'editor': '1200px',
+        'content': '1400px',
+      },
+      minHeight: {
+        'editor': '400px',
+        'sidebar': '600px',
+      },
       typography: {
         // Custom typography for markdown content
         markdown: {
@@ -50,6 +101,28 @@ export default {
             }
           }
         }
+      },
+      animation: {
+        'shimmer': 'shimmer 2s infinite linear',
+      },
+      keyframes: {
+        shimmer: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
+        },
+      },
+      transitionDuration: {
+        '150': '150ms',
+        '200': '200ms',
+        '250': '250ms',
+        '300': '300ms',
+        '400': '400ms',
+        '500': '500ms',
+        '600': '600ms',
+        '700': '700ms',
+        '800': '800ms',
+        '900': '900ms',
+        '1000': '1000ms',
       }
     },
   },

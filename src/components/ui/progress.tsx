@@ -1,8 +1,12 @@
-"use client"
+/**
+ * @fileoverview Progress component for showing completion status
+ * @author shadcn/ui
+ * @created 2024-01-XX
+ * @phase 4 - UI component for progress indication
+ */
 
 import * as React from "react"
 import * as ProgressPrimitive from "@radix-ui/react-progress"
-
 import { cn } from "@/lib/utils"
 
 const Progress = React.forwardRef<

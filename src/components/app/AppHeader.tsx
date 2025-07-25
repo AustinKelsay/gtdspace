@@ -8,7 +8,7 @@
 import React from 'react';
 import { Save, Settings, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { SmartTooltip } from '@/components/help/TooltipManager';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Theme } from '@/types';
 
 /**
@@ -105,91 +105,98 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 </span>
 
                 {/* Save Button */}
-                <SmartTooltip
-                    id="save-active-file"
-                    title="Save File"
-                    content="Save the current file. Your changes are also auto-saved every few seconds."
-                    type="shortcut"
-                    shortcut="Ctrl+S"
-                >
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={onSaveActiveFile}
-                        disabled={!hasCurrentFileUnsavedChanges}
-                    >
-                        <Save className="h-4 w-4" />
-                    </Button>
-                </SmartTooltip>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={onSaveActiveFile}
+                                disabled={!hasCurrentFileUnsavedChanges}
+                            >
+                                <Save className="h-4 w-4" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Save File (Ctrl+S)</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
 
                 {/* Save All Button */}
                 {hasAnyUnsavedChanges && (
-                    <SmartTooltip
-                        id="save-all-files"
-                        title="Save All Files"
-                        content="Save all open files with unsaved changes at once."
-                        type="shortcut"
-                        shortcut="Ctrl+Shift+S"
-                    >
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={onSaveAllFiles}
-                            className="text-xs"
-                        >
-                            Save All
-                        </Button>
-                    </SmartTooltip>
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={onSaveAllFiles}
+                                    className="text-xs"
+                                >
+                                    Save All
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Save All Files (Ctrl+Shift+S)</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 )}
 
                 {/* Analytics Button */}
-                <SmartTooltip
-                    id="open-analytics"
-                    title="Analytics"
-                    content="View detailed insights about your writing habits, document metrics, and productivity."
-                    type="feature"
-                >
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={onOpenAnalytics}
-                    >
-                        <BarChart3 className="h-4 w-4" />
-                    </Button>
-                </SmartTooltip>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={onOpenAnalytics}
+                            >
+                                <BarChart3 className="h-4 w-4" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Analytics</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
 
                 {/* Settings Button */}
-                <SmartTooltip
-                    id="open-settings"
-                    title="Settings"
-                    content="Configure application preferences, keyboard shortcuts, and editor options."
-                    type="feature"
-                    shortcut="Ctrl+,"
-                >
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={onOpenSettings}
-                    >
-                        <Settings className="h-4 w-4" />
-                    </Button>
-                </SmartTooltip>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={onOpenSettings}
+                            >
+                                <Settings className="h-4 w-4" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Settings (Ctrl+,)</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
 
                 {/* Theme Toggle */}
-                <SmartTooltip
-                    id="toggle-theme"
-                    title="Toggle Theme"
-                    content={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme for better visibility and comfort.`}
-                    type="feature"
-                >
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={onToggleTheme}
-                    >
-                        {theme === 'dark' ? '☀️' : '🌙'}
-                    </Button>
-                </SmartTooltip>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={onToggleTheme}
+                            >
+                                {theme === 'dark' ? '☀️' : '🌙'}
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Toggle Theme</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
             </div>
         </header>
     );

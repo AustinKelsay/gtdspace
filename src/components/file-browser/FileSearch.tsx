@@ -7,9 +7,8 @@
 
 import React, { useEffect } from 'react';
 import { Search, X } from 'lucide-react';
-// import { Input } from '@/components/ui/input';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ValidatedInput, ValidationRules } from '@/components/validation/ValidationSystem';
 
 /**
  * Props for the file search component
@@ -60,7 +59,6 @@ export const FileSearch: React.FC<FileSearchProps> = ({
       // Ctrl/Cmd + F to focus search
       if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
         event.preventDefault();
-        // Could focus the validated input if needed
       }
       
       // Escape to clear search
@@ -80,7 +78,6 @@ export const FileSearch: React.FC<FileSearchProps> = ({
    */
   const handleClear = () => {
     onChange('');
-    // Could focus the validated input if needed
   };
 
   // === RENDER ===
@@ -89,19 +86,13 @@ export const FileSearch: React.FC<FileSearchProps> = ({
     <div className={`relative ${className}`}>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground z-10" />
-        <ValidatedInput
-          fieldId="fileSearch"
-          rules={[
-            ValidationRules.search.minLength(2),
-            ValidationRules.search.maxLength(100),
-            ValidationRules.search.validRegex(),
-          ]}
-          initialValue={value}
+        <Input
+          id="fileSearch"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           type="search"
           className="pl-10 pr-10"
-          onValueChange={onChange}
-          showValidation={false}
         />
         {value && (
           <Button

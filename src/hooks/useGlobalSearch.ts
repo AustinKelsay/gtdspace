@@ -78,8 +78,6 @@ export function useGlobalSearch(): UseGlobalSearchResult {
       setIsSearching(true);
       setError(null);
 
-      console.log('Performing global search:', queryToUse, 'in', directory);
-
       const response = await invoke<SearchResponse>('search_files', {
         query: queryToUse,
         directory,
@@ -93,10 +91,7 @@ export function useGlobalSearch(): UseGlobalSearchResult {
         duration: response.duration_ms,
         truncated: response.truncated,
       });
-
-      console.log(`Search completed: ${response.results.length} results in ${response.duration_ms}ms`);
     } catch (err) {
-      console.error('Search failed:', err);
       setError(err instanceof Error ? err.message : 'Search failed');
       setResults([]);
       setMetadata(null);
@@ -104,7 +99,6 @@ export function useGlobalSearch(): UseGlobalSearchResult {
       setIsSearching(false);
     }
   }, [query, filters]);
-
 
   /**
    * Update search query

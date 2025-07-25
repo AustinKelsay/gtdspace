@@ -32,7 +32,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
-use tauri_plugin_store::{StoreExt, StoreBuilder};
+use tauri_plugin_store::StoreBuilder;
 use notify::RecursiveMode;
 use notify_debouncer_mini::{new_debouncer, DebouncedEventKind};
 

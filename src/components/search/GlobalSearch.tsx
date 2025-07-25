@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchResults } from './SearchResults';
 import { SearchFilters } from './SearchFilters';
-import { SearchSkeleton } from '@/components/polish';
+// SearchSkeleton removed during simplification
 import { useGlobalSearch } from '@/hooks/useGlobalSearch';
 import type { BaseComponentProps, MarkdownFile } from '@/types';
 
@@ -508,11 +508,10 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
             )}
 
             {isSearching && (
-              <SearchSkeleton 
-                count={5}
-                animation="pulse"
-                className="p-4"
-              />
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                <span className="text-muted-foreground">Searching...</span>
+              </div>
             )}
 
             {results.length > 0 && !isSearching && (

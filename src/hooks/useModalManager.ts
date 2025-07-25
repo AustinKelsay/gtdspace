@@ -13,12 +13,7 @@ import { useState, useCallback } from 'react';
 export type ModalType = 
   | 'settings'
   | 'globalSearch'
-  | 'commandPalette'
-  | 'writingMode'
-  | 'debugPanel'
-  | 'helpDocumentation'
   | 'keyboardShortcuts'
-  | 'analytics'
   | null;
 
 /**

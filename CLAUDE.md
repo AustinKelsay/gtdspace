@@ -4,33 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**GTD Space** is a cross-platform desktop markdown editor built with Tauri. It combines a React 18 + TypeScript frontend with a Rust backend to create a local-first markdown editing experience.
+**GTD Space** is a streamlined cross-platform desktop markdown editor built with Tauri. It combines a React 18 + TypeScript frontend with a Rust backend to create a local-first markdown editing experience focused on simplicity and core functionality.
 
 **Current Status:**
-- **Phase 4 In Progress (90%)**: Polish, performance optimization, and final refinements
-  - ✅ Design system implementation with dark-first Slate theme
-  - ✅ Performance optimizations with code splitting and lazy loading
-  - ✅ Accessibility improvements targeting WCAG 2.1 AA compliance
-  - ✅ Enhanced keyboard navigation and screen reader support
-  - ✅ Advanced search with regex, case sensitivity, and filter persistence
-  - ✅ Error boundaries and comprehensive error handling
-  - ✅ File validation system with size limits and extension verification
-  - ✅ Onboarding flow with interactive tutorial
-  - ✅ Analytics integration for usage insights
-  - 🚧 Help documentation and tooltips (partial)
-  - 🚧 Video tutorials (planned)
-  - 🚧 Feedback widget (planned)
-
-**Previous Phases Complete:**
-- **Phase 3**: Advanced WYSIWYG editing, block system, exports, media management
-- **Phase 2**: Enhanced multi-file editing with tabbed interface
-- **Phase 1**: Full MVP with file management and basic editing
+- Simplified to core features only
+- Removed advanced features to focus on solid foundation
+- Clean, maintainable codebase
 
 **Key Technologies:**
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui
-- **Editors**: CodeMirror 6 (source) + Tiptap/ProseMirror (WYSIWYG)
-- **State Management**: Custom hooks pattern (no external state library)
-- **Rich Content**: KaTeX (math), Mermaid (diagrams), Lowlight (syntax highlighting)
+- **Editor**: CodeMirror 6 for markdown source editing
+- **State Management**: Custom hooks pattern
+- **Markdown**: marked for preview rendering
 - **Backend**: Rust, Tauri 2.x with fs, dialog, and store plugins
 - **File Watching**: notify crate for real-time external change detection
 
@@ -58,87 +43,82 @@ npm run build
 
 # Preview built frontend
 npm run preview
+
+# Access Tauri CLI directly
+npm run tauri <command>
 ```
 
-## Architecture & Structure
+## Core Features
 
-### Frontend Architecture (`src/`)
+### Kept (Essential Features)
+- File browser and management (create, rename, delete, open folder)
+- CodeMirror markdown editor with syntax highlighting
+- Markdown preview mode
+- Multi-tab editing with tab management
+- Auto-save functionality (2s debounce)
+- Basic file search within current folder
+- Theme switching (light/dark/auto)
+- File watcher for external changes
+- Essential keyboard shortcuts
+
+### Removed (To Reduce Complexity)
+- WYSIWYG editor and block system
+- Export functionality (PDF/HTML)
+- Media management and embeds
+- Analytics and monitoring
+- Onboarding and tutorials
+- Help documentation system
+- Command palette
+- Debug panel
+- Performance monitoring
+- Complex error recovery
+- Animations and transitions
+- Advanced validation
+
+## Architecture
+
+### Frontend Structure (`src/`)
 
 **Application Entry:**
 - `main.tsx`: React entry point
-- `AppPhase2.tsx`: Main application component with all features integrated
+- `AppPhase2.tsx`: Main application component (simplified)
 - `global.css`: Tailwind CSS and global styles
 
-**Core Hooks (State Management):**
-- `hooks/useFileManager.ts`: Central file operations and folder state
+**Core Hooks:**
+- `hooks/useFileManager.ts`: File operations and folder state
 - `hooks/useTabManager.ts`: Multi-file tab management with auto-save
-- `hooks/useFileWatcher.ts`: External file change detection with debouncing
-- `hooks/useKeyboardShortcuts.ts`: Global keyboard shortcuts management
-- `hooks/useModalManager.ts`: Modal state management for dialogs
-- `hooks/useSettings.ts`: User settings persistence and management
-- `hooks/useCommands.ts`: Command palette integration
-- `hooks/useGlobalSearch.ts`: Cross-file search functionality
-- `hooks/useErrorHandler.ts`: Centralized error handling and recovery
-- `hooks/useOnboarding.ts`: User onboarding flow management
-- `hooks/use-toast.tsx`: Toast notification system (shadcn/ui)
+- `hooks/useFileWatcher.ts`: External file change detection
+- `hooks/useKeyboardShortcuts.ts`: Keyboard shortcuts
+- `hooks/useModalManager.ts`: Modal state (settings, search, shortcuts)
+- `hooks/useSettings.ts`: User settings persistence
+- `hooks/useGlobalSearch.ts`: File search functionality
+- `hooks/useErrorHandler.ts`: Basic error handling with toasts
 
 **Component Organization:**
 ```
 components/
-├── analytics/          # Usage analytics and visualization
-├── app/               # Application-level components (AppHeader)
-├── blocks/            # Block-based editing system (Phase 3 complete)
-├── command-palette/   # Command palette for quick access
-├── debug/             # Debug panel and development tools
-├── design-system/     # Design system showcase and documentation
-├── editor/            # Text editing components (CodeMirror)
-├── error-handling/    # Error boundaries and recovery systems
-├── export/            # PDF/HTML export functionality
-├── file-browser/      # File management and browser UI
-├── help/              # Help system, tutorials, and tooltips
-├── layout/            # Responsive layout components
-├── lazy/              # Code splitting wrappers for performance
-├── media/             # Image and attachment handling
-├── monitoring/        # Performance monitoring UI
-├── navigation/        # Document outline, TOC, stats
-├── onboarding/        # User onboarding flow
-├── polish/            # UI polish, animations, and micro-interactions
-├── search/            # Global search functionality
-├── settings/          # Settings management interface
-├── tabs/              # Tabbed interface for multi-file editing
-├── tutorial/          # Interactive tutorial system
-├── ui/                # shadcn/ui base components
-├── validation/        # File validation and form handling
-├── virtualized/       # Performance optimizations for large lists
-└── wysiwyg/           # Rich text editing (Tiptap/ProseMirror)
+├── app/               # Application header
+├── editor/            # CodeMirror editor component
+├── error-handling/    # Simple error boundary
+├── file-browser/      # File management UI
+├── lazy/              # Lazy loaded components (search, settings)
+├── navigation/        # Document stats
+├── search/            # Global search
+├── settings/          # Settings interface
+├── tabs/              # Tabbed interface
+└── ui/                # shadcn/ui base components
 ```
 
-**Services:**
-```
-services/
-├── ErrorManager.ts          # Global error management
-├── analytics/
-│   └── AnalyticsCollector.ts # Usage analytics collection
-├── caching/
-│   ├── CacheManager.ts      # Central cache management
-│   └── LRUCache.ts          # LRU cache implementation
-├── logging/
-│   └── LoggingService.ts    # Application logging infrastructure
-├── performance/
-│   ├── PerformanceMonitor.ts       # Performance tracking
-│   ├── memoryMonitor.ts            # Memory usage monitoring
-│   ├── benchmarkRunner.ts          # Performance benchmarks
-│   └── memoryLeakPrevention.ts     # Memory management
-```
+### Backend Structure (`src-tauri/`)
 
-### Backend Architecture (`src-tauri/`)
-
-**Command Structure:**
+**Commands:**
 ```rust
-// All commands in src/commands/mod.rs
 // File operations
 select_folder, list_markdown_files, read_file, save_file,
-create_file, rename_file, delete_file
+create_file, rename_file, delete_file, copy_file, move_file
+
+// Search
+search_files, replace_in_file
 
 // File watching
 start_file_watcher, stop_file_watcher
@@ -150,19 +130,11 @@ load_settings, save_settings
 ping, get_app_version, check_permissions
 ```
 
-**Key Patterns:**
-- All commands return `Result<T, String>` for error handling
-- File operations use `FileOperationResult` type
-- Settings persisted with `tauri-plugin-store`
-- File watching with debounced events
-
 ### Communication Pattern
 
-Frontend → Backend:
 ```typescript
 import { invoke } from '@tauri-apps/api/core';
 
-// Example usage
 const files = await invoke<MarkdownFile[]>('list_markdown_files', { 
   folderPath: '/path/to/folder' 
 });
@@ -170,97 +142,152 @@ const files = await invoke<MarkdownFile[]>('list_markdown_files', {
 
 ## Key Implementation Details
 
-### Design System
-- **Theme**: Dark-first Slate theme with light mode support
-- **Colors**: Consistent palette defined in `tailwind.config.js`
-- **Typography**: System font stack with responsive sizing
-- **Spacing**: 4px base unit system
-- **Components**: All UI components follow shadcn/ui patterns
-- **Accessibility**: WCAG 2.1 AA compliance target with screen reader support
-
 ### Editor System
-- **Dual Editors**: CodeMirror 6 for source, Tiptap/ProseMirror for WYSIWYG
-- **Mode Switching**: Seamless content sync via markdown serialization
-- **Four Modes**: WYSIWYG, source, preview, split-view
-- **Rich Features**: Tables, math (KaTeX), diagrams (Mermaid), syntax highlighting
-- **Block System**: Complete Notion-style blocks with drag-and-drop (Phase 3 complete)
-- **Content Types**: Text, headers, lists, tables, code blocks, math equations, images
-
-### Performance Architecture
-- **Code Splitting**: Lazy loading for heavy components with React.lazy
-- **Virtualization**: Large file lists use react-window for windowing
-- **Caching**: LRU caching system for optimal performance
-- **Memory Management**: Built-in memory leak prevention and monitoring
-- **Debouncing**: Auto-save, search, and file watching operations
-- **Memoization**: React.memo and useMemo for expensive renders
-- **Bundle Optimization**: Target <2MB initial bundle with ongoing optimization
+- **Single Editor**: CodeMirror 6 for source editing
+- **Preview Mode**: Markdown parsed with marked library
+- **Modes**: Source view and preview (no WYSIWYG)
+- **Syntax Highlighting**: Built-in markdown support
 
 ### File Management
-- **Tab System**: Maximum 10 tabs with intelligent memory management
-- **Auto-Save**: Per-tab debounced saving (2s delay) with visual indicators
-- **File Watching**: Real-time external change detection with notify crate
-- **Validation**: File size limits (10MB), extension verification, content validation
-- **Search**: Global search across files with regex and case sensitivity support
+- **Tab System**: Maximum 10 tabs with memory management
+- **Auto-Save**: Per-tab debounced saving (2s delay)
+- **File Watching**: Real-time external change detection
+- **Search**: Basic search across files in current folder
 
-### Error Handling & Monitoring
-- **Error Boundaries**: Component-level error recovery with fallback UI
-- **Error Manager**: Central error management service with context tracking
-- **User Feedback**: Toast notifications for all operations with severity levels
-- **Logging**: Comprehensive logging service for development and debugging
-- **Recovery**: Graceful degradation with automatic retry mechanisms
-- **Performance Monitoring**: Real-time performance metrics and benchmarking
+### Error Handling
+- **Error Boundary**: Simple React error boundary with refresh
+- **Toast Notifications**: User feedback via toast messages
+- **Console Logging**: Errors logged for debugging
+
+### State Management
+- **Custom Hooks**: Each feature has dedicated hook
+- **No External Library**: No Redux/MobX/Zustand
+- **Local Storage**: Settings persisted via Tauri store
 
 ## Development Workflow
 
 ### Adding New Features
-1. Define TypeScript types in `src/types/index.ts`
-2. Add Rust commands if backend work needed
-3. Create/extend hooks for state management
-4. Build components using shadcn/ui patterns
-5. Add keyboard shortcuts if applicable
-6. Update CLAUDE.md documentation
+1. Define types in `src/types/index.ts`
+2. Add Rust command if backend needed
+3. Create hook in `src/hooks/`
+4. Build UI component
+5. Add to lazy loading if heavy
 
-### Code Style Guidelines
-- Use TypeScript strict mode (currently disabled, but aim for type safety)
-- Follow existing component patterns
-- Use absolute imports (@/) for all imports
-- Implement error handling for all async operations
-- Add proper TypeScript types (avoid `any`)
-- Use semantic HTML for accessibility
+### Common Patterns
 
-### Current Limitations
-- TypeScript strict mode disabled due to legacy code patterns
-- Bundle size management requires ongoing optimization
-- File watcher debouncing can delay rapid successive changes
-- Some components still need performance optimization
-- Testing infrastructure exists but comprehensive test suite not complete
+**Adding a Modal:**
+1. Add to `ModalType` in `useModalManager`
+2. Create component with shadcn/ui Dialog
+3. Add to AppPhase2.tsx modal section
+4. Use `openModal('name')` to open
+
+**Adding File Operations:**
+1. Add Rust command in `commands/mod.rs`
+2. Add TypeScript types
+3. Use in hook with error handling
+4. Update UI accordingly
+
+## Current Limitations & TODOs
+
+### Known Issues
+- TypeScript strict mode disabled (tsconfig.json)
+- No comprehensive test suite
+- File size limit 10MB (hardcoded)
+- Maximum 10 tabs (memory management)
+- Basic search only (no advanced filtering)
+- No plugin system or extensibility
+- Empty `src/services` directory
+- `useTabManager.ts` imports non-existent memory leak prevention services
+
+### TODO Items in Codebase
+1. **ESLint Configuration**: Fix ESLint configuration issue with @typescript-eslint/recommended
+2. **Services Directory**: Either populate or remove empty services directory
+3. **Tab Manager Component**: Remove DnD Kit dependencies from TabManager.tsx
 
 ## Important Notes
 
-### Phase 4 Completion Status
-Phase 4 is approximately 90% complete with the following status:
-- ✅ Performance monitoring and metrics tracking implemented
-- ✅ Error handling and recovery systems complete
-- ✅ Analytics and usage tracking integrated
-- ✅ Memory management and leak prevention active
-- ✅ Command palette and keyboard shortcuts complete
-- ✅ Onboarding flow and tutorial system functional
-- 🚧 Help documentation system (partial implementation)
-- 🚧 Final accessibility compliance (WCAG 2.1 AA)
-- 🚧 Video tutorial integration (planned)
-- 🚧 Feedback widget system (planned)
+### Development vs Production
+- Environment warning shown when not in Tauri
+- Development server on port 5173
+- Bundle size significantly reduced (~1MB target)
 
-### Known Issues
-- TypeScript strict mode disabled requiring gradual migration
-- File watcher debouncing can delay rapid successive updates
-- Memory usage optimization ongoing for very large files (>10MB)
-- Search performance requires optimization for large file sets (>1000 files)
-- Bundle size management due to rich editor dependencies
-- Some advanced accessibility features still in development
+### Platform Notes
+- File paths handled by Rust (cross-platform)
+- Keyboard shortcuts adapt (Cmd vs Ctrl)
+- Native file dialogs via Tauri
 
-### Future Considerations
-- **Phase 5**: Plugin system and extensibility framework
-- **Testing**: Implement comprehensive test suite
-- **CI/CD**: Automated build and release pipeline
-- **Internationalization**: Multi-language support
-- **Cloud Sync**: Optional cloud backup feature
+### Security
+- File paths sanitized in Rust
+- No external network requests
+- Settings stored locally only
+
+## Common Development Tasks
+
+### Running the Application
+```bash
+# For development with hot reload
+npm run tauri:dev
+
+# This starts both:
+# - Vite dev server on http://localhost:5173
+# - Tauri backend with file watching
+```
+
+### Type Checking & Linting
+```bash
+# Check TypeScript types without emitting
+npm run type-check
+
+# Run ESLint
+npm run lint
+
+# Auto-fix ESLint issues
+npm run lint:fix
+```
+
+### Building for Release
+```bash
+# Creates platform-specific installer in src-tauri/target/release/bundle/
+npm run tauri:build
+```
+
+### Frontend-Only Development
+```bash
+# Useful for UI development without Tauri
+npm run dev
+
+# Note: File operations won't work without Tauri backend
+```
+
+## Architecture Patterns
+
+### Hook Pattern
+All business logic is encapsulated in custom hooks:
+- Hooks handle state management
+- Components focus on presentation
+- No prop drilling - hooks provide direct access
+
+### Lazy Loading
+Heavy components are lazy loaded to improve initial load:
+```typescript
+const SettingsManagerLazy = lazy(() => 
+  import('@/components/settings/SettingsManager')
+);
+```
+
+### Error Handling Pattern
+```typescript
+const { withErrorHandling } = useErrorHandler();
+
+const result = await withErrorHandling(
+  async () => await invoke('command_name', args),
+  'User-friendly error message'
+);
+```
+
+### Modal Management
+Centralized modal state prevents multiple modals:
+```typescript
+const { openModal, closeModal } = useModalManager();
+openModal('settings'); // Only one modal at a time
+```

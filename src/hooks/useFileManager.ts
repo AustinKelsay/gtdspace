@@ -8,9 +8,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useSettings } from '@/hooks/useSettings';
-import { startTiming, endTiming, recordFileOperation } from '@/services/performance/PerformanceMonitor';
-import { cacheManager } from '@/services/caching';
-import { useResourceCleanup, useMemoryLeakDetection } from '@/services/performance/memoryLeakPrevention';
+// Performance monitoring and caching removed during simplification
 import type { 
   MarkdownFile, 
   FileOperationResult, 
@@ -41,10 +39,6 @@ import type {
  * ```
  */
 export const useFileManager = () => {
-  // === MEMORY LEAK PREVENTION ===
-  const { safeSetTimeout, safeAddEventListener } = useResourceCleanup();
-  // Memory leak detection for this hook
-  useMemoryLeakDetection('useFileManager');
   
   // === SETTINGS INTEGRATION ===
   
@@ -165,30 +159,15 @@ export const useFileManager = () => {
    * Load a file's content into the editor
    */
   const loadFile = useCallback(async (file: MarkdownFile) => {
-    const timingId = `file_load_${file.id}`;
-    startTiming(timingId);
     
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       
       console.log('Loading file:', file.path);
       
-      // Check cache first
-      let content = cacheManager.getFileContent(file.path);
+      // Load from file system
+      const content = await invoke<string>('read_file', { path: file.path });
       
-      if (content === undefined) {
-        // Load from file system if not cached
-        content = await invoke<string>('read_file', { path: file.path });
-        // Cache the content
-        cacheManager.setFileContent(file.path, content);
-      }
-      
-      // Record performance metrics
-      endTiming(timingId, 'file_operation', { 
-        fileSize: file.size,
-        fileName: file.name 
-      });
-      recordFileOperation('open', performance.now() - performance.timeOrigin, file.size);
       
       setState(prev => ({
         ...prev,
@@ -216,8 +195,6 @@ export const useFileManager = () => {
   const saveCurrentFile = useCallback(async () => {
     if (!state.currentFile || !state.hasUnsavedChanges) return;
     
-    const timingId = `file_save_${state.currentFile.id}`;
-    startTiming(timingId);
     
     try {
       setState(prev => ({ ...prev, autoSaveStatus: 'saving' }));
@@ -228,16 +205,6 @@ export const useFileManager = () => {
         content: state.fileContent,
       });
       
-      // Update cache with new content
-      cacheManager.setFileContent(state.currentFile.path, state.fileContent);
-      
-      // Record performance metrics
-      endTiming(timingId, 'file_operation', { 
-        fileSize: state.currentFile.size,
-        fileName: state.currentFile.name,
-        contentLength: state.fileContent.length
-      });
-      recordFileOperation('save', performance.now() - performance.timeOrigin, state.fileContent.length);
       
       setState(prev => ({
         ...prev,
@@ -248,7 +215,7 @@ export const useFileManager = () => {
       console.log('File saved successfully');
       
       // Reset save status after 2 seconds
-      safeSetTimeout(() => {
+      setTimeout(() => {
         setState(prev => ({ ...prev, autoSaveStatus: 'idle' }));
       }, 2000);
       
@@ -326,7 +293,6 @@ export const useFileManager = () => {
         
         // If we deleted the current file, clear the editor and cache
         if (operation.type === 'delete' && state.currentFile?.path === operation.path) {
-          cacheManager.invalidateFileContent(operation.path);
           setState(prev => ({
             ...prev,
             currentFile: null,
@@ -337,7 +303,6 @@ export const useFileManager = () => {
         
         // Handle rename operation cache invalidation
         if (operation.type === 'rename' && operation.oldPath) {
-          cacheManager.invalidateFileContent(operation.oldPath);
         }
       } else {
         throw new Error(result.message || 'Operation failed');
@@ -389,12 +354,12 @@ export const useFileManager = () => {
   useEffect(() => {
     if (!state.hasUnsavedChanges) return;
     
-    const timeoutId = safeSetTimeout(() => {
+    const timeoutId = setTimeout(() => {
       saveCurrentFile();
     }, 2000);
     
     return () => clearTimeout(timeoutId);
-  }, [state.fileContent, state.hasUnsavedChanges, saveCurrentFile, safeSetTimeout]);
+  }, [state.fileContent, state.hasUnsavedChanges, saveCurrentFile]);
 
   // === INITIALIZATION ===
   
@@ -441,8 +406,11 @@ export const useFileManager = () => {
       }
     };
 
-    safeAddEventListener(document, 'keydown', handleKeyDown as EventListener);
-    // Cleanup handled automatically by useResourceCleanup
+    document.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [saveCurrentFile, selectFolder]);
 
   // === RETURN STATE AND OPERATIONS ===

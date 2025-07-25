@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { useResourceCleanup, useMemoryLeakDetection, useLargeCollection } from '@/services/performance/memoryLeakPrevention';
+// Memory leak prevention removed during simplification
 import type { 
   MarkdownFile, 
   FileTab, 
@@ -24,11 +24,6 @@ import type {
  * @returns Tab manager state and operations
  */
 export const useTabManager = () => {
-  // === MEMORY LEAK PREVENTION ===
-  const { safeAddEventListener } = useResourceCleanup();
-  // Memory leak detection for this hook
-  useMemoryLeakDetection('useTabManager');
-  const recentlyClosedCollection = useLargeCollection<FileTab>(10); // Limit recently closed tabs
   
   // === TAB STATE ===
   
@@ -199,8 +194,8 @@ export const useTabManager = () => {
           // Close the oldest non-active tab
           const oldestInactiveTab = newTabs.find(tab => !tab.isActive && !tab.hasUnsavedChanges);
           if (oldestInactiveTab) {
-            // Use managed collection for recently closed tabs
-            recentlyClosedCollection.add(oldestInactiveTab);
+            // Add to recently closed tabs
+            const newRecentlyClosed = [oldestInactiveTab, ...prev.recentlyClosed].slice(0, 10);
             
             return {
               ...prev,
@@ -208,7 +203,7 @@ export const useTabManager = () => {
                 .filter(tab => tab.id !== oldestInactiveTab.id)
                 .map(tab => ({ ...tab, isActive: tab.id === tabId })),
               activeTabId: tabId,
-              recentlyClosed: recentlyClosedCollection.get(),
+              recentlyClosed: newRecentlyClosed,
             };
           }
         }
@@ -279,10 +274,7 @@ export const useTabManager = () => {
           isActive: tab.id === newActiveTabId,
         })),
         activeTabId: newActiveTabId,
-        recentlyClosed: (() => {
-          recentlyClosedCollection.add(tab);
-          return recentlyClosedCollection.get();
-        })(),
+        recentlyClosed: [tab, ...prev.recentlyClosed].slice(0, 10),
       };
     });
 
@@ -486,10 +478,9 @@ export const useTabManager = () => {
       const tabId = await openTab(lastClosed.file);
       
       // Remove from recently closed
-      recentlyClosedCollection.remove(0);
       setTabState(prev => ({
         ...prev,
-        recentlyClosed: recentlyClosedCollection.get(),
+        recentlyClosed: prev.recentlyClosed.slice(1),
       }));
 
       return tabId;
@@ -580,8 +571,11 @@ export const useTabManager = () => {
       }
     };
 
-    safeAddEventListener(window, 'beforeunload', handleBeforeUnload);
-    // Cleanup handled automatically by useResourceCleanup
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, [tabState, saveTabsToStorage]);
 
   // === RETURN STATE AND OPERATIONS ===

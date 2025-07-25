@@ -6,16 +6,13 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Eye, Edit3, Columns2, Settings, Code, Navigation, BarChart3, BookOpen, Download } from 'lucide-react';
+import { Eye, Edit3, Columns2, Settings, Code, Navigation } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { MarkdownPreview } from './MarkdownPreview';
 import { CodeMirrorEditor } from './CodeMirrorEditor';
 import { 
-  DocumentOutlineLazy, 
-  TableOfContentsLazy, 
-  DocumentStatsLazy,
-  ExportManagerLazy 
+  DocumentStatsLazy
 } from '@/components/lazy';
 import type { TextEditorProps, EditorMode } from '@/types';
 
@@ -45,11 +42,6 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
   const [useAdvancedEditor, setUseAdvancedEditor] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showNavigation, setShowNavigation] = useState(false);
-  const [navigationView, setNavigationView] = useState<'outline' | 'toc' | 'stats'>('outline');
-  const [showExportDialog, setShowExportDialog] = useState(false);
-  // Future: synchronized scrolling state
-  // const [previewScrollTop, setPreviewScrollTop] = useState(0);
-  // const [editorScrollTop, setEditorScrollTop] = useState(0);
 
   // === EFFECTS ===
   
@@ -101,28 +93,6 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
     setShowNavigation(prev => !prev);
   }, []);
 
-  /**
-   * Handle navigation view change
-   */
-  const handleNavigationViewChange = useCallback((view: 'outline' | 'toc' | 'stats') => {
-    setNavigationView(view);
-  }, []);
-
-  /**
-   * Toggle export dialog
-   */
-  const toggleExportDialog = useCallback(() => {
-    setShowExportDialog(prev => !prev);
-  }, []);
-
-  /**
-   * Handle export completion
-   */
-  const handleExportComplete = useCallback(() => {
-    setShowExportDialog(false);
-  }, []);
-
-  // === SYNCHRONIZED SCROLLING (Future Enhancement) ===
 
   // === TOOLBAR ===
   
@@ -185,17 +155,6 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
           Nav
         </Button>
 
-        {/* Export Button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={toggleExportDialog}
-          title="Export document"
-          className="text-xs"
-        >
-          <Download className="h-3 w-3 mr-1" />
-          Export
-        </Button>
 
         {/* Settings (placeholder for future enhancement) */}
         <Button
@@ -228,8 +187,8 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
           lineWrapping={true}
           className="h-full"
           placeholder="Start writing your markdown here..."
-          onFocus={() => console.log('Editor focused')}
-          onBlur={() => console.log('Editor blurred')}
+          onFocus={() => {}}
+          onBlur={() => {}}
         />
       );
     }
@@ -258,69 +217,18 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
         {/* Navigation Header */}
         <div className="p-2 border-b border-border bg-muted/20">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">NAVIGATION</span>
-            <div className="flex items-center space-x-1">
-              <Button
-                variant={navigationView === 'outline' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleNavigationViewChange('outline')}
-                className="h-6 px-2 text-xs"
-                title="Document Outline"
-              >
-                <Navigation className="h-3 w-3" />
-              </Button>
-              <Button
-                variant={navigationView === 'toc' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleNavigationViewChange('toc')}
-                className="h-6 px-2 text-xs"
-                title="Table of Contents"
-              >
-                <BookOpen className="h-3 w-3" />
-              </Button>
-              <Button
-                variant={navigationView === 'stats' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleNavigationViewChange('stats')}
-                className="h-6 px-2 text-xs"
-                title="Document Statistics"
-              >
-                <BarChart3 className="h-3 w-3" />
-              </Button>
-            </div>
+            <span className="text-xs font-medium text-muted-foreground">DOCUMENT STATISTICS</span>
           </div>
         </div>
 
         {/* Navigation Content */}
         <div className="flex-1 min-h-0">
-          {navigationView === 'outline' && (
-            <DocumentOutlineLazy
-              content={content}
-              showLineNumbers={true}
-              allowCollapse={true}
-              maxDepth={6}
-              autoExpand={true}
-            />
-          )}
-          
-          {navigationView === 'toc' && (
-            <TableOfContentsLazy
-              content={content}
-              showNumbers={true}
-              showLevelIndicators={true}
-              maxDepth={6}
-              minLevel={1}
-            />
-          )}
-          
-          {navigationView === 'stats' && (
-            <DocumentStatsLazy
-              content={content}
-              showDetailed={true}
-              showAnalytics={true}
-              compact={false}
-            />
-          )}
+          <DocumentStatsLazy
+            content={content}
+            showDetailed={true}
+            showAnalytics={true}
+            compact={false}
+          />
         </div>
       </div>
     );
@@ -373,14 +281,6 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
         {renderNavigationPanel()}
       </div>
 
-      {/* Export Manager Dialog */}
-      <ExportManagerLazy
-        content={content}
-        title="Document"
-        isOpen={showExportDialog}
-        onClose={() => setShowExportDialog(false)}
-        onExportComplete={handleExportComplete}
-      />
 
       {/* Status Bar */}
       <div className="p-2 border-t border-border bg-muted/20 flex items-center justify-between text-xs text-muted-foreground">

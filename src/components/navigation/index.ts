@@ -4,8 +4,6 @@
  */
 
 // Component exports
-export { DocumentOutline } from './DocumentOutline';
-export { TableOfContents } from './TableOfContents';
 export { DocumentStats } from './DocumentStats';
 
 // Re-export any types that are actually exported from the modules

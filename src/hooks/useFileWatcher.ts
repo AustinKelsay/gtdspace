@@ -8,7 +8,7 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { useMemoryLeakDetection, useLargeCollection } from '@/services/performance/memoryLeakPrevention';
+// Memory leak prevention removed during simplification
 import type { FileChangeEvent } from '@/types';
 
 export interface FileWatcherState {
@@ -45,10 +45,8 @@ export interface FileWatcherHookResult {
  * @returns File watcher hook result with state and control functions
  */
 export function useFileWatcher(): FileWatcherHookResult {
-  // === MEMORY LEAK PREVENTION ===
-  // Memory leak detection for this hook
-  useMemoryLeakDetection('useFileWatcher');
-  const eventCollection = useLargeCollection<FileChangeEvent>(50); // Limit to 50 events
+  // === EVENT MANAGEMENT ===
+  const maxEvents = 50; // Limit to 50 events
   
   // === STATE ===
   
@@ -69,14 +67,11 @@ export function useFileWatcher(): FileWatcherHookResult {
   const handleFileChange = useCallback((event: FileChangeEvent) => {
     console.log('File change detected:', event);
     
-    // Use managed collection for better memory control
-    eventCollection.add(event);
-    
     setState(prev => ({
       ...prev,
-      recentEvents: eventCollection.get(),
+      recentEvents: [event, ...prev.recentEvents].slice(0, maxEvents),
     }));
-  }, [eventCollection]);
+  }, []);
   
   // === WATCHER CONTROL FUNCTIONS ===
   
@@ -141,7 +136,6 @@ export function useFileWatcher(): FileWatcherHookResult {
       unlistenRef.current = unlisten;
       
       // Clear previous events
-      eventCollection.clear();
       
       setState(prev => ({
         ...prev,
@@ -168,19 +162,18 @@ export function useFileWatcher(): FileWatcherHookResult {
    * Clear recent events
    */
   const clearEvents = useCallback(() => {
-    eventCollection.clear();
     setState(prev => ({
       ...prev,
       recentEvents: [],
     }));
-  }, [eventCollection]);
+  }, []);
   
   /**
    * Get events for a specific file path
    */
   const getEventsForFile = useCallback((filePath: string) => {
-    return eventCollection.get().filter(event => event.file_path === filePath);
-  }, [eventCollection]);
+    return state.recentEvents.filter(event => event.file_path === filePath);
+  }, [state.recentEvents]);
   
   // === CLEANUP ON UNMOUNT ===
   

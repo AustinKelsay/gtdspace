@@ -25,7 +25,6 @@ export interface SearchResultsProps extends BaseComponentProps {
  */
 export const SearchResults: React.FC<SearchResultsProps> = ({
   results,
-  query,
   onResultClick,
   className = '',
   ...props

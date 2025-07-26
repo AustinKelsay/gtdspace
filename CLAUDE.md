@@ -6,14 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **GTD Space** is a streamlined cross-platform desktop markdown editor built with Tauri. It combines a React 18 + TypeScript frontend with a Rust backend to create a local-first markdown editing experience focused on simplicity and core functionality.
 
-**Current Status:**
-- Simplified to core features only
-- Removed advanced features to focus on solid foundation
-- Clean, maintainable codebase
-
 **Key Technologies:**
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui
-- **Editor**: BlockNote for WYSIWYG editing (recently switched from CodeMirror)
+- **Editor**: BlockNote for WYSIWYG editing
 - **State Management**: Custom hooks pattern
 - **Markdown**: marked for preview rendering
 - **Backend**: Rust, Tauri 2.x with fs, dialog, and store plugins
@@ -50,7 +45,6 @@ npm run tauri <command>
 
 ## Core Features
 
-### Kept (Essential Features)
 - File browser and management (create, rename, delete, open folder)
 - BlockNote WYSIWYG editor with rich text editing
 - Markdown preview mode
@@ -61,77 +55,11 @@ npm run tauri <command>
 - File watcher for external changes
 - Essential keyboard shortcuts
 
-### Removed (To Reduce Complexity)
-- CodeMirror source editor (replaced with BlockNote)
-- Export functionality (PDF/HTML)
-- Media management and embeds
-- Analytics and monitoring
-- Onboarding and tutorials
-- Help documentation system
-- Command palette
-- Debug panel
-- Performance monitoring
-- Complex error recovery
-- Animations and transitions
-- Advanced validation
-
 ## Architecture
 
-### Frontend Structure (`src/`)
+### Frontend-Backend Communication
 
-**Application Entry:**
-- `main.tsx`: React entry point
-- `App.tsx`: Main application component (simplified)
-- `styles/globals.css`: Tailwind CSS and global styles
-
-**Core Hooks:**
-- `hooks/useFileManager.ts`: File operations and folder state
-- `hooks/useTabManager.ts`: Multi-file tab management with auto-save
-- `hooks/useFileWatcher.ts`: External file change detection
-- `hooks/useKeyboardShortcuts.ts`: Keyboard shortcuts
-- `hooks/useModalManager.ts`: Modal state (settings, search, shortcuts)
-- `hooks/useSettings.ts`: User settings persistence
-- `hooks/useGlobalSearch.ts`: File search functionality
-- `hooks/useErrorHandler.ts`: Basic error handling with toasts
-
-**Component Organization:**
-```
-components/
-├── app/               # Application header
-├── editor/            # BlockNote editor components
-├── error-handling/    # Simple error boundary
-├── file-browser/      # File management UI
-├── lazy/              # Lazy loaded components (search, settings)
-├── navigation/        # Document stats
-├── search/            # Global search
-├── settings/          # Settings interface
-├── tabs/              # Tabbed interface
-└── ui/                # shadcn/ui base components
-```
-
-### Backend Structure (`src-tauri/`)
-
-**Commands:**
-```rust
-// File operations
-select_folder, list_markdown_files, read_file, save_file,
-create_file, rename_file, delete_file, copy_file, move_file
-
-// Search
-search_files, replace_in_file
-
-// File watching
-start_file_watcher, stop_file_watcher
-
-// Settings
-load_settings, save_settings
-
-// System
-ping, get_app_version, check_permissions
-```
-
-### Communication Pattern
-
+The app uses Tauri's invoke system for IPC:
 ```typescript
 import { invoke } from '@tauri-apps/api/core';
 
@@ -140,143 +68,89 @@ const files = await invoke<MarkdownFile[]>('list_markdown_files', {
 });
 ```
 
-## Key Implementation Details
+### Tauri Commands (`src-tauri/src/commands/mod.rs`)
 
-### Editor System
-- **WYSIWYG Editor**: BlockNote with Mantine theme
-- **Rich Text Features**: Headers, lists, code blocks, links, formatting
-- **Markdown Conversion**: BlockNote blocks to/from markdown
-- **Preview Mode**: Markdown parsed with marked library
+**File Operations:**
+- `select_folder` - Native folder selection dialog
+- `list_markdown_files` - Get markdown files in directory
+- `read_file` - Read file contents
+- `save_file` - Save content to file
+- `create_file` - Create new markdown file
+- `rename_file` - Rename existing file
+- `delete_file` - Delete file
+- `copy_file` - Copy file to new location
+- `move_file` - Move file to new location
 
-### File Management
-- **Tab System**: Maximum 10 tabs with memory management
-- **Auto-Save**: Per-tab debounced saving (2s delay)
-- **File Watching**: Real-time external change detection
-- **Search**: Basic search across files in current folder
+**Search:**
+- `search_files` - Full-text search with filters
+- `replace_in_file` - Find and replace in files
 
-### Error Handling
-- **Error Boundary**: Simple React error boundary with refresh
-- **Toast Notifications**: User feedback via toast messages
-- **Console Logging**: Errors logged for debugging
+**File Watching:**
+- `start_file_watcher` - Monitor directory for changes
+- `stop_file_watcher` - Stop monitoring
 
-### State Management
-- **Custom Hooks**: Each feature has dedicated hook
-- **No External Library**: No Redux/MobX/Zustand
-- **Local Storage**: Settings persisted via Tauri store
+**Settings:**
+- `load_settings` - Load user preferences
+- `save_settings` - Save user preferences
 
-## Development Workflow
+**System:**
+- `ping` - Test communication
+- `get_app_version` - Get app version
+- `check_permissions` - Check file system access
 
-### Adding New Features
-1. Define types in `src/types/index.ts`
-2. Add Rust command if backend needed
-3. Create hook in `src/hooks/`
-4. Build UI component
-5. Add to lazy loading if heavy
+### State Management Pattern
 
-### Common Patterns
+Each feature has a dedicated hook in `src/hooks/`:
+- `useFileManager` - File operations and folder state
+- `useTabManager` - Multi-file tab management with auto-save
+- `useFileWatcher` - External file change detection
+- `useSettings` - User preferences
+- `useModalManager` - Centralized modal control
+- `useGlobalSearch` - File search functionality
+- `useErrorHandler` - Error handling with toasts
+- `useKeyboardShortcuts` - Keyboard shortcut handling
 
-**Adding a Modal:**
-1. Add to `ModalType` in `useModalManager`
-2. Create component with shadcn/ui Dialog
-3. Add to App.tsx modal section
-4. Use `openModal('name')` to open
+### Component Architecture
 
-**Adding File Operations:**
-1. Add Rust command in `commands/mod.rs`
-2. Add TypeScript types
-3. Use in hook with error handling
-4. Update UI accordingly
-
-## Current Limitations & TODOs
-
-### Known Issues
-- TypeScript strict mode disabled (tsconfig.json)
-- No comprehensive test suite
-- File size limit 10MB (hardcoded)
-- Maximum 10 tabs (memory management)
-- Basic search only (no advanced filtering)
-- No plugin system or extensibility
-- Empty `src/services` directory
-- `useTabManager.ts` imports non-existent memory leak prevention services
-
-### TODO Items in Codebase
-1. **ESLint Configuration**: Fix ESLint configuration issue with @typescript-eslint/recommended
-2. **Services Directory**: Either populate or remove empty services directory
-3. **Tab Manager Import**: Remove reference to non-existent memory leak prevention services in useTabManager.ts
-4. **DnD Kit Dependencies**: Remove unused @dnd-kit dependencies from TabManager.tsx
-
-## Important Notes
-
-### Development vs Production
-- Environment warning shown when not in Tauri
-- Development server on port 5173
-- Bundle size optimization ongoing
-
-### Platform Notes
-- File paths handled by Rust (cross-platform)
-- Keyboard shortcuts adapt (Cmd vs Ctrl)
-- Native file dialogs via Tauri
-
-### Security
-- File paths sanitized in Rust
-- No external network requests
-- Settings stored locally only
-
-## Common Development Tasks
-
-### Running the Application
-```bash
-# For development with hot reload
-npm run tauri:dev
-
-# This starts both:
-# - Vite dev server on http://localhost:5173
-# - Tauri backend with file watching
+```
+src/
+├── App.tsx              # Main application component
+├── components/
+│   ├── editor/          # BlockNote editor wrapper
+│   ├── file-browser/    # File tree and operations
+│   ├── tabs/            # Tab bar and management
+│   ├── settings/        # Settings UI
+│   ├── search/          # Global search components
+│   └── ui/              # shadcn/ui base components
+└── hooks/               # Business logic hooks
 ```
 
-### Type Checking & Linting
-```bash
-# Check TypeScript types without emitting
-npm run type-check
+## Key Implementation Notes
 
-# Run ESLint
-npm run lint
+### TypeScript Configuration
+- **Strict mode disabled** (`tsconfig.json`)
+- Path aliases configured for clean imports (`@/`)
+- Unused variable/parameter checks disabled
 
-# Auto-fix ESLint issues
-npm run lint:fix
-```
+### ESLint Configuration
+- Uses `@typescript-eslint/recommended`
+- React hooks rules enabled
+- Allow underscore-prefixed unused parameters
+- Console statements allowed
 
-### Building for Release
-```bash
-# Creates platform-specific installer in src-tauri/target/release/bundle/
-npm run tauri:build
-```
+### BlockNote Editor Integration
+- Uses `@blocknote/mantine` theme
+- Custom styles in `blocknote-theme.css`
+- Markdown conversion utilities for BlockNote blocks
+- WYSIWYG-only (no source code view)
 
-### Frontend-Only Development
-```bash
-# Useful for UI development without Tauri
-npm run dev
-
-# Note: File operations won't work without Tauri backend
-```
-
-## Architecture Patterns
-
-### Hook Pattern
-All business logic is encapsulated in custom hooks:
-- Hooks handle state management
-- Components focus on presentation
-- No prop drilling - hooks provide direct access
-
-### Lazy Loading
-Heavy components are lazy loaded to improve initial load:
-```typescript
-const SettingsManagerLazy = lazy(() => 
-  import('@/components/settings/SettingsManager')
-);
-```
+### File Size and Tab Limits
+- Maximum file size: 10MB (hardcoded)
+- Maximum open tabs: 10 (memory management)
+- Auto-save delay: 2 seconds
 
 ### Error Handling Pattern
+All operations use the `withErrorHandling` wrapper:
 ```typescript
 const { withErrorHandling } = useErrorHandler();
 
@@ -286,28 +160,40 @@ const result = await withErrorHandling(
 );
 ```
 
-### Modal Management
-Centralized modal state prevents multiple modals:
-```typescript
-const { openModal, closeModal } = useModalManager();
-openModal('settings'); // Only one modal at a time
-```
+### File Watcher Integration
+- Uses notify crate with 500ms debounce
+- Only monitors markdown files (.md, .markdown)
+- Emits 'file-changed' events to frontend
+- Non-recursive directory watching
 
-## Recent Changes
+### Search Implementation
+- Basic text search (no advanced regex by default)
+- Supports case sensitivity, whole word, file name search
+- Results limited by `max_results` filter
+- Returns context lines for matches
 
-### Editor Migration
-- Switched from CodeMirror to BlockNote for better WYSIWYG experience
-- Added BlockNote Mantine theme integration
-- Implemented markdown conversion for BlockNote blocks
-- Removed source-only editing mode in favor of rich text
 
-### Component Updates
-- `EnhancedTextEditor.tsx`: Now wraps BlockNote editor
-- `BlockNoteEditor.tsx`: New component for WYSIWYG editing
-- Removed: `CodeMirrorEditor.tsx`, `MarkdownPreview.tsx`
-- Added: `blocknote-theme.css` for custom styling
+## Current Issues to Address
 
-### Dependency Changes
-- Added: @blocknote/core, @blocknote/mantine, @blocknote/react
-- Removed: codemirror, @codemirror/* packages
-- Still includes: @dnd-kit packages (to be removed)
+1. **TypeScript strict mode disabled** - Consider enabling for better type safety
+2. **Unused @dnd-kit dependencies** - Remove from package.json and TabManager.tsx
+3. **Empty services directory** - Either populate or remove `src/services/`
+4. **10MB file size limit** - Consider making configurable
+5. **Basic search only** - No regex support in UI despite backend capability
+
+## Platform-Specific Notes
+
+- File paths handled by Rust backend (cross-platform compatibility)
+- Keyboard shortcuts adapt to platform (Cmd on macOS, Ctrl on Windows/Linux)
+- Native file dialogs via Tauri's dialog plugin
+- Settings stored in platform-specific app data directory
+
+
+## Performance Considerations
+
+- Components lazy-loaded for code splitting
+- File list refresh debounced to prevent excessive updates
+- Tab content saved with 2-second debounce
+- Maximum 10 tabs to prevent memory issues
+- File watcher uses debounced events (500ms)
+

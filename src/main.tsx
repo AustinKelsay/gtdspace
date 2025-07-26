@@ -10,7 +10,7 @@ import ReactDOM from 'react-dom/client';
 import AppPhase2 from './App';
 
 // Ensure we're running in a Tauri environment
-if (typeof window !== 'undefined' && !(window as any).__TAURI__) {
+if (typeof window !== 'undefined' && !(window as unknown as {__TAURI__?: unknown}).__TAURI__) {
   console.warn('GTD Space is designed to run as a Tauri application');
 }
 

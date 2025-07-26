@@ -10,11 +10,11 @@ declare global {
   }
 
   interface WeakRefConstructor {
-    readonly prototype: WeakRef<any>;
+    readonly prototype: WeakRef<object>;
     new <T extends object>(target: T): WeakRef<T>;
   }
 
-  var WeakRef: WeakRefConstructor;
+  const WeakRef: WeakRefConstructor;
 }
 
 export {};

@@ -4,7 +4,7 @@
  * @created 2024-01-XX
  */
 
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
 // === TYPES ===

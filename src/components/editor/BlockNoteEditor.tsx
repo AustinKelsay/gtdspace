@@ -9,6 +9,7 @@ import React, { useEffect } from 'react';
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
+import { codeBlock } from "@blocknote/code-block";
 import './blocknote-theme.css';
 
 export interface BlockNoteEditorProps {
@@ -41,13 +42,12 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   onChange,
   darkMode = false,
   readOnly = false,
-  autoFocus = false,
   className = '',
-  onFocus,
-  onBlur,
 }) => {
-  // Create the BlockNote editor instance
-  const editor = useCreateBlockNote();
+  // Create the BlockNote editor instance with code block support
+  const editor = useCreateBlockNote({
+    codeBlock,
+  });
 
   // Handle initial content
   useEffect(() => {
@@ -62,7 +62,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       }
     };
     loadContent();
-  }, []); // Only run on mount
+  }, [content, editor]); // Only run on mount
 
   // Handle content changes
   useEffect(() => {

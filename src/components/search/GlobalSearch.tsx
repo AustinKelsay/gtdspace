@@ -17,7 +17,7 @@ import { SearchResults } from './SearchResults';
 import { SearchFilters } from './SearchFilters';
 // SearchSkeleton removed during simplification
 import { useGlobalSearch } from '@/hooks/useGlobalSearch';
-import type { BaseComponentProps, MarkdownFile } from '@/types';
+import type { BaseComponentProps, MarkdownFile, SearchFilters as SearchFiltersType } from '@/types';
 
 export interface GlobalSearchProps extends BaseComponentProps {
   /** Whether the search dialog is open */
@@ -50,7 +50,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
   const [isReplacing, setIsReplacing] = useState(false);
   const [replaceResults, setReplaceResults] = useState<{filePath: string, success: boolean}[]>([]);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
-  const [savedSearches, setSavedSearches] = useState<{name: string, query: string, filters: any}[]>([]);
+  const [savedSearches, setSavedSearches] = useState<{name: string, query: string, filters: Record<string, unknown>}[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   
   const {
@@ -112,7 +112,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
       const newSavedSearch = {
         name: searchName,
         query: query.trim(),
-        filters: filters,
+        filters: filters as unknown as Record<string, unknown>,
       };
       
       setSavedSearches(prev => {
@@ -123,9 +123,9 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
     }
   };
 
-  const loadSavedSearch = (savedSearch: {name: string, query: string, filters: any}) => {
+  const loadSavedSearch = (savedSearch: {name: string, query: string, filters: Record<string, unknown>}) => {
     setQuery(savedSearch.query);
-    setFilters(savedSearch.filters);
+    setFilters(savedSearch.filters as unknown as SearchFiltersType);
     setShowHistory(false);
   };
 
@@ -137,7 +137,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
     });
   };
 
-  const handleResultClick = (result: any) => {
+  const handleResultClick = (result: {file_path: string, file_name: string, line_number?: number}) => {
     // Create a mock MarkdownFile object from the search result
     const file: MarkdownFile = {
       id: result.file_path,

@@ -15,6 +15,7 @@
     "lint:fix": "eslint . --ext ts,tsx --fix"
   },
   "dependencies": {
+    "@blocknote/code-block": "^0.35.0",
     "@blocknote/core": "^0.35.0",
     "@blocknote/mantine": "^0.35.0",
     "@blocknote/react": "^0.35.0",
@@ -34,6 +35,7 @@
     "@radix-ui/react-slider": "^1.3.5",
     "@radix-ui/react-tabs": "^1.1.12",
     "@radix-ui/react-tooltip": "^1.2.7",
+    "@shikijs/langs-precompiled": "^3.8.1",
     "@tauri-apps/api": "^2.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -46,6 +48,7 @@
     "react-dom": "^18.2.0",
     "react-hotkeys-hook": "^5.1.0",
     "react-markdown": "^10.1.0",
+    "shiki": "^3.8.1",
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {

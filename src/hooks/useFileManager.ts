@@ -264,7 +264,7 @@ export const useFileManager = () => {
           });
           break;
           
-        case 'copy':
+        case 'copy': {
           console.log('Copying file from:', operation.sourcePath, 'to:', operation.destPath);
           const copyResult = await invoke<string>('copy_file', {
             source_path: operation.sourcePath,
@@ -272,8 +272,9 @@ export const useFileManager = () => {
           });
           result = { success: true, message: copyResult };
           break;
+        }
           
-        case 'move':
+        case 'move': {
           console.log('Moving file from:', operation.sourcePath, 'to:', operation.destPath);
           const moveResult = await invoke<string>('move_file', {
             source_path: operation.sourcePath,
@@ -281,6 +282,7 @@ export const useFileManager = () => {
           });
           result = { success: true, message: moveResult };
           break;
+        }
           
         default:
           throw new Error('Unknown file operation');
@@ -303,6 +305,7 @@ export const useFileManager = () => {
         
         // Handle rename operation cache invalidation
         if (operation.type === 'rename' && operation.oldPath) {
+          // Cache invalidation would go here if implemented
         }
       } else {
         throw new Error(result.message || 'Operation failed');

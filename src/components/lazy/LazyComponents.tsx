@@ -6,6 +6,10 @@
 
 import React, { lazy, Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
+import type { GlobalSearchProps } from '@/components/search/GlobalSearch';
+import type { DocumentStatsProps } from '@/components/navigation/DocumentStats';
+import type { SettingsManagerProps } from '@/components/settings/SettingsManager';
+import type { KeyboardShortcutsModalProps } from '@/components/settings/KeyboardShortcutsModal';
 
 // === LOADING FALLBACK ===
 /**
@@ -53,7 +57,7 @@ const LazyKeyboardShortcutsReference = lazy(() =>
 /**
  * Wrapper for lazy-loaded global search
  */
-export const GlobalSearchLazy: React.FC<any> = (props) => (
+export const GlobalSearchLazy: React.FC<GlobalSearchProps> = (props) => (
   <Suspense fallback={<LoadingFallback message="Loading Search..." />}>
     <LazyGlobalSearch {...props} />
   </Suspense>
@@ -62,7 +66,7 @@ export const GlobalSearchLazy: React.FC<any> = (props) => (
 /**
  * Wrapper for lazy-loaded document navigation
  */
-export const DocumentStatsLazy: React.FC<any> = (props) => (
+export const DocumentStatsLazy: React.FC<DocumentStatsProps> = (props) => (
   <Suspense fallback={<LoadingFallback message="Loading Statistics..." />}>
     <LazyDocumentStats {...props} />
   </Suspense>
@@ -71,7 +75,7 @@ export const DocumentStatsLazy: React.FC<any> = (props) => (
 /**
  * Wrapper for lazy-loaded settings
  */
-export const SettingsManagerLazy: React.FC<any> = (props) => (
+export const SettingsManagerLazy: React.FC<SettingsManagerProps> = (props) => (
   <Suspense fallback={<LoadingFallback message="Loading Settings..." />}>
     <LazySettingsManager {...props} />
   </Suspense>
@@ -80,7 +84,7 @@ export const SettingsManagerLazy: React.FC<any> = (props) => (
 /**
  * Wrapper for lazy-loaded keyboard shortcuts reference
  */
-export const KeyboardShortcutsReferenceLazy: React.FC<any> = (props) => (
+export const KeyboardShortcutsReferenceLazy: React.FC<KeyboardShortcutsModalProps> = (props) => (
   <Suspense fallback={<LoadingFallback message="Loading Keyboard Shortcuts..." />}>
     <LazyKeyboardShortcutsReference {...props} />
   </Suspense>

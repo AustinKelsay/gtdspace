@@ -4,7 +4,7 @@
  * @created 2024-01-XX
  */
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Menu, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -68,7 +68,6 @@ export const AppPhase2: React.FC = () => {
     saveTab,
     handleTabAction,
     saveAllTabs,
-    clearPersistedTabs,
     reorderTabs,
   } = useTabManager();
 
@@ -94,7 +93,6 @@ export const AppPhase2: React.FC = () => {
   // === ERROR HANDLING ===
 
   const {
-    reportError,
     withErrorHandling,
   } = useErrorHandler();
 
@@ -115,19 +113,19 @@ export const AppPhase2: React.FC = () => {
     );
   };
 
-  // Close all tabs handler
-  const closeAllTabs = async () => {
-    // Save any unsaved changes first
-    if (hasUnsavedChanges) {
-      await saveAllTabs();
-    }
-    
-    // Close all tabs
-    tabState.openTabs.forEach(tab => closeTab(tab.id));
-    
-    // Clear persisted tabs
-    clearPersistedTabs();
-  };
+  // Close all tabs handler - currently unused but may be needed later
+  // const closeAllTabs = async () => {
+  //   // Save any unsaved changes first
+  //   if (hasUnsavedChanges) {
+  //     await saveAllTabs();
+  //   }
+  //   
+  //   // Close all tabs
+  //   tabState.openTabs.forEach(tab => closeTab(tab.id));
+  //   
+  //   // Clear persisted tabs
+  //   clearPersistedTabs();
+  // };
 
   // Refresh file list handler
   const refreshFileList = async () => {
@@ -219,7 +217,7 @@ export const AppPhase2: React.FC = () => {
         }
         break;
 
-      case 'deleted':
+      case 'deleted': {
         // File deleted - close tab if open and refresh file list
         const deletedTab = tabState.openTabs.find(tab => tab.file.path === latestEvent.file_path);
         if (deletedTab) {
@@ -229,14 +227,16 @@ export const AppPhase2: React.FC = () => {
           loadFolder(fileState.currentFolder);
         }
         break;
+      }
 
-      case 'modified':
+      case 'modified': {
         // File modified externally - show notification if tab is open
         const modifiedTab = tabState.openTabs.find(tab => tab.file.path === latestEvent.file_path);
         if (modifiedTab && !modifiedTab.hasUnsavedChanges) {
           console.log(`File ${latestEvent.file_name} was modified externally`);
         }
         break;
+      }
     }
   }, [watcherState.recentEvents, fileState.currentFolder, tabState.openTabs, loadFolder, closeTab]);
 
@@ -461,7 +461,7 @@ export const AppPhase2: React.FC = () => {
         isOpen={isModalOpen('globalSearch')}
         onClose={closeModal}
         currentFolder={fileState.currentFolder}
-        onResultClick={handleSearchResultClick}
+        onResultSelect={handleSearchResultClick}
       />
 
       {/* Keyboard Shortcuts Reference */}

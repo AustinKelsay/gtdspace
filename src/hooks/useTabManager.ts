@@ -374,7 +374,7 @@ export const useTabManager = () => {
   /**
    * Resolve conflict by applying chosen resolution
    */
-  const resolveConflict = useCallback(async (tabId: string, resolution: any): Promise<boolean> => {
+  const resolveConflict = useCallback(async (tabId: string, resolution: {action: string, content?: string}): Promise<boolean> => {
     const tab = tabState.openTabs.find(t => t.id === tabId);
     if (!tab) return false;
 
@@ -385,11 +385,12 @@ export const useTabManager = () => {
         case 'keep-local':
           contentToUse = tab.content;
           break;
-        case 'use-external':
+        case 'use-external': {
           const externalContent = await getExternalContent(tabId);
           if (externalContent === null) return false;
           contentToUse = externalContent;
           break;
+        }
         case 'manual-merge':
           contentToUse = resolution.content;
           break;
@@ -430,12 +431,13 @@ export const useTabManager = () => {
         await closeTab(tabId);
         break;
 
-      case 'close-others':
+      case 'close-others': {
         const tabsToClose = tabState.openTabs.filter(t => t.id !== tabId);
         for (const tab of tabsToClose) {
           await closeTab(tab.id);
         }
         break;
+      }
 
       case 'close-all':
         for (const tab of tabState.openTabs) {
@@ -443,21 +445,23 @@ export const useTabManager = () => {
         }
         break;
 
-      case 'close-to-right':
+      case 'close-to-right': {
         const tabIndex = tabState.openTabs.findIndex(t => t.id === tabId);
         const tabsToRight = tabState.openTabs.slice(tabIndex + 1);
         for (const tab of tabsToRight) {
           await closeTab(tab.id);
         }
         break;
+      }
 
-      case 'copy-path':
+      case 'copy-path': {
         const tab = tabState.openTabs.find(t => t.id === tabId);
         if (tab) {
           // Copy path to clipboard (will implement when we add clipboard support)
           console.log('Copy path:', tab.file.path);
         }
         break;
+      }
 
       case 'reveal-in-folder':
         // Will implement when we add file system integration
@@ -546,7 +550,7 @@ export const useTabManager = () => {
     };
 
     initializeTabs();
-  }, []); // Only run on mount
+  }, [loadTabsFromStorage]); // Only run on mount
 
   /**
    * Save tabs to localStorage whenever tab state changes

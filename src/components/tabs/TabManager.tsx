@@ -5,7 +5,7 @@
  * @phase 2 - Central tab management interface
  */
 
-import React, { useMemo, useRef, useEffect, useState } from 'react';
+import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -107,7 +107,7 @@ export const TabManager: React.FC<TabManagerProps> = ({
 
   // === EVENT HANDLERS ===
 
-  const handleTabActivate = (tabId: string) => {
+  const handleTabActivate = useCallback((tabId: string) => {
     onTabActivate(tabId);
     
     // Scroll active tab into view if needed
@@ -121,11 +121,11 @@ export const TabManager: React.FC<TabManagerProps> = ({
         });
       }
     }, 100);
-  };
+  }, [onTabActivate]);
 
-  const handleNewTab = () => {
+  const handleNewTab = useCallback(() => {
     onNewTab?.();
-  };
+  }, [onNewTab]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -193,7 +193,7 @@ export const TabManager: React.FC<TabManagerProps> = ({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [tabState.activeTabId, tabState.openTabs, onTabClose, handleNewTab]);
+  }, [tabState.activeTabId, tabState.openTabs, onTabClose, handleNewTab, handleTabActivate]);
 
   // === RENDER ===
 

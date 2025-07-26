@@ -47,7 +47,7 @@ interface DocumentStatsData {
 /**
  * Props for the DocumentStats component
  */
-interface DocumentStatsProps {
+export interface DocumentStatsProps {
   /** Document content to analyze */
   content: string;
   /** Whether to show detailed statistics */

@@ -4,8 +4,6 @@
  */
 
 /* === EXTERNAL LIBRARY STYLES === */
-/* KaTeX styles for mathematical equations */
-@import 'katex/dist/katex.min.css';
 
 @tailwind base;
 @tailwind components;

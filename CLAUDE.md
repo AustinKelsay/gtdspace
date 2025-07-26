@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Key Technologies:**
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui
-- **Editor**: CodeMirror 6 for markdown source editing
+- **Editor**: BlockNote for WYSIWYG editing (recently switched from CodeMirror)
 - **State Management**: Custom hooks pattern
 - **Markdown**: marked for preview rendering
 - **Backend**: Rust, Tauri 2.x with fs, dialog, and store plugins
@@ -52,7 +52,7 @@ npm run tauri <command>
 
 ### Kept (Essential Features)
 - File browser and management (create, rename, delete, open folder)
-- CodeMirror markdown editor with syntax highlighting
+- BlockNote WYSIWYG editor with rich text editing
 - Markdown preview mode
 - Multi-tab editing with tab management
 - Auto-save functionality (2s debounce)
@@ -62,7 +62,7 @@ npm run tauri <command>
 - Essential keyboard shortcuts
 
 ### Removed (To Reduce Complexity)
-- WYSIWYG editor and block system
+- CodeMirror source editor (replaced with BlockNote)
 - Export functionality (PDF/HTML)
 - Media management and embeds
 - Analytics and monitoring
@@ -81,8 +81,8 @@ npm run tauri <command>
 
 **Application Entry:**
 - `main.tsx`: React entry point
-- `AppPhase2.tsx`: Main application component (simplified)
-- `global.css`: Tailwind CSS and global styles
+- `App.tsx`: Main application component (simplified)
+- `styles/globals.css`: Tailwind CSS and global styles
 
 **Core Hooks:**
 - `hooks/useFileManager.ts`: File operations and folder state
@@ -98,7 +98,7 @@ npm run tauri <command>
 ```
 components/
 ├── app/               # Application header
-├── editor/            # CodeMirror editor component
+├── editor/            # BlockNote editor components
 ├── error-handling/    # Simple error boundary
 ├── file-browser/      # File management UI
 ├── lazy/              # Lazy loaded components (search, settings)
@@ -136,17 +136,17 @@ ping, get_app_version, check_permissions
 import { invoke } from '@tauri-apps/api/core';
 
 const files = await invoke<MarkdownFile[]>('list_markdown_files', { 
-  folderPath: '/path/to/folder' 
+  path: '/path/to/folder' 
 });
 ```
 
 ## Key Implementation Details
 
 ### Editor System
-- **Single Editor**: CodeMirror 6 for source editing
+- **WYSIWYG Editor**: BlockNote with Mantine theme
+- **Rich Text Features**: Headers, lists, code blocks, links, formatting
+- **Markdown Conversion**: BlockNote blocks to/from markdown
 - **Preview Mode**: Markdown parsed with marked library
-- **Modes**: Source view and preview (no WYSIWYG)
-- **Syntax Highlighting**: Built-in markdown support
 
 ### File Management
 - **Tab System**: Maximum 10 tabs with memory management
@@ -178,7 +178,7 @@ const files = await invoke<MarkdownFile[]>('list_markdown_files', {
 **Adding a Modal:**
 1. Add to `ModalType` in `useModalManager`
 2. Create component with shadcn/ui Dialog
-3. Add to AppPhase2.tsx modal section
+3. Add to App.tsx modal section
 4. Use `openModal('name')` to open
 
 **Adding File Operations:**
@@ -202,14 +202,15 @@ const files = await invoke<MarkdownFile[]>('list_markdown_files', {
 ### TODO Items in Codebase
 1. **ESLint Configuration**: Fix ESLint configuration issue with @typescript-eslint/recommended
 2. **Services Directory**: Either populate or remove empty services directory
-3. **Tab Manager Component**: Remove DnD Kit dependencies from TabManager.tsx
+3. **Tab Manager Import**: Remove reference to non-existent memory leak prevention services in useTabManager.ts
+4. **DnD Kit Dependencies**: Remove unused @dnd-kit dependencies from TabManager.tsx
 
 ## Important Notes
 
 ### Development vs Production
 - Environment warning shown when not in Tauri
 - Development server on port 5173
-- Bundle size significantly reduced (~1MB target)
+- Bundle size optimization ongoing
 
 ### Platform Notes
 - File paths handled by Rust (cross-platform)
@@ -291,3 +292,22 @@ Centralized modal state prevents multiple modals:
 const { openModal, closeModal } = useModalManager();
 openModal('settings'); // Only one modal at a time
 ```
+
+## Recent Changes
+
+### Editor Migration
+- Switched from CodeMirror to BlockNote for better WYSIWYG experience
+- Added BlockNote Mantine theme integration
+- Implemented markdown conversion for BlockNote blocks
+- Removed source-only editing mode in favor of rich text
+
+### Component Updates
+- `EnhancedTextEditor.tsx`: Now wraps BlockNote editor
+- `BlockNoteEditor.tsx`: New component for WYSIWYG editing
+- Removed: `CodeMirrorEditor.tsx`, `MarkdownPreview.tsx`
+- Added: `blocknote-theme.css` for custom styling
+
+### Dependency Changes
+- Added: @blocknote/core, @blocknote/mantine, @blocknote/react
+- Removed: codemirror, @codemirror/* packages
+- Still includes: @dnd-kit packages (to be removed)

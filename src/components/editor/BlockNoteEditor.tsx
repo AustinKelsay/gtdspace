@@ -1,0 +1,95 @@
+/**
+ * @fileoverview BlockNote WYSIWYG editor component
+ * @author Development Team
+ * @created 2024-01-XX
+ * @phase 2 - Block-based WYSIWYG editor like Notion
+ */
+
+import React, { useEffect } from 'react';
+import { BlockNoteView } from "@blocknote/mantine";
+import "@blocknote/mantine/style.css";
+import { useCreateBlockNote } from "@blocknote/react";
+import './blocknote-theme.css';
+
+export interface BlockNoteEditorProps {
+  /** Content to edit (markdown string) */
+  content: string;
+  /** Callback when content changes */
+  onChange: (content: string) => void;
+  /** Dark mode theme */
+  darkMode?: boolean;
+  /** Read-only mode */
+  readOnly?: boolean;
+  /** Auto-focus on mount */
+  autoFocus?: boolean;
+  /** Optional CSS class name */
+  className?: string;
+  /** Callback when editor gains focus */
+  onFocus?: () => void;
+  /** Callback when editor loses focus */
+  onBlur?: () => void;
+}
+
+/**
+ * BlockNote WYSIWYG editor component
+ * 
+ * Provides a Notion-like block-based editing experience with
+ * rich text formatting, nested blocks, and slash commands.
+ */
+export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
+  content,
+  onChange,
+  darkMode = false,
+  readOnly = false,
+  autoFocus = false,
+  className = '',
+  onFocus,
+  onBlur,
+}) => {
+  // Create the BlockNote editor instance
+  const editor = useCreateBlockNote();
+
+  // Handle initial content
+  useEffect(() => {
+    const loadContent = async () => {
+      if (content && editor && content.trim() !== '') {
+        try {
+          const blocks = await editor.tryParseMarkdownToBlocks(content);
+          editor.replaceBlocks(editor.document, blocks);
+        } catch (error) {
+          console.error('Error parsing initial content:', error);
+        }
+      }
+    };
+    loadContent();
+  }, []); // Only run on mount
+
+  // Handle content changes
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleUpdate = async () => {
+      try {
+        const markdown = await editor.blocksToMarkdownLossy(editor.document);
+        onChange(markdown);
+      } catch (error) {
+        console.error('Error converting to markdown:', error);
+      }
+    };
+
+    editor.onChange(handleUpdate);
+  }, [editor, onChange]);
+
+  return (
+    <div className={`w-full ${className} ${darkMode ? 'dark' : ''}`}>
+      <BlockNoteView
+        editor={editor}
+        theme={darkMode ? "dark" : "light"}
+        editable={!readOnly}
+        data-theming-css-variables={false}
+      />
+    </div>
+  );
+};
+
+export default BlockNoteEditor;

@@ -397,7 +397,7 @@ export const AppPhase2: React.FC = () => {
             />
 
             {/* Editor */}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 flex flex-col min-h-0">
               {activeTab ? (
                 <EnhancedTextEditor
                   key={activeTab.id}
@@ -407,6 +407,7 @@ export const AppPhase2: React.FC = () => {
                   showLineNumbers={true}
                   readOnly={false}
                   autoFocus={true}
+                  className="flex-1"
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-muted-foreground">

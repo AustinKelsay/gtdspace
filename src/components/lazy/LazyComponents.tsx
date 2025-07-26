@@ -43,8 +43,8 @@ export const LazySettingsManager = lazy(() =>
 
 // Keyboard Shortcuts Reference overlay
 const LazyKeyboardShortcutsReference = lazy(() => 
-  import('@/components/settings/KeyboardShortcuts').then(module => ({
-    default: module.KeyboardShortcuts
+  import('@/components/settings/KeyboardShortcutsModal').then(module => ({
+    default: module.KeyboardShortcutsModal
   }))
 );
 

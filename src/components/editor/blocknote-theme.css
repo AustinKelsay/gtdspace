@@ -1,0 +1,487 @@
+/* BlockNote Theme Integration with shadcn/ui */
+
+/* Override BlockNote's default CSS variables with our app's theme */
+.bn-container {
+  --bn-colors-editor-background: rgb(var(--background));
+  --bn-colors-editor-text: rgb(var(--foreground));
+  --bn-colors-menu-background: rgb(var(--card));
+  --bn-colors-menu-text: rgb(var(--card-foreground));
+  --bn-colors-tooltip-background: rgb(var(--card));
+  --bn-colors-tooltip-text: rgb(var(--card-foreground));
+  --bn-colors-hovered-background: rgb(var(--accent));
+  --bn-colors-hovered-text: rgb(var(--accent-foreground));
+  --bn-colors-selected-background: rgb(var(--secondary));
+  --bn-colors-selected-text: rgb(var(--secondary-foreground));
+  --bn-colors-disabled-text: rgb(var(--muted-foreground));
+  --bn-colors-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --bn-colors-border: rgb(var(--border));
+  --bn-colors-side-menu: rgb(var(--muted-foreground));
+  --bn-colors-side-menu-hover: rgb(var(--foreground));
+  --bn-colors-highlight-colors-gray-background: rgb(var(--muted));
+  --bn-colors-highlight-colors-gray-text: rgb(var(--muted-foreground));
+  --bn-colors-highlight-colors-blue-background: rgb(59, 130, 246, 0.15);
+  --bn-colors-highlight-colors-blue-text: rgb(59, 130, 246);
+  --bn-colors-highlight-colors-purple-background: rgb(147, 51, 234, 0.15);
+  --bn-colors-highlight-colors-purple-text: rgb(147, 51, 234);
+  --bn-colors-highlight-colors-red-background: rgb(239, 68, 68, 0.15);
+  --bn-colors-highlight-colors-red-text: rgb(239, 68, 68);
+  --bn-colors-highlight-colors-yellow-background: rgb(245, 158, 11, 0.15);
+  --bn-colors-highlight-colors-yellow-text: rgb(245, 158, 11);
+}
+
+/* Dark mode specific overrides */
+.dark .bn-container {
+  --bn-colors-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --bn-colors-highlight-colors-blue-background: rgba(59, 130, 246, 0.2);
+  --bn-colors-highlight-colors-blue-text: rgb(96, 165, 250);
+  --bn-colors-highlight-colors-purple-background: rgba(147, 51, 234, 0.2);
+  --bn-colors-highlight-colors-purple-text: rgb(167, 139, 250);
+  --bn-colors-highlight-colors-red-background: rgba(239, 68, 68, 0.2);
+  --bn-colors-highlight-colors-red-text: rgb(248, 113, 113);
+  --bn-colors-highlight-colors-yellow-background: rgba(245, 158, 11, 0.2);
+  --bn-colors-highlight-colors-yellow-text: rgb(251, 191, 36);
+}
+
+/* Ensure dark mode background consistency */
+.dark .bn-editor,
+.dark .bn-container,
+.dark .bn-block-outer {
+  background-color: rgb(var(--background)) !important;
+}
+
+/* Editor container styles */
+.bn-editor {
+  background: transparent !important;
+  color: rgb(var(--foreground)) !important;
+  font-family: inherit;
+  height: 100%;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+.bn-container {
+  background: transparent !important;
+  color: rgb(var(--foreground)) !important;
+  min-height: 100%;
+  padding-bottom: 2rem; /* Add some bottom padding for better scrolling experience */
+}
+
+/* Ensure the BlockNote editor wrapper allows scrolling */
+.bn-editor-wrapper {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Make sure the content area is scrollable */
+.bn-editor > div {
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* Fix BlockNote's internal structure for proper scrolling */
+.bn-editor .bn-editor-wrapper {
+  height: auto !important;
+  min-height: 100%;
+}
+
+/* Ensure the prosemirror editor itself doesn't constrain height */
+.bn-editor .ProseMirror {
+  min-height: 100%;
+  height: auto !important;
+  padding: 1rem;
+}
+
+/* Remove any max-height constraints */
+.bn-editor .bn-block-group {
+  height: auto !important;
+  max-height: none !important;
+}
+
+/* Block content styling */
+.bn-block-content {
+  padding: 0.375rem 0;
+  line-height: 1.75;
+  color: rgb(var(--foreground)) !important;
+}
+
+/* Placeholder text */
+.bn-inline-content[data-is-empty="true"]:before {
+  color: rgb(var(--muted-foreground));
+  opacity: 0.5;
+}
+
+/* Headings */
+.bn-block-content h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: rgb(var(--foreground));
+}
+
+.bn-block-content h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  color: rgb(var(--foreground));
+}
+
+.bn-block-content h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: rgb(var(--foreground));
+}
+
+/* Links */
+.bn-inline-content a {
+  color: rgb(59, 130, 246);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: opacity 0.2s;
+}
+
+.bn-inline-content a:hover {
+  opacity: 0.8;
+}
+
+.dark .bn-inline-content a {
+  color: rgb(96, 165, 250);
+}
+
+/* Lists */
+.bn-block-content ul,
+.bn-block-content ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+  color: rgb(var(--foreground));
+}
+
+.bn-block-content li {
+  margin: 0.25rem 0;
+  color: rgb(var(--foreground));
+}
+
+/* Code blocks */
+.bn-block-content pre {
+  background: rgb(var(--muted) / 0.5) !important;
+  border: 1px solid rgb(var(--border));
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
+.bn-block-content pre code {
+  background: transparent !important;
+  padding: 0;
+  font-size: 0.875rem;
+  color: rgb(var(--foreground));
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+}
+
+.dark .bn-block-content pre {
+  background: rgb(var(--muted) / 0.8) !important;
+}
+
+/* Inline code */
+.bn-inline-content code {
+  background: rgb(var(--muted) / 0.5);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+  color: rgb(var(--foreground));
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+}
+
+.dark .bn-inline-content code {
+  background: rgb(var(--muted) / 0.8);
+}
+
+/* Blockquotes */
+.bn-block-content blockquote {
+  border-left: 3px solid rgb(var(--border));
+  padding-left: 1rem;
+  margin: 0.5rem 0;
+  color: rgb(var(--muted-foreground));
+  font-style: italic;
+}
+
+/* Tables */
+.bn-block-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5rem 0;
+}
+
+.bn-block-content th,
+.bn-block-content td {
+  border: 1px solid rgb(var(--border));
+  padding: 0.5rem;
+  text-align: left;
+  color: rgb(var(--foreground));
+}
+
+.bn-block-content th {
+  background: rgb(var(--muted) / 0.5);
+  font-weight: 600;
+}
+
+.dark .bn-block-content th {
+  background: rgb(var(--muted) / 0.8);
+}
+
+/* Slash menu */
+.bn-slash-menu {
+  background: rgb(var(--card)) !important;
+  border: 1px solid rgb(var(--border)) !important;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  padding: 0.25rem;
+}
+
+.dark .bn-slash-menu {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
+.bn-slash-menu-item {
+  color: rgb(var(--card-foreground)) !important;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  transition: all 0.2s;
+}
+
+.bn-slash-menu-item:hover {
+  background: rgb(var(--accent)) !important;
+  color: rgb(var(--accent-foreground)) !important;
+}
+
+.bn-slash-menu-item[data-selected="true"] {
+  background: rgb(var(--accent)) !important;
+  color: rgb(var(--accent-foreground)) !important;
+}
+
+/* Formatting toolbar */
+.bn-toolbar {
+  background: rgb(var(--card)) !important;
+  border: 1px solid rgb(var(--border)) !important;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  padding: 0.25rem;
+}
+
+.dark .bn-toolbar {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
+.bn-toolbar-button {
+  color: rgb(var(--card-foreground)) !important;
+  border-radius: 0.375rem;
+  padding: 0.375rem;
+  transition: all 0.2s;
+}
+
+.bn-toolbar-button:hover {
+  background: rgb(var(--accent)) !important;
+  color: rgb(var(--accent-foreground)) !important;
+}
+
+.bn-toolbar-button[data-selected="true"] {
+  background: rgb(var(--secondary)) !important;
+  color: rgb(var(--secondary-foreground)) !important;
+}
+
+/* Side menu (drag handle) */
+.bn-side-menu {
+  background: transparent !important;
+}
+
+.bn-side-menu-button {
+  color: rgb(var(--muted-foreground)) !important;
+  transition: all 0.2s;
+}
+
+.bn-side-menu-button:hover {
+  background: rgb(var(--accent)) !important;
+  color: rgb(var(--accent-foreground)) !important;
+  border-radius: 0.375rem;
+}
+
+/* Selection */
+.bn-block.bn-is-selected .bn-block-content {
+  background: rgb(var(--accent) / 0.3) !important;
+  border-radius: 0.375rem;
+}
+
+/* Text selection */
+.bn-editor ::selection {
+  background: rgb(var(--primary) / 0.3);
+  color: rgb(var(--foreground));
+}
+
+/* Scrollbar styling */
+.bn-editor::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.bn-editor::-webkit-scrollbar-track {
+  background: rgb(var(--background));
+}
+
+.bn-editor::-webkit-scrollbar-thumb {
+  background: rgb(var(--border));
+  border-radius: 4px;
+}
+
+.bn-editor::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--muted-foreground));
+}
+
+/* Focus states */
+.bn-editor:focus-within {
+  outline: none;
+}
+
+/* Remove any default shadows */
+.bn-container * {
+  box-shadow: none !important;
+}
+
+/* Add our own shadows where needed */
+.bn-slash-menu,
+.bn-toolbar {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+.dark .bn-slash-menu,
+.dark .bn-toolbar {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Ensure consistent font */
+.bn-container * {
+  font-family: inherit;
+}
+
+/* Fix input fields in menus */
+.bn-slash-menu input,
+.bn-toolbar input {
+  background: rgb(var(--input)) !important;
+  border: 1px solid rgb(var(--border)) !important;
+  color: rgb(var(--foreground)) !important;
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.5rem;
+}
+
+.bn-slash-menu input:focus,
+.bn-toolbar input:focus {
+  outline: 2px solid rgb(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Code syntax highlighting in BlockNote */
+.bn-code-block pre {
+  background: rgb(var(--muted) / 0.8) !important;
+  border: 1px solid rgb(var(--border));
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 0;
+}
+
+.bn-code-block code {
+  background: transparent !important;
+  color: rgb(var(--foreground));
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Match syntax highlighting from globals.css */
+.dark .bn-code-block .hljs-comment,
+.dark .bn-code-block .hljs-quote {
+  color: #8b949e;
+  font-style: italic;
+}
+
+.dark .bn-code-block .hljs-keyword,
+.dark .bn-code-block .hljs-selector-tag,
+.dark .bn-code-block .hljs-literal,
+.dark .bn-code-block .hljs-section,
+.dark .bn-code-block .hljs-doctag,
+.dark .bn-code-block .hljs-name,
+.dark .bn-code-block .hljs-strong {
+  color: #ff7b72;
+  font-weight: 600;
+}
+
+.dark .bn-code-block .hljs-string,
+.dark .bn-code-block .hljs-regexp {
+  color: #a5d6ff;
+}
+
+.dark .bn-code-block .hljs-number,
+.dark .bn-code-block .hljs-built_in,
+.dark .bn-code-block .hljs-builtin-name {
+  color: #79c0ff;
+}
+
+.dark .bn-code-block .hljs-function .hljs-title,
+.dark .bn-code-block .hljs-title,
+.dark .bn-code-block .hljs-class .hljs-title {
+  color: #d2a8ff;
+  font-weight: 600;
+}
+
+.dark .bn-code-block .hljs-variable,
+.dark .bn-code-block .hljs-template-variable,
+.dark .bn-code-block .hljs-template-tag,
+.dark .bn-code-block .hljs-addition {
+  color: #7ee787;
+}
+
+/* Light mode syntax highlighting */
+.bn-code-block .hljs-comment,
+.bn-code-block .hljs-quote {
+  color: #6a737d;
+  font-style: italic;
+}
+
+.bn-code-block .hljs-keyword,
+.bn-code-block .hljs-selector-tag,
+.bn-code-block .hljs-literal,
+.bn-code-block .hljs-section,
+.bn-code-block .hljs-doctag,
+.bn-code-block .hljs-name,
+.bn-code-block .hljs-strong {
+  color: #d73a49;
+  font-weight: 600;
+}
+
+.bn-code-block .hljs-string,
+.bn-code-block .hljs-regexp {
+  color: #032f62;
+}
+
+.bn-code-block .hljs-number,
+.bn-code-block .hljs-built_in,
+.bn-code-block .hljs-builtin-name {
+  color: #005cc5;
+}
+
+.bn-code-block .hljs-function .hljs-title,
+.bn-code-block .hljs-title,
+.bn-code-block .hljs-class .hljs-title {
+  color: #6f42c1;
+  font-weight: 600;
+}
+
+.bn-code-block .hljs-variable,
+.bn-code-block .hljs-template-variable,
+.bn-code-block .hljs-template-tag,
+.bn-code-block .hljs-addition {
+  color: #22863a;
+}

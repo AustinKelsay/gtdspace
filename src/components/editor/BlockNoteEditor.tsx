@@ -5,7 +5,7 @@
  * @phase 2 - Block-based WYSIWYG editor like Notion
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
@@ -49,20 +49,24 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
     codeBlock,
   });
 
-  // Handle initial content
+  // Track if initial content has been loaded
+  const initialContentLoaded = useRef(false);
+
+  // Handle initial content - only on mount
   useEffect(() => {
     const loadContent = async () => {
-      if (content && editor && content.trim() !== '') {
+      if (!initialContentLoaded.current && content && editor && content.trim() !== '') {
         try {
           const blocks = await editor.tryParseMarkdownToBlocks(content);
           editor.replaceBlocks(editor.document, blocks);
+          initialContentLoaded.current = true;
         } catch (error) {
           console.error('Error parsing initial content:', error);
         }
       }
     };
     loadContent();
-  }, [content, editor]); // Only run on mount
+  }, [content, editor]); // Now safe to include content in deps
 
   // Handle content changes
   useEffect(() => {

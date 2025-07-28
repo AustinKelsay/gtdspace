@@ -8,11 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Key Technologies:**
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui
-- **Editor**: BlockNote for WYSIWYG editing
-- **State Management**: Custom hooks pattern
-- **Markdown**: marked for preview rendering
+- **Editor**: BlockNote for WYSIWYG editing (with @blocknote/code-block for syntax highlighting)
+- **State Management**: Custom hooks pattern (no Redux/MobX)
+- **Markdown**: BlockNote handles all markdown conversion internally
 - **Backend**: Rust, Tauri 2.x with fs, dialog, and store plugins
-- **File Watching**: notify crate for real-time external change detection
+- **File Watching**: notify crate with 500ms debounce for real-time external change detection
 
 ## Development Commands
 
@@ -23,9 +23,6 @@ npm run tauri:dev
 # Build for production
 npm run tauri:build
 
-# Frontend-only development server
-npm run dev
-
 # Type checking
 npm run type-check
 
@@ -33,39 +30,31 @@ npm run type-check
 npm run lint
 npm run lint:fix
 
+# Frontend-only development (file operations won't work)
+npm run dev
+
 # Build frontend only
 npm run build
 
 # Preview built frontend
 npm run preview
-
-# Access Tauri CLI directly
-npm run tauri <command>
 ```
 
-## Core Features
+## Architecture Overview
 
-- File browser and management (create, rename, delete, open folder)
-- BlockNote WYSIWYG editor with rich text editing
-- Markdown preview mode
-- Multi-tab editing with tab management
-- Auto-save functionality (2s debounce)
-- Basic file search within current folder
-- Theme switching (light/dark/auto)
-- File watcher for external changes
-- Essential keyboard shortcuts
+### Frontend-Backend Communication Pattern
 
-## Architecture
+The app uses Tauri's invoke system for IPC. All backend operations follow this pattern:
 
-### Frontend-Backend Communication
-
-The app uses Tauri's invoke system for IPC:
 ```typescript
 import { invoke } from '@tauri-apps/api/core';
+import { withErrorHandling } from '@/hooks/useErrorHandler';
 
-const files = await invoke<MarkdownFile[]>('list_markdown_files', { 
-  path: '/path/to/folder' 
-});
+// Always wrap invokes with error handling
+const result = await withErrorHandling(
+  async () => await invoke<MarkdownFile[]>('list_markdown_files', { path }),
+  'Failed to list files'
+);
 ```
 
 ### Tauri Commands (`src-tauri/src/commands/mod.rs`)
@@ -98,102 +87,127 @@ const files = await invoke<MarkdownFile[]>('list_markdown_files', {
 - `get_app_version` - Get app version
 - `check_permissions` - Check file system access
 
-### State Management Pattern
+### State Management Architecture
 
-Each feature has a dedicated hook in `src/hooks/`:
-- `useFileManager` - File operations and folder state
-- `useTabManager` - Multi-file tab management with auto-save
-- `useFileWatcher` - External file change detection
-- `useSettings` - User preferences
-- `useModalManager` - Centralized modal control
-- `useGlobalSearch` - File search functionality
-- `useErrorHandler` - Error handling with toasts
-- `useKeyboardShortcuts` - Keyboard shortcut handling
+Each feature has a dedicated hook in `src/hooks/` that encapsulates all business logic:
 
-### Component Architecture
+- **`useFileManager`** - File operations and folder state
+  - Manages current folder, file list, search
+  - Handles file operations (create, rename, delete)
+  
+- **`useTabManager`** - Multi-file tab management with auto-save
+  - Manages open tabs, active tab, unsaved changes
+  - Auto-saves content with 2s debounce
+  - Persists tab state to localStorage
+  
+- **`useFileWatcher`** - External file change detection
+  - Monitors current directory for external changes
+  - Emits events when files are created/modified/deleted
+  
+- **`useSettings`** - User preferences
+  - Theme, font size, editor mode preferences
+  - Persists to Tauri store
+  
+- **`useModalManager`** - Centralized modal control
+  - Single source of truth for modal state
+  - Prevents multiple modals from opening
+  
+- **`useErrorHandler`** - Error handling with toasts
+  - Provides `withErrorHandling` wrapper for all async operations
+  - Shows user-friendly error messages
+  
+- **`useKeyboardShortcuts`** - Keyboard shortcut handling
+  - Platform-aware shortcuts (Cmd on macOS, Ctrl elsewhere)
+  - Centralized shortcut registration
 
-```
-src/
-├── App.tsx              # Main application component
-├── components/
-│   ├── editor/          # BlockNote editor wrapper
-│   ├── file-browser/    # File tree and operations
-│   ├── tabs/            # Tab bar and management
-│   ├── settings/        # Settings UI
-│   ├── search/          # Global search components
-│   └── ui/              # shadcn/ui base components
-└── hooks/               # Business logic hooks
-```
+### Component Organization
 
-## Key Implementation Notes
+The main app flow is:
+1. **App.tsx** - Main orchestrator that connects all hooks
+2. **FileBrowserSidebar** - File tree and operations
+3. **TabManager** - Tab bar UI
+4. **BlockNoteEditor** - WYSIWYG markdown editor
+5. **EnhancedTextEditor** - Wrapper for BlockNote with theme detection
 
-### TypeScript Configuration
-- **Strict mode disabled** (`tsconfig.json`)
-- Path aliases configured for clean imports (`@/`)
-- Unused variable/parameter checks disabled
-
-### ESLint Configuration
-- Uses `@typescript-eslint/recommended`
-- React hooks rules enabled
-- Allow underscore-prefixed unused parameters
-- Console statements allowed
-
-### BlockNote Editor Integration
-- Uses `@blocknote/mantine` theme
-- Custom styles in `blocknote-theme.css`
-- Markdown conversion utilities for BlockNote blocks
-- WYSIWYG-only (no source code view)
-
-### File Size and Tab Limits
-- Maximum file size: 10MB (hardcoded)
-- Maximum open tabs: 10 (memory management)
-- Auto-save delay: 2 seconds
+## Key Implementation Patterns
 
 ### Error Handling Pattern
-All operations use the `withErrorHandling` wrapper:
 ```typescript
+// Always use withErrorHandling for async operations
 const { withErrorHandling } = useErrorHandler();
 
 const result = await withErrorHandling(
   async () => await invoke('command_name', args),
-  'User-friendly error message'
+  'User-friendly error message',
+  'optional_error_category'
 );
 ```
 
-### File Watcher Integration
-- Uses notify crate with 500ms debounce
-- Only monitors markdown files (.md, .markdown)
-- Emits 'file-changed' events to frontend
-- Non-recursive directory watching
+### Tab Management Pattern
+```typescript
+// Opening a file always goes through tab manager
+const handleFileSelect = async (file: MarkdownFile) => {
+  await openTab(file); // Handles duplicate detection, tab limits, etc.
+};
+```
 
-### Search Implementation
-- Basic text search (no advanced regex by default)
-- Supports case sensitivity, whole word, file name search
-- Results limited by `max_results` filter
-- Returns context lines for matches
+### File Operations Pattern
+```typescript
+// All file operations go through useFileManager
+await handleFileOperation({
+  type: 'create' | 'rename' | 'delete',
+  name: 'filename',
+  path: 'optional/path'
+});
+```
 
+## BlockNote Editor Configuration
 
-## Current Issues to Address
+- Uses `@blocknote/mantine` for theming
+- Requires `@blocknote/code-block` for syntax highlighting
+- Custom theme integration via `blocknote-theme.css`
+- Light/dark mode support with CSS variables
+- Markdown conversion handled by BlockNote's built-in methods
 
-1. **TypeScript strict mode disabled** - Consider enabling for better type safety
-2. **Unused @dnd-kit dependencies** - Remove from package.json and TabManager.tsx
-3. **Empty services directory** - Either populate or remove `src/services/`
-4. **10MB file size limit** - Consider making configurable
-5. **Basic search only** - No regex support in UI despite backend capability
+## Important Constraints
 
-## Platform-Specific Notes
+### File Size and Tab Limits
+- Maximum file size: 10MB (hardcoded check)
+- Maximum open tabs: 10 (memory management)
+- Auto-save delay: 2 seconds
 
-- File paths handled by Rust backend (cross-platform compatibility)
-- Keyboard shortcuts adapt to platform (Cmd on macOS, Ctrl on Windows/Linux)
-- Native file dialogs via Tauri's dialog plugin
+### TypeScript Configuration
+- **Strict mode is disabled** - be careful with null checks
+- Path alias `@/` maps to `src/`
+- Unused variable checks disabled for underscore-prefixed vars
+
+### Platform Considerations
+- File paths handled by Rust backend (cross-platform)
 - Settings stored in platform-specific app data directory
+- Keyboard shortcuts adapt to platform automatically
 
+## Common Development Tasks
 
-## Performance Considerations
+### Adding a New Tauri Command
+1. Add the command function in `src-tauri/src/commands/mod.rs`
+2. Add TypeScript types in `src/types/index.ts`
+3. Create or update the relevant hook in `src/hooks/`
+4. Always use `withErrorHandling` when invoking
 
-- Components lazy-loaded for code splitting
-- File list refresh debounced to prevent excessive updates
-- Tab content saved with 2-second debounce
-- Maximum 10 tabs to prevent memory issues
-- File watcher uses debounced events (500ms)
+### Adding a New Modal
+1. Create the modal component
+2. Add modal type to `useModalManager`
+3. Open with `openModal('modalName')`
+4. Close with `closeModal()`
 
+### Modifying the Editor
+- BlockNote configuration is in `BlockNoteEditor.tsx`
+- Theme overrides are in `blocknote-theme.css`
+- For new BlockNote extensions, install the package and add to editor config
+
+## Testing Considerations
+
+- No test suite currently implemented
+- When testing file operations, use `npm run tauri:dev` (not `npm run dev`)
+- Check console for Rust backend logs
+- File watcher events can be monitored in browser console

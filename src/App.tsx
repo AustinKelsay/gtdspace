@@ -26,6 +26,7 @@ import { useModalManager } from '@/hooks/useModalManager';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ErrorBoundary } from '@/components/error-handling';
+import { Toaster } from '@/components/ui/toaster';
 import type { Theme, MarkdownFile, FileOperation, EditorMode } from '@/types';
 import './styles/globals.css';
 
@@ -334,6 +335,7 @@ export const AppPhase2: React.FC = () => {
   return (
     <ErrorBoundary>
       <div className="flex flex-col h-screen bg-background text-foreground">
+        <Toaster />
         {/* Header */}
         <AppHeader
           fileName={activeTab?.file.name || ''}

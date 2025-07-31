@@ -1468,3 +1468,485 @@ pub async fn replace_in_file(file_path: String, search_term: String, replace_ter
         Err(e) => Err(format!("Failed to write file: {}", e)),
     }
 }
+
+/// Initialize GTD space structure
+///
+/// Creates the standard GTD directory structure in the specified path:
+/// - Projects/ (contains project folders with README.md files)
+/// - Habits/ (for habit tracking)
+/// - Someday Maybe/ (for future ideas)
+/// - Cabinet/ (for reference materials)
+///
+/// # Arguments
+///
+/// * `space_path` - Full path where to create the GTD space
+///
+/// # Returns
+///
+/// Success message or error details
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// await invoke('initialize_gtd_space', { 
+///   space_path: '/path/to/my/gtd/space' 
+/// });
+/// ```
+#[tauri::command]
+pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> {
+    log::info!("Initializing GTD space at: {}", space_path);
+    
+    let root_path = Path::new(&space_path);
+    
+    // Create root directory if it doesn't exist
+    if !root_path.exists() {
+        if let Err(e) = fs::create_dir_all(root_path) {
+            return Err(format!("Failed to create root directory: {}", e));
+        }
+    }
+    
+    // GTD directories to create
+    let directories = [
+        "Projects",
+        "Habits",
+        "Someday Maybe",
+        "Cabinet",
+    ];
+    
+    let mut created_dirs = Vec::new();
+    
+    for dir_name in &directories {
+        let dir_path = root_path.join(dir_name);
+        
+        if dir_path.exists() {
+            log::info!("Directory already exists: {}", dir_name);
+        } else {
+            if let Err(e) = fs::create_dir_all(&dir_path) {
+                return Err(format!("Failed to create {} directory: {}", dir_name, e));
+            }
+            created_dirs.push(dir_name.to_string());
+            log::info!("Created directory: {}", dir_name);
+        }
+    }
+    
+    // Create a welcome file in the root directory
+    let welcome_path = root_path.join("Welcome to GTD Space.md");
+    if !welcome_path.exists() {
+        let welcome_content = r#"# Welcome to Your GTD Space
+
+This is your personal Getting Things Done (GTD) space. The directory structure has been set up to help you organize your life:
+
+## 📁 Projects
+Contains all your active projects. Each project is a folder with:
+- A README.md file containing project details
+- Individual action files (markdown) for tasks
+
+### Project Structure:
+```
+Projects/
+├── Project Name/
+│   ├── README.md (Description, Due Date, Status)
+│   ├── action-1.md (Status, Due Date, Effort)
+│   └── action-2.md
+```
+
+## 📁 Habits
+Track your recurring habits and routines.
+
+## 📁 Someday Maybe
+Ideas and projects for future consideration.
+
+## 📁 Cabinet
+Reference materials and documents that don't require action.
+
+---
+
+Start by creating your first project in the Projects folder!
+"#;
+        
+        if let Err(e) = fs::write(&welcome_path, welcome_content) {
+            log::warn!("Failed to create welcome file: {}", e);
+        } else {
+            log::info!("Created welcome file");
+        }
+    }
+    
+    let message = if created_dirs.is_empty() {
+        "GTD space already initialized".to_string()
+    } else {
+        format!("GTD space initialized. Created directories: {}", created_dirs.join(", "))
+    };
+    
+    Ok(message)
+}
+
+/// Create a new GTD project
+///
+/// Creates a new project folder with a README.md template in the Projects directory.
+///
+/// # Arguments
+///
+/// * `space_path` - Path to the GTD space root
+/// * `project_name` - Name of the project
+/// * `description` - Project description
+/// * `due_date` - Optional due date (ISO format: YYYY-MM-DD)
+///
+/// # Returns
+///
+/// Path to the created project or error details
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// await invoke('create_gtd_project', { 
+///   space_path: '/path/to/gtd/space',
+///   project_name: 'Build Website',
+///   description: 'Create company website',
+///   due_date: '2024-12-31'
+/// });
+/// ```
+#[tauri::command]
+pub async fn create_gtd_project(
+    space_path: String,
+    project_name: String,
+    description: String,
+    due_date: Option<String>,
+) -> Result<String, String> {
+    log::info!("Creating GTD project: {}", project_name);
+    
+    let projects_path = Path::new(&space_path).join("Projects");
+    
+    // Ensure Projects directory exists
+    if !projects_path.exists() {
+        return Err("Projects directory does not exist. Initialize GTD space first.".to_string());
+    }
+    
+    // Create project folder
+    let project_path = projects_path.join(&project_name);
+    
+    if project_path.exists() {
+        return Err(format!("Project '{}' already exists", project_name));
+    }
+    
+    if let Err(e) = fs::create_dir_all(&project_path) {
+        return Err(format!("Failed to create project directory: {}", e));
+    }
+    
+    // Create README.md with project template
+    let readme_path = project_path.join("README.md");
+    let readme_content = format!(
+        r#"# {}
+
+## Description
+{}
+
+## Due Date
+{}
+
+## Status
+Active
+
+## Actions
+Actions for this project are stored as individual markdown files in this directory.
+
+### Action Template
+Each action file should contain:
+- **Status**: Not Started / In Progress / Complete
+- **Due Date**: (optional)
+- **Effort**: Small / Medium / Large
+
+---
+Created: {}
+"#,
+        project_name,
+        description,
+        due_date.as_deref().unwrap_or("Not set"),
+        chrono::Local::now().format("%Y-%m-%d")
+    );
+    
+    if let Err(e) = fs::write(&readme_path, readme_content) {
+        // Clean up project directory if README creation fails
+        let _ = fs::remove_dir(&project_path);
+        return Err(format!("Failed to create project README: {}", e));
+    }
+    
+    log::info!("Successfully created project: {}", project_name);
+    Ok(project_path.to_string_lossy().to_string())
+}
+
+/// Create a new GTD action
+///
+/// Creates a new action (task) file within a project directory.
+///
+/// # Arguments
+///
+/// * `project_path` - Full path to the project directory
+/// * `action_name` - Name of the action
+/// * `status` - Initial status (Not Started / In Progress / Complete)
+/// * `due_date` - Optional due date (ISO format: YYYY-MM-DD)
+/// * `effort` - Effort estimate (Small / Medium / Large)
+///
+/// # Returns
+///
+/// Path to the created action file or error details
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// await invoke('create_gtd_action', { 
+///   project_path: '/path/to/gtd/space/Projects/Build Website',
+///   action_name: 'Design homepage',
+///   status: 'Not Started',
+///   due_date: '2024-11-15',
+///   effort: 'Medium'
+/// });
+/// ```
+#[tauri::command]
+pub async fn create_gtd_action(
+    project_path: String,
+    action_name: String,
+    status: String,
+    due_date: Option<String>,
+    effort: String,
+) -> Result<String, String> {
+    log::info!("Creating GTD action: {} in project: {}", action_name, project_path);
+    
+    let project_dir = Path::new(&project_path);
+    
+    if !project_dir.exists() || !project_dir.is_dir() {
+        return Err("Project directory does not exist".to_string());
+    }
+    
+    // Sanitize action name for filename
+    let file_name = format!("{}.md", action_name.replace('/', "-"));
+    let action_path = project_dir.join(&file_name);
+    
+    if action_path.exists() {
+        return Err(format!("Action '{}' already exists", action_name));
+    }
+    
+    // Create action file with template
+    let action_content = format!(
+        r#"# {}
+
+## Status
+{}
+
+## Due Date
+{}
+
+## Effort
+{}
+
+## Notes
+<!-- Add any additional notes or details about this action here -->
+
+---
+Created: {}
+"#,
+        action_name,
+        status,
+        due_date.as_deref().unwrap_or("Not set"),
+        effort,
+        chrono::Local::now().format("%Y-%m-%d %H:%M")
+    );
+    
+    match fs::write(&action_path, action_content) {
+        Ok(_) => {
+            log::info!("Successfully created action: {}", action_name);
+            Ok(action_path.to_string_lossy().to_string())
+        }
+        Err(e) => Err(format!("Failed to create action file: {}", e))
+    }
+}
+
+/// GTD Project metadata structure
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GTDProject {
+    /// Project name
+    pub name: String,
+    /// Project description
+    pub description: String,
+    /// Due date (optional)
+    pub due_date: Option<String>,
+    /// Project status
+    pub status: String,
+    /// Full path to project directory
+    pub path: String,
+    /// Created date
+    pub created_date: String,
+    /// Number of actions in the project
+    pub action_count: u32,
+}
+
+/// List all GTD projects in a space
+///
+/// Scans the Projects directory for project folders and extracts metadata
+/// from their README.md files.
+///
+/// # Arguments
+///
+/// * `space_path` - Path to the GTD space root
+///
+/// # Returns
+///
+/// Vector of GTDProject structs or error details
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// const projects = await invoke('list_gtd_projects', { 
+///   space_path: '/path/to/gtd/space' 
+/// });
+/// ```
+#[tauri::command]
+pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, String> {
+    log::info!("Listing GTD projects in: {}", space_path);
+    
+    let projects_path = Path::new(&space_path).join("Projects");
+    
+    if !projects_path.exists() {
+        return Err("Projects directory does not exist".to_string());
+    }
+    
+    let mut projects = Vec::new();
+    
+    // Read all directories in Projects folder
+    match fs::read_dir(&projects_path) {
+        Ok(entries) => {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    
+                    // Only process directories
+                    if path.is_dir() {
+                        let project_name = path.file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string();
+                        
+                        // Read README.md to extract project metadata
+                        let readme_path = path.join("README.md");
+                        
+                        let (description, due_date, status, created_date) = if readme_path.exists() {
+                            match fs::read_to_string(&readme_path) {
+                                Ok(content) => parse_project_readme(&content),
+                                Err(_) => (
+                                    "No description available".to_string(),
+                                    None,
+                                    "Active".to_string(),
+                                    "Unknown".to_string()
+                                ),
+                            }
+                        } else {
+                            (
+                                "No description available".to_string(),
+                                None,
+                                "Active".to_string(),
+                                "Unknown".to_string()
+                            )
+                        };
+                        
+                        // Count action files in the project
+                        let action_count = count_project_actions(&path);
+                        
+                        projects.push(GTDProject {
+                            name: project_name,
+                            description,
+                            due_date,
+                            status,
+                            path: path.to_string_lossy().to_string(),
+                            created_date,
+                            action_count,
+                        });
+                    }
+                }
+            }
+        }
+        Err(e) => return Err(format!("Failed to read projects directory: {}", e)),
+    }
+    
+    // Sort projects by name
+    projects.sort_by(|a, b| a.name.cmp(&b.name));
+    
+    log::info!("Found {} GTD projects", projects.len());
+    Ok(projects)
+}
+
+/// Parse project README.md to extract metadata
+fn parse_project_readme(content: &str) -> (String, Option<String>, String, String) {
+    let mut description = "No description available".to_string();
+    let mut due_date = None;
+    let mut status = "Active".to_string();
+    let mut created_date = "Unknown".to_string();
+    
+    let lines: Vec<&str> = content.lines().collect();
+    let mut current_section = "";
+    
+    for line in lines {
+        let trimmed = line.trim();
+        
+        // Detect section headers
+        if trimmed.starts_with("## Description") {
+            current_section = "description";
+        } else if trimmed.starts_with("## Due Date") {
+            current_section = "due_date";
+        } else if trimmed.starts_with("## Status") {
+            current_section = "status";
+        } else if trimmed.starts_with("Created:") {
+            created_date = trimmed.replace("Created:", "").trim().to_string();
+        } else if trimmed.starts_with("##") {
+            current_section = "";
+        } else if !trimmed.is_empty() && !trimmed.starts_with('#') {
+            // Parse content based on current section
+            match current_section {
+                "description" => {
+                    if description == "No description available" {
+                        description = trimmed.to_string();
+                    }
+                }
+                "due_date" => {
+                    if trimmed != "Not set" {
+                        due_date = Some(trimmed.to_string());
+                    }
+                }
+                "status" => {
+                    status = trimmed.to_string();
+                }
+                _ => {}
+            }
+        }
+    }
+    
+    (description, due_date, status, created_date)
+}
+
+/// Count the number of action files in a project directory
+fn count_project_actions(project_path: &Path) -> u32 {
+    let mut count = 0;
+    
+    if let Ok(entries) = fs::read_dir(project_path) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(extension) = path.extension() {
+                        if extension == "md" && path.file_name() != Some(std::ffi::OsStr::new("README.md")) {
+                            count += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    count
+}

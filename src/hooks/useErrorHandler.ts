@@ -71,6 +71,7 @@ export function useErrorHandler(
     try {
       return await operation();
     } catch (error) {
+      console.error('Full error details:', error);
       const message = error instanceof Error ? error.message : errorMessage;
       reportError(message, category);
       return null;

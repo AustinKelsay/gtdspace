@@ -9,6 +9,7 @@ A streamlined cross-platform desktop markdown editor built with Tauri, React, an
 
 ## Features
 
+- **GTD (Getting Things Done) Integration** - Built-in project and action management system
 - **WYSIWYG Markdown Editing** - BlockNote editor with rich text formatting
 - **Multi-Tab Interface** - Work with multiple files simultaneously
 - **Auto-Save** - Never lose your work (2s debounce)
@@ -47,6 +48,7 @@ npm run tauri:build
 
 - [Installation Guide](docs/installation.md) - Detailed setup instructions
 - [Architecture Overview](docs/architecture.md) - System design and patterns
+- [GTD Implementation](docs/GTD_IMPLEMENTATION.md) - Getting Things Done methodology integration
 - [Theming & Styles](docs/theming.md) - CSS variables and theme system
 - [Tauri Integration](docs/tauri.md) - Backend commands and IPC
 - [BlockNote Editor](docs/blocknote.md) - Editor configuration and extensions
@@ -62,6 +64,25 @@ npm run type-check   # TypeScript checking
 npm run lint         # ESLint
 npm run lint:fix     # Auto-fix linting issues
 ```
+
+## GTD (Getting Things Done) System
+
+GTD Space includes built-in support for David Allen's Getting Things Done methodology:
+
+### GTD Structure
+- **Projects** - Outcome-focused goals with multiple actions
+- **Actions** - Concrete next steps within projects
+- **Habits** - Recurring routines (coming soon)
+- **Someday Maybe** - Ideas for future consideration (coming soon)
+- **Cabinet** - Reference materials (coming soon)
+
+### Getting Started with GTD
+1. Initialize a GTD space in any folder
+2. Create projects with descriptions and due dates
+3. Add actions to projects with effort estimates
+4. Track progress with status updates
+
+See [GTD Implementation](docs/GTD_IMPLEMENTATION.md) for detailed usage.
 
 ## Keyboard Shortcuts
 

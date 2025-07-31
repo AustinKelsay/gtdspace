@@ -42,7 +42,11 @@ pub fn run() {
             commands::search_files,
             commands::copy_file,
             commands::move_file,
-            commands::replace_in_file
+            commands::replace_in_file,
+            commands::initialize_gtd_space,
+            commands::create_gtd_project,
+            commands::create_gtd_action,
+            commands::list_gtd_projects
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

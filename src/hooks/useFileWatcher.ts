@@ -126,7 +126,7 @@ export function useFileWatcher(): FileWatcherHookResult {
       }));
       
       // Start the backend file watcher
-      await invoke('start_file_watcher', { folder_path: folderPath });
+      await invoke('start_file_watcher', { folderPath });
       
       // Listen for file change events
       const unlisten = await listen<FileChangeEvent>('file-changed', (event) => {

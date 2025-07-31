@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**GTD Space** is a streamlined cross-platform desktop markdown editor built with Tauri. It combines a React 18 + TypeScript frontend with a Rust backend to create a local-first markdown editing experience focused on simplicity and core functionality.
+**GTD Space** is a streamlined cross-platform desktop markdown editor built with Tauri that integrates Getting Things Done (GTD) methodology. It combines a React 18 + TypeScript frontend with a Rust backend to create a local-first markdown editing and productivity experience.
 
 **Key Technologies:**
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui
@@ -13,6 +13,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Markdown**: BlockNote handles all markdown conversion internally
 - **Backend**: Rust, Tauri 2.x with fs, dialog, and store plugins
 - **File Watching**: notify crate with 500ms debounce for real-time external change detection
+- **Toast Notifications**: shadcn/ui toast system (not sonner)
+- **GTD Integration**: Built-in support for GTD methodology with projects, actions, and structured spaces
+- **DnD**: @dnd-kit for tab reordering and file operations
 
 ## Development Commands
 
@@ -87,6 +90,12 @@ const result = await withErrorHandling(
 - `get_app_version` - Get app version
 - `check_permissions` - Check file system access
 
+**GTD Operations:**
+- `initialize_gtd_space` - Create GTD directory structure
+- `create_gtd_project` - Create new project with metadata
+- `create_gtd_action` - Create new action within project
+- `list_gtd_projects` - List all projects with action counts
+
 ### State Management Architecture
 
 Each feature has a dedicated hook in `src/hooks/` that encapsulates all business logic:
@@ -120,6 +129,15 @@ Each feature has a dedicated hook in `src/hooks/` that encapsulates all business
   - Platform-aware shortcuts (Cmd on macOS, Ctrl elsewhere)
   - Centralized shortcut registration
 
+- **`useGTDSpace`** - GTD methodology integration
+  - Initialize GTD spaces with standard structure
+  - Create and manage projects and actions
+  - Load project lists with action counts
+  
+- **`useToast`** - Toast notifications wrapper
+  - Provides convenience methods (showSuccess, showError, etc.)
+  - Built on shadcn/ui toast system
+
 ### Component Organization
 
 The main app flow is:
@@ -128,6 +146,20 @@ The main app flow is:
 3. **TabManager** - Tab bar UI
 4. **BlockNoteEditor** - WYSIWYG markdown editor
 5. **EnhancedTextEditor** - Wrapper for BlockNote with theme detection
+
+### Critical Architecture Patterns
+
+**Event-Driven File Watcher Integration:**
+The file watcher runs in the Rust backend and emits events to the frontend via Tauri's event system. The frontend responds to these events in `App.tsx` to update file lists and handle external changes to open tabs.
+
+**Tab State Persistence:**
+Tab state is persisted to localStorage with a specific structure that includes file metadata, content, and unsaved changes. Recovery happens automatically on app launch.
+
+**Multi-Level Error Handling:**
+- Rust backend returns `Result<T, String>` for all commands
+- Frontend wraps all invokes with `withErrorHandling` 
+- User-friendly error messages displayed via toast system
+- Errors are categorized for better debugging
 
 ## Key Implementation Patterns
 
@@ -175,16 +207,37 @@ await handleFileOperation({
 - Maximum file size: 10MB (hardcoded check)
 - Maximum open tabs: 10 (memory management)
 - Auto-save delay: 2 seconds
+- File watcher debounce: 500ms
 
 ### TypeScript Configuration
 - **Strict mode is disabled** - be careful with null checks
 - Path alias `@/` maps to `src/`
 - Unused variable checks disabled for underscore-prefixed vars
+- No explicit return types required
 
 ### Platform Considerations
 - File paths handled by Rust backend (cross-platform)
 - Settings stored in platform-specific app data directory
 - Keyboard shortcuts adapt to platform automatically
+- Native file dialogs via tauri-plugin-dialog
+
+### GTD Space Structure
+When initialized, creates this directory structure:
+```
+gtd-space/
+├── .gtd.json           # Space metadata
+├── projects/           # Active projects
+├── habits/            # Daily/weekly routines
+├── someday_maybe/     # Future ideas
+├── cabinet/           # Reference materials
+└── archive/           # Completed items
+```
+
+### Tauri Security
+- Only whitelisted commands exposed to frontend
+- File operations restricted to user-selected directories
+- No arbitrary command execution
+- All file paths validated in Rust backend
 
 ## Common Development Tasks
 
@@ -205,9 +258,22 @@ await handleFileOperation({
 - Theme overrides are in `blocknote-theme.css`
 - For new BlockNote extensions, install the package and add to editor config
 
-## Testing Considerations
+## Testing and Debugging
 
-- No test suite currently implemented
+### Development Testing
+- No automated test suite currently implemented
 - When testing file operations, use `npm run tauri:dev` (not `npm run dev`)
 - Check console for Rust backend logs
 - File watcher events can be monitored in browser console
+
+### Debugging Tips
+- Rust backend logging: Set `RUST_LOG=info` environment variable
+- Frontend debugging: React DevTools work normally
+- Tauri DevTools: Available in development builds
+- IPC debugging: All commands log to console with timing
+
+### Performance Considerations
+- BlockNote editor handles large files well up to 10MB
+- File list virtualization not implemented (may lag with 1000+ files)
+- Search is performed in Rust backend for speed
+- Tab content stored in memory (hence 10 tab limit)

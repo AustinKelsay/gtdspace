@@ -421,3 +421,118 @@ export interface SearchResponse {
   /** Whether search was truncated due to limits */
   truncated: boolean;
 }
+
+// === GTD TYPES ===
+
+/**
+ * GTD Project status options
+ */
+export type GTDProjectStatus = 'Active' | 'On Hold' | 'Complete' | 'Cancelled';
+
+/**
+ * GTD Action status options
+ */
+export type GTDActionStatus = 'Not Started' | 'In Progress' | 'Complete';
+
+/**
+ * GTD Action effort estimation
+ */
+export type GTDActionEffort = 'Small' | 'Medium' | 'Large';
+
+/**
+ * GTD Project structure
+ */
+export interface GTDProject {
+  /** Project name (folder name) */
+  name: string;
+  /** Project description */
+  description: string;
+  /** Optional due date (ISO format: YYYY-MM-DD) */
+  due_date?: string | null;
+  /** Project status */
+  status: GTDProjectStatus;
+  /** Full path to project folder */
+  path: string;
+  /** Date project was created */
+  created_date: string;
+  /** Number of actions in the project */
+  action_count?: number;
+}
+
+/**
+ * GTD Action (task) structure
+ */
+export interface GTDAction {
+  /** Action name */
+  name: string;
+  /** Full path to action file */
+  path: string;
+  /** Action status */
+  status: GTDActionStatus;
+  /** Optional due date (ISO format: YYYY-MM-DD) */
+  due_date?: string | null;
+  /** Effort estimation */
+  effort: GTDActionEffort;
+  /** Optional notes */
+  notes?: string;
+  /** Date action was created */
+  created_date: string;
+  /** Project this action belongs to */
+  project_path: string;
+}
+
+/**
+ * GTD Space structure
+ */
+export interface GTDSpace {
+  /** Root path of the GTD space */
+  root_path: string;
+  /** Whether the space is properly initialized */
+  is_initialized: boolean;
+  /** List of projects in the space */
+  projects?: GTDProject[];
+  /** Total action count across all projects */
+  total_actions?: number;
+}
+
+/**
+ * GTD initialization result
+ */
+export interface GTDInitResult {
+  /** Whether initialization was successful */
+  success: boolean;
+  /** Message describing the result */
+  message: string;
+  /** Path to the initialized space */
+  space_path?: string;
+}
+
+/**
+ * GTD project creation parameters
+ */
+export interface GTDProjectCreate {
+  /** GTD space root path */
+  space_path: string;
+  /** Project name */
+  project_name: string;
+  /** Project description */
+  description: string;
+  /** Optional due date (ISO format: YYYY-MM-DD) */
+  due_date?: string | null;
+}
+
+/**
+ * GTD action creation parameters
+ */
+export interface GTDActionCreate {
+  /** Full path to the project directory */
+  project_path: string;
+  /** Action name */
+  action_name: string;
+  /** Initial status */
+  status: GTDActionStatus;
+  /** Optional due date (ISO format: YYYY-MM-DD) */
+  due_date?: string | null;
+  /** Effort estimate */
+  effort: GTDActionEffort;
+}

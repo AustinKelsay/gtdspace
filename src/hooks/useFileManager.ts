@@ -54,7 +54,7 @@ export const useFileManager = () => {
     error: null,
     
     // Phase 1 file management state
-    currentFolder: settings.last_folder || null,
+    currentFolder: null, // Don't auto-load last folder for GTD-first experience
     files: [],
     currentFile: null,
     fileContent: '',
@@ -368,26 +368,27 @@ export const useFileManager = () => {
   
   /**
    * Load last folder on startup if available
+   * Disabled for GTD-first experience - users should manually select folder
    */
-  useEffect(() => {
-    if (settings.last_folder && !state.currentFolder) {
-      // Auto-load the last folder
-      (async () => {
-        try {
-          const files = await invoke<MarkdownFile[]>('list_markdown_files', { 
-            path: settings.last_folder 
-          });
-          setState(prev => ({
-            ...prev,
-            currentFolder: settings.last_folder || null,
-            files,
-          }));
-        } catch (error) {
-          console.log('Failed to load last folder:', error);
-        }
-      })();
-    }
-  }, [settings.last_folder, state.currentFolder]);
+  // useEffect(() => {
+  //   if (settings.last_folder && !state.currentFolder) {
+  //     // Auto-load the last folder
+  //     (async () => {
+  //       try {
+  //         const files = await invoke<MarkdownFile[]>('list_markdown_files', { 
+  //           path: settings.last_folder 
+  //         });
+  //         setState(prev => ({
+  //           ...prev,
+  //           currentFolder: settings.last_folder || null,
+  //           files,
+  //         }));
+  //       } catch (error) {
+  //         console.log('Failed to load last folder:', error);
+  //       }
+  //     })();
+  //   }
+  // }, [settings.last_folder, state.currentFolder]);
 
   // === KEYBOARD SHORTCUTS ===
   

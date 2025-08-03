@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { FileItem } from './FileItem';
+import { GTDFileItem } from './GTDFileItem';
+import { useGTDSpace } from '@/hooks/useGTDSpace';
 import type { FileListProps, FileOperation } from '@/types';
 
 /**
@@ -58,6 +60,11 @@ export const FileList: React.FC<FileListProps> = ({
   
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newFileName, setNewFileName] = useState('');
+  
+  // === GTD DETECTION ===
+  const { gtdSpace } = useGTDSpace();
+  const isGTDSpace = gtdSpace?.isGTDSpace || false;
+  const isInProjectsFolder = files.some(f => f.path.includes('/Projects/'));
   
   // === VIRTUALIZATION REMOVED ===
   // Virtualization removed during simplification
@@ -210,15 +217,20 @@ export const FileList: React.FC<FileListProps> = ({
         {filteredFiles.length > 0 ? (
           <ScrollArea className="h-full">
             <div className="p-2 space-y-1">
-              {filteredFiles.map((file) => (
-                <FileItem
-                  key={file.id}
-                  file={file}
-                  isSelected={selectedFile?.id === file.id}
-                  onSelect={() => onFileSelect(file)}
-                  onFileOperation={onFileOperation ? handleFileOperation : undefined}
-                />
-              ))}
+              {filteredFiles.map((file) => {
+                // Use GTDFileItem for files in a GTD space, especially in Projects folder
+                const FileComponent = isGTDSpace && isInProjectsFolder ? GTDFileItem : FileItem;
+                
+                return (
+                  <FileComponent
+                    key={file.id}
+                    file={file}
+                    isSelected={selectedFile?.id === file.id}
+                    onSelect={() => onFileSelect(file)}
+                    onFileOperation={onFileOperation ? handleFileOperation : undefined}
+                  />
+                );
+              })}
             </div>
           </ScrollArea>
         ) : (

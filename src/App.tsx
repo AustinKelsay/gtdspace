@@ -6,10 +6,10 @@
 
 import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Menu, FolderOpen } from 'lucide-react';
+import { Menu, FolderOpen, Folder, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppHeader } from '@/components/app/AppHeader';
-import { FileBrowserSidebar } from '@/components/file-browser/FileBrowserSidebar';
+import { GTDWorkspaceSidebar, GTDDashboard, GTDQuickActions, GTDInitDialog } from '@/components/gtd';
 import { FileChangeManager } from '@/components/file-browser/FileChangeManager';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
 import { TabManager } from '@/components/tabs';
@@ -25,9 +25,10 @@ import { useSettings } from '@/hooks/useSettings';
 import { useModalManager } from '@/hooks/useModalManager';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { ErrorBoundary } from '@/components/error-handling';
 import { Toaster } from '@/components/ui/toaster';
-import type { Theme, MarkdownFile, FileOperation, EditorMode } from '@/types';
+import type { Theme, MarkdownFile, EditorMode, GTDProject } from '@/types';
 import './styles/globals.css';
 
 /**
@@ -53,7 +54,6 @@ export const AppPhase2: React.FC = () => {
     selectFolder,
     loadFolder,
     handleFileOperation,
-    setSearchQuery,
   } = useFileManager();
 
   // === TAB MANAGEMENT ===
@@ -174,20 +174,6 @@ export const AppPhase2: React.FC = () => {
     }
   };
 
-  /**
-   * Handle file operations from sidebar - refresh tabs if needed
-   */
-  const handleSidebarFileOperation = async (operation: FileOperation) => {
-    await handleFileOperation(operation);
-
-    // If we renamed or deleted a file that's open in a tab, we should handle it
-    if (operation.type === 'delete') {
-      const openTab = tabState.openTabs.find(tab => tab.file.path === operation.path);
-      if (openTab) {
-        await closeTab(openTab.id);
-      }
-    }
-  };
 
   /**
    * Handle folder loading - start file watcher
@@ -287,9 +273,63 @@ export const AppPhase2: React.FC = () => {
     );
   };
 
+  // === GTD STATE ===
+  
+  const { gtdSpace, checkGTDSpace, loadProjects } = useGTDSpace();
+  const [isGTDSpace, setIsGTDSpace] = React.useState(false);
+  const [currentProject, setCurrentProject] = React.useState<GTDProject | null>(null);
+  const [showGTDInit, setShowGTDInit] = React.useState(false);
+
   // === SIDEBAR STATE ===
 
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+
+  // === GTD SPACE CHECK ===
+  
+  React.useEffect(() => {
+    const checkSpace = async () => {
+      if (fileState.currentFolder) {
+        // If we already know this is part of a GTD space, don't recheck subdirectories
+        if (gtdSpace?.root_path && fileState.currentFolder.startsWith(gtdSpace.root_path)) {
+          setIsGTDSpace(true);
+          setShowGTDInit(false);
+          
+          // Check if we're in a specific project
+          if (fileState.currentFolder.includes('/Projects/') && gtdSpace?.projects) {
+            const projectPath = fileState.currentFolder;
+            const project = gtdSpace.projects.find(p => p.path === projectPath);
+            setCurrentProject(project || null);
+          } else {
+            setCurrentProject(null);
+          }
+        } else {
+          // Check if this is a GTD space root
+          const isGTD = await checkGTDSpace(fileState.currentFolder);
+          setIsGTDSpace(isGTD);
+          
+          // If not a GTD space, show initialization prompt
+          if (!isGTD) {
+            setShowGTDInit(true);
+          } else {
+            setShowGTDInit(false);
+          }
+          
+          setCurrentProject(null);
+        }
+      } else {
+        // No folder selected - clear everything
+        setIsGTDSpace(false);
+        setCurrentProject(null);
+        setShowGTDInit(false);
+        
+        // Clear all tabs when no folder is selected
+        if (tabState.openTabs.length > 0) {
+          tabState.openTabs.forEach(tab => closeTab(tab.id));
+        }
+      }
+    };
+    checkSpace();
+  }, [fileState.currentFolder, checkGTDSpace, gtdSpace?.projects, gtdSpace?.root_path, tabState.openTabs, closeTab]);
 
   // === INITIALIZE ===
 
@@ -302,13 +342,18 @@ export const AppPhase2: React.FC = () => {
         // Check permissions on app start
         const status = await invoke<{ status: string }>('check_permissions');
         console.log('Permission status:', status);
+        
+        // Clear tab state if no folder is selected (fresh start)
+        if (!fileState.currentFolder) {
+          localStorage.removeItem('gtdspace-tabs');
+        }
       } catch (error) {
         console.error('Failed to check permissions:', error);
       }
     };
 
     init();
-  }, [settings.theme]);
+  }, [settings.theme, fileState.currentFolder]);
 
   // === RENDER ===
 
@@ -343,6 +388,7 @@ export const AppPhase2: React.FC = () => {
           hasAnyUnsavedChanges={hasUnsavedChanges}
           tabCount={tabState.openTabs.length}
           theme={settings.theme}
+          isGTDSpace={isGTDSpace}
           onSaveActiveFile={async () => {
             if (activeTab) {
               await saveTab(activeTab.id);
@@ -362,17 +408,15 @@ export const AppPhase2: React.FC = () => {
           <div
             className={`transition-all duration-300 ${
               sidebarCollapsed ? 'w-0' : 'w-64'
-            }`}
+            } overflow-hidden`}
           >
-            {!sidebarCollapsed && (
-              <FileBrowserSidebar
-                state={fileState}
-                onFolderSelect={handleFolderLoad}
-                onFileSelect={handleFileSelect}
-                onFileOperation={handleSidebarFileOperation}
-                onSearchChange={setSearchQuery}
-              />
-            )}
+            <GTDWorkspaceSidebar
+              currentFolder={fileState.currentFolder}
+              onFolderSelect={handleFolderLoad}
+              onFileSelect={handleFileSelect}
+              onRefresh={refreshFileList}
+              className={sidebarCollapsed ? 'invisible' : ''}
+            />
           </div>
 
           {/* Sidebar toggle button */}
@@ -387,42 +431,69 @@ export const AppPhase2: React.FC = () => {
             </Button>
           </div>
 
-          {/* Editor area */}
+          {/* Main Content Area */}
           <div className="flex-1 flex flex-col min-w-0">
-            {/* Tab bar */}
-            <TabManager
-              tabState={tabState}
-              onTabActivate={activateTab}
-              onTabClose={closeTab}
-              onTabAction={handleTabAction}
-              onTabReorder={reorderTabs}
-            />
-
-            {/* Editor */}
-            <div className="flex-1 flex flex-col min-h-0">
-              {activeTab ? (
-                <EnhancedTextEditor
-                  key={activeTab.id}
-                  content={activeTab.content}
-                  onChange={(content) => updateTabContent(activeTab.id, content)}
-                  mode={settings.editor_mode as EditorMode}
-                  showLineNumbers={true}
-                  readOnly={false}
-                  autoFocus={true}
-                  className="flex-1"
+            {fileState.currentFolder && isGTDSpace && !fileState.currentFolder?.includes('/Projects/') ? (
+              // GTD Dashboard View - Show when in GTD root or non-project folders
+              <GTDDashboard
+                currentFolder={fileState.currentFolder}
+                onSelectProject={handleFolderLoad}
+                onSelectFile={handleFileSelect}
+                className="flex-1"
+              />
+            ) : fileState.currentFolder ? (
+              // Editor View - Show when editing files
+              <>
+                {/* Tab bar */}
+                <TabManager
+                  tabState={tabState}
+                  onTabActivate={activateTab}
+                  onTabClose={closeTab}
+                  onTabAction={handleTabAction}
+                  onTabReorder={reorderTabs}
                 />
-              ) : (
-                <div className="h-full flex items-center justify-center text-muted-foreground">
-                  <div className="text-center">
-                    <FolderOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No file open</p>
-                    <p className="text-sm mt-2">
-                      Select a file from the sidebar or create a new one
-                    </p>
-                  </div>
+
+                {/* Editor */}
+                <div className="flex-1 flex flex-col min-h-0">
+                  {activeTab ? (
+                    <EnhancedTextEditor
+                      key={activeTab.id}
+                      content={activeTab.content}
+                      onChange={(content) => updateTabContent(activeTab.id, content)}
+                      mode={settings.editor_mode as EditorMode}
+                      showLineNumbers={true}
+                      readOnly={false}
+                      autoFocus={true}
+                      className="flex-1"
+                    />
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-muted-foreground">
+                      <div className="text-center">
+                        <FolderOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>No file open</p>
+                        <p className="text-sm mt-2">
+                          Select a file from the sidebar or create a new one
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            ) : (
+              // No folder selected - show welcome screen
+              <div className="h-full flex items-center justify-center text-muted-foreground">
+                <div className="text-center p-8">
+                  <Target className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <h2 className="text-2xl font-semibold mb-2">Welcome to GTD Space</h2>
+                  <p className="text-lg mb-6">Your personal productivity system</p>
+                  <p className="mb-4">Select a folder from the sidebar to get started</p>
+                  <Button onClick={selectFolder} size="lg">
+                    <Folder className="h-5 w-5 mr-2" />
+                    Select Folder
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -448,6 +519,15 @@ export const AppPhase2: React.FC = () => {
             Warning: Not running in Tauri environment. File operations will not work.
           </div>
         )}
+        
+        {/* GTD Quick Actions */}
+        {isGTDSpace && (
+          <GTDQuickActions
+            currentFolder={fileState.currentFolder}
+            currentProject={currentProject}
+            variant="floating"
+          />
+        )}
       </div>
 
       {/* Modals */}
@@ -470,6 +550,24 @@ export const AppPhase2: React.FC = () => {
       <KeyboardShortcutsReferenceLazy
         isOpen={isModalOpen('keyboardShortcuts')}
         onClose={closeModal}
+      />
+      
+      {/* GTD Initialization Dialog */}
+      <GTDInitDialog
+        isOpen={showGTDInit}
+        onClose={() => setShowGTDInit(false)}
+        onSuccess={async (spacePath) => {
+          setShowGTDInit(false);
+          // Reload the folder to show GTD structure
+          await handleFolderLoad(spacePath);
+          // Force a GTD space check and load projects
+          const isGTD = await checkGTDSpace(spacePath);
+          setIsGTDSpace(isGTD);
+          if (isGTD) {
+            // Load GTD projects to properly update the sidebar
+            await loadProjects(spacePath);
+          }
+        }}
       />
     </ErrorBoundary>
   );

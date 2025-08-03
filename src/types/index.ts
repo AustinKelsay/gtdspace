@@ -489,6 +489,8 @@ export interface GTDSpace {
   root_path: string;
   /** Whether the space is properly initialized */
   is_initialized: boolean;
+  /** Whether this is a GTD space (alias for is_initialized) */
+  isGTDSpace?: boolean;
   /** List of projects in the space */
   projects?: GTDProject[];
   /** Total action count across all projects */

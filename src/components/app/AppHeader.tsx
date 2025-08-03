@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { Save, Settings, BarChart3 } from 'lucide-react';
+import { Save, Settings, BarChart3, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Theme } from '@/types';
@@ -25,6 +25,8 @@ export interface AppHeaderProps {
     tabCount: number;
     /** Current theme */
     theme: Theme;
+    /** Whether the current folder is a GTD space */
+    isGTDSpace: boolean;
     /** Callback to save the active file */
     onSaveActiveFile: () => Promise<void>;
     /** Callback to save all files */
@@ -52,6 +54,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     hasAnyUnsavedChanges,
     tabCount,
     theme,
+    isGTDSpace,
     onSaveActiveFile,
     onSaveAllFiles,
     onOpenSettings,
@@ -94,6 +97,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 {tabCount > 0 && (
                     <span className="text-xs text-muted-foreground">
                         ({tabCount} file{tabCount !== 1 ? 's' : ''})
+                    </span>
+                )}
+                {isGTDSpace && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Target className="h-3 w-3" />
+                        GTD Space
                     </span>
                 )}
             </div>

@@ -40,6 +40,7 @@ export function useGTDSpace() {
           setGTDSpace({
             root_path: spacePath,
             is_initialized: true,
+            isGTDSpace: true,
             projects: [],
             total_actions: 0,
           });
@@ -70,10 +71,10 @@ export function useGTDSpace() {
       const result = await withErrorHandling(
         async () => {
           const projectPath = await invoke<string>('create_gtd_project', {
-            spacePath: params.space_path,
-            projectName: params.project_name,
+            space_path: params.space_path,
+            project_name: params.project_name,
             description: params.description,
-            dueDate: params.due_date || undefined,
+            due_date: params.due_date || undefined,
           });
           
           // Create project object for state update
@@ -121,10 +122,10 @@ export function useGTDSpace() {
       const result = await withErrorHandling(
         async () => {
           const actionPath = await invoke<string>('create_gtd_action', {
-            projectPath: params.project_path,
-            actionName: params.action_name,
+            project_path: params.project_path,
+            action_name: params.action_name,
             status: params.status,
-            dueDate: params.due_date || undefined,
+            due_date: params.due_date || undefined,
             effort: params.effort,
           });
           
@@ -190,6 +191,7 @@ export function useGTDSpace() {
             setGTDSpace({
               root_path: path,
               is_initialized: true,
+              isGTDSpace: true,
               projects: [], // Will be loaded separately
               total_actions: 0,
             });
@@ -228,6 +230,7 @@ export function useGTDSpace() {
           setGTDSpace({
             root_path: spacePath,
             is_initialized: true,
+            isGTDSpace: true,
             projects,
             total_actions: totalActions,
           });

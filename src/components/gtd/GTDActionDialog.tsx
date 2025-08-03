@@ -27,6 +27,7 @@ interface GTDActionDialogProps {
   onClose: () => void;
   projectPath: string;
   projectName: string;
+  onSuccess?: (actionPath: string) => void;
 }
 
 export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
@@ -34,6 +35,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
   onClose,
   projectPath,
   projectName,
+  onSuccess,
 }) => {
   const [actionName, setActionName] = React.useState('');
   const [status, setStatus] = React.useState<GTDActionStatus>('Not Started');
@@ -65,6 +67,12 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
       setDueDate('');
       setEffort('Medium');
       setNotes('');
+      
+      // Call onSuccess with the action path if provided
+      if (onSuccess && typeof result === 'string') {
+        onSuccess(result);
+      }
+      
       onClose();
     }
   };

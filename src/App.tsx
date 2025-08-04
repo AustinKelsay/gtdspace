@@ -13,7 +13,7 @@ import { GTDWorkspaceSidebar, GTDDashboard, GTDQuickActions, GTDInitDialog } fro
 import { FileChangeManager } from '@/components/file-browser/FileChangeManager';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
 import { TabManager } from '@/components/tabs';
-import { 
+import {
   SettingsManagerLazy,
   GlobalSearchLazy,
   KeyboardShortcutsReferenceLazy
@@ -274,26 +274,27 @@ export const AppPhase2: React.FC = () => {
   };
 
   // === GTD STATE ===
-  
+
   const { gtdSpace, checkGTDSpace, loadProjects } = useGTDSpace();
-  const [isGTDSpace, setIsGTDSpace] = React.useState(false);
   const [currentProject, setCurrentProject] = React.useState<GTDProject | null>(null);
   const [showGTDInit, setShowGTDInit] = React.useState(false);
+
+  // Derived state for GTD space
+  const isGTDSpace = gtdSpace?.isGTDSpace || false;
 
   // === SIDEBAR STATE ===
 
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
 
   // === GTD SPACE CHECK ===
-  
+
   React.useEffect(() => {
     const checkSpace = async () => {
       if (fileState.currentFolder) {
         // If we already know this is part of a GTD space, don't recheck subdirectories
         if (gtdSpace?.root_path && fileState.currentFolder.startsWith(gtdSpace.root_path)) {
-          setIsGTDSpace(true);
           setShowGTDInit(false);
-          
+
           // Check if we're in a specific project
           if (fileState.currentFolder.includes('/Projects/') && gtdSpace?.projects) {
             const projectPath = fileState.currentFolder;
@@ -305,23 +306,21 @@ export const AppPhase2: React.FC = () => {
         } else {
           // Check if this is a GTD space root
           const isGTD = await checkGTDSpace(fileState.currentFolder);
-          setIsGTDSpace(isGTD);
-          
+
           // If not a GTD space, show initialization prompt
           if (!isGTD) {
             setShowGTDInit(true);
           } else {
             setShowGTDInit(false);
           }
-          
+
           setCurrentProject(null);
         }
       } else {
         // No folder selected - clear everything
-        setIsGTDSpace(false);
         setCurrentProject(null);
         setShowGTDInit(false);
-        
+
         // Clear all tabs when no folder is selected
         if (tabState.openTabs.length > 0) {
           tabState.openTabs.forEach(tab => closeTab(tab.id));
@@ -342,7 +341,7 @@ export const AppPhase2: React.FC = () => {
         // Check permissions on app start
         const status = await invoke<{ status: string }>('check_permissions');
         console.log('Permission status:', status);
-        
+
         // Clear tab state if no folder is selected (fresh start)
         if (!fileState.currentFolder) {
           localStorage.removeItem('gtdspace-tabs');
@@ -358,7 +357,7 @@ export const AppPhase2: React.FC = () => {
   // === RENDER ===
 
   const [isTauriEnvironment, setIsTauriEnvironment] = React.useState(false);
-  
+
   React.useEffect(() => {
     // Check for Tauri environment after component mount
     const checkTauri = async () => {
@@ -373,9 +372,11 @@ export const AppPhase2: React.FC = () => {
         console.log('Not in Tauri environment:', error);
       }
     };
-    
+
     checkTauri();
   }, []);
+
+
 
   return (
     <ErrorBoundary>
@@ -398,7 +399,7 @@ export const AppPhase2: React.FC = () => {
             await saveAllTabs();
           }}
           onOpenSettings={() => openModal('settings')}
-          onOpenAnalytics={() => {/* Analytics removed */}}
+          onOpenAnalytics={() => {/* Analytics removed */ }}
           onToggleTheme={toggleTheme}
         />
 
@@ -406,9 +407,8 @@ export const AppPhase2: React.FC = () => {
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar */}
           <div
-            className={`transition-all duration-300 ${
-              sidebarCollapsed ? 'w-0' : 'w-64'
-            } overflow-hidden`}
+            className={`transition-all duration-300 ${sidebarCollapsed ? 'w-0' : 'w-64'
+              } overflow-hidden`}
           >
             <GTDWorkspaceSidebar
               currentFolder={fileState.currentFolder}
@@ -416,6 +416,9 @@ export const AppPhase2: React.FC = () => {
               onFileSelect={handleFileSelect}
               onRefresh={refreshFileList}
               className={sidebarCollapsed ? 'invisible' : ''}
+              gtdSpace={gtdSpace}
+              checkGTDSpace={checkGTDSpace}
+              loadProjects={loadProjects}
             />
           </div>
 
@@ -519,7 +522,7 @@ export const AppPhase2: React.FC = () => {
             Warning: Not running in Tauri environment. File operations will not work.
           </div>
         )}
-        
+
         {/* GTD Quick Actions */}
         {isGTDSpace && (
           <GTDQuickActions
@@ -531,7 +534,7 @@ export const AppPhase2: React.FC = () => {
       </div>
 
       {/* Modals */}
-      
+
       {/* Settings Modal */}
       <SettingsManagerLazy
         isOpen={isModalOpen('settings')}
@@ -551,7 +554,7 @@ export const AppPhase2: React.FC = () => {
         isOpen={isModalOpen('keyboardShortcuts')}
         onClose={closeModal}
       />
-      
+
       {/* GTD Initialization Dialog */}
       <GTDInitDialog
         isOpen={showGTDInit}
@@ -562,12 +565,12 @@ export const AppPhase2: React.FC = () => {
           await handleFolderLoad(spacePath);
           // Force a GTD space check and load projects
           const isGTD = await checkGTDSpace(spacePath);
-          setIsGTDSpace(isGTD);
           if (isGTD) {
             // Load GTD projects to properly update the sidebar
             await loadProjects(spacePath);
           }
         }}
+        initialPath={fileState.currentFolder || undefined}
       />
     </ErrorBoundary>
   );

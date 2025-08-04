@@ -1,6 +1,6 @@
 # GTD Space
 
-A streamlined cross-platform desktop markdown editor built with Tauri, React, and TypeScript.
+A GTD-first productivity system with integrated markdown editing, built with Tauri, React, and TypeScript.
 
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
 ![Tech Stack](https://img.shields.io/badge/Stack-Tauri%202.x%20%7C%20React%2018%20%7C%20Rust-orange)
@@ -9,15 +9,27 @@ A streamlined cross-platform desktop markdown editor built with Tauri, React, an
 
 ## Features
 
-- **GTD (Getting Things Done) Integration** - Built-in project and action management system
+### GTD-First Design
+- **Getting Things Done at the Core** - Not just an editor with GTD features, but a GTD system with editing capabilities
+- **Automatic GTD Space Detection** - Recognizes and adapts to GTD workspace structure
+- **Project & Action Management** - Full GTD workflow with projects, actions, and organization
+- **Smart Navigation** - Click projects to view README, expand to see all actions
+- **Quick Actions** - Floating action button for rapid project/action creation
+
+### Productivity Features
 - **WYSIWYG Markdown Editing** - BlockNote editor with rich text formatting
 - **Multi-Tab Interface** - Work with multiple files simultaneously
 - **Auto-Save** - Never lose your work (2s debounce)
-- **File Management** - Native file browser with create, rename, delete
+- **Persistent Sidebar** - GTD workspace stays loaded even when collapsed
+- **Action List in Sidebar** - See all project actions at a glance
+- **Real-time Updates** - File watcher detects external changes
+- **Smart Notifications** - Deduped alerts for file changes
+
+### Technical Features
 - **Code Syntax Highlighting** - Supports 100+ languages with Shiki
 - **Theme Support** - Light/dark/auto themes
-- **Search** - Find text across all markdown files
-- **File Watching** - Real-time external change detection
+- **Global Search** - Find text across all markdown files
+- **Native File Operations** - Create, rename, delete with OS dialogs
 
 ## Quick Start
 
@@ -67,20 +79,28 @@ npm run lint:fix     # Auto-fix linting issues
 
 ## GTD (Getting Things Done) System
 
-GTD Space includes built-in support for David Allen's Getting Things Done methodology:
+GTD Space is designed from the ground up around David Allen's Getting Things Done methodology:
 
 ### GTD Structure
 - **Projects** - Outcome-focused goals with multiple actions
+  - Each project is a folder with README.md for metadata
+  - Actions are individual markdown files within project folders
+  - See all actions directly in the sidebar
 - **Actions** - Concrete next steps within projects
+  - Status tracking (Not Started, In Progress, Complete)
+  - Effort estimates (Small <30min, Medium 30-90min, Large >90min)
+  - Optional due dates
 - **Habits** - Recurring routines (coming soon)
 - **Someday Maybe** - Ideas for future consideration (coming soon)
 - **Cabinet** - Reference materials (coming soon)
 
 ### Getting Started with GTD
-1. Initialize a GTD space in any folder
-2. Create projects with descriptions and due dates
-3. Add actions to projects with effort estimates
-4. Track progress with status updates
+1. Select any folder to start
+2. GTD Space automatically prompts to initialize GTD structure
+3. Create projects with clear outcomes and optional due dates
+4. Add actions to projects - they appear instantly in the sidebar
+5. Click any action to open and edit it
+6. Track progress with status updates
 
 See [GTD Implementation](docs/GTD_IMPLEMENTATION.md) for detailed usage.
 

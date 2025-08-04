@@ -21,6 +21,7 @@ import {
 import { Calendar } from 'lucide-react';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { GTDActionCreate, GTDActionStatus, GTDActionEffort } from '@/types';
+import { GTDTagSelector } from './GTDTagSelector';
 
 interface GTDActionDialogProps {
   isOpen: boolean;
@@ -42,6 +43,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
   const [dueDate, setDueDate] = React.useState('');
   const [effort, setEffort] = React.useState<GTDActionEffort>('Medium');
   const [notes, setNotes] = React.useState('');
+  const [contexts, setContexts] = React.useState<string[]>([]);
   const [isCreating, setIsCreating] = React.useState(false);
   const { createAction } = useGTDSpace();
 
@@ -55,6 +57,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
       status,
       due_date: dueDate || null,
       effort,
+      contexts: contexts.length > 0 ? contexts : undefined,
     };
 
     const result = await createAction(actionData);
@@ -67,6 +70,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
       setDueDate('');
       setEffort('Medium');
       setNotes('');
+      setContexts([]);
       
       // Call onSuccess with the action path if provided
       if (onSuccess && typeof result === 'string') {
@@ -84,6 +88,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
       setDueDate('');
       setEffort('Medium');
       setNotes('');
+      setContexts([]);
       onClose();
     }
   };
@@ -152,6 +157,19 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
               />
               <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Contexts</Label>
+            <GTDTagSelector
+              type="contexts"
+              value={contexts}
+              onValueChange={setContexts}
+              placeholder="Where can this be done? (@computer, @phone, etc.)"
+            />
+            <p className="text-xs text-muted-foreground">
+              Add contexts to filter actions by location or tool needed
+            </p>
           </div>
 
           <div className="space-y-2">

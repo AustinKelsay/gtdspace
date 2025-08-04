@@ -24,17 +24,85 @@ export function useGTDSpace() {
   const { showSuccess } = useToast();
 
   /**
+   * Waits for the expected GTD directory structure to be created
+   * @param spacePath - Path to the GTD space root
+   * @param maxAttempts - Maximum number of polling attempts (default: 50)
+   * @param intervalMs - Polling interval in milliseconds (default: 100)
+   * @returns Promise that resolves when all expected directories exist
+   */
+  const waitForDirectoryStructure = useCallback(
+    async (
+      spacePath: string,
+      maxAttempts: number = 50,
+      intervalMs: number = 100
+    ): Promise<void> => {
+      const expectedDirs = ['Projects', 'Habits', 'Someday Maybe', 'Cabinet'];
+      
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          // Check if all expected directories exist
+          const dirChecks = await Promise.all(
+            expectedDirs.map(async (dirName) => {
+              try {
+                const dirPath = `${spacePath}/${dirName}`;
+                const result = await invoke<boolean>('check_directory_exists', { path: dirPath });
+                return { dirName, exists: result };
+              } catch (error) {
+                console.warn(`Error checking directory ${dirName}:`, error);
+                return { dirName, exists: false };
+              }
+            })
+          );
+          
+          // If all directories exist, we're done
+          const allExist = dirChecks.every(check => check.exists);
+          if (allExist) {
+            console.log('All GTD directories confirmed to exist');
+            return;
+          }
+          
+          // Log which directories are still missing
+          const missingDirs = dirChecks.filter(check => !check.exists).map(check => check.dirName);
+          if (missingDirs.length > 0) {
+            console.log(`Waiting for directories: ${missingDirs.join(', ')}`);
+          }
+          
+        } catch (error) {
+          console.warn('Error during directory structure check:', error);
+        }
+        
+        // Wait before next attempt
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+      }
+      
+      throw new Error(`Directory structure not ready after ${maxAttempts} attempts`);
+    },
+    []
+  );
+
+  /**
    * Initialize a new GTD space
    */
   const initializeSpace = useCallback(
     async (spacePath: string) => {
+      if (!spacePath) {
+        console.error('spacePath is empty or undefined');
+        return false;
+      }
+      
       setIsLoading(true);
       
       const result = await withErrorHandling(
         async () => {
-          const message = await invoke<string>('initialize_gtd_space', {
-            spacePath,
-          });
+          const message = await invoke<string>('initialize_gtd_space', { spacePath });
+          
+          // Wait for directory structure to be fully created
+          try {
+            await waitForDirectoryStructure(spacePath);
+          } catch (error) {
+            console.error('Failed to wait for directory structure:', error);
+            // Continue anyway - the user can refresh manually if needed
+          }
           
           // Update state with initialized space
           setGTDSpace({
@@ -58,7 +126,7 @@ export function useGTDSpace() {
       setIsLoading(false);
       return result !== null;
     },
-    [withErrorHandling, showSuccess]
+    [withErrorHandling, showSuccess, waitForDirectoryStructure]
   );
 
   /**
@@ -71,10 +139,10 @@ export function useGTDSpace() {
       const result = await withErrorHandling(
         async () => {
           const projectPath = await invoke<string>('create_gtd_project', {
-            space_path: params.space_path,
-            project_name: params.project_name,
+            spacePath: params.space_path,
+            projectName: params.project_name,
             description: params.description,
-            due_date: params.due_date || undefined,
+            dueDate: params.due_date || undefined,
           });
           
           // Create project object for state update
@@ -122,10 +190,10 @@ export function useGTDSpace() {
       const result = await withErrorHandling(
         async () => {
           const actionPath = await invoke<string>('create_gtd_action', {
-            project_path: params.project_path,
-            action_name: params.action_name,
+            projectPath: params.project_path,
+            actionName: params.action_name,
             status: params.status,
-            due_date: params.due_date || undefined,
+            dueDate: params.due_date || undefined,
             effort: params.effort,
           });
           

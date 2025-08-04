@@ -1582,6 +1582,31 @@ Start by creating your first project in the Projects folder!
     Ok(message)
 }
 
+/// Check if a directory exists
+///
+/// # Arguments
+///
+/// * `path` - Path to the directory to check
+///
+/// # Returns
+///
+/// Boolean indicating whether the directory exists
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// const exists = await invoke('check_directory_exists', {
+///   path: '/path/to/directory'
+/// });
+/// ```
+#[tauri::command]
+pub async fn check_directory_exists(path: String) -> Result<bool, String> {
+    let dir_path = Path::new(&path);
+    Ok(dir_path.exists() && dir_path.is_dir())
+}
+
 /// Create a new GTD project
 ///
 /// Creates a new project folder with a README.md template in the Projects directory.

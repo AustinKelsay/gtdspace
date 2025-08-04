@@ -521,6 +521,8 @@ export interface GTDProjectCreate {
   description: string;
   /** Optional due date (ISO format: YYYY-MM-DD) */
   due_date?: string | null;
+  /** Project categories/tags */
+  categories?: string[];
 }
 
 /**
@@ -537,4 +539,6 @@ export interface GTDActionCreate {
   due_date?: string | null;
   /** Effort estimate */
   effort: GTDActionEffort;
+  /** GTD contexts where this action can be performed */
+  contexts?: string[];
 }

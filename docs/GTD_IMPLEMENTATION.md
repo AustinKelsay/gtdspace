@@ -2,9 +2,11 @@
 
 This guide explains how GTD Space implements David Allen's Getting Things Done (GTD) methodology.
 
+**Updated**: January 2025 - GTD-First Architecture
+
 ## Overview
 
-GTD Space provides built-in support for organizing your work using the GTD system. The implementation focuses on the core components: Projects, Actions, and structured organization.
+GTD Space is a GTD-first application where the Getting Things Done methodology is the primary experience, not an add-on feature. The entire UI is designed around GTD workflows, with markdown editing as a supporting capability.
 
 ## GTD Space Structure
 
@@ -183,42 +185,110 @@ interface GTDAction {
 
 ## UI Components
 
+### GTD-First Architecture
+The application starts with GTD as the primary interface:
+- **No generic file browser by default** - GTD workspace is the main view
+- **Automatic initialization prompt** - When selecting a non-GTD folder
+- **Persistent sidebar state** - GTD workspace remains loaded when sidebar is toggled
+- **Smart empty states** - Clear CTAs for folder selection and space initialization
+
+### GTDWorkspaceSidebar
+- **Projects with expandable actions** - Click chevron to see all actions
+- **Direct action access** - Click any action to open in editor
+- **Project README auto-open** - Clicking project opens its README.md
+- **Inline action creation** - Plus button on each project
+- **Search functionality** - Filter projects by name/description
+- **Workspace switching** - Change between GTD spaces easily
+
+### GTDDashboard
+- **Overview statistics** - Active projects, total actions, completion rates
+- **Attention required section** - Overdue projects and upcoming deadlines
+- **Active projects list** - Quick access to all active work
+- **Progress visualization** - See project completion at a glance
+
 ### GTDInitDialog
 - Initialize new GTD space
 - Shows structure preview
 - Creates all directories
+- **Auto-appears for non-GTD folders**
 
 ### GTDProjectDialog
 - Create new projects
 - Enforces required fields
 - Generates README.md
+- **Success feedback with toast notifications**
 
 ### GTDActionDialog
 - Create actions within projects
 - Status and effort selection
 - Optional due dates
+- **Creates markdown files with proper structure**
 
-### GTDProjectList
-- Display all projects
-- Show status indicators
-- Action counts
-- Click to open project
+### GTDQuickActions (Floating Action Button)
+- **Context-aware creation** - Shows project creation at root, action creation in projects
+- **Quick access menu** - Hover for creation options
+- **Keyboard-friendly** - Accessible via shortcuts
 
 ## Hook: useGTDSpace
 
-Manages all GTD operations:
+Manages all GTD operations with improved state management:
 
 ```typescript
 const {
-  gtdSpace,        // Current space state
+  gtdSpace,        // Current space state with root_path tracking
   isLoading,       // Loading indicator
   initializeSpace, // Create new space
-  createProject,   // Add project
-  createAction,    // Add action
-  checkGTDSpace,   // Verify space
-  loadProjects     // Load project list
+  createProject,   // Add project with toast feedback
+  createAction,    // Add action with toast feedback
+  checkGTDSpace,   // Verify space (smart subdirectory handling)
+  loadProjects     // Load project list with action counts
 } = useGTDSpace();
 ```
+
+### Key Improvements
+- **Root path tracking** - Maintains GTD space context across navigation
+- **Success notifications** - User feedback for all operations
+- **Deduplication** - Prevents duplicate toasts in React StrictMode
+- **Smart path handling** - Correctly handles subdirectory navigation
+
+## Recent Improvements (January 2025)
+
+### UI/UX Enhancements
+1. **GTD-First Experience**
+   - Removed mode switching - GTD is now the default
+   - Automatic GTD initialization prompts
+   - Simplified navigation flow
+
+2. **Sidebar Improvements**
+   - Actions visible directly under projects
+   - Persistent state when toggling sidebar
+   - Expandable project sections
+   - Click actions to open in editor
+
+3. **Better Feedback**
+   - Toast notifications for all operations
+   - Deduplication to prevent double notifications
+   - File change notifications with smart deduping
+
+4. **Navigation Fixes**
+   - Correct path handling for GTD sections
+   - Project README auto-opens when selected
+   - Subdirectory navigation preserves GTD context
+
+### Technical Improvements
+1. **Parameter Fixes**
+   - Fixed snake_case/camelCase mismatches in Tauri commands
+   - Proper TypeScript interfaces for MarkdownFile
+
+2. **State Management**
+   - GTD space state persists across navigation
+   - Smart detection prevents re-initialization prompts
+   - Root path tracking for correct operations
+
+3. **Performance**
+   - Sidebar stays mounted when hidden
+   - Deduplication prevents excessive re-renders
+   - Efficient action list loading
 
 ## Best Practices
 
@@ -283,6 +353,23 @@ const {
 ## Troubleshooting
 
 ### Common Issues
+
+1. **Duplicate notifications**
+   - This is fixed with deduplication logic
+   - 100ms window prevents React StrictMode duplicates
+   - Both toasts and file notifications are deduped
+
+2. **Actions not showing in sidebar**
+   - Click the chevron next to project name
+   - Actions load dynamically when project is expanded
+   - README.md is filtered out from action list
+
+3. **GTD initialization dialog appears in GTD space**
+   - Fixed with smart path detection
+   - Root path is tracked to prevent false negatives
+   - Subdirectories correctly identified as part of GTD space
+
+### Fixed Issues
 
 1. **Projects not showing**
    - Ensure README.md exists in project folder

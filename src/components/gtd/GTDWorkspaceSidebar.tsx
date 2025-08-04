@@ -30,7 +30,7 @@ import {
 import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { GTDProjectDialog, GTDActionDialog } from '@/components/gtd';
 import { FileSearch } from '@/components/file-browser/FileSearch';
-import type { GTDProject, MarkdownFile } from '@/types';
+import type { GTDProject, MarkdownFile, GTDSpace } from '@/types';
 
 interface GTDWorkspaceSidebarProps {
   currentFolder: string | null;
@@ -38,6 +38,9 @@ interface GTDWorkspaceSidebarProps {
   onFileSelect: (file: MarkdownFile) => void;
   onRefresh: () => void;
   className?: string;
+  gtdSpace?: GTDSpace | null;
+  checkGTDSpace?: (path: string) => Promise<boolean>;
+  loadProjects?: (path: string) => Promise<GTDProject[]>;
 }
 
 interface GTDSection {
@@ -89,14 +92,22 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   onFolderSelect,
   onFileSelect,
   onRefresh,
-  className = ''
+  className = '',
+  gtdSpace: propGtdSpace,
+  checkGTDSpace: propCheckGTDSpace,
+  loadProjects: propLoadProjects
 }) => {
   const { 
-    gtdSpace, 
+    gtdSpace: hookGtdSpace, 
     isLoading,
-    checkGTDSpace, 
-    loadProjects
+    checkGTDSpace: hookCheckGTDSpace, 
+    loadProjects: hookLoadProjects
   } = useGTDSpace();
+  
+  // Use props if provided, otherwise fall back to hook
+  const gtdSpace = propGtdSpace !== undefined ? propGtdSpace : hookGtdSpace;
+  const checkGTDSpace = propCheckGTDSpace || hookCheckGTDSpace;
+  const loadProjects = propLoadProjects || hookLoadProjects;
   
   const [showProjectDialog, setShowProjectDialog] = React.useState(false);
   const [showActionDialog, setShowActionDialog] = React.useState(false);

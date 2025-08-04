@@ -5,7 +5,7 @@
  * @phase 2 - File watcher UI integration
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { FileChangeNotification } from './FileChangeNotification';
 import type { BaseComponentProps, FileChangeEvent, FileTab } from '@/types';
 
@@ -32,6 +32,9 @@ interface ProcessedEvent extends FileChangeEvent {
 /**
  * Manager component for handling and displaying file change notifications
  */
+// Deduplication window for file change events (100ms)
+const EVENT_DEDUP_WINDOW = 100;
+
 export const FileChangeManager: React.FC<FileChangeManagerProps> = ({
   events,
   openTabs,
@@ -42,21 +45,44 @@ export const FileChangeManager: React.FC<FileChangeManagerProps> = ({
   ...props
 }) => {
   const [processedEvents, setProcessedEvents] = useState<ProcessedEvent[]>([]);
+  const lastEventTimeRef = useRef<{ [key: string]: number }>({});
 
   // Process new events
   useEffect(() => {
-    const newEvents = events.filter(event => 
-      !processedEvents.some(pe => pe.timestamp === event.timestamp && pe.file_path === event.file_path)
-    );
+    const now = Date.now();
+    
+    // Filter out duplicate events within deduplication window
+    const newEvents = events.filter(event => {
+      const eventKey = `${event.event_type}-${event.file_path}`;
+      const lastTime = lastEventTimeRef.current[eventKey] || 0;
+      
+      // Skip if this event is too close to the last one
+      if (now - lastTime < EVENT_DEDUP_WINDOW) {
+        return false;
+      }
+      
+      // Skip if already processed
+      if (processedEvents.some(pe => pe.timestamp === event.timestamp && pe.file_path === event.file_path)) {
+        return false;
+      }
+      
+      return true;
+    });
 
     if (newEvents.length === 0) return;
+    
+    // Update last event times after filtering to avoid race condition
+    newEvents.forEach(event => {
+      const eventKey = `${event.event_type}-${event.file_path}`;
+      lastEventTimeRef.current[eventKey] = now;
+    });
 
-    const processed = newEvents.map(event => {
+    const processed = newEvents.map((event, index) => {
       const affectedTab = openTabs.find(tab => tab.file.path === event.file_path);
       
       return {
         ...event,
-        id: `${event.file_path}-${event.timestamp}`,
+        id: `${event.file_path}-${event.timestamp}-${Date.now()}-${index}`, // Add more uniqueness
         dismissed: false,
         isFileOpen: !!affectedTab,
         affectedTabId: affectedTab?.id,

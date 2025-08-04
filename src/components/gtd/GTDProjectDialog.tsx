@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from 'lucide-react';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { GTDProjectCreate } from '@/types';
+import { GTDTagSelector } from './GTDTagSelector';
 
 interface GTDProjectDialogProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
   const [projectName, setProjectName] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [dueDate, setDueDate] = React.useState('');
+  const [categories, setCategories] = React.useState<string[]>([]);
   const [isCreating, setIsCreating] = React.useState(false);
   const { createProject } = useGTDSpace();
 
@@ -41,6 +43,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       project_name: projectName.trim(),
       description: description.trim(),
       due_date: dueDate || null,
+      categories: categories.length > 0 ? categories : undefined,
     };
 
     const result = await createProject(projectData);
@@ -51,6 +54,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       setProjectName('');
       setDescription('');
       setDueDate('');
+      setCategories([]);
       onClose();
     }
   };
@@ -60,6 +64,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       setProjectName('');
       setDescription('');
       setDueDate('');
+      setCategories([]);
       onClose();
     }
   };
@@ -110,6 +115,20 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
               />
               <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Categories</Label>
+            <GTDTagSelector
+              type="categories"
+              value={categories}
+              onValueChange={setCategories}
+              maxCount={3}
+              placeholder="Select up to 3 categories..."
+            />
+            <p className="text-xs text-muted-foreground">
+              Categorize your project for better organization
+            </p>
           </div>
         </div>
 

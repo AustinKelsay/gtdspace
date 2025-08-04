@@ -17,17 +17,26 @@ interface GTDInitDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (spacePath: string) => void;
+  initialPath?: string;
 }
 
 export const GTDInitDialog: React.FC<GTDInitDialogProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  initialPath,
 }) => {
   const [selectedPath, setSelectedPath] = React.useState<string>('');
   const [isInitializing, setIsInitializing] = React.useState(false);
   const { initializeSpace } = useGTDSpace();
   const { withErrorHandling } = useErrorHandler();
+
+  // Set initial path when dialog opens
+  React.useEffect(() => {
+    if (isOpen && initialPath) {
+      setSelectedPath(initialPath);
+    }
+  }, [isOpen, initialPath]);
 
   const handleSelectFolder = async () => {
     const result = await withErrorHandling(

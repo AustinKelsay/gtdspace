@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **GTD Space** is a GTD-first productivity system with integrated markdown editing, built with Tauri, React, and TypeScript. The application implements David Allen's Getting Things Done methodology as its core experience, with markdown editing as a supporting capability.
 
 **Key Technologies:**
+
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui
 - **Editor**: BlockNote for WYSIWYG editing (with @blocknote/code-block for syntax highlighting)
 - **State Management**: Custom hooks pattern (no Redux/MobX)
@@ -54,20 +55,25 @@ const result = await withErrorHandling(
 ### Tauri Commands (`src-tauri/src/commands/mod.rs`)
 
 **File Operations:**
+
 - `select_folder`, `list_markdown_files`, `read_file`, `save_file`
 - `create_file`, `rename_file`, `delete_file`, `copy_file`, `move_file`
 
 **Search & Replace:**
+
 - `search_files`, `replace_in_file`
 
 **File Watching:**
+
 - `start_file_watcher`, `stop_file_watcher`
 
 **Settings & System:**
+
 - `load_settings`, `save_settings`
 - `ping`, `get_app_version`, `check_permissions`
 
 **GTD Operations:**
+
 - `initialize_gtd_space`, `create_gtd_project`, `create_gtd_action`
 - `list_gtd_projects`
 
@@ -101,6 +107,7 @@ Backend emits events via Tauri's event system. Frontend updates in `App.tsx`.
 Tabs saved to localStorage with content and metadata. Auto-recovery on launch.
 
 **Error Handling:**
+
 ```typescript
 const { withErrorHandling } = useErrorHandler();
 const result = await withErrorHandling(
@@ -112,6 +119,7 @@ const result = await withErrorHandling(
 ## GTD Space Structure
 
 When initialized, creates:
+
 ```
 gtd-space/
 ├── .gtd.json           # Space metadata
@@ -125,17 +133,20 @@ gtd-space/
 ## Important Constraints
 
 ### Limits
+
 - Maximum file size: 10MB
 - Maximum open tabs: 10
 - Auto-save delay: 2 seconds
 - File watcher debounce: 500ms
 
 ### TypeScript Configuration
+
 - **Strict mode is disabled** - check for null/undefined manually
 - Path alias `@/` maps to `src/`
 - No explicit return types required
 
 ### Platform Considerations
+
 - File paths handled by Rust backend (cross-platform)
 - Keyboard shortcuts adapt to platform (Cmd/Ctrl)
 - Native file dialogs via tauri-plugin-dialog
@@ -143,17 +154,21 @@ gtd-space/
 ## Common Development Tasks
 
 ### Adding a New Tauri Command
+
 1. Add function in `src-tauri/src/commands/mod.rs`
 2. Add TypeScript types in `src/types/index.ts`
 3. Update relevant hook in `src/hooks/`
 4. Always use `withErrorHandling` when invoking
 
 ### Modifying the Editor
+
 - BlockNote config in `BlockNoteEditor.tsx`
 - Theme overrides in `blocknote-theme.css`
 - For extensions, install package and update editor config
 
 ### GTD Feature Development
+
 - All GTD operations go through `useGTDSpace` hook
-- Maintain snake_case for Rust parameters
+- **Rust backend**: Use snake_case for all parameters and data structures
+- **TypeScript frontend**: Use camelCase for function parameters, snake_case for data structures that match backend
 - Projects require README.md, actions are individual .md files

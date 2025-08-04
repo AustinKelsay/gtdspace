@@ -203,16 +203,17 @@ await invoke('list_gtd_projects', { spacePath });
 ### Data Structures
 
 **TypeScript interfaces (snake_case to match Rust backend):**
+
 ```typescript
 // Project
 interface GTDProject {
   name: string;
   description: string;
-  due_date?: string | null;        // snake_case to match Rust
+  due_date?: string | null; // snake_case to match Rust
   status: GTDProjectStatus;
   path: string;
-  created_date: string;            // snake_case to match Rust
-  action_count?: number;           // snake_case to match Rust
+  created_date: string; // snake_case to match Rust
+  action_count?: number; // snake_case to match Rust
 }
 
 // Action
@@ -220,11 +221,11 @@ interface GTDAction {
   name: string;
   path: string;
   status: GTDActionStatus;
-  due_date?: string | null;        // snake_case to match Rust
+  due_date?: string | null; // snake_case to match Rust
   effort: GTDActionEffort;
   notes?: string;
-  created_date: string;            // snake_case to match Rust
-  project_path: string;            // snake_case to match Rust
+  created_date: string; // snake_case to match Rust
+  project_path: string; // snake_case to match Rust
 }
 ```
 

@@ -46,7 +46,8 @@ pub fn run() {
             commands::initialize_gtd_space,
             commands::create_gtd_project,
             commands::create_gtd_action,
-            commands::list_gtd_projects
+            commands::list_gtd_projects,
+            commands::check_directory_exists
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

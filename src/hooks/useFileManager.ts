@@ -2,7 +2,6 @@
  * @fileoverview File management hook for Phase 1 functionality
  * @author Development Team
  * @created 2024-01-XX
- * @phase 1 - File operations, folder management, and state handling
  */
 
 import { useState, useCallback, useEffect } from 'react';
@@ -13,7 +12,7 @@ import type {
   MarkdownFile, 
   FileOperationResult, 
   FileOperation, 
-  AppStatePhase1,
+  FileManagerState,
   EditorMode 
 } from '@/types';
 
@@ -46,7 +45,7 @@ export const useFileManager = () => {
   
   // === STATE ===
   
-  const [state, setState] = useState<AppStatePhase1>({
+  const [state, setState] = useState<FileManagerState>({
     // Base app state
     theme: settings.theme as 'light' | 'dark' | 'auto',
     isReady: true,

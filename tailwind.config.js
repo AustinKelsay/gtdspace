@@ -55,6 +55,10 @@ export default {
         border: "rgb(var(--border))",
         input: "rgb(var(--input))",
         ring: "rgb(var(--ring))",
+        popover: "rgb(var(--popover))",
+        "popover-foreground": "rgb(var(--popover-foreground))",
+        destructive: "rgb(var(--destructive))",
+        "destructive-foreground": "rgb(var(--destructive-foreground))",
         // Custom color palette for markdown editor
         editor: {
           bg: '#1e1e1e',

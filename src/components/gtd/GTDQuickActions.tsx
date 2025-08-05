@@ -25,15 +25,19 @@ interface GTDQuickActionsProps {
   currentProject?: GTDProject | null;
   variant?: 'floating' | 'inline';
   className?: string;
+  onProjectCreated?: () => void;
+  onActionCreated?: () => void;
 }
 
 export const GTDQuickActions: React.FC<GTDQuickActionsProps> = ({
   currentFolder,
   currentProject,
   variant = 'floating',
-  className = ''
+  className = '',
+  onProjectCreated,
+  onActionCreated
 }) => {
-  const { gtdSpace } = useGTDSpace();
+  const { gtdSpace, loadProjects } = useGTDSpace();
   const [showProjectDialog, setShowProjectDialog] = React.useState(false);
   const [showActionDialog, setShowActionDialog] = React.useState(false);
 
@@ -192,6 +196,15 @@ export const GTDQuickActions: React.FC<GTDQuickActionsProps> = ({
                 setShowProjectDialog(false);
               }}
               spacePath={currentFolder.split('/Projects')[0]}
+              onSuccess={async () => {
+                // Reload projects after creation
+                if (gtdSpace?.root_path) {
+                  await loadProjects(gtdSpace.root_path);
+                }
+                if (onProjectCreated) {
+                  onProjectCreated();
+                }
+              }}
             />
             
             {currentProject && (
@@ -202,6 +215,15 @@ export const GTDQuickActions: React.FC<GTDQuickActionsProps> = ({
                 }}
                 projectPath={currentProject.path}
                 projectName={currentProject.name}
+                onSuccess={async () => {
+                  // Reload projects to update action counts
+                  if (gtdSpace?.root_path) {
+                    await loadProjects(gtdSpace.root_path);
+                  }
+                  if (onActionCreated) {
+                    onActionCreated();
+                  }
+                }}
               />
             )}
           </>
@@ -270,6 +292,15 @@ export const GTDQuickActions: React.FC<GTDQuickActionsProps> = ({
               setShowProjectDialog(false);
             }}
             spacePath={currentFolder.split('/Projects')[0]}
+            onSuccess={async () => {
+              // Reload projects after creation
+              if (gtdSpace?.root_path) {
+                await loadProjects(gtdSpace.root_path);
+              }
+              if (onProjectCreated) {
+                onProjectCreated();
+              }
+            }}
           />
           
           {currentProject && (
@@ -280,6 +311,15 @@ export const GTDQuickActions: React.FC<GTDQuickActionsProps> = ({
               }}
               projectPath={currentProject.path}
               projectName={currentProject.name}
+              onSuccess={async () => {
+                // Reload projects to update action counts
+                if (gtdSpace?.root_path) {
+                  await loadProjects(gtdSpace.root_path);
+                }
+                if (onActionCreated) {
+                  onActionCreated();
+                }
+              }}
             />
           )}
         </>

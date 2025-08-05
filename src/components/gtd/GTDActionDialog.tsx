@@ -95,7 +95,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Add Action to {projectName}</DialogTitle>
           <DialogDescription>
@@ -103,7 +103,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 overflow-y-auto flex-1">
           <div className="space-y-2">
             <Label htmlFor="action-name">Action Name</Label>
             <Input
@@ -185,7 +185,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0">
           <Button variant="outline" onClick={handleClose} disabled={isCreating}>
             Cancel
           </Button>

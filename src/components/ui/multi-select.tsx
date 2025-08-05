@@ -311,7 +311,7 @@ const MultiSelect = React.forwardRef<
 
                   {groupedOptions.ungrouped.length > 0 && (
                     <div className="py-1">
-                      {groupedOptions.ungrouped.map((option, index) => {
+                      {groupedOptions.ungrouped.map((option, _index) => {
                         const optionIndex = selectableOptions.findIndex(
                           o => o.value === option.value
                         )

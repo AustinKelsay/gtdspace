@@ -6,7 +6,6 @@
 
 import React from 'react';
 import { MultiSelect, Option } from '@/components/ui/multi-select';
-import { Tag, AtSign, Calendar, Clock, Home, Building2, Phone, Computer } from 'lucide-react';
 
 // Predefined GTD contexts
 const GTD_CONTEXTS: Option[] = [

@@ -126,9 +126,9 @@ export type FileOperation =
   | { type: 'move'; sourcePath: string; destPath: string };
 
 /**
- * Extended application state for Phase 1
+ * File manager state
  */
-export interface AppStatePhase1 extends AppState {
+export interface FileManagerState extends AppState {
   /** Currently selected folder path */
   currentFolder: string | null;
   /** List of markdown files in current folder */
@@ -258,21 +258,6 @@ export interface TabManagerState {
   recentlyClosed: FileTab[];
 }
 
-/**
- * Enhanced application state for Phase 2
- */
-export interface AppStatePhase2 extends AppState {
-  /** Currently selected folder path */
-  currentFolder: string | null;
-  /** List of markdown files in current folder */
-  files: MarkdownFile[];
-  /** Search query for file filtering */
-  searchQuery: string;
-  /** Tab management state */
-  tabs: TabManagerState;
-  /** Current editor mode */
-  editorMode: EditorMode;
-}
 
 /**
  * Tab component props

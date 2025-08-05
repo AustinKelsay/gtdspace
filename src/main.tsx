@@ -2,12 +2,11 @@
  * @fileoverview React application entry point for GTD Space
  * @author Development Team
  * @created 2024-01-XX
- * @phase 0 - Basic React app initialization
  */
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import AppPhase2 from './App';
+import App from './App';
 
 // Ensure we're running in a Tauri environment
 if (typeof window !== 'undefined' && !(window as unknown as {__TAURI__?: unknown}).__TAURI__) {
@@ -32,7 +31,7 @@ const initializeApp = () => {
     
     root.render(
       <React.StrictMode>
-        <AppPhase2 />
+        <App />
       </React.StrictMode>
     );
 

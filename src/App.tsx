@@ -46,14 +46,13 @@ import './styles/globals.css';
  * 
  * @returns Simplified GTD Space application
  */
-export const AppPhase2: React.FC = () => {
+export const App: React.FC = () => {
   // === FILE MANAGEMENT ===
 
   const {
     state: fileState,
     selectFolder,
     loadFolder,
-    handleFileOperation,
   } = useFileManager();
 
   // === TAB MANAGEMENT ===
@@ -96,37 +95,6 @@ export const AppPhase2: React.FC = () => {
   const {
     withErrorHandling,
   } = useErrorHandler();
-
-  // Create new file handler
-  const createNewFile = async () => {
-    if (!fileState.currentFolder) return;
-
-    await withErrorHandling(
-      async () => {
-        const fileName = `new-file-${Date.now()}.md`;
-        await handleFileOperation({
-          type: 'create',
-          name: fileName,
-        });
-      },
-      'Failed to create new file',
-      'file_operation'
-    );
-  };
-
-  // Close all tabs handler - currently unused but may be needed later
-  // const closeAllTabs = async () => {
-  //   // Save any unsaved changes first
-  //   if (hasUnsavedChanges) {
-  //     await saveAllTabs();
-  //   }
-  //   
-  //   // Close all tabs
-  //   tabState.openTabs.forEach(tab => closeTab(tab.id));
-  //   
-  //   // Clear persisted tabs
-  //   clearPersistedTabs();
-  // };
 
   // Refresh file list handler
   const refreshFileList = async () => {
@@ -230,24 +198,15 @@ export const AppPhase2: React.FC = () => {
   // === KEYBOARD SHORTCUTS ===
 
   const keyboardHandlers = {
-    onSave: saveTab,
+    onSaveActive: activeTab ? async () => {
+      await saveTab(activeTab.id);
+    } : undefined,
+    onSaveAll: async () => {
+      await saveAllTabs();
+    },
     onOpenFolder: selectFolder,
-    onNewFile: createNewFile,
-    onCloseTab: activeTab ? () => closeTab(activeTab.id) : undefined,
-    onNextTab: () => {
-      const currentIndex = tabState.openTabs.findIndex(tab => tab.id === activeTab?.id);
-      if (currentIndex !== -1 && currentIndex < tabState.openTabs.length - 1) {
-        activateTab(tabState.openTabs[currentIndex + 1].id);
-      }
-    },
-    onPreviousTab: () => {
-      const currentIndex = tabState.openTabs.findIndex(tab => tab.id === activeTab?.id);
-      if (currentIndex > 0) {
-        activateTab(tabState.openTabs[currentIndex - 1].id);
-      }
-    },
-    onShowKeyboardShortcuts: () => openModal('keyboardShortcuts'),
-    onToggleSearch: () => openModal('globalSearch'),
+    onOpenGlobalSearch: () => openModal('globalSearch'),
+    onOpenKeyboardShortcuts: () => openModal('keyboardShortcuts'),
   };
 
   useKeyboardShortcuts(keyboardHandlers);
@@ -399,7 +358,6 @@ export const AppPhase2: React.FC = () => {
             await saveAllTabs();
           }}
           onOpenSettings={() => openModal('settings')}
-          onOpenAnalytics={() => {/* Analytics removed */ }}
           onToggleTheme={toggleTheme}
         />
 
@@ -436,16 +394,16 @@ export const AppPhase2: React.FC = () => {
 
           {/* Main Content Area */}
           <div className="flex-1 flex flex-col min-w-0">
-            {fileState.currentFolder && isGTDSpace && !fileState.currentFolder?.includes('/Projects/') ? (
-              // GTD Dashboard View - Show when in GTD root or non-project folders
+            {fileState.currentFolder && isGTDSpace && !fileState.currentFolder?.includes('/Projects/') && tabState.openTabs.length === 0 ? (
+              // GTD Dashboard View - Show only when in GTD root with no open tabs
               <GTDDashboard
                 currentFolder={fileState.currentFolder}
                 onSelectProject={handleFolderLoad}
                 onSelectFile={handleFileSelect}
                 className="flex-1"
               />
-            ) : fileState.currentFolder ? (
-              // Editor View - Show when editing files
+            ) : fileState.currentFolder || tabState.openTabs.length > 0 ? (
+              // Editor View - Show when editing files or when there are open tabs
               <>
                 {/* Tab bar */}
                 <TabManager
@@ -529,6 +487,14 @@ export const AppPhase2: React.FC = () => {
             currentFolder={fileState.currentFolder}
             currentProject={currentProject}
             variant="floating"
+            onProjectCreated={async () => {
+              // Refresh file list when project is created
+              await refreshFileList();
+            }}
+            onActionCreated={async () => {
+              // Refresh file list when action is created
+              await refreshFileList();
+            }}
           />
         )}
       </div>
@@ -576,4 +542,4 @@ export const AppPhase2: React.FC = () => {
   );
 };
 
-export default AppPhase2;
+export default App;

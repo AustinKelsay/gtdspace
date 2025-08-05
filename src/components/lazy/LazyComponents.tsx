@@ -7,7 +7,6 @@
 import React, { lazy, Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { GlobalSearchProps } from '@/components/search/GlobalSearch';
-import type { DocumentStatsProps } from '@/components/navigation/DocumentStats';
 import type { SettingsManagerProps } from '@/components/settings/SettingsManager';
 import type { KeyboardShortcutsModalProps } from '@/components/settings/KeyboardShortcutsModal';
 
@@ -31,12 +30,6 @@ export const LazyGlobalSearch = lazy(() =>
   }))
 );
 
-// Document Navigation components
-export const LazyDocumentStats = lazy(() => 
-  import('@/components/navigation/DocumentStats').then(module => ({
-    default: module.DocumentStats
-  }))
-);
 
 // Settings Manager
 export const LazySettingsManager = lazy(() => 
@@ -63,14 +56,6 @@ export const GlobalSearchLazy: React.FC<GlobalSearchProps> = (props) => (
   </Suspense>
 );
 
-/**
- * Wrapper for lazy-loaded document navigation
- */
-export const DocumentStatsLazy: React.FC<DocumentStatsProps> = (props) => (
-  <Suspense fallback={<LoadingFallback message="Loading Statistics..." />}>
-    <LazyDocumentStats {...props} />
-  </Suspense>
-);
 
 /**
  * Wrapper for lazy-loaded settings
@@ -92,7 +77,6 @@ export const KeyboardShortcutsReferenceLazy: React.FC<KeyboardShortcutsModalProp
 
 export default {
   GlobalSearchLazy,
-  DocumentStatsLazy,
   SettingsManagerLazy,
   KeyboardShortcutsReferenceLazy,
 };

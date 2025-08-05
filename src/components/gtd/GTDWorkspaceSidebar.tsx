@@ -477,6 +477,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         isOpen={showProjectDialog}
         onClose={() => setShowProjectDialog(false)}
         spacePath={gtdSpace?.root_path || currentFolder || ''}
+        onSuccess={async () => {
+          // Reload projects after successful creation
+          if (gtdSpace?.root_path) {
+            await loadProjects(gtdSpace.root_path);
+          }
+        }}
       />
       
       {selectedProject && (
@@ -488,6 +494,14 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           }}
           projectPath={selectedProject.path}
           projectName={selectedProject.name}
+          onSuccess={async () => {
+            // Reload project actions after successful creation
+            await loadProjectActions(selectedProject.path);
+            // Also reload projects to update action counts
+            if (gtdSpace?.root_path) {
+              await loadProjects(gtdSpace.root_path);
+            }
+          }}
         />
       )}
     </Card>

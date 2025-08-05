@@ -4,17 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**GTD Space** is a GTD-first productivity system with integrated markdown editing, built with Tauri, React, and TypeScript. The application implements David Allen's Getting Things Done methodology as its core experience, with markdown editing as a supporting capability.
+**GTD Space** is a GTD-first productivity system with integrated markdown editing, built with Tauri, React, and TypeScript. The entire application is designed around the Getting Things Done methodology as the primary experience, not an add-on feature.
 
 **Key Technologies:**
-
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui
 - **Editor**: BlockNote for WYSIWYG editing (with @blocknote/code-block for syntax highlighting)
 - **State Management**: Custom hooks pattern (no Redux/MobX)
+- **Markdown**: BlockNote handles all markdown conversion internally
 - **Backend**: Rust, Tauri 2.x with fs, dialog, and store plugins
-- **File Watching**: notify crate with 500ms debounce
-- **GTD Integration**: Built-in support for projects, actions, and structured spaces
-- **DnD**: @dnd-kit for tab reordering
+- **File Watching**: notify crate with 500ms debounce for real-time external change detection
+- **Toast Notifications**: shadcn/ui toast system (not sonner)
+- **GTD Integration**: Built-in support for GTD methodology with projects, actions, and structured spaces
+- **DnD**: @dnd-kit for tab reordering and file operations
 
 ## Development Commands
 
@@ -34,141 +35,330 @@ npm run lint:fix
 
 # Frontend-only development (file operations won't work)
 npm run dev
+
+# Build frontend only
+npm run build
+
+# Preview built frontend
+npm run preview
 ```
 
 ## Architecture Overview
 
 ### Frontend-Backend Communication Pattern
 
-All backend operations use Tauri's invoke system with consistent error handling:
+The app uses Tauri's invoke system for IPC. All backend operations follow this pattern:
 
 ```typescript
 import { invoke } from '@tauri-apps/api/core';
 import { withErrorHandling } from '@/hooks/useErrorHandler';
 
+// Always wrap invokes with error handling
 const result = await withErrorHandling(
-  async () => await invoke<ReturnType>('command_name', { param }),
-  'User-friendly error message'
+  async () => await invoke<MarkdownFile[]>('list_markdown_files', { path }),
+  'Failed to list files'
 );
 ```
 
 ### Tauri Commands (`src-tauri/src/commands/mod.rs`)
 
 **File Operations:**
+- `select_folder` - Native folder selection dialog
+- `list_markdown_files` - Get markdown files in directory
+- `read_file` - Read file contents
+- `save_file` - Save content to file
+- `create_file` - Create new markdown file
+- `rename_file` - Rename existing file
+- `delete_file` - Delete file
+- `copy_file` - Copy file to new location
+- `move_file` - Move file to new location
 
-- `select_folder`, `list_markdown_files`, `read_file`, `save_file`
-- `create_file`, `rename_file`, `delete_file`, `copy_file`, `move_file`
-
-**Search & Replace:**
-
-- `search_files`, `replace_in_file`
+**Search:**
+- `search_files` - Full-text search with filters
+- `replace_in_file` - Find and replace in files
 
 **File Watching:**
+- `start_file_watcher` - Monitor directory for changes
+- `stop_file_watcher` - Stop monitoring
 
-- `start_file_watcher`, `stop_file_watcher`
+**Settings:**
+- `load_settings` - Load user preferences
+- `save_settings` - Save user preferences
 
-**Settings & System:**
-
-- `load_settings`, `save_settings`
-- `ping`, `get_app_version`, `check_permissions`
+**System:**
+- `ping` - Test communication
+- `get_app_version` - Get app version
+- `check_permissions` - Check file system access
+- `check_directory_exists` - Verify directory existence
 
 **GTD Operations:**
-
-- `initialize_gtd_space`, `create_gtd_project`, `create_gtd_action`
-- `list_gtd_projects`
+- `initialize_gtd_space` - Create GTD directory structure
+- `create_gtd_project` - Create new project with metadata
+- `create_gtd_action` - Create new action within project
+- `list_gtd_projects` - List all projects with action counts
 
 ### State Management Architecture
 
-Core hooks in `src/hooks/`:
+Each feature has a dedicated hook in `src/hooks/` that encapsulates all business logic:
 
 - **`useFileManager`** - File operations and folder state
-- **`useTabManager`** - Multi-file tabs with 2s auto-save debounce
-- **`useFileWatcher`** - External change detection (500ms debounce)
-- **`useSettings`** - Theme, font size, editor preferences
-- **`useModalManager`** - Centralized modal state
-- **`useErrorHandler`** - Error handling with toast notifications
-- **`useKeyboardShortcuts`** - Platform-aware shortcuts
+  - Manages current folder, file list, search
+  - Handles file operations (create, rename, delete)
+  
+- **`useTabManager`** - Multi-file tab management with auto-save
+  - Manages open tabs, active tab, unsaved changes
+  - Auto-saves content with 2s debounce
+  - Persists tab state to localStorage
+  
+- **`useFileWatcher`** - External file change detection
+  - Monitors current directory for external changes
+  - Emits events when files are created/modified/deleted
+  
+- **`useSettings`** - User preferences
+  - Theme, font size, editor mode preferences
+  - Persists to Tauri store
+  
+- **`useModalManager`** - Centralized modal control
+  - Single source of truth for modal state
+  - Prevents multiple modals from opening
+  
+- **`useErrorHandler`** - Error handling with toasts
+  - Provides `withErrorHandling` wrapper for all async operations
+  - Shows user-friendly error messages
+  
+- **`useKeyboardShortcuts`** - Keyboard shortcut handling
+  - Platform-aware shortcuts (Cmd on macOS, Ctrl elsewhere)
+  - Centralized shortcut registration
+
 - **`useGTDSpace`** - GTD methodology integration
-- **`useToast`** - Toast notifications (shadcn/ui based)
+  - Initialize GTD spaces with standard structure
+  - Create and manage projects and actions
+  - Load project lists with action counts
+  
+- **`useToast`** - Toast notifications wrapper
+  - Provides convenience methods (showSuccess, showError, etc.)
+  - Built on shadcn/ui toast system
 
 ### Component Organization
 
-1. **App.tsx** - Main orchestrator connecting all hooks
-2. **GTDWorkspaceSidebar** - Projects, actions, and GTD navigation
-3. **TabManager** - Multi-tab interface
+The main app flow is:
+1. **App.tsx** - Main orchestrator that connects all hooks
+2. **FileBrowserSidebar** - File tree and operations
+3. **TabManager** - Tab bar UI
 4. **BlockNoteEditor** - WYSIWYG markdown editor
+5. **EnhancedTextEditor** - Wrapper for BlockNote with theme detection
 
-### Critical Patterns
+### Critical Architecture Patterns
 
-**Event-Driven File Watching:**
-Backend emits events via Tauri's event system. Frontend updates in `App.tsx`.
+**Event-Driven File Watcher Integration:**
+The file watcher runs in the Rust backend and emits events to the frontend via Tauri's event system. The frontend responds to these events in `App.tsx` to update file lists and handle external changes to open tabs.
 
 **Tab State Persistence:**
-Tabs saved to localStorage with content and metadata. Auto-recovery on launch.
+Tab state is persisted to localStorage with a specific structure that includes file metadata, content, and unsaved changes. Recovery happens automatically on app launch.
 
-**Error Handling:**
+**Multi-Level Error Handling:**
+- Rust backend returns `Result<T, String>` for all commands
+- Frontend wraps all invokes with `withErrorHandling` 
+- User-friendly error messages displayed via toast system
+- Errors are categorized for better debugging
 
+## Key Implementation Patterns
+
+### Error Handling Pattern
 ```typescript
+// Always use withErrorHandling for async operations
 const { withErrorHandling } = useErrorHandler();
+
 const result = await withErrorHandling(
-  async () => await invoke('command', args),
-  'User-friendly message'
+  async () => await invoke('command_name', args),
+  'User-friendly error message',
+  'optional_error_category'
 );
 ```
 
-## GTD Space Structure
-
-When initialized, creates:
-
+### Tab Management Pattern
+```typescript
+// Opening a file always goes through tab manager
+const handleFileSelect = async (file: MarkdownFile) => {
+  await openTab(file); // Handles duplicate detection, tab limits, etc.
+};
 ```
-gtd-space/
-├── .gtd.json           # Space metadata
-├── projects/           # Active projects
-├── habits/            # Daily/weekly routines
-├── someday_maybe/     # Future ideas
-├── cabinet/           # Reference materials
-└── archive/           # Completed items
+
+### File Operations Pattern
+```typescript
+// All file operations go through useFileManager
+await handleFileOperation({
+  type: 'create' | 'rename' | 'delete',
+  name: 'filename',
+  path: 'optional/path'
+});
 ```
+
+## BlockNote Editor Configuration
+
+- Uses `@blocknote/mantine` for theming
+- Requires `@blocknote/code-block` for syntax highlighting
+- Custom theme integration via `blocknote-theme.css`
+- Light/dark mode support with CSS variables
+- Markdown conversion handled by BlockNote's built-in methods
 
 ## Important Constraints
 
-### Limits
-
-- Maximum file size: 10MB
-- Maximum open tabs: 10
+### File Size and Tab Limits
+- Maximum file size: 10MB (hardcoded check)
+- Maximum open tabs: 10 (memory management)
 - Auto-save delay: 2 seconds
 - File watcher debounce: 500ms
 
 ### TypeScript Configuration
-
-- **Strict mode is disabled** - check for null/undefined manually
+- **Strict mode is disabled** - be careful with null checks
 - Path alias `@/` maps to `src/`
+- Unused variable checks disabled for underscore-prefixed vars
 - No explicit return types required
 
 ### Platform Considerations
-
 - File paths handled by Rust backend (cross-platform)
-- Keyboard shortcuts adapt to platform (Cmd/Ctrl)
+- Settings stored in platform-specific app data directory
+- Keyboard shortcuts adapt to platform automatically
 - Native file dialogs via tauri-plugin-dialog
+
+### GTD Space Structure
+When initialized, creates this directory structure:
+```
+gtd-space/
+├── .gtd.json           # Space metadata
+├── Projects/           # Active projects
+├── Habits/            # Daily/weekly routines
+├── Someday Maybe/     # Future ideas
+├── Cabinet/           # Reference materials
+└── Welcome to GTD Space.md
+```
+
+### Tauri Security
+- Only whitelisted commands exposed to frontend
+- File operations restricted to user-selected directories
+- No arbitrary command execution
+- All file paths validated in Rust backend
 
 ## Common Development Tasks
 
 ### Adding a New Tauri Command
-
-1. Add function in `src-tauri/src/commands/mod.rs`
+1. Add the command function in `src-tauri/src/commands/mod.rs`
 2. Add TypeScript types in `src/types/index.ts`
-3. Update relevant hook in `src/hooks/`
+3. Create or update the relevant hook in `src/hooks/`
 4. Always use `withErrorHandling` when invoking
 
+### Adding a New Modal
+1. Create the modal component
+2. Add modal type to `useModalManager`
+3. Open with `openModal('modalName')`
+4. Close with `closeModal()`
+
 ### Modifying the Editor
+- BlockNote configuration is in `BlockNoteEditor.tsx`
+- Theme overrides are in `blocknote-theme.css`
+- For new BlockNote extensions, install the package and add to editor config
 
-- BlockNote config in `BlockNoteEditor.tsx`
-- Theme overrides in `blocknote-theme.css`
-- For extensions, install package and update editor config
+## Testing and Debugging
 
-### GTD Feature Development
+### Development Testing
+- No automated test suite currently implemented
+- When testing file operations, use `npm run tauri:dev` (not `npm run dev`)
+- Check console for Rust backend logs
+- File watcher events can be monitored in browser console
 
-- All GTD operations go through `useGTDSpace` hook
-- **Rust backend**: Use snake_case for all parameters and data structures
-- **TypeScript frontend**: Use camelCase for function parameters, snake_case for data structures that match backend
-- Projects require README.md, actions are individual .md files
+### Debugging Tips
+- Rust backend logging: Set `RUST_LOG=info` environment variable
+- Frontend debugging: React DevTools work normally
+- Tauri DevTools: Available in development builds
+- IPC debugging: All commands log to console with timing
+
+### Performance Considerations
+- BlockNote editor handles large files well up to 10MB
+- File list virtualization not implemented (may lag with 1000+ files)
+- Search is performed in Rust backend for speed
+- Tab content stored in memory (hence 10 tab limit)
+
+## Build and Release
+
+### Local Development
+```bash
+# Install dependencies
+npm install
+
+# Run in development mode
+npm run tauri:dev
+```
+
+### Production Build
+```bash
+# Build for current platform
+npm run tauri:build
+
+# The built application will be in:
+# - macOS: src-tauri/target/release/bundle/dmg/
+# - Windows: src-tauri/target/release/bundle/msi/
+# - Linux: src-tauri/target/release/bundle/appimage/
+```
+
+## GTD-Specific Implementation Details
+
+### Parameter Naming Convention
+- **Rust backend**: Uses `snake_case` for all parameters
+- **TypeScript frontend**: Uses `camelCase` for parameters
+- **Tauri automatically converts** camelCase to snake_case when invoking Rust commands
+
+Example:
+```typescript
+// Frontend (camelCase)
+await invoke('create_gtd_project', {
+  spacePath,     // Becomes space_path in Rust
+  projectName,   // Becomes project_name in Rust
+  description,
+  dueDate,       // Becomes due_date in Rust
+});
+
+// Backend (snake_case)
+pub async fn create_gtd_project(
+    space_path: String,
+    project_name: String,
+    description: String,
+    due_date: Option<String>
+) -> Result<String, String>
+```
+
+### Data Structure Naming
+TypeScript interfaces use `snake_case` properties to match Rust serialization:
+```typescript
+interface GTDProject {
+  name: string;
+  description: string;
+  due_date?: string | null;    // snake_case
+  status: GTDProjectStatus;
+  path: string;
+  created_date: string;         // snake_case
+  action_count?: number;        // snake_case
+}
+```
+
+### GTD State Management
+The `useGTDSpace` hook maintains:
+- `gtdSpace` state with `root_path` tracking
+- Smart subdirectory detection (won't re-prompt for initialization)
+- Toast notifications for all operations
+- Deduplication logic to prevent double notifications in React StrictMode
+
+## Recent Changes (January 2025)
+
+### GTD-First Architecture
+- Removed mode switching - GTD is now the default experience
+- Automatic GTD initialization prompts for non-GTD folders
+- Sidebar shows expandable project list with inline actions
+- Floating action button for quick project/action creation
+- Toast notifications for all GTD operations with deduplication
+
+### Key Fixes
+- Parameter naming convention clarified (Rust: snake_case, TypeScript: camelCase)
+- Smart subdirectory detection prevents re-initialization prompts
+- Root path tracking maintains GTD context across navigation
+- Actions load dynamically when projects are expanded in sidebar

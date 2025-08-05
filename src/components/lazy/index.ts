@@ -11,6 +11,5 @@ export { default as LazyComponents } from './LazyComponents';
 export {
   GlobalSearchLazy,
   SettingsManagerLazy,
-  DocumentStatsLazy,
   KeyboardShortcutsReferenceLazy
 } from './LazyComponents';

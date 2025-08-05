@@ -20,12 +20,14 @@ interface GTDProjectDialogProps {
   isOpen: boolean;
   onClose: () => void;
   spacePath: string;
+  onSuccess?: () => void;
 }
 
 export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
   isOpen,
   onClose,
   spacePath,
+  onSuccess,
 }) => {
   const [projectName, setProjectName] = React.useState('');
   const [description, setDescription] = React.useState('');
@@ -55,6 +57,12 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       setDescription('');
       setDueDate('');
       setCategories([]);
+      
+      // Call success callback if provided
+      if (onSuccess) {
+        onSuccess();
+      }
+      
       onClose();
     }
   };
@@ -71,7 +79,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Create New Project</DialogTitle>
           <DialogDescription>
@@ -79,7 +87,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 overflow-y-auto flex-1">
           <div className="space-y-2">
             <Label htmlFor="project-name">Project Name</Label>
             <Input
@@ -132,7 +140,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0">
           <Button variant="outline" onClick={handleClose} disabled={isCreating}>
             Cancel
           </Button>

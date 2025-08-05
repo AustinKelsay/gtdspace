@@ -29,6 +29,8 @@
   --ring: 24 24 27;
   --destructive: 239 68 68;
   --destructive-foreground: 250 250 250;
+  --popover: 255 255 255;
+  --popover-foreground: 23 23 23;
 }
 
 .dark {
@@ -50,6 +52,8 @@
   --ring: 212 212 216;
   --destructive: 220 38 38;
   --destructive-foreground: 250 250 250;
+  --popover: 24 24 27;
+  --popover-foreground: 250 250 250;
 }
 
 /* === BASE STYLES === */

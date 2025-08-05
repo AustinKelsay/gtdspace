@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { Save, Settings, BarChart3, Target } from 'lucide-react';
+import { Save, Settings, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Theme } from '@/types';
@@ -33,8 +33,6 @@ export interface AppHeaderProps {
     onSaveAllFiles: () => Promise<void>;
     /** Callback to open settings */
     onOpenSettings: () => void;
-    /** Callback to open analytics */
-    onOpenAnalytics: () => void;
     /** Callback to toggle theme */
     onToggleTheme: () => Promise<void>;
 }
@@ -58,7 +56,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     onSaveActiveFile,
     onSaveAllFiles,
     onOpenSettings,
-    onOpenAnalytics,
     onToggleTheme,
 }) => {
     /**
@@ -153,23 +150,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                     </TooltipProvider>
                 )}
 
-                {/* Analytics Button */}
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={onOpenAnalytics}
-                            >
-                                <BarChart3 className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>Analytics</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
 
                 {/* Settings Button */}
                 <TooltipProvider>

@@ -11,10 +11,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Calendar } from 'lucide-react';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
-import { GTDProjectCreate } from '@/types';
-import { GTDTagSelector } from './GTDTagSelector';
+import { GTDProjectCreate, GTDProjectStatus } from '@/types';
 
 interface GTDProjectDialogProps {
   isOpen: boolean;
@@ -32,7 +38,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
   const [projectName, setProjectName] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [dueDate, setDueDate] = React.useState('');
-  const [categories, setCategories] = React.useState<string[]>([]);
+  const [status, setStatus] = React.useState<GTDProjectStatus>('in-progress');
   const [isCreating, setIsCreating] = React.useState(false);
   const { createProject } = useGTDSpace();
 
@@ -45,7 +51,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       project_name: projectName.trim(),
       description: description.trim(),
       due_date: dueDate || null,
-      categories: categories.length > 0 ? categories : undefined,
+      status: status,
     };
 
     const result = await createProject(projectData);
@@ -56,7 +62,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       setProjectName('');
       setDescription('');
       setDueDate('');
-      setCategories([]);
+      setStatus('in-progress');
       
       // Call success callback if provided
       if (onSuccess) {
@@ -72,7 +78,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       setProjectName('');
       setDescription('');
       setDueDate('');
-      setCategories([]);
+      setStatus('in-progress');
       onClose();
     }
   };
@@ -112,6 +118,20 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="status">Status</Label>
+            <Select value={status} onValueChange={(value) => setStatus(value as GTDProjectStatus)} disabled={isCreating}>
+              <SelectTrigger id="status">
+                <SelectValue placeholder="Select project status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="in-progress">In Progress</SelectItem>
+                <SelectItem value="waiting">Waiting</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="due-date">Due Date (Optional)</Label>
             <div className="relative">
               <Input
@@ -125,19 +145,6 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Categories</Label>
-            <GTDTagSelector
-              type="categories"
-              value={categories}
-              onValueChange={setCategories}
-              maxCount={3}
-              placeholder="Select up to 3 categories..."
-            />
-            <p className="text-xs text-muted-foreground">
-              Categorize your project for better organization
-            </p>
-          </div>
         </div>
 
         <DialogFooter className="flex-shrink-0">

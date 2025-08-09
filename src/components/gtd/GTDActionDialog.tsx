@@ -39,7 +39,9 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
   onSuccess,
 }) => {
   const [actionName, setActionName] = React.useState('');
-  const [status, setStatus] = React.useState<GTDActionStatus>('Not Started');
+  const [status, setStatus] = React.useState<GTDActionStatus>('In Progress');
+  const [focusDate, setFocusDate] = React.useState('');
+  const [focusTime, setFocusTime] = React.useState('');
   const [dueDate, setDueDate] = React.useState('');
   const [effort, setEffort] = React.useState<GTDActionEffort>('Medium');
   const [notes, setNotes] = React.useState('');
@@ -51,10 +53,24 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
     if (!actionName.trim()) return;
 
     setIsCreating(true);
+    
+    // Combine focus date and time into ISO datetime string
+    let focusDateTime: string | null = null;
+    if (focusDate) {
+      if (focusTime) {
+        // Combine date and time
+        focusDateTime = `${focusDate}T${focusTime}:00`;
+      } else {
+        // Default to start of day if no time specified
+        focusDateTime = `${focusDate}T09:00:00`;
+      }
+    }
+    
     const actionData: GTDActionCreate = {
       project_path: projectPath,
       action_name: actionName.trim(),
       status,
+      focus_date: focusDateTime,
       due_date: dueDate || null,
       effort,
       contexts: contexts.length > 0 ? contexts : undefined,
@@ -66,7 +82,9 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
     if (result) {
       // Reset form
       setActionName('');
-      setStatus('Not Started');
+      setStatus('In Progress');
+      setFocusDate('');
+      setFocusTime('');
       setDueDate('');
       setEffort('Medium');
       setNotes('');
@@ -84,7 +102,9 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
   const handleClose = () => {
     if (!isCreating) {
       setActionName('');
-      setStatus('Not Started');
+      setStatus('In Progress');
+      setFocusDate('');
+      setFocusTime('');
       setDueDate('');
       setEffort('Medium');
       setNotes('');
@@ -123,8 +143,8 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Not Started">Not Started</SelectItem>
                   <SelectItem value="In Progress">In Progress</SelectItem>
+                  <SelectItem value="Waiting">Waiting</SelectItem>
                   <SelectItem value="Complete">Complete</SelectItem>
                 </SelectContent>
               </Select>
@@ -142,6 +162,34 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
                   <SelectItem value="Large">Large (&gt;90 min)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="focus-date">Focus Date (Optional)</Label>
+            <p className="text-xs text-muted-foreground mb-2">
+              When will you work on this action?
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="relative">
+                <Input
+                  id="focus-date"
+                  type="date"
+                  value={focusDate}
+                  onChange={(e) => setFocusDate(e.target.value)}
+                  disabled={isCreating}
+                  placeholder="Date"
+                />
+                <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              </div>
+              <Input
+                id="focus-time"
+                type="time"
+                value={focusTime}
+                onChange={(e) => setFocusTime(e.target.value)}
+                disabled={isCreating}
+                placeholder="Time"
+              />
             </div>
           </div>
 

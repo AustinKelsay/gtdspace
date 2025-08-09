@@ -196,19 +196,20 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     );
   };
 
-  const getProjectStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'active': return 'text-green-600';
-      case 'on hold': return 'text-yellow-600';
-      case 'complete': return 'text-blue-600';
-      case 'cancelled': return 'text-gray-500';
+  const getProjectStatusColor = (statuses: string[]) => {
+    const status = statuses[0] || 'in-progress';
+    switch (status) {
+      case 'in-progress': return 'text-green-600';
+      case 'waiting': return 'text-yellow-600';
+      case 'completed': return 'text-blue-600';
       default: return 'text-gray-600';
     }
   };
 
-  const getProjectStatusIcon = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'complete': return CheckCircle2;
+  const getProjectStatusIcon = (statuses: string[]) => {
+    const status = statuses[0] || 'in-progress';
+    switch (status) {
+      case 'completed': return CheckCircle2;
       default: return Circle;
     }
   };

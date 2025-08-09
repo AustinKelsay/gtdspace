@@ -410,14 +410,14 @@ export interface SearchResponse {
 // === GTD TYPES ===
 
 /**
- * GTD Project status options
+ * GTD Project status options (multiselect)
  */
-export type GTDProjectStatus = 'Active' | 'On Hold' | 'Complete' | 'Cancelled';
+export type GTDProjectStatus = 'in-progress' | 'waiting' | 'completed';
 
 /**
  * GTD Action status options
  */
-export type GTDActionStatus = 'Not Started' | 'In Progress' | 'Complete';
+export type GTDActionStatus = 'In Progress' | 'Waiting' | 'Complete';
 
 /**
  * GTD Action effort estimation
@@ -434,8 +434,8 @@ export interface GTDProject {
   description: string;
   /** Optional due date (ISO format: YYYY-MM-DD) */
   due_date?: string | null;
-  /** Project status */
-  status: GTDProjectStatus;
+  /** Project status (multiselect) */
+  status: GTDProjectStatus[];
   /** Full path to project folder */
   path: string;
   /** Date project was created */
@@ -454,6 +454,8 @@ export interface GTDAction {
   path: string;
   /** Action status */
   status: GTDActionStatus;
+  /** Optional focus date (ISO format: YYYY-MM-DDTHH:mm:ss) */
+  focus_date?: string | null;
   /** Optional due date (ISO format: YYYY-MM-DD) */
   due_date?: string | null;
   /** Effort estimation */
@@ -506,8 +508,8 @@ export interface GTDProjectCreate {
   description: string;
   /** Optional due date (ISO format: YYYY-MM-DD) */
   due_date?: string | null;
-  /** Project categories/tags */
-  categories?: string[];
+  /** Project status */
+  status?: GTDProjectStatus;
 }
 
 /**
@@ -520,6 +522,8 @@ export interface GTDActionCreate {
   action_name: string;
   /** Initial status */
   status: GTDActionStatus;
+  /** Optional focus date (ISO format: YYYY-MM-DDTHH:mm:ss) */
+  focus_date?: string | null;
   /** Optional due date (ISO format: YYYY-MM-DD) */
   due_date?: string | null;
   /** Effort estimate */

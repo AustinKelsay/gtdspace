@@ -84,6 +84,10 @@ Actions are concrete next steps that move projects forward.
 
 Not Started | In Progress | Complete
 
+## Focus Date
+
+YYYY-MM-DD HH:MM AM/PM or "Not set"
+
 ## Due Date
 
 YYYY-MM-DD or "Not set"
@@ -110,7 +114,8 @@ Actions must be created within a project folder:
 // Action fields
 - Name: Clear, actionable description
 - Status: Track progress
-- Due Date: Optional deadline
+- Focus Date: When you will work on this action (date and time)
+- Due Date: Optional deadline (date only)
 - Effort: Time estimate for planning
 ```
 
@@ -163,6 +168,7 @@ create_gtd_action(
     project_path: String,
     action_name: String,
     status: String,
+    focus_date: Option<String>,
     due_date: Option<String>,
     effort: String
 ) -> Result<String, String>
@@ -190,6 +196,7 @@ await invoke('create_gtd_action', {
   projectPath,
   actionName,
   status,
+  focusDate,
   dueDate,
   effort,
 });
@@ -221,7 +228,8 @@ interface GTDAction {
   name: string;
   path: string;
   status: GTDActionStatus;
-  due_date?: string | null; // snake_case to match Rust
+  focus_date?: string | null; // snake_case to match Rust, ISO datetime
+  due_date?: string | null; // snake_case to match Rust, ISO date
   effort: GTDActionEffort;
   notes?: string;
   created_date: string; // snake_case to match Rust

@@ -558,8 +558,47 @@ pub async fn create_file(directory: String, name: String) -> Result<FileOperatio
         });
     }
     
-    // Create file with basic markdown template
-    let template_content = format!("# {}\n\n", name);
+    // Check if we're in a GTD Projects directory
+    let is_in_projects = dir_path
+        .components()
+        .any(|c| c.as_os_str() == "Projects");
+    
+    // Check if this is a project directory (has README.md)
+    let is_project_dir = dir_path.join("README.md").exists();
+    
+    // Create appropriate template content
+    let template_content = if is_in_projects && is_project_dir {
+        // Use GTD action template with single select fields
+        let clean_name = name.trim_end_matches(".md");
+        format!(
+            r#"# {}
+
+## Status
+[!singleselect:status:in-progress]
+
+## Focus Date
+Not set
+
+## Due Date
+Not set
+
+## Effort
+[!singleselect:effort:medium]
+
+## Notes
+<!-- Add any additional notes or details about this action here -->
+
+---
+Created: {}
+"#,
+            clean_name,
+            chrono::Local::now().format("%Y-%m-%d %H:%M")
+        )
+    } else {
+        // Use basic template for non-GTD files
+        let clean_name = name.trim_end_matches(".md");
+        format!("# {}\n\n", clean_name)
+    };
     
     match fs::write(&file_path, template_content) {
         Ok(_) => {
@@ -1617,6 +1656,7 @@ pub async fn check_directory_exists(path: String) -> Result<bool, String> {
 /// * `project_name` - Name of the project
 /// * `description` - Project description
 /// * `due_date` - Optional due date (ISO format: YYYY-MM-DD)
+/// * `status` - Optional project status (in-progress, waiting, completed). Defaults to 'in-progress'
 ///
 /// # Returns
 ///
@@ -1631,7 +1671,8 @@ pub async fn check_directory_exists(path: String) -> Result<bool, String> {
 ///   space_path: '/path/to/gtd/space',
 ///   project_name: 'Build Website',
 ///   description: 'Create company website',
-///   due_date: '2024-12-31'
+///   due_date: '2024-12-31',
+///   status: 'in-progress'
 /// });
 /// ```
 #[tauri::command]
@@ -1640,6 +1681,7 @@ pub async fn create_gtd_project(
     project_name: String,
     description: String,
     due_date: Option<String>,
+    status: Option<String>,
 ) -> Result<String, String> {
     log::info!("Creating GTD project: {}", project_name);
     
@@ -1663,6 +1705,7 @@ pub async fn create_gtd_project(
     
     // Create README.md with project template
     let readme_path = project_path.join("README.md");
+    let project_status = status.unwrap_or_else(|| "in-progress".to_string());
     let readme_content = format!(
         r#"# {}
 
@@ -1673,16 +1716,17 @@ pub async fn create_gtd_project(
 {}
 
 ## Status
-Active
+[!singleselect:project-status:{}]
 
 ## Actions
 Actions for this project are stored as individual markdown files in this directory.
 
 ### Action Template
-Each action file should contain:
-- **Status**: Not Started / In Progress / Complete
-- **Due Date**: (optional)
-- **Effort**: Small / Medium / Large
+Each action file contains:
+- **Status**: Single select field for tracking progress
+- **Focus Date**: When to work on this action
+- **Due Date**: Optional deadline
+- **Effort**: Single select field for time estimate
 
 ---
 Created: {}
@@ -1690,6 +1734,7 @@ Created: {}
         project_name,
         description,
         due_date.as_deref().unwrap_or("Not set"),
+        project_status,
         chrono::Local::now().format("%Y-%m-%d")
     );
     
@@ -1729,6 +1774,7 @@ Created: {}
 ///   action_name: 'Design homepage',
 ///   status: 'Not Started',
 ///   due_date: '2024-11-15',
+///   focus_date: '2024-11-14T14:30:00',
 ///   effort: 'Medium'
 /// });
 /// ```
@@ -1738,6 +1784,7 @@ pub async fn create_gtd_action(
     action_name: String,
     status: String,
     due_date: Option<String>,
+    focus_date: Option<String>,
     effort: String,
 ) -> Result<String, String> {
     log::info!("Creating GTD action: {} in project: {}", action_name, project_path);
@@ -1756,18 +1803,52 @@ pub async fn create_gtd_action(
         return Err(format!("Action '{}' already exists", action_name));
     }
     
-    // Create action file with template
+    // Map status and effort to single select values
+    let status_value = match status.as_str() {
+        "In Progress" => "in-progress",
+        "Waiting" => "waiting",
+        "Complete" => "complete",
+        _ => "in-progress"
+    };
+    
+    let effort_value = match effort.as_str() {
+        "Small" => "small",
+        "Medium" => "medium",
+        "Large" => "large",
+        _ => "medium"
+    };
+    
+    // Format focus date for display
+    let focus_date_display = if let Some(ref fd) = focus_date {
+        // Parse ISO datetime and format for display
+        if fd.contains('T') {
+            // Full datetime format
+            match chrono::DateTime::parse_from_rfc3339(fd) {
+                Ok(dt) => dt.format("%Y-%m-%d %l:%M %p").to_string(),
+                Err(_) => fd.clone()
+            }
+        } else {
+            fd.clone()
+        }
+    } else {
+        "Not set".to_string()
+    };
+    
+    // Create action file with template using single select fields
     let action_content = format!(
         r#"# {}
 
 ## Status
+[!singleselect:status:{}]
+
+## Focus Date
 {}
 
 ## Due Date
 {}
 
 ## Effort
-{}
+[!singleselect:effort:{}]
 
 ## Notes
 <!-- Add any additional notes or details about this action here -->
@@ -1776,9 +1857,10 @@ pub async fn create_gtd_action(
 Created: {}
 "#,
         action_name,
-        status,
+        status_value,
+        focus_date_display,
         due_date.as_deref().unwrap_or("Not set"),
-        effort,
+        effort_value,
         chrono::Local::now().format("%Y-%m-%d %H:%M")
     );
     
@@ -1867,7 +1949,7 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
                                 Err(_) => (
                                     "No description available".to_string(),
                                     None,
-                                    "Active".to_string(),
+                                    "in-progress".to_string(),
                                     "Unknown".to_string()
                                 ),
                             }
@@ -1875,7 +1957,7 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
                             (
                                 "No description available".to_string(),
                                 None,
-                                "Active".to_string(),
+                                "in-progress".to_string(),
                                 "Unknown".to_string()
                             )
                         };
@@ -1910,7 +1992,7 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
 fn parse_project_readme(content: &str) -> (String, Option<String>, String, String) {
     let mut description = "No description available".to_string();
     let mut due_date = None;
-    let mut status = "Active".to_string();
+    let mut status = "in-progress".to_string();
     let mut created_date = "Unknown".to_string();
     
     let lines: Vec<&str> = content.lines().collect();
@@ -1944,7 +2026,27 @@ fn parse_project_readme(content: &str) -> (String, Option<String>, String, Strin
                     }
                 }
                 "status" => {
-                    status = trimmed.to_string();
+                    // Parse singleselect or multiselect syntax
+                    if trimmed.starts_with("[!singleselect:") || trimmed.starts_with("[!multiselect:") {
+                        // Extract value from [!singleselect:project-status:value] or [!multiselect:project-status:value]
+                        if let Some(last_colon) = trimmed.rfind(':') {
+                            if let Some(end_bracket) = trimmed.rfind(']') {
+                                if last_colon < end_bracket {
+                                    let value = &trimmed[last_colon + 1..end_bracket];
+                                    // Map value to display format
+                                    status = match value {
+                                        "in-progress" => "in-progress",
+                                        "waiting" => "waiting",
+                                        "completed" => "completed",
+                                        _ => value
+                                    }.to_string();
+                                }
+                            }
+                        }
+                    } else {
+                        // Fallback to raw text
+                        status = trimmed.to_string();
+                    }
                 }
                 _ => {}
             }

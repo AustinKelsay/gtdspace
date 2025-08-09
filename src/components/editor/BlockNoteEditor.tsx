@@ -9,7 +9,12 @@ import React, { useEffect, useRef } from 'react';
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
-import { codeBlock } from "@blocknote/code-block";
+import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
+import { MultiSelectBlock } from './blocks/MultiSelectBlock';
+import { SingleSelectBlock } from './blocks/SingleSelectBlock';
+import { postProcessBlockNoteBlocks } from '@/utils/blocknote-preprocessing';
+import { useMultiSelectInsertion } from '@/hooks/useMultiSelectInsertion';
+import { useSingleSelectInsertion } from '@/hooks/useSingleSelectInsertion';
 import './blocknote-theme.css';
 
 export interface BlockNoteEditorProps {
@@ -44,10 +49,26 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   readOnly = false,
   className = '',
 }) => {
-  // Create the BlockNote editor instance with code block support
-  const editor = useCreateBlockNote({
-    codeBlock,
+  // Create custom schema with multiselect and singleselect blocks
+  const schema = BlockNoteSchema.create({
+    blockSpecs: {
+      ...defaultBlockSpecs,
+      multiselect: MultiSelectBlock,
+      singleselect: SingleSelectBlock,
+    },
   });
+  
+  
+  // Create the BlockNote editor instance with custom schema
+  const editor = useCreateBlockNote({
+    schema,
+  });
+
+  // Add multiselect insertion capabilities
+  useMultiSelectInsertion(editor);
+
+  // Add singleselect insertion capabilities
+  useSingleSelectInsertion(editor);
 
   // Track if initial content has been loaded
   const initialContentLoaded = useRef(false);
@@ -57,7 +78,18 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
     const loadContent = async () => {
       if (!initialContentLoaded.current && content && editor && content.trim() !== '') {
         try {
-          const blocks = await editor.tryParseMarkdownToBlocks(content);
+          // First parse markdown to blocks
+          let blocks = await editor.tryParseMarkdownToBlocks(content);
+          
+          // Then post-process to handle custom multiselect blocks
+          blocks = postProcessBlockNoteBlocks(blocks, content);
+          
+          // Log to see if multiselect blocks are being created
+          const hasMultiselect = blocks.some((b: any) => b.type === 'multiselect');
+          if (hasMultiselect) {
+            console.log('Found multiselect blocks in parsed content:', blocks.filter((b: any) => b.type === 'multiselect'));
+          }
+          
           editor.replaceBlocks(editor.document, blocks);
           initialContentLoaded.current = true;
         } catch (error) {

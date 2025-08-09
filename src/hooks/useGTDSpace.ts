@@ -143,6 +143,7 @@ export function useGTDSpace() {
             projectName: params.project_name,
             description: params.description,
             dueDate: params.due_date || undefined,
+            status: params.status || 'in-progress',
           });
           
           // Create project object for state update
@@ -150,7 +151,7 @@ export function useGTDSpace() {
             name: params.project_name,
             description: params.description,
             due_date: params.due_date,
-            status: 'Active',
+            status: [params.status || 'in-progress'],
             path: projectPath,
             created_date: new Date().toISOString().split('T')[0],
             action_count: 0,
@@ -193,6 +194,7 @@ export function useGTDSpace() {
             projectPath: params.project_path,
             actionName: params.action_name,
             status: params.status,
+            focusDate: params.focus_date || undefined,
             dueDate: params.due_date || undefined,
             effort: params.effort,
           });

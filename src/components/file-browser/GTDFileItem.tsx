@@ -128,7 +128,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
   
   const parseProjectMetadata = (content: string): Partial<GTDMetadata> => {
     const lines = content.split('\n');
-    let status = 'Active';
+    let status = 'in-progress';
     let dueDate = null;
     let description = '';
     let currentSection = '';
@@ -168,7 +168,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
 
   const parseActionMetadata = (content: string): Partial<GTDMetadata> => {
     const lines = content.split('\n');
-    let status = 'Not Started';
+    let status = 'In Progress';
     let dueDate = null;
     let effort = 'Medium';
     let currentSection = '';

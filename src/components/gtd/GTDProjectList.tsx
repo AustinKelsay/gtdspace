@@ -16,18 +16,18 @@ export const GTDProjectList: React.FC<GTDProjectListProps> = ({
   onSelectProject,
   onCreateAction,
 }) => {
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (statuses: string[]) => {
+    // Get color based on first status (for display)
+    const status = statuses[0] || 'in-progress';
     switch (status) {
-      case 'Active':
+      case 'in-progress':
         return 'bg-green-500/10 text-green-700 dark:text-green-400';
-      case 'On Hold':
+      case 'waiting':
         return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400';
-      case 'Complete':
+      case 'completed':
         return 'bg-blue-500/10 text-blue-700 dark:text-blue-400';
-      case 'Cancelled':
-        return 'bg-gray-500/10 text-gray-700 dark:text-gray-400';
       default:
-        return '';
+        return 'bg-gray-500/10 text-gray-700 dark:text-gray-400';
     }
   };
 
@@ -53,9 +53,11 @@ export const GTDProjectList: React.FC<GTDProjectListProps> = ({
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <h3 className="font-medium">{project.name}</h3>
-                <Badge className={getStatusColor(project.status)} variant="secondary">
-                  {project.status}
-                </Badge>
+                {project.status.map((s, idx) => (
+                  <Badge key={idx} className={getStatusColor(project.status)} variant="secondary">
+                    {s}
+                  </Badge>
+                ))}
               </div>
               <p className="text-sm text-muted-foreground line-clamp-2">
                 {project.description}

@@ -24,6 +24,7 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 - **Action List in Sidebar** - See all project actions at a glance
 - **Real-time Updates** - File watcher detects external changes
 - **Smart Notifications** - Deduped alerts for file changes
+- **Interactive MultiSelect Fields** - Notion-like dropdowns for Status and Effort that can't be accidentally overwritten
 
 ### Technical Features
 - **Code Syntax Highlighting** - Supports 100+ languages with Shiki
@@ -61,6 +62,7 @@ npm run tauri:build
 - [Installation Guide](docs/installation.md) - Detailed setup instructions
 - [Architecture Overview](docs/architecture.md) - System design and patterns
 - [GTD Implementation](docs/GTD_IMPLEMENTATION.md) - Getting Things Done methodology integration
+- [MultiSelect Fields](docs/multiselect-fields.md) - Interactive dropdown fields for Status and Effort
 - [Theming & Styles](docs/theming.md) - CSS variables and theme system
 - [Tauri Integration](docs/tauri.md) - Backend commands and IPC
 - [BlockNote Editor](docs/blocknote.md) - Editor configuration and extensions
@@ -87,8 +89,8 @@ GTD Space is designed from the ground up around David Allen's Getting Things Don
   - Actions are individual markdown files within project folders
   - See all actions directly in the sidebar
 - **Actions** - Concrete next steps within projects
-  - Status tracking (Not Started, In Progress, Complete)
-  - Effort estimates (Small <30min, Medium 30-90min, Large >90min)
+  - Interactive Status tracking (Not Started, In Progress, Complete) via multiselect dropdowns
+  - Interactive Effort estimates (Small <30min, Medium 30-90min, Large >90min) via multiselect dropdowns
   - Optional due dates
 - **Habits** - Recurring routines (coming soon)
 - **Someday Maybe** - Ideas for future consideration (coming soon)
@@ -114,6 +116,9 @@ See [GTD Implementation](docs/GTD_IMPLEMENTATION.md) for detailed usage.
 | Close Tab | `Ctrl/Cmd+W` |
 | Search | `Ctrl/Cmd+F` |
 | Settings | `Ctrl/Cmd+,` |
+| Insert Status Field | `Ctrl/Cmd+Shift+S` |
+| Insert Effort Field | `Ctrl/Cmd+Shift+E` |
+| Insert Project Status | `Ctrl/Cmd+Shift+P` |
 
 ## Contributing
 

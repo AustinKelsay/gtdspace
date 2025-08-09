@@ -84,15 +84,16 @@ export const GTDDashboard: React.FC<GTDDashboardProps> = ({
     };
 
     gtdSpace.projects.forEach(project => {
-      // Count by status
-      switch (project.status.toLowerCase()) {
-        case 'active':
+      // Count by status (use first status for counting)
+      const primaryStatus = project.status[0] || 'in-progress';
+      switch (primaryStatus) {
+        case 'in-progress':
           stats.active++;
           break;
-        case 'on hold':
+        case 'waiting':
           stats.onHold++;
           break;
-        case 'complete':
+        case 'completed':
           stats.completed++;
           break;
       }
@@ -101,7 +102,7 @@ export const GTDDashboard: React.FC<GTDDashboardProps> = ({
       stats.totalActions += project.action_count || 0;
 
       // Check for overdue projects
-      if (project.due_date && project.status.toLowerCase() !== 'complete') {
+      if (project.due_date && !project.status.includes('completed')) {
         const dueDate = new Date(project.due_date);
         if (dueDate < now) {
           stats.overdueProjects++;
@@ -130,8 +131,10 @@ export const GTDDashboard: React.FC<GTDDashboardProps> = ({
 
   const getProjectCompletion = (project: GTDProject): number => {
     // This is a placeholder - would need to load action details to calculate real completion
-    return project.status.toLowerCase() === 'complete' ? 100 : 
-           project.status.toLowerCase() === 'active' ? 50 : 0;
+    if (project.status.includes('completed')) return 100;
+    if (project.status.includes('in-progress')) return 50;
+    if (project.status.includes('waiting')) return 25;
+    return 0;
   };
 
   const formatDate = (dateString: string) => {
@@ -296,7 +299,7 @@ export const GTDDashboard: React.FC<GTDDashboardProps> = ({
                   <p className="text-sm text-muted-foreground">No active projects</p>
                 ) : (
                   gtdSpace.projects
-                    ?.filter(p => p.status.toLowerCase() === 'active')
+                    ?.filter(p => p.status.includes('in-progress'))
                     .map(project => (
                       <div
                         key={project.path}

@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "GTD Space - Markdown Editor",
         "width": 1200,
         "height": 800,
@@ -22,7 +23,9 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "dangerousDisableAssetCspModification": false,
+      "freezePrototype": false
     }
   },
   "bundle": {

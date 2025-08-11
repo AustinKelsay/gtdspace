@@ -153,9 +153,11 @@ export const useTabManager = () => {
    * Open a file in a new tab or activate existing tab
    */
   const openTab = useCallback(async (file: MarkdownFile): Promise<string> => {
+    console.log('useTabManager: openTab called for:', file.path);
     // Check if file is already open
     const existingTab = findTabByFile(file);
     if (existingTab) {
+      console.log('useTabManager: File already open in tab:', existingTab.id);
       // Activate existing tab
       setTabState(prev => ({
         ...prev,
@@ -172,6 +174,7 @@ export const useTabManager = () => {
       // Load file content
       console.log('Loading file content for new tab:', file.path);
       const content = await invoke<string>('read_file', { path: file.path });
+      console.log('useTabManager: File content loaded, length:', content.length);
 
       // Create new tab
       const tabId = generateTabId(file);
@@ -187,6 +190,7 @@ export const useTabManager = () => {
       };
 
       setTabState(prev => {
+        console.log('TabState updater: prev.openTabs=', prev.openTabs.length);
         const newTabs = [...prev.openTabs, newTab];
         
         // Enforce max tabs limit
@@ -208,14 +212,17 @@ export const useTabManager = () => {
           }
         }
 
-        return {
+        const nextState = {
           ...prev,
           openTabs: newTabs.map(tab => ({ ...tab, isActive: tab.id === tabId })),
           activeTabId: tabId,
         };
+        console.log('TabState updater: next.openTabs=', nextState.openTabs.length, 'activeTabId=', nextState.activeTabId);
+        return nextState;
       });
 
       console.log('Opened new tab:', tabId, 'for file:', file.name);
+      console.log('openTab post-setTabState: tabs count will be updated');
       return tabId;
 
     } catch (error) {
@@ -315,12 +322,12 @@ export const useTabManager = () => {
         content: tab.content,
       });
 
-      // Mark tab as saved
+      // Mark tab as saved and update originalContent
       setTabState(prev => ({
         ...prev,
         openTabs: prev.openTabs.map(t => 
           t.id === tabId
-            ? { ...t, hasUnsavedChanges: false }
+            ? { ...t, originalContent: t.content, hasUnsavedChanges: false }
             : t
         ),
       }));
@@ -537,11 +544,13 @@ export const useTabManager = () => {
    * Initialize tabs from localStorage on mount
    */
   useEffect(() => {
+    const ENABLE_TAB_RESTORE = false;
     const initializeTabs = async () => {
+      if (!ENABLE_TAB_RESTORE) return;
       try {
         const restoredState = await loadTabsFromStorage();
         if (restoredState && restoredState.openTabs.length > 0) {
-          setTabState(restoredState);
+          setTabState(prev => (prev.openTabs.length === 0 ? restoredState : prev));
           console.log(`Restored ${restoredState.openTabs.length} tabs from previous session`);
         }
       } catch (error) {

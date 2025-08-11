@@ -5,6 +5,7 @@ This document details how GTD Space integrates with Tauri for native desktop fun
 ## Overview
 
 Tauri provides the bridge between our React frontend and native system capabilities through:
+
 - **IPC (Inter-Process Communication)** - Frontend ↔ Backend messaging
 - **Commands** - Rust functions callable from JavaScript
 - **Events** - Real-time notifications from backend to frontend
@@ -20,14 +21,14 @@ All commands are defined in `src-tauri/src/commands/mod.rs`:
 #[tauri::command]
 pub async fn read_file(path: String) -> Result<String, String> {
     log::info!("Reading file: {}", path);
-    
+
     let file_path = Path::new(&path);
-    
+
     // Validation
     if !file_path.exists() {
         return Err("File does not exist".to_string());
     }
-    
+
     // Operation
     match fs::read_to_string(file_path) {
         Ok(content) => Ok(content),
@@ -39,11 +40,11 @@ pub async fn read_file(path: String) -> Result<String, String> {
 ### Command Invocation (TypeScript)
 
 ```typescript
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from "@tauri-apps/api/core";
 
 // Type-safe invocation
-const content = await invoke<string>('read_file', { 
-    path: '/path/to/file.md' 
+const content = await invoke<string>("read_file", {
+  path: "/path/to/file.md",
 });
 ```
 
@@ -55,8 +56,8 @@ Always wrap invocations with error handling:
 const { withErrorHandling } = useErrorHandler();
 
 const result = await withErrorHandling(
-    async () => await invoke<string>('read_file', { path }),
-    'Failed to read file'
+  async () => await invoke<string>("read_file", { path }),
+  "Failed to read file"
 );
 ```
 
@@ -64,32 +65,46 @@ const result = await withErrorHandling(
 
 ### File Operations
 
-| Command | Parameters | Returns | Description |
-|---------|------------|---------|-------------|
-| `select_folder` | none | `string` | Opens native folder picker |
-| `list_markdown_files` | `path: string` | `MarkdownFile[]` | Lists .md files in directory |
-| `read_file` | `path: string` | `string` | Reads file content |
-| `save_file` | `path: string, content: string` | `string` | Saves content to file |
-| `create_file` | `directory: string, name: string` | `FileOperationResult` | Creates new markdown file |
-| `rename_file` | `old_path: string, new_name: string` | `FileOperationResult` | Renames file |
-| `delete_file` | `path: string` | `FileOperationResult` | Deletes file |
-| `copy_file` | `source_path: string, dest_path: string` | `string` | Copies file |
-| `move_file` | `source_path: string, dest_path: string` | `string` | Moves file |
+| Command               | Parameters                               | Returns               | Description                  |
+| --------------------- | ---------------------------------------- | --------------------- | ---------------------------- |
+| `select_folder`       | none                                     | `string`              | Opens native folder picker   |
+| `list_markdown_files` | `path: string`                           | `MarkdownFile[]`      | Lists .md files in directory |
+| `read_file`           | `path: string`                           | `string`              | Reads file content           |
+| `save_file`           | `path: string, content: string`          | `string`              | Saves content to file        |
+| `create_file`         | `directory: string, name: string`        | `FileOperationResult` | Creates new markdown file    |
+| `rename_file`         | `old_path: string, new_name: string`     | `FileOperationResult` | Renames file                 |
+| `delete_file`         | `path: string`                           | `FileOperationResult` | Deletes file                 |
+| `copy_file`           | `source_path: string, dest_path: string` | `string`              | Copies file                  |
+| `move_file`           | `source_path: string, dest_path: string` | `string`              | Moves file                   |
 
 ### Search Operations
 
-| Command | Parameters | Returns | Description |
-|---------|------------|---------|-------------|
-| `search_files` | `query: string, directory: string, filters: SearchFilters` | `SearchResponse` | Full-text search |
-| `replace_in_file` | `file_path: string, search_term: string, replace_term: string` | `string` | Find and replace |
+| Command           | Parameters                                                     | Returns          | Description      |
+| ----------------- | -------------------------------------------------------------- | ---------------- | ---------------- |
+| `search_files`    | `query: string, directory: string, filters: SearchFilters`     | `SearchResponse` | Full-text search |
+| `replace_in_file` | `file_path: string, search_term: string, replace_term: string` | `string`         | Find and replace |
 
 ### System Commands
 
-| Command | Parameters | Returns | Description |
-|---------|------------|---------|-------------|
-| `ping` | none | `string` | Tests IPC connection |
-| `get_app_version` | none | `string` | Returns app version |
-| `check_permissions` | none | `PermissionStatus` | Checks file system access |
+| Command                      | Parameters | Returns            | Description                     |
+| ---------------------------- | ---------- | ------------------ | ------------------------------- |
+| `ping`                       | none       | `string`           | Tests IPC connection            |
+| `get_app_version`            | none       | `string`           | Returns app version             |
+| `check_permissions`          | none       | `PermissionStatus` | Checks file system access       |
+| `get_default_gtd_space_path` | none       | `string`           | Platform default GTD space path |
+
+### GTD Initialization & Seeding
+
+| Command                    | Parameters           | Returns  | Description                                                  |
+| -------------------------- | -------------------- | -------- | ------------------------------------------------------------ |
+| `initialize_gtd_space`     | `space_path: string` | `string` | Creates `Projects/`, `Habits/`, `Someday Maybe/`, `Cabinet/` |
+| `seed_example_gtd_content` | `space_path: string` | `string` | Seeds demo projects and actions if no projects exist         |
+
+On app startup, the frontend:
+
+- Calls `get_default_gtd_space_path` to derive a default path (e.g., `~/GTD Space`)
+- Ensures a valid space via `initialize_gtd_space`
+- Seeds examples via `seed_example_gtd_content` on first run
 
 ## Event System
 
@@ -111,12 +126,12 @@ app.emit("file-changed", FileChangeEvent {
 ### Frontend Event Listening
 
 ```typescript
-import { listen } from '@tauri-apps/api/event';
+import { listen } from "@tauri-apps/api/event";
 
 // Set up listener
-const unlisten = await listen<FileChangeEvent>('file-changed', (event) => {
-    console.log('File changed:', event.payload);
-    handleFileChange(event.payload);
+const unlisten = await listen<FileChangeEvent>("file-changed", (event) => {
+  console.log("File changed:", event.payload);
+  handleFileChange(event.payload);
 });
 
 // Clean up
@@ -125,10 +140,10 @@ unlisten();
 
 ### Available Events
 
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `file-changed` | `FileChangeEvent` | File system changes detected |
-| `settings-updated` | `UserSettings` | Settings changed |
+| Event              | Payload           | Description                  |
+| ------------------ | ----------------- | ---------------------------- |
+| `file-changed`     | `FileChangeEvent` | File system changes detected |
+| `settings-updated` | `UserSettings`    | Settings changed             |
 
 ## Type Definitions
 
@@ -157,18 +172,18 @@ pub struct FileOperationResult {
 
 ```typescript
 export interface MarkdownFile {
-    id: string;
-    name: string;
-    path: string;
-    size: number;
-    last_modified: number;
-    extension: string;
+  id: string;
+  name: string;
+  path: string;
+  size: number;
+  last_modified: number;
+  extension: string;
 }
 
 export interface FileOperationResult {
-    success: boolean;
-    path?: string;
-    message?: string;
+  success: boolean;
+  path?: string;
+  message?: string;
 }
 ```
 
@@ -180,7 +195,7 @@ The file watcher uses the `notify` crate with debouncing:
 // Start watching
 #[tauri::command]
 pub async fn start_file_watcher(
-    app: AppHandle, 
+    app: AppHandle,
     folder_path: String
 ) -> Result<String, String> {
     // Create debounced watcher (500ms)
@@ -190,10 +205,10 @@ pub async fn start_file_watcher(
             // Handle file events
         }
     )?;
-    
+
     // Watch directory (non-recursive)
     debouncer.watcher().watch(
-        Path::new(&folder_path), 
+        Path::new(&folder_path),
         RecursiveMode::NonRecursive
     )?;
 }
@@ -226,7 +241,7 @@ tauri-plugin-store = "2.0.0"
 
 // Usage
 let store = StoreBuilder::new(
-    &app, 
+    &app,
     PathBuf::from("settings.json")
 ).build()?;
 
@@ -349,7 +364,7 @@ Provide user-friendly error messages:
 // ✅ Good
 Err("File is too large. Maximum size is 10MB".to_string())
 
-// ❌ Bad  
+// ❌ Bad
 Err(format!("{:?}", e))
 ```
 
@@ -377,7 +392,7 @@ Test commands directly from the DevTools console:
 
 ```javascript
 // In browser console
-await window.__TAURI__.invoke('ping')
+await window.__TAURI__.invoke("ping");
 // Returns: "pong"
 ```
 
@@ -385,15 +400,18 @@ await window.__TAURI__.invoke('ping')
 
 ### Common Issues
 
-1. **"window.__TAURI__ is not defined"**
+1. **"window.**TAURI** is not defined"**
+
    - Running with `npm run dev` instead of `npm run tauri:dev`
    - Tauri APIs only available in Tauri context
 
 2. **"Command not found"**
+
    - Command not added to `invoke_handler` in main.rs
    - Typo in command name
 
 3. **"Failed to serialize/deserialize"**
+
    - Mismatch between Rust and TypeScript types
    - Missing `Serialize`/`Deserialize` derives
 

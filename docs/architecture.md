@@ -56,10 +56,7 @@ GTD Space uses a **custom hooks pattern** for state management instead of Redux 
 
 ```typescript
 // Each domain has its own hook
-const { 
-  state, 
-  actions 
-} = useFileManager();
+const { state, actions } = useFileManager();
 
 // Hooks compose other hooks
 const useTabManager = () => {
@@ -72,11 +69,13 @@ const useTabManager = () => {
 ### Hook Architecture
 
 1. **Domain Hooks** - Handle specific features
+
    - `useFileManager` - File operations
    - `useTabManager` - Tab state and persistence
    - `useSettings` - User preferences
 
 2. **Infrastructure Hooks** - Provide services
+
    - `useErrorHandler` - Error handling wrapper
    - `useModalManager` - Modal state control
    - `useKeyboardShortcuts` - Hotkey registration
@@ -84,6 +83,16 @@ const useTabManager = () => {
 3. **Integration Hooks** - Connect to backend
    - `useFileWatcher` - File system monitoring
    - `useGlobalSearch` - Search functionality
+   - `useGTDSpace` - GTD space lifecycle (default path, init, project/actions)
+
+### Default GTD Space Lifecycle
+
+On startup (`App.tsx`):
+
+- Derive default path via `get_default_gtd_space_path`
+- If not a valid space, call `initialize_gtd_space`
+- Seed examples via `seed_example_gtd_content` if no projects exist
+- Load the space and projects automatically (no manual folder selection)
 
 ## Backend Architecture
 
@@ -119,14 +128,16 @@ src-tauri/src/commands/
 Both frontend and backend use Result types:
 
 **Frontend:**
+
 ```typescript
 const result = await withErrorHandling(
-  async () => await invoke('command'),
-  'User-friendly message'
+  async () => await invoke("command"),
+  "User-friendly message"
 );
 ```
 
 **Backend:**
+
 ```rust
 match operation() {
     Ok(value) => Ok(value),
@@ -168,8 +179,8 @@ match operation() {
 
 ```typescript
 // Type-safe invoke
-const files = await invoke<MarkdownFile[]>('list_markdown_files', {
-  path: '/folder/path'
+const files = await invoke<MarkdownFile[]>("list_markdown_files", {
+  path: "/folder/path",
 });
 ```
 
@@ -186,7 +197,7 @@ app.emit("file-changed", FileChangeEvent {
 
 ```typescript
 // Listen for events
-listen<FileChangeEvent>('file-changed', (event) => {
+listen<FileChangeEvent>("file-changed", (event) => {
   handleFileChange(event.payload);
 });
 ```
@@ -194,10 +205,12 @@ listen<FileChangeEvent>('file-changed', (event) => {
 ## Performance Considerations
 
 1. **Lazy Loading**
+
    - Modals loaded on demand
    - Code splitting for large components
 
 2. **Debouncing**
+
    - Auto-save: 2 seconds
    - File watcher: 500ms
    - Search: 300ms
@@ -210,11 +223,13 @@ listen<FileChangeEvent>('file-changed', (event) => {
 ## Security
 
 1. **File System Access**
+
    - All paths validated in Rust
    - No arbitrary file access
    - Scoped to user-selected folders
 
 2. **Content Security**
+
    - No eval() in renderer
    - Sanitized markdown rendering
    - CSP headers in production
@@ -227,16 +242,19 @@ listen<FileChangeEvent>('file-changed', (event) => {
 ## Testing Strategy
 
 ### Unit Tests (Not yet implemented)
+
 - Hook logic isolation
 - Component rendering
 - Rust command logic
 
 ### Integration Tests (Planned)
+
 - File operations flow
 - Tab management
 - Search functionality
 
 ### E2E Tests (Future)
+
 - Full user workflows
 - Cross-platform testing
 - Performance benchmarks

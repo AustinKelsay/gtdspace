@@ -4,329 +4,193 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**GTD Space** is a GTD-first productivity system with integrated markdown editing, built with Tauri, React, and TypeScript. The entire application is designed around the Getting Things Done methodology as the primary experience, not an add-on feature.
+GTD Space is a GTD-first productivity system with integrated markdown editing, built with Tauri, React, and TypeScript. The application is architected around Getting Things Done methodology as the primary experience.
 
-**Key Technologies:**
-- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui
-- **Editor**: BlockNote v0.35 for WYSIWYG editing with custom single/multiselect blocks
-- **State Management**: Custom hooks pattern (no Redux/MobX)
-- **Backend**: Rust, Tauri 2.x with fs, dialog, and store plugins
-- **File Watching**: notify crate with 500ms debounce for real-time external change detection
-- **Toast Notifications**: shadcn/ui toast system (not sonner)
-- **DnD**: @dnd-kit for tab reordering and file operations
+**Tech Stack:**
+- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui components
+- **Editor**: BlockNote v0.35 with custom single/multiselect GTD blocks
+- **Backend**: Rust with Tauri 2.x (fs, dialog, store plugins)
+- **State**: Custom hooks pattern (no Redux/MobX)
+- **File Watching**: notify crate with 500ms debounce
+- **DnD**: @dnd-kit for tab reordering
 
 ## Development Commands
 
 ```bash
-# Start development server (runs both frontend and Tauri backend)
-npm run tauri:dev
+# Primary development workflow
+npm run tauri:dev      # Full dev environment (frontend + backend)
+npm run tauri:build    # Production build
 
-# Build for production
-npm run tauri:build
+# Code quality
+npm run type-check     # TypeScript validation
+npm run lint           # ESLint check
+npm run lint:fix       # Auto-fix linting issues
 
-# Type checking
-npm run type-check
+# Rust backend (from src-tauri/)
+cd src-tauri && cargo check   # Fast compilation check
+cd src-tauri && cargo build   # Full compilation
 
-# Linting
-npm run lint
-npm run lint:fix
-
-# Frontend-only development (file operations won't work)
+# Frontend-only (limited - no file operations)
 npm run dev
-
-# Rust compilation check (run from src-tauri directory)
-cargo check
-cargo build
 ```
 
-## Architecture Overview
+## Architecture: Frontend-Backend Communication
 
-### Frontend-Backend Communication Pattern
-
-The app uses Tauri's invoke system for IPC. All backend operations follow this pattern:
+All backend operations use Tauri's IPC with consistent error handling:
 
 ```typescript
-import { invoke } from '@tauri-apps/api/core';
-import { withErrorHandling } from '@/hooks/useErrorHandler';
+import { invoke } from "@tauri-apps/api/core";
+import { withErrorHandling } from "@/hooks/useErrorHandler";
 
-// Always wrap invokes with error handling
+// Pattern for all backend calls
 const result = await withErrorHandling(
-  async () => await invoke<MarkdownFile[]>('list_markdown_files', { path }),
-  'Failed to list files',
-  'gtd' // optional category for error handling
+  async () => await invoke<ReturnType>("command_name", { param }),
+  "User-friendly error message",
+  "category" // optional
 );
 ```
 
-### Tauri Commands (`src-tauri/src/commands/mod.rs`)
+**Parameter Convention:**
+- Frontend: `camelCase` (e.g., `spacePath`)
+- Backend: `snake_case` (e.g., `space_path`)
+- Tauri auto-converts during IPC
 
-**File Operations:**
-- `select_folder` - Native folder selection dialog
-- `list_markdown_files` - Get markdown files in directory
-- `read_file` - Read file contents
-- `save_file` - Save content to file
-- `create_file` - Create new markdown file with GTD templates
-- `rename_file` - Rename existing file
-- `delete_file` - Delete file
-- `copy_file` - Copy file to new location
-- `move_file` - Move file to new location
+## Architecture: State Management via Custom Hooks
 
-**Search:**
-- `search_files` - Full-text search with filters
-- `replace_in_file` - Find and replace in files
+Each hook in `src/hooks/` encapsulates specific domain logic:
 
-**File Watching:**
-- `start_file_watcher` - Monitor directory for changes
-- `stop_file_watcher` - Stop monitoring
+- **`useGTDSpace`** - GTD workspace, projects, actions, initialization
+- **`useTabManager`** - Multi-file tabs, auto-save (2s debounce), persistence
+- **`useFileWatcher`** - External change detection, conflict resolution
+- **`useFileManager`** - File operations, folder state
+- **`useSettings`** - User preferences via Tauri store
+- **`useErrorHandler`** - Centralized error handling with toasts
+- **`useKeyboardShortcuts`** - Platform-aware keyboard shortcuts
+- **`useSingleSelectInsertion`** / **`useMultiSelectInsertion`** - GTD field insertion
 
-**Settings:**
-- `load_settings` - Load user preferences
-- `save_settings` - Save user preferences
+## Architecture: GTD Implementation
 
-**System:**
-- `ping` - Test communication
-- `get_app_version` - Get app version
-- `check_permissions` - Check file system access
-- `check_directory_exists` - Verify directory existence
+### Default Behavior
+1. On startup, derives default path: `~/GTD Space` (platform-specific)
+2. Auto-initializes if not a GTD space (creates folders, seeds examples)
+3. Loads workspace automatically (no folder dialog)
 
-**GTD Operations:**
-- `initialize_gtd_space` - Create GTD directory structure
-- `create_gtd_project` - Create new project with metadata and status
-- `create_gtd_action` - Create new action within project with focus date
-- `list_gtd_projects` - List all projects with action counts
-
-### State Management Architecture
-
-Each feature has a dedicated hook in `src/hooks/` that encapsulates all business logic:
-
-- **`useFileManager`** - File operations and folder state
-- **`useTabManager`** - Multi-file tab management with auto-save (2s debounce)
-- **`useFileWatcher`** - External file change detection
-- **`useSettings`** - User preferences with Tauri store persistence
-- **`useModalManager`** - Centralized modal control
-- **`useErrorHandler`** - Error handling with toasts
-- **`useKeyboardShortcuts`** - Platform-aware shortcuts
-- **`useGTDSpace`** - GTD methodology integration
-- **`useToast`** - Toast notifications wrapper
-- **`useMultiSelectInsertion`** - MultiSelect field insertion via keyboard shortcuts
-- **`useSingleSelectInsertion`** - SingleSelect field insertion via keyboard shortcuts
-
-### Component Organization
-
-The main app flow is:
-1. **App.tsx** - Main orchestrator that connects all hooks
-2. **GTDWorkspaceSidebar** - GTD project list with expandable actions
-3. **TabManager** - Tab bar UI with drag-and-drop reordering
-4. **BlockNoteEditor** - WYSIWYG markdown editor with custom blocks
-5. **SingleSelectBlock/MultiSelectBlock** - Custom BlockNote blocks for GTD fields
-
-## Select Fields Implementation
-
-### Single Select Fields (Status, Effort)
-Used for fields where only one value should be selected.
-
-**Markdown Syntax:**
-```markdown
-[!singleselect:type:value]
-```
-
-Examples:
-- `[!singleselect:status:in-progress]`
-- `[!singleselect:effort:medium]`
-- `[!singleselect:project-status:waiting]`
-
-### Multi Select Fields (Tags, Contexts)
-Used for fields where multiple values can be selected.
-
-**Markdown Syntax:**
-```markdown
-[!multiselect:type:value1,value2]
-```
-
-### Field Types and Values
-
-**Action Status (Single Select):**
-- in-progress, waiting, complete
-
-**Effort Estimates (Single Select):**
-- small (<30min), medium (30-90min), large (>90min), extra-large (>3hrs)
-
-**Project Status (Single Select):**
-- in-progress, waiting, completed
-
-### Keyboard Shortcuts for Insertion
-**Single Select:**
-- **Cmd+Alt+S** (Mac) / **Ctrl+Alt+S** (Windows/Linux): Insert Status field
-- **Cmd+Alt+E** (Mac) / **Ctrl+Alt+E** (Windows/Linux): Insert Effort field
-- **Cmd+Alt+P** (Mac) / **Ctrl+Alt+P** (Windows/Linux): Insert Project Status field
-
-**Multi Select:**
-- **Cmd+Shift+S** (Mac) / **Ctrl+Shift+S** (Windows/Linux): Insert Status field
-- **Cmd+Shift+E** (Mac) / **Ctrl+Shift+E** (Windows/Linux): Insert Effort field
-- **Cmd+Shift+P** (Mac) / **Ctrl+Shift+P** (Windows/Linux): Insert Project Status field
-
-### Implementation Details
-- Custom BlockNote blocks in `src/components/editor/blocks/`
-- Markdown preprocessing converts markers to BlockNote blocks
-- Theme-aware styling with Tailwind classes
-- Legacy HTML format support for backward compatibility
-
-## BlockNote Editor Configuration
-
-- Version 0.35 with custom schema
-- Custom single/multiselect blocks for GTD fields
-- Theme detection via DOM class mutation observer
-- Markdown preprocessing for custom syntax in `src/utils/blocknote-preprocessing.ts`
-- Code syntax highlighting via @blocknote/code-block
-- Custom theme integration via `blocknote-theme.css`
-
-## Important Constraints
-
-### File Size and Tab Limits
-- Maximum file size: 10MB
-- Maximum open tabs: 10
-- Auto-save delay: 2 seconds
-- File watcher debounce: 500ms
-
-### TypeScript Configuration
-- **Strict mode is disabled** - be careful with null checks
-- Path alias `@/` maps to `src/`
-- Unused variable checks disabled for underscore-prefixed vars
-
-### Vite Configuration
-- Development server port: 1420 (strict)
-- Path aliases configured for `@/`, `@/components`, `@/hooks`, `@/lib`, `@/types`
-- Build targets: Chrome 105 (Windows), Safari 13 (others)
-- Source maps enabled in debug builds
-
-### ESLint Rules
-- React Refresh plugin for component exports
-- TypeScript unused vars allowed with `_` prefix
-- React hooks exhaustive deps set to warn
-- Console statements allowed
-
-### Platform Considerations
-- File paths handled by Rust backend (cross-platform)
-- Settings stored in platform-specific app data directory
-- Keyboard shortcuts adapt to platform (Cmd on macOS, Ctrl elsewhere)
-- Native file dialogs via tauri-plugin-dialog
-
-### GTD Space Structure
-When initialized, creates this directory structure:
+### Directory Structure
 ```
 gtd-space/
-├── .gtd.json           # Space metadata (future)
-├── Projects/           # Active projects (folders with README.md + action files)
-├── Habits/            # Daily/weekly routines
-├── Someday Maybe/     # Future ideas
-└── Cabinet/           # Reference materials
+├── Projects/          # Active projects (folders with README.md + actions)
+├── Habits/           # Recurring routines
+├── Someday Maybe/    # Future ideas
+└── Cabinet/          # Reference materials
 ```
 
-### Tauri Security
-- Only whitelisted commands exposed to frontend
-- File operations restricted to user-selected directories
-- No arbitrary command execution
-- All file paths validated in Rust backend
-
-## GTD-Specific Implementation Details
-
-### Parameter Naming Convention
-- **Rust backend**: Uses `snake_case` for all parameters
-- **TypeScript frontend**: Uses `camelCase` for parameters
-- **Tauri automatically converts** camelCase to snake_case when invoking Rust commands
-
-Example:
+### Data Models
 ```typescript
-// Frontend (camelCase)
-await invoke('create_gtd_project', {
-  spacePath,     // Becomes space_path in Rust
-  projectName,   // Becomes project_name in Rust
-  description,
-  dueDate,       // Becomes due_date in Rust
-  status,        // Project status selection
-});
-```
-
-### Data Structure Naming
-TypeScript interfaces use `snake_case` properties to match Rust serialization:
-```typescript
+// Projects: Folders with README.md containing metadata
 interface GTDProject {
   name: string;
   description: string;
-  due_date?: string | null;    // snake_case
-  status: GTDProjectStatus[];  // Array for compatibility
-  path: string;
-  created_date: string;         // snake_case
-  action_count?: number;        // snake_case
+  due_date?: string | null;     // snake_case for Rust compatibility
+  status: GTDProjectStatus[];   // Array for compatibility
+  created_date: string;
+  action_count?: number;
 }
 
+// Actions: Individual .md files within project folders
 interface GTDAction {
   name: string;
-  status: GTDActionStatus;
-  focus_date?: string | null;   // When to work on (date + time)
+  status: GTDActionStatus;      // in-progress | waiting | complete
+  focus_date?: string | null;   // When to work on (datetime)
   due_date?: string | null;     // Deadline (date only)
-  effort: string;
+  effort: string;               // small | medium | large | extra-large
 }
 ```
 
-### GTD State Management
-The `useGTDSpace` hook maintains:
-- `gtdSpace` state with `root_path` tracking
-- Smart subdirectory detection (won't re-prompt for initialization)
-- Toast notifications for all operations
-- Deduplication logic to prevent double notifications in React StrictMode
+## Architecture: BlockNote Editor Customizations
 
-## Critical Architecture Patterns
+### Custom GTD Blocks
 
-### Event-Driven File Watcher
-The file watcher runs in the Rust backend and emits events to the frontend via Tauri's event system. The frontend responds in `App.tsx` to update file lists and handle external changes to open tabs.
-
-### Tab State Persistence
-Tab state is persisted to localStorage with file metadata, content, and unsaved changes. Recovery happens automatically on app launch.
-
-### Multi-Level Error Handling
-- Rust backend returns `Result<T, String>` for all commands
-- Frontend wraps all invokes with `withErrorHandling`
-- User-friendly error messages displayed via toast system
-- Errors are categorized for better debugging
-
-### File Operations Pattern
-All file operations go through `useFileManager`:
-```typescript
-await handleFileOperation({
-  type: 'create' | 'rename' | 'delete',
-  name: 'filename',
-  path: 'optional/path'
-});
+**Single Select Fields** (Status, Effort):
+```markdown
+[!singleselect:status:in-progress]
+[!singleselect:effort:medium]
+[!singleselect:project-status:waiting]
 ```
 
-## Recent Changes (January 2025)
+**Multi Select Fields** (Tags, legacy support):
+```markdown
+[!multiselect:tags:urgent,important]
+```
 
-### Single Select Fields
-- Status and Effort fields now use single select instead of multiselect
-- Projects can have initial status set during creation
-- Actions use single select for cleaner UI
+### Content Processing Pipeline
+1. **Load**: Markdown → `preprocessMarkdownForBlockNote()` → `postProcessBlockNoteBlocks()` → Interactive blocks
+2. **Save**: BlockNote blocks → `toExternalHTML()` → Markdown with field markers
+3. **Theme**: DOM class mutation observer for light/dark switching
 
-### GTD Action Enhancements
-- Actions support Focus Date (when to work on) with date and time
-- Actions support Due Date (deadline) as date only
-- Status options: In Progress (default), Waiting, Complete
-- Removed "Not Started" status - actions default to "In Progress"
+### Keyboard Shortcuts
+- **Single Select**: `Cmd/Ctrl+Alt+S` (Status), `+E` (Effort), `+P` (Project Status)
+- **Multi Select**: `Cmd/Ctrl+Shift+S/E/P` (legacy)
 
-### GTD Project Enhancements
-- Projects support status selection during creation
-- Status options: in-progress (default), waiting, completed
-- Removed categories field - simplified to just status
+## Critical Patterns & Constraints
 
-### GTD-First Architecture
-- GTD is now the default and only mode
-- Automatic GTD initialization prompts for non-GTD folders
-- Sidebar shows expandable project list with inline actions
-- Floating action button for quick project/action creation
-- Toast notifications for all GTD operations with deduplication
+### File Operations
+- All operations go through `useFileManager` hook
+- Max file size: 10MB
+- Max open tabs: 10
+- Auto-save: 2s debounce
+- File watcher: 500ms debounce
 
-### Key Fixes
-- Parameter naming convention clarified (Rust: snake_case, TypeScript: camelCase)
-- Smart subdirectory detection prevents re-initialization prompts
-- Root path tracking maintains GTD context across navigation
-- Actions load dynamically when projects are expanded in sidebar
-- Proper parsing of single/multiselect syntax in project README files
+### Event-Driven Updates
+- Rust backend emits file change events
+- Frontend receives via Tauri event system
+- `App.tsx` orchestrates responses
+- Tab conflicts trigger user prompts
+
+### TypeScript Configuration
+- **Strict mode disabled** - careful with null checks
+- Path alias `@/` → `src/`
+- Unused vars allowed with `_` prefix
+
+### Vite Configuration
+- Dev port: 1420 (strict)
+- Build targets: Chrome 105 (Windows), Safari 13 (others)
+- Source maps in debug builds
+
+### Security
+- Whitelisted Tauri commands only
+- File ops restricted to user-selected directories
+- Path validation in Rust backend
+
+## Tauri Backend Commands
+
+**File Operations:**
+`read_file`, `save_file`, `create_file`, `delete_file`, `rename_file`, `copy_file`, `move_file`, `list_markdown_files`
+
+**GTD Operations:**
+`initialize_gtd_space`, `create_gtd_project`, `create_gtd_action`, `list_gtd_projects`, `seed_example_gtd_content`
+
+**System:**
+`select_folder`, `check_permissions`, `get_app_version`, `get_default_gtd_space_path`
+
+**File Watching:**
+`start_file_watcher`, `stop_file_watcher`
+
+**Search:**
+`search_files`, `replace_in_file`
+
+**Settings:**
+`load_settings`, `save_settings`
+
+## Recent Architecture Decisions (Jan 2025)
+
+- **GTD-First**: GTD is the default mode, not optional
+- **Single Select**: Status/Effort fields use single select for cleaner UX
+- **Smart Detection**: Subdirectory detection prevents re-initialization
+- **IPC Fix**: Rust commands are synchronous for Tauri 2.0 compatibility
+- **Recursive Scanning**: `list_markdown_files` scans project subdirectories
+- **Focus vs Due Dates**: Actions support both work timing and deadlines
+- **Toast Deduplication**: Prevents double notifications in React StrictMode
+
+## Testing Status
+
+**No test suite exists.** Manual testing required for all changes.

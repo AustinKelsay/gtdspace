@@ -75,13 +75,43 @@ export const SingleSelectBlock = createReactBlockSpec(
       const customOptions = customOptionsJson ? JSON.parse(customOptionsJson) : [];
       
       const handleChange = (newValue: string) => {
-        props.editor.updateBlock(block, {
-          type: 'singleselect',
-          props: {
-            ...block.props,
-            value: newValue,
-          },
-        });
+        try {
+          // Check if the block still exists in the document
+          const blockStillExists = props.editor.document.some((b: any) => b.id === block.id);
+          
+          if (!blockStillExists) {
+            console.warn('Block no longer exists in document, skipping update');
+            return;
+          }
+          
+          props.editor.updateBlock(block, {
+            type: 'singleselect',
+            props: {
+              ...block.props,
+              value: newValue,
+            },
+          });
+        } catch (error) {
+          console.error('Error updating single select block:', error);
+          // Try to force a re-render by updating through the document
+          try {
+            const blocks = props.editor.document.map((b: any) => {
+              if (b.id === block.id) {
+                return {
+                  ...b,
+                  props: {
+                    ...b.props,
+                    value: newValue,
+                  },
+                };
+              }
+              return b;
+            });
+            props.editor.replaceBlocks(props.editor.document, blocks);
+          } catch (fallbackError) {
+            console.error('Fallback update also failed:', fallbackError);
+          }
+        }
       };
 
       // Get options based on type

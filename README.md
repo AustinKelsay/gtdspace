@@ -10,6 +10,7 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 ## Features
 
 ### GTD-First Design
+
 - **Getting Things Done at the Core** - Not just an editor with GTD features, but a GTD system with editing capabilities
 - **Automatic GTD Space Detection** - Recognizes and adapts to GTD workspace structure
 - **Project & Action Management** - Full GTD workflow with projects, actions, and organization
@@ -17,6 +18,7 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 - **Quick Actions** - Floating action button for rapid project/action creation
 
 ### Productivity Features
+
 - **WYSIWYG Markdown Editing** - BlockNote editor with rich text formatting
 - **Multi-Tab Interface** - Work with multiple files simultaneously
 - **Auto-Save** - Never lose your work (2s debounce)
@@ -27,6 +29,7 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 - **Interactive MultiSelect Fields** - Notion-like dropdowns for Status and Effort that can't be accidentally overwritten
 
 ### Technical Features
+
 - **Code Syntax Highlighting** - Supports 100+ languages with Shiki
 - **Theme Support** - Light/dark/auto themes
 - **Global Search** - Find text across all markdown files
@@ -50,7 +53,7 @@ cd gtdspace
 # Install dependencies
 npm install
 
-# Run development server
+# Run development server (auto-creates your GTD Space at ~/GTD Space on first run)
 npm run tauri:dev
 
 # Build for production
@@ -84,10 +87,12 @@ npm run lint:fix     # Auto-fix linting issues
 GTD Space is designed from the ground up around David Allen's Getting Things Done methodology:
 
 ### GTD Structure
+
 - **Projects** - Outcome-focused goals with multiple actions
   - Each project is a folder with README.md for metadata
   - Actions are individual markdown files within project folders
   - See all actions directly in the sidebar
+  - Example content is created on first run to help you get started
 - **Actions** - Concrete next steps within projects
   - Interactive Status tracking (Not Started, In Progress, Complete) via multiselect dropdowns
   - Interactive Effort estimates (Small <30min, Medium 30-90min, Large >90min) via multiselect dropdowns
@@ -97,27 +102,29 @@ GTD Space is designed from the ground up around David Allen's Getting Things Don
 - **Cabinet** - Reference materials (coming soon)
 
 ### Getting Started with GTD
-1. Select any folder to start
-2. GTD Space automatically prompts to initialize GTD structure
-3. Create projects with clear outcomes and optional due dates
+
+On first launch, GTD Space automatically initializes your workspace at `~/GTD Space` (macOS/Linux) or `%USERPROFILE%\\GTD Space` (Windows). It also seeds example projects and actions to demonstrate statuses, focus dates, due dates, and effort fields.
+
+1. The default space is created or loaded automatically
+2. Explore the seeded projects in `Projects/`
+3. Create your own projects with clear outcomes and optional due dates
 4. Add actions to projects - they appear instantly in the sidebar
-5. Click any action to open and edit it
-6. Track progress with status updates
+5. Track progress with status updates
 
 See [GTD Implementation](docs/GTD_IMPLEMENTATION.md) for detailed usage.
 
 ## Keyboard Shortcuts
 
-| Action | Shortcut |
-|--------|----------|
-| Save | `Ctrl/Cmd+S` |
-| New File | `Ctrl/Cmd+N` |
-| Open Folder | `Ctrl/Cmd+O` |
-| Close Tab | `Ctrl/Cmd+W` |
-| Search | `Ctrl/Cmd+F` |
-| Settings | `Ctrl/Cmd+,` |
-| Insert Status Field | `Ctrl/Cmd+Shift+S` |
-| Insert Effort Field | `Ctrl/Cmd+Shift+E` |
+| Action                | Shortcut           |
+| --------------------- | ------------------ |
+| Save                  | `Ctrl/Cmd+S`       |
+| New File              | `Ctrl/Cmd+N`       |
+| Open Folder           | `Ctrl/Cmd+O`       |
+| Close Tab             | `Ctrl/Cmd+W`       |
+| Search                | `Ctrl/Cmd+F`       |
+| Settings              | `Ctrl/Cmd+,`       |
+| Insert Status Field   | `Ctrl/Cmd+Shift+S` |
+| Insert Effort Field   | `Ctrl/Cmd+Shift+E` |
 | Insert Project Status | `Ctrl/Cmd+Shift+P` |
 
 ## Contributing

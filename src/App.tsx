@@ -71,6 +71,21 @@ export const App: React.FC = () => {
     reorderTabs,
   } = useTabManager();
 
+
+  // Fallback to last tab if activeTab is not set for any reason
+  const displayedTab = React.useMemo(() => {
+    return activeTab || (tabState.openTabs.length > 0 ? tabState.openTabs[tabState.openTabs.length - 1] : null);
+  }, [activeTab, tabState.openTabs]);
+
+  // Handle auto-activation of last tab when no active tab exists
+  React.useEffect(() => {
+    if (!activeTab && tabState.openTabs.length > 0 && !tabState.activeTabId) {
+      const lastTab = tabState.openTabs[tabState.openTabs.length - 1];
+      console.log('No active tab, auto-activating last opened tab:', lastTab.id);
+      activateTab(lastTab.id);
+    }
+  }, [activeTab, tabState.openTabs, tabState.activeTabId, activateTab]);
+
   // === FILE WATCHER ===
 
   const {
@@ -135,8 +150,22 @@ export const App: React.FC = () => {
    * Handle file selection from sidebar - opens in new tab
    */
   const handleFileSelect = async (file: MarkdownFile) => {
+    // Check if file path exists and is valid
+    if (!file.path) {
+      console.error('File path is undefined or empty');
+      return;
+    }
+    
     try {
-      await openTab(file);
+      const tabId = await openTab(file);
+      if (tabId) {
+        activateTab(tabId);
+        // Focus the editor region shortly after activation
+        setTimeout(() => {
+          const editorRoot = document.querySelector('[data-editor-root]') as HTMLElement | null;
+          editorRoot?.focus();
+        }, 0);
+      }
     } catch (error) {
       console.error('Failed to open file in tab:', error);
     }
@@ -146,14 +175,17 @@ export const App: React.FC = () => {
   /**
    * Handle folder loading - start file watcher
    */
-  const handleFolderLoad = async (folderPath: string) => {
-    try {
-      await loadFolder(folderPath);
-      await startWatching(folderPath);
-    } catch (error) {
-      console.error('Failed to load folder or start watcher:', error);
-    }
-  };
+  const handleFolderLoad = React.useCallback(
+    async (folderPath: string) => {
+      try {
+        await loadFolder(folderPath);
+        await startWatching(folderPath);
+      } catch (error) {
+        console.error('Failed to load folder or start watcher:', error);
+      }
+    },
+    [loadFolder, startWatching]
+  );
 
   /**
    * Handle external file changes from file watcher
@@ -234,7 +266,7 @@ export const App: React.FC = () => {
 
   // === GTD STATE ===
 
-  const { gtdSpace, checkGTDSpace, loadProjects } = useGTDSpace();
+  const { gtdSpace, checkGTDSpace, loadProjects, initializeDefaultSpaceIfNeeded } = useGTDSpace();
   const [currentProject, setCurrentProject] = React.useState<GTDProject | null>(null);
   const [showGTDInit, setShowGTDInit] = React.useState(false);
 
@@ -305,13 +337,26 @@ export const App: React.FC = () => {
         if (!fileState.currentFolder) {
           localStorage.removeItem('gtdspace-tabs');
         }
+
+        // Auto-initialize/load default GTD space via hook
+        try {
+          const spacePath = await initializeDefaultSpaceIfNeeded();
+          if (spacePath) {
+            await handleFolderLoad(spacePath);
+            const isGTDNow = await checkGTDSpace(spacePath);
+            if (isGTDNow) await loadProjects(spacePath);
+            setShowGTDInit(false);
+          }
+        } catch (e) {
+          console.warn('Default GTD space setup skipped (likely non-Tauri env):', e);
+        }
       } catch (error) {
-        console.error('Failed to check permissions:', error);
+        console.error('Failed to initialize app:', error);
       }
     };
 
     init();
-  }, [settings.theme, fileState.currentFolder]);
+  }, [settings.theme, fileState.currentFolder, initializeDefaultSpaceIfNeeded, checkGTDSpace, loadProjects, handleFolderLoad]);
 
   // === RENDER ===
 
@@ -324,7 +369,6 @@ export const App: React.FC = () => {
         // In Tauri 2.x, check if we can invoke commands
         await invoke('ping');
         setIsTauriEnvironment(true);
-        console.log('Tauri environment confirmed: ping successful');
       } catch (error) {
         // If invoke fails, we're not in Tauri environment
         setIsTauriEnvironment(false);
@@ -341,6 +385,7 @@ export const App: React.FC = () => {
     <ErrorBoundary>
       <div className="flex flex-col h-screen bg-background text-foreground">
         <Toaster />
+        
         {/* Header */}
         <AppHeader
           fileName={activeTab?.file.name || ''}
@@ -416,17 +461,24 @@ export const App: React.FC = () => {
 
                 {/* Editor */}
                 <div className="flex-1 flex flex-col min-h-0">
-                  {activeTab ? (
+                  {displayedTab ? (
                     <EnhancedTextEditor
-                      key={activeTab.id}
-                      content={activeTab.content}
-                      onChange={(content) => updateTabContent(activeTab.id, content)}
+                      key={displayedTab.id}
+                      content={displayedTab.content}
+                      onChange={(content) => updateTabContent(displayedTab.id, content)}
                       mode={settings.editor_mode as EditorMode}
                       showLineNumbers={true}
                       readOnly={false}
                       autoFocus={true}
                       className="flex-1"
+                      data-editor-root
                     />
+                  ) : tabState.openTabs.length > 0 ? (
+                    <div className="h-full flex items-center justify-center text-muted-foreground">
+                      <div className="text-center">
+                        <p>Activating tab...</p>
+                      </div>
+                    </div>
                   ) : (
                     <div className="h-full flex items-center justify-center text-muted-foreground">
                       <div className="text-center">

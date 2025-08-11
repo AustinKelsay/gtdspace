@@ -72,12 +72,17 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
 
   // Track if initial content has been loaded
   const initialContentLoaded = useRef(false);
+  // Track if we should ignore the next onChange event
+  const ignoreNextChange = useRef(false);
 
   // Handle initial content - only on mount
   useEffect(() => {
     const loadContent = async () => {
       if (!initialContentLoaded.current && content && editor && content.trim() !== '') {
         try {
+          // Set flag to ignore the onChange event from initial content load
+          ignoreNextChange.current = true;
+          
           // First parse markdown to blocks
           let blocks = await editor.tryParseMarkdownToBlocks(content);
           
@@ -92,6 +97,11 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
           
           editor.replaceBlocks(editor.document, blocks);
           initialContentLoaded.current = true;
+          
+          // Reset the flag after a short delay to ensure the onChange has fired
+          setTimeout(() => {
+            ignoreNextChange.current = false;
+          }, 100);
         } catch (error) {
           console.error('Error parsing initial content:', error);
         }
@@ -105,6 +115,11 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
     if (!editor) return;
 
     const handleUpdate = async () => {
+      // Skip onChange if we're loading initial content
+      if (ignoreNextChange.current) {
+        return;
+      }
+      
       try {
         const markdown = await editor.blocksToMarkdownLossy(editor.document);
         onChange(markdown);

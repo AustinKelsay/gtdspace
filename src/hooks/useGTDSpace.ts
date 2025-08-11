@@ -20,6 +20,7 @@ import {
 export function useGTDSpace() {
   const [gtdSpace, setGTDSpace] = useState<GTDSpace | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const { withErrorHandling } = useErrorHandler();
   const { showSuccess } = useToast();
 
@@ -241,31 +242,23 @@ export function useGTDSpace() {
     async (path: string): Promise<boolean> => {
       const result = await withErrorHandling(
         async () => {
-          // For now, we'll check by trying to list files in the expected directories
-          // In the future, we might want a dedicated command for this
           try {
             const requiredDirs = ['Projects', 'Habits', 'Someday Maybe', 'Cabinet'];
-            
-            // Try to list files in each required directory
             for (const dir of requiredDirs) {
               try {
-                await invoke('list_markdown_files', { 
-                  path: `${path}/${dir}` 
-                });
+                await invoke('list_markdown_files', { path: `${path}/${dir}` });
               } catch {
-                // Directory doesn't exist
                 return false;
               }
             }
-            
-            setGTDSpace({
+            // Preserve existing projects/action counts to avoid flicker
+            setGTDSpace(prev => ({
               root_path: path,
               is_initialized: true,
               isGTDSpace: true,
-              projects: [], // Will be loaded separately
-              total_actions: 0,
-            });
-            
+              projects: prev?.projects || [],
+              total_actions: prev?.total_actions || 0,
+            }));
             return true;
           } catch {
             return false;
@@ -274,7 +267,6 @@ export function useGTDSpace() {
         'Failed to check GTD space',
         'gtd'
       );
-      
       return result || false;
     },
     [withErrorHandling]
@@ -317,13 +309,35 @@ export function useGTDSpace() {
     [withErrorHandling]
   );
 
+  /**
+   * Initialize default GTD space if user preferences allow it (on app startup)
+   * - Derives default path in backend
+   * - Ensures GTD structure exists
+   * - Seeds example content (first run) if enabled
+   * - Returns the path or null if initialization is disabled or failed
+   */
+  const initializeDefaultSpaceIfNeeded = useCallback(async (): Promise<string | null> => {
+    // Allow tests to disable auto init
+    if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') return null;
+
+    setIsInitializing(true);
+    const result = await withErrorHandling(async () => {
+      const path = await invoke<string>('initialize_default_gtd_space');
+      return path;
+    }, 'Failed to initialize default GTD space', 'gtd');
+    setIsInitializing(false);
+    return result;
+  }, [withErrorHandling]);
+
   return {
     gtdSpace,
     isLoading,
+    isInitializing,
     initializeSpace,
     createProject,
     createAction,
     checkGTDSpace,
     loadProjects,
+    initializeDefaultSpaceIfNeeded,
   };
 }

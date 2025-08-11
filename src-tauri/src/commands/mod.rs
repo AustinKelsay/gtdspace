@@ -26,6 +26,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::path::PathBuf;
 use std::fs;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
@@ -94,6 +95,12 @@ pub struct UserSettings {
     pub window_width: Option<u32>,
     /// Window height (for future use)
     pub window_height: Option<u32>,
+    /// Auto-initialize default GTD space on startup (optional; defaults to true)
+    pub auto_initialize: Option<bool>,
+    /// Seed example content on first run (optional; defaults to true)
+    pub seed_example_content: Option<bool>,
+    /// Preferred default GTD space path override
+    pub default_space_path: Option<String>,
 }
 
 /// File change event for external file modifications
@@ -184,7 +191,7 @@ lazy_static::lazy_static! {
 /// console.log(response); // "pong"
 /// ```
 #[tauri::command]
-pub async fn ping() -> Result<String, String> {
+pub fn ping() -> Result<String, String> {
     log::info!("Ping command received");
     Ok("pong".to_string())
 }
@@ -304,45 +311,102 @@ pub async fn select_folder(app: AppHandle) -> Result<String, String> {
     }
 }
 
-/// List all markdown files in the specified directory
+/// Open a folder in the system's file explorer
 ///
-/// Scans the given directory for files with .md and .markdown extensions,
-/// returning metadata for each file found. This is used to populate the
-/// file browser sidebar.
+/// Opens the specified folder path in the native file manager:
+/// - macOS: Finder
+/// - Windows: Explorer
+/// - Linux: Default file manager
 ///
 /// # Arguments
 ///
-/// * `path` - Directory path to scan for markdown files
+/// * `path` - The folder path to open
 ///
 /// # Returns
 ///
-/// Vector of MarkdownFile structs with metadata, or error message
+/// Success message or error
 ///
 /// # Examples
 ///
 /// ```typescript
 /// import { invoke } from '@tauri-apps/api/core';
 /// 
-/// const files = await invoke('list_markdown_files', { 
-///   path: '/Users/username/documents' 
-/// });
-/// console.log(`Found ${files.length} markdown files`);
+/// await invoke('open_folder_in_explorer', { path: '/Users/me/Documents' });
 /// ```
 #[tauri::command]
-pub async fn list_markdown_files(path: String) -> Result<Vec<MarkdownFile>, String> {
-    log::info!("Listing markdown files in: {}", path);
+pub fn open_folder_in_explorer(path: String) -> Result<String, String> {
+    use std::process::Command;
     
-    let dir_path = Path::new(&path);
+    log::info!("Opening folder in explorer: {}", path);
     
-    if !dir_path.exists() {
-        return Err("Directory does not exist".to_string());
+    // Verify the path exists and is a directory
+    let path_buf = PathBuf::from(&path);
+    if !path_buf.exists() {
+        return Err(format!("Path does not exist: {}", path));
+    }
+    if !path_buf.is_dir() {
+        return Err(format!("Path is not a directory: {}", path));
     }
     
-    if !dir_path.is_dir() {
-        return Err("Path is not a directory".to_string());
-    }
+    // Open the folder based on the operating system
+    let result = if cfg!(target_os = "windows") {
+        Command::new("explorer")
+            .arg(&path)
+            .spawn()
+    } else if cfg!(target_os = "macos") {
+        Command::new("open")
+            .arg(&path)
+            .spawn()
+    } else if cfg!(target_os = "linux") {
+        // Try common Linux file managers
+        Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .or_else(|_| Command::new("nautilus").arg(&path).spawn())
+            .or_else(|_| Command::new("dolphin").arg(&path).spawn())
+            .or_else(|_| Command::new("thunar").arg(&path).spawn())
+    } else {
+        return Err("Unsupported operating system".to_string());
+    };
     
-    let mut files = Vec::new();
+    match result {
+        Ok(_) => {
+            log::info!("Successfully opened folder in explorer");
+            Ok(format!("Opened folder: {}", path))
+        }
+        Err(e) => {
+            log::error!("Failed to open folder in explorer: {}", e);
+            Err(format!("Failed to open folder: {}", e))
+        }
+    }
+}
+
+/// Get the default GTD space path for the current user
+///
+/// Returns a platform-appropriate path in the user's home directory:
+/// - macOS/Linux: "$HOME/GTD Space"
+/// - Windows: "%USERPROFILE%\\GTD Space"
+#[tauri::command]
+pub async fn get_default_gtd_space_path() -> Result<String, String> {
+    fn home_dir() -> Option<PathBuf> {
+        if cfg!(target_os = "windows") {
+            std::env::var_os("USERPROFILE").map(PathBuf::from)
+        } else {
+            std::env::var_os("HOME").map(PathBuf::from)
+        }
+    }
+
+    match home_dir() {
+        Some(home) => {
+            let default_path = home.join("GTD Space");
+            Ok(default_path.to_string_lossy().to_string())
+        }
+        None => Err("Unable to determine user home directory".to_string()),
+    }
+}
+
+/// Helper function to recursively scan directories for markdown files
+fn scan_directory_recursive(dir_path: &Path, files: &mut Vec<MarkdownFile>) -> Result<(), String> {
     let markdown_extensions = ["md", "markdown"];
     
     match fs::read_dir(dir_path) {
@@ -351,8 +415,16 @@ pub async fn list_markdown_files(path: String) -> Result<Vec<MarkdownFile>, Stri
                 if let Ok(entry) = entry {
                     let path = entry.path();
                     
-                    // Skip directories and non-markdown files
-                    if path.is_file() {
+                    // Recursively scan subdirectories
+                    if path.is_dir() {
+                        // Skip hidden directories (starting with .)
+                        if let Some(dir_name) = path.file_name() {
+                            if !dir_name.to_string_lossy().starts_with('.') {
+                                scan_directory_recursive(&path, files)?;
+                            }
+                        }
+                    } else if path.is_file() {
+                        // Process markdown files
                         if let Some(extension) = path.extension() {
                             let ext_str = extension.to_string_lossy().to_lowercase();
                             if markdown_extensions.contains(&ext_str.as_str()) {
@@ -388,14 +460,124 @@ pub async fn list_markdown_files(path: String) -> Result<Vec<MarkdownFile>, Stri
                     }
                 }
             }
+            Ok(())
         }
-        Err(e) => return Err(format!("Failed to read directory: {}", e)),
+        Err(e) => Err(format!("Failed to read directory: {}", e)),
+    }
+}
+
+/// List all markdown files in the specified directory and its subdirectories
+///
+/// Recursively scans the given directory for files with .md and .markdown extensions,
+/// returning metadata for each file found. This is used to populate the
+/// file browser sidebar.
+///
+/// # Arguments
+///
+/// * `path` - Directory path to scan for markdown files
+///
+/// # Returns
+///
+/// Vector of MarkdownFile structs with metadata, or error message
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// const files = await invoke('list_markdown_files', { 
+///   path: '/Users/username/documents' 
+/// });
+/// console.log(`Found ${files.length} markdown files`);
+/// ```
+#[tauri::command]
+pub async fn list_markdown_files(path: String) -> Result<Vec<MarkdownFile>, String> {
+    log::info!("Listing markdown files recursively in: {}", path);
+    
+    let dir_path = Path::new(&path);
+    
+    if !dir_path.exists() {
+        return Err("Directory does not exist".to_string());
     }
     
-    // Sort files by name for consistent ordering
-    files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    if !dir_path.is_dir() {
+        return Err("Path is not a directory".to_string());
+    }
+    
+    let mut files = Vec::new();
+    
+    // Recursively scan the directory
+    scan_directory_recursive(dir_path, &mut files)?;
+    
+    // Sort files by path for consistent ordering
+    files.sort_by(|a, b| a.path.to_lowercase().cmp(&b.path.to_lowercase()));
     
     log::info!("Found {} markdown files", files.len());
+    Ok(files)
+}
+
+/// List only project action files (markdown) in a project directory
+/// Skips the project's README.md
+#[tauri::command]
+pub async fn list_project_actions(project_path: String) -> Result<Vec<MarkdownFile>, String> {
+    log::info!("Listing project actions in: {}", project_path);
+
+    let dir_path = Path::new(&project_path);
+    if !dir_path.exists() {
+        return Err("Project directory does not exist".to_string());
+    }
+    if !dir_path.is_dir() {
+        return Err("Path is not a directory".to_string());
+    }
+
+    let mut files = Vec::new();
+    match fs::read_dir(dir_path) {
+        Ok(entries) => {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Some(extension) = path.extension() {
+                            let ext_str = extension.to_string_lossy().to_lowercase();
+                            if (ext_str == "md" || ext_str == "markdown")
+                                && path.file_name() != Some(std::ffi::OsStr::new("README.md"))
+                            {
+                                if let Ok(metadata) = entry.metadata() {
+                                    use std::collections::hash_map::DefaultHasher;
+                                    use std::hash::{Hash, Hasher};
+                                    let mut hasher = DefaultHasher::new();
+                                    path.to_string_lossy().hash(&mut hasher);
+                                    let id = format!("{:x}", hasher.finish());
+
+                                    files.push(MarkdownFile {
+                                        id,
+                                        name: path
+                                            .file_name()
+                                            .unwrap_or_default()
+                                            .to_string_lossy()
+                                            .to_string(),
+                                        path: path.to_string_lossy().to_string(),
+                                        size: metadata.len(),
+                                        last_modified: metadata
+                                            .modified()
+                                            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                                            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                                            .unwrap_or_default()
+                                            .as_secs(),
+                                        extension: ext_str,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => return Err(format!("Failed to read project directory: {}", e)),
+    }
+
+    files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    log::info!("Found {} project actions", files.len());
     Ok(files)
 }
 
@@ -423,17 +605,19 @@ pub async fn list_markdown_files(path: String) -> Result<Vec<MarkdownFile>, Stri
 /// console.log('File content loaded');
 /// ```
 #[tauri::command]
-pub async fn read_file(path: String) -> Result<String, String> {
-    log::info!("Reading file: {}", path);
+pub fn read_file(path: String) -> Result<String, String> {
+    log::info!("read_file command called with path: {}", path);
     
     let file_path = Path::new(&path);
     
     if !file_path.exists() {
-        return Err("File does not exist".to_string());
+        log::error!("File does not exist: {}", path);
+        return Err(format!("File does not exist: {}", path));
     }
     
     if !file_path.is_file() {
-        return Err("Path is not a file".to_string());
+        log::error!("Path is not a file: {}", path);
+        return Err(format!("Path is not a file: {}", path));
     }
     
     match fs::read_to_string(file_path) {
@@ -442,7 +626,7 @@ pub async fn read_file(path: String) -> Result<String, String> {
             Ok(content)
         }
         Err(e) => {
-            log::error!("Failed to read file {}: {}", path, e);
+            log::error!("Failed to read file {}: {:?}", path, e);
             Err(format!("Failed to read file: {}", e))
         }
     }
@@ -473,7 +657,7 @@ pub async fn read_file(path: String) -> Result<String, String> {
 /// });
 /// ```
 #[tauri::command]
-pub async fn save_file(path: String, content: String) -> Result<String, String> {
+pub fn save_file(path: String, content: String) -> Result<String, String> {
     log::info!("Saving file: {} ({} bytes)", path, content.len());
     
     let file_path = Path::new(&path);
@@ -908,6 +1092,9 @@ fn get_default_settings() -> UserSettings {
         editor_mode: "split".to_string(),
         window_width: Some(1200),
         window_height: Some(800),
+        auto_initialize: Some(true),
+        seed_example_content: Some(true),
+        default_space_path: None,
     }
 }
 
@@ -1619,6 +1806,213 @@ Start by creating your first project in the Projects folder!
     };
     
     Ok(message)
+}
+
+/// Seed the GTD space with example projects and actions
+///
+/// This creates a small set of demo projects and actions that showcase
+/// statuses, focus dates, due dates, and effort levels. If the Projects
+/// directory already contains subdirectories, seeding is skipped.
+#[tauri::command]
+pub async fn seed_example_gtd_content(space_path: String) -> Result<String, String> {
+    let projects_root = Path::new(&space_path).join("Projects");
+
+    if !projects_root.exists() {
+        return Err("Projects directory does not exist. Initialize GTD space first.".to_string());
+    }
+
+    // If a seed marker exists, skip seeding
+    let seed_marker = Path::new(&space_path).join(".gtdspace_seeded");
+    if seed_marker.exists() {
+        return Ok("Example content already seeded".to_string());
+    }
+
+    // Detect if any project directories already exist
+    let mut has_any_projects = false;
+    if let Ok(entries) = fs::read_dir(&projects_root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                has_any_projects = true;
+                break;
+            }
+        }
+    }
+
+    if has_any_projects {
+        // Still write a marker so we don't attempt again
+        let _ = fs::write(&seed_marker, "seeded: existing-projects");
+        return Ok("Projects already exist; skipping example seeding".to_string());
+    }
+
+    // Helper to safely create a project and ignore "already exists" errors
+    async fn ensure_project(
+        space_path: &str,
+        name: &str,
+        description: &str,
+        due_date: Option<String>,
+        status: Option<String>,
+    ) -> Result<String, String> {
+        match create_gtd_project(
+            space_path.to_string(),
+            name.to_string(),
+            description.to_string(),
+            due_date,
+            status,
+        )
+        .await
+        {
+            Ok(path) => Ok(path),
+            Err(e) => {
+                // If it already exists, compute the expected path and return it
+                if e.contains("already exists") {
+                    Ok(Path::new(space_path)
+                        .join("Projects")
+                        .join(name)
+                        .to_string_lossy()
+                        .to_string())
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    // Project 1: Getting Started
+    let project1_path = ensure_project(
+        &space_path,
+        "Getting Started",
+        "A quick tour of how GTD Space works.",
+        None,
+        Some("in-progress".to_string()),
+    )
+    .await?;
+
+    // Actions for Project 1
+    let _ = create_gtd_action(
+        project1_path.clone(),
+        "Read the welcome file".to_string(),
+        "In Progress".to_string(),
+        None,
+        Some(chrono::Local::now().to_rfc3339()),
+        "Small".to_string(),
+    )
+    .await;
+
+    let _ = create_gtd_action(
+        project1_path.clone(),
+        "Create your first project".to_string(),
+        "Waiting".to_string(),
+        None,
+        None,
+        "Medium".to_string(),
+    )
+    .await;
+
+    let _ = create_gtd_action(
+        project1_path.clone(),
+        "Mark a task complete".to_string(),
+        "Complete".to_string(),
+        None,
+        None,
+        "Small".to_string(),
+    )
+    .await;
+
+    // Project 2: Demo Project - Website
+    let seven_days = chrono::Local::now() + chrono::Duration::days(7);
+    let two_days = chrono::Local::now() + chrono::Duration::days(2);
+
+    let project2_path = ensure_project(
+        &space_path,
+        "Demo Project - Website",
+        "Build a simple marketing website.",
+        Some(seven_days.format("%Y-%m-%d").to_string()),
+        Some("in-progress".to_string()),
+    )
+    .await?;
+
+    let _ = create_gtd_action(
+        project2_path.clone(),
+        "Design homepage".to_string(),
+        "In Progress".to_string(),
+        Some(seven_days.format("%Y-%m-%d").to_string()),
+        Some(two_days.to_rfc3339()),
+        "Large".to_string(),
+    )
+    .await;
+
+    let _ = create_gtd_action(
+        project2_path.clone(),
+        "Set up repository".to_string(),
+        "Complete".to_string(),
+        None,
+        None,
+        "Small".to_string(),
+    )
+    .await;
+
+    let _ = create_gtd_action(
+        project2_path.clone(),
+        "Plan content".to_string(),
+        "Waiting".to_string(),
+        None,
+        None,
+        "Medium".to_string(),
+    )
+    .await;
+
+    // Project 3: Completed Example
+    let project3_path = ensure_project(
+        &space_path,
+        "Completed Example",
+        "An example of a finished project.",
+        None,
+        Some("completed".to_string()),
+    )
+    .await?;
+
+    let _ = create_gtd_action(
+        project3_path,
+        "Wrap up and archive".to_string(),
+        "Complete".to_string(),
+        None,
+        None,
+        "Small".to_string(),
+    )
+    .await;
+
+    // Write seed marker
+    let _ = fs::write(&seed_marker, format!(
+        "seeded: {}",
+        chrono::Local::now().to_rfc3339()
+    ));
+
+    Ok("Seeded example projects and actions".to_string())
+}
+
+/// Initialize default GTD space and optionally seed example content in one call
+#[tauri::command]
+pub async fn initialize_default_gtd_space(app: AppHandle) -> Result<String, String> {
+    // Load settings to determine behavior
+    let settings = load_settings(app.clone()).await.unwrap_or_else(|_| get_default_settings());
+
+    // Resolve default path (settings override or platform default)
+    let target_path = if let Some(path) = settings.default_space_path.clone() {
+        path
+    } else {
+        get_default_gtd_space_path().await?
+    };
+
+    // Ensure GTD structure
+    let _ = initialize_gtd_space(target_path.clone()).await?;
+
+    // Seed content if enabled
+    if settings.seed_example_content.unwrap_or(true) {
+        let _ = seed_example_gtd_content(target_path.clone()).await;
+    }
+
+    Ok(target_path)
 }
 
 /// Check if a directory exists

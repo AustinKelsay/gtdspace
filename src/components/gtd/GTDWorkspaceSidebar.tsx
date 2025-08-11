@@ -11,9 +11,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { 
-  Briefcase, 
-  Plus, 
+import {
+  Briefcase,
+  Plus,
   Calendar,
   CheckCircle2,
   Circle,
@@ -97,18 +97,18 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   checkGTDSpace: propCheckGTDSpace,
   loadProjects: propLoadProjects
 }) => {
-  const { 
-    gtdSpace: hookGtdSpace, 
+  const {
+    gtdSpace: hookGtdSpace,
     isLoading,
-    checkGTDSpace: hookCheckGTDSpace, 
-    loadProjects: hookLoadProjects
+    checkGTDSpace: hookCheckGTDSpace,
+    loadProjects: hookLoadProjects,
   } = useGTDSpace();
-  
+
   // Use props if provided, otherwise fall back to hook
-  const gtdSpace = propGtdSpace !== undefined ? propGtdSpace : hookGtdSpace;
-  const checkGTDSpace = propCheckGTDSpace || hookCheckGTDSpace;
-  const loadProjects = propLoadProjects || hookLoadProjects;
-  
+  const gtdSpace = propGtdSpace ?? hookGtdSpace;
+  const checkGTDSpace = propCheckGTDSpace ?? hookCheckGTDSpace;
+  const loadProjects = propLoadProjects ?? hookLoadProjects;
+
   const [showProjectDialog, setShowProjectDialog] = React.useState(false);
   const [showActionDialog, setShowActionDialog] = React.useState(false);
   const [selectedProject, setSelectedProject] = React.useState<GTDProject | null>(null);
@@ -121,38 +121,63 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   // Check if current folder is a GTD space
   React.useEffect(() => {
     const checkSpace = async () => {
-      if (currentFolder) {
-        const isGTD = await checkGTDSpace(currentFolder);
+      // Prefer the known GTD root path if available to avoid flicker
+      const pathToCheck = (gtdSpace?.root_path && currentFolder?.startsWith(gtdSpace.root_path))
+        ? gtdSpace.root_path
+        : currentFolder;
+
+      if (pathToCheck) {
+        const isGTD = await checkGTDSpace(pathToCheck);
         if (isGTD) {
-          await loadProjects(currentFolder);
+          const projects = await loadProjects(pathToCheck);
+          console.log('Sidebar: loaded projects count =', projects?.length ?? 0);
         }
       }
     };
     checkSpace();
-  }, [currentFolder, checkGTDSpace, loadProjects]);
+  }, [currentFolder, gtdSpace?.root_path, checkGTDSpace, loadProjects]);
 
 
   const loadProjectActions = React.useCallback(async (projectPath: string) => {
     try {
-      const files = await invoke<MarkdownFile[]>('list_markdown_files', { 
-        path: projectPath 
-      });
-      
-      // Filter out README.md to show only actions
-      const actions = files.filter(file => file.name !== 'README.md');
-      
+      // Use dedicated backend command to list actions only
+      let files: MarkdownFile[] = [];
+      try {
+        files = await invoke<MarkdownFile[]>('list_project_actions', { projectPath });
+      } catch (e) {
+        console.warn('list_project_actions not available, falling back to list_markdown_files', e);
+        const all = await invoke<MarkdownFile[]>('list_markdown_files', { path: projectPath });
+        files = all.filter(f => f.name !== 'README.md');
+      }
+
+      const actions = files;
+      console.log(`Loaded ${actions.length} actions for project:`, projectPath, actions.map(a => a.name));
+
       setProjectActions(prev => ({
         ...prev,
         [projectPath]: actions
       }));
     } catch (error) {
-      console.error('Failed to load project actions:', error);
+      console.error('Failed to load project actions:', projectPath, error);
     }
   }, []);
 
+  // Prefetch actions after projects load so the UI always has items ready
+  React.useEffect(() => {
+    const prefetch = async () => {
+      if (!gtdSpace?.projects || gtdSpace.projects.length === 0) return;
+      for (const project of gtdSpace.projects) {
+        if (!projectActions[project.path]) {
+          await loadProjectActions(project.path);
+        }
+      }
+    };
+    prefetch();
+  }, [gtdSpace?.projects, loadProjectActions, projectActions]);
+
   const toggleProjectExpand = async (project: GTDProject) => {
     const isExpanded = expandedProjects.includes(project.path);
-    
+
     if (isExpanded) {
       setExpandedProjects(prev => prev.filter(path => path !== project.path));
     } else {
@@ -166,8 +191,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
   const handleProjectClick = async (project: GTDProject) => {
     setSelectedProject(project);
-    onFolderSelect(project.path);
-    
+    // Do not switch the global current folder; just open the README and keep GTD root stable
+    // Preload actions for this project to ensure the list is populated
+    if (!projectActions[project.path]) {
+      await loadProjectActions(project.path);
+    }
+
     // Open the project's README.md file
     const readmeFile: MarkdownFile = {
       id: `${project.path}/README.md`,
@@ -177,15 +206,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       last_modified: Date.now(),
       extension: 'md'
     };
-    
+
     onFileSelect(readmeFile);
   };
 
   const handleSectionClick = (section: GTDSection) => {
-    if (gtdSpace?.root_path) {
-      const sectionPath = `${gtdSpace.root_path}/${section.path}`;
-      onFolderSelect(sectionPath);
-    }
+    // Keep current folder stable; we may extend navigation later
   };
 
   const toggleSection = (sectionId: string) => {
@@ -215,10 +241,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   };
 
   const filteredProjects = React.useMemo(() => {
+    console.log('Sidebar: computing filteredProjects from', gtdSpace?.projects?.length ?? 0, 'projects, query=', searchQuery);
     if (!gtdSpace?.projects || !searchQuery) {
       return gtdSpace?.projects || [];
     }
-    
+
     const query = searchQuery.toLowerCase();
     return gtdSpace.projects.filter(project =>
       project.name.toLowerCase().includes(query) ||
@@ -232,6 +259,16 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       onFolderSelect(folderPath);
     } catch (error) {
       console.error('Failed to select folder:', error);
+    }
+  };
+
+  const handleOpenFolderInExplorer = async () => {
+    if (!currentFolder) return;
+    
+    try {
+      await invoke('open_folder_in_explorer', { path: currentFolder });
+    } catch (error) {
+      console.error('Failed to open folder in explorer:', error);
     }
   };
 
@@ -277,11 +314,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           </h3>
           <div className="flex items-center gap-1">
             <Button
-              onClick={handleSelectFolder}
+              onClick={handleOpenFolderInExplorer}
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              title="Change Workspace"
+              title="Open in File Explorer"
             >
               <Folder className="h-4 w-4" />
             </Button>
@@ -296,7 +333,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             </Button>
           </div>
         </div>
-        
+
         {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="flex items-center gap-1">
@@ -340,16 +377,15 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       <ScrollArea className="flex-1">
         <div className="p-2">
           {/* Projects Section - Always show first */}
-          <Collapsible 
+          <Collapsible
             open={expandedSections.includes('projects')}
             onOpenChange={() => toggleSection('projects')}
           >
             <div className="flex items-center justify-between">
               <CollapsibleTrigger className="flex-1">
                 <div className="flex items-center gap-2 p-2 hover:bg-accent rounded-lg transition-colors">
-                  <ChevronRight className={`h-4 w-4 transition-transform ${
-                    expandedSections.includes('projects') ? 'rotate-90' : ''
-                  }`} />
+                  <ChevronRight className={`h-4 w-4 transition-transform ${expandedSections.includes('projects') ? 'rotate-90' : ''
+                    }`} />
                   <Briefcase className="h-4 w-4 text-blue-600" />
                   <span className="font-medium">Projects</span>
                   <Badge variant="secondary" className="ml-2">
@@ -369,7 +405,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                 <Plus className="h-3 w-3" />
               </Button>
             </div>
-            
+
             <CollapsibleContent>
               <div className="pl-6 pr-2 py-1 space-y-1">
                 {isLoading ? (
@@ -383,15 +419,27 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                     const StatusIcon = getProjectStatusIcon(project.status);
                     const isExpanded = expandedProjects.includes(project.path);
                     const actions = projectActions[project.path] || [];
-                    
+
                     return (
                       <div key={project.path}>
                         <div
                           className="group flex items-center justify-between p-2 hover:bg-accent rounded-lg transition-colors"
                         >
-                          <div 
+                          <div
                             className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer"
-                            onClick={() => handleProjectClick(project)}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              console.log('Sidebar: project click ->', project.path);
+                              handleProjectClick(project)
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                console.log('Sidebar: project key activate ->', project.path);
+                                handleProjectClick(project);
+                              }
+                            }}
                           >
                             <Button
                               onClick={(e) => {
@@ -431,7 +479,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                             <Plus className="h-3 w-3" />
                           </Button>
                         </div>
-                        
+
                         {/* Actions list */}
                         {isExpanded && (
                           <div className="ml-8 space-y-1 mt-1">
@@ -442,7 +490,19 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                 <div
                                   key={action.path}
                                   className="flex items-center gap-2 px-2 py-1 hover:bg-accent/50 rounded cursor-pointer text-sm"
-                                  onClick={() => onFileSelect(action)}
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => {
+                                    console.log('Sidebar: action click ->', action.path);
+                                    onFileSelect(action);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault();
+                                      console.log('Sidebar: action key activate ->', action.path);
+                                      onFileSelect(action);
+                                    }
+                                  }}
                                 >
                                   <FileText className="h-3 w-3 text-muted-foreground" />
                                   <span className="truncate">{action.name.replace('.md', '')}</span>
@@ -485,7 +545,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           }
         }}
       />
-      
+
       {selectedProject && (
         <GTDActionDialog
           isOpen={showActionDialog}

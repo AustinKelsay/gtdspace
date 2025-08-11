@@ -90,8 +90,8 @@ gtd-space/
 interface GTDProject {
   name: string;
   description: string;
-  due_date?: string | null;     // snake_case for Rust compatibility
-  status: GTDProjectStatus[];   // Array for compatibility
+  due_date?: string | null;  // snake_case for Rust compatibility
+  status: GTDProjectStatus[]; // Array for compatibility
   created_date: string;
   action_count?: number;
 }
@@ -99,10 +99,10 @@ interface GTDProject {
 // Actions: Individual .md files within project folders
 interface GTDAction {
   name: string;
-  status: GTDActionStatus;      // in-progress | waiting | complete
-  focus_date?: string | null;   // When to work on (datetime)
-  due_date?: string | null;     // Deadline (date only)
-  effort: string;               // small | medium | large | extra-large
+  status: GTDActionStatus;  // in-progress | waiting | complete
+  focus_date?: string | null;  // When to work on (datetime)
+  due_date?: string | null;    // Deadline (date only)
+  effort: string;  // small | medium | large | extra-large
 }
 ```
 

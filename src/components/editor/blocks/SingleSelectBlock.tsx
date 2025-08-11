@@ -75,42 +75,66 @@ export const SingleSelectBlock = createReactBlockSpec(
       const customOptions = customOptionsJson ? JSON.parse(customOptionsJson) : [];
       
       const handleChange = (newValue: string) => {
-        try {
-          // Check if the block still exists in the document
-          const blockStillExists = props.editor.document.some((b: any) => b.id === block.id);
+        // Find and update the block in the current document
+        const findAndUpdateBlock = () => {
+          const blocks = props.editor.document;
           
-          if (!blockStillExists) {
-            console.warn('Block no longer exists in document, skipping update');
-            return;
-          }
-          
-          props.editor.updateBlock(block, {
-            type: 'singleselect',
-            props: {
-              ...block.props,
-              value: newValue,
-            },
-          });
-        } catch (error) {
-          console.error('Error updating single select block:', error);
-          // Try to force a re-render by updating through the document
-          try {
-            const blocks = props.editor.document.map((b: any) => {
-              if (b.id === block.id) {
-                return {
-                  ...b,
-                  props: {
-                    ...b.props,
-                    value: newValue,
-                  },
-                };
+          // Recursively search for the block with matching properties
+          const findBlock = (blocks: any[], targetId: string): any => {
+            for (const block of blocks) {
+              if (block.id === targetId) {
+                return block;
               }
-              return b;
-            });
-            props.editor.replaceBlocks(props.editor.document, blocks);
-          } catch (fallbackError) {
-            console.error('Fallback update also failed:', fallbackError);
+              if (block.children && block.children.length > 0) {
+                const found = findBlock(block.children, targetId);
+                if (found) return found;
+              }
+            }
+            return null;
+          };
+          
+          // Try to find the block by ID first
+          let targetBlock = findBlock(blocks, block.id);
+          
+          // If not found by ID, try to find by content and type
+          if (!targetBlock) {
+            const findByContent = (blocks: any[]): any => {
+              for (const b of blocks) {
+                if (b.type === 'singleselect' && 
+                    b.props?.type === block.props.type &&
+                    b.props?.label === block.props.label) {
+                  return b;
+                }
+                if (b.children && b.children.length > 0) {
+                  const found = findByContent(b.children);
+                  if (found) return found;
+                }
+              }
+              return null;
+            };
+            targetBlock = findByContent(blocks);
           }
+          
+          if (targetBlock) {
+            try {
+              props.editor.updateBlock(targetBlock, {
+                props: {
+                  ...targetBlock.props,
+                  value: newValue,
+                },
+              });
+              return true;
+            } catch (e) {
+              console.error('Failed to update found block:', e);
+              return false;
+            }
+          }
+          return false;
+        };
+        
+        // Try the update
+        if (!findAndUpdateBlock()) {
+          console.warn('Could not find block to update, value may not persist');
         }
       };
 
@@ -178,14 +202,11 @@ export const SingleSelectBlock = createReactBlockSpec(
     toExternalHTML: (props) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const block = props.block as any;
-      const { type, value, label, placeholder, customOptionsJson } = block.props;
-      const customOptions = customOptionsJson ? JSON.parse(customOptionsJson) : [];
-      const data = JSON.stringify({ type, value, label, placeholder, customOptions });
-      return (
-        <div data-singleselect={data} className="singleselect-block">
-          {label && <strong>{label}:</strong>} {value || `[No ${type} selected]`}
-        </div>
-      );
+      const { type, value } = block.props;
+      // Return the markdown format that can be parsed back
+      const markdownFormat = `[!singleselect:${type}:${value || ''}]`;
+      // Wrap in a paragraph to ensure it's preserved in the markdown
+      return <p>{markdownFormat}</p>;
     },
   }
 );

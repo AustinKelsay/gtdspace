@@ -15,6 +15,11 @@ declare global {
   }
 
   const WeakRef: WeakRefConstructor;
+
+  // Window extensions for GTD Space
+  interface Window {
+    onTabFileSaved?: (filePath: string) => Promise<void>;
+  }
 }
 
 export {};

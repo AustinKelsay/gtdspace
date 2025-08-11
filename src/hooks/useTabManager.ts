@@ -15,6 +15,13 @@ import type {
   TabAction
 } from '@/types';
 
+// Extend the global Window interface to include our custom callback
+declare global {
+  interface Window {
+    onTabFileSaved?: (path: string) => void;
+  }
+}
+
 /**
  * Tab manager hook for handling multiple open files
  * 
@@ -333,6 +340,17 @@ export const useTabManager = () => {
       }));
 
       console.log('Tab saved successfully:', tabId);
+      
+      // Notify parent component that a file was saved
+      // This will be used to reload projects when a README is saved
+      if (typeof window !== 'undefined' && typeof window.onTabFileSaved === 'function') {
+        try {
+          window.onTabFileSaved(tab.file.path);
+        } catch (error) {
+          console.warn('Error calling onTabFileSaved callback:', error);
+        }
+      }
+      
       return true;
 
     } catch (error) {
@@ -573,6 +591,26 @@ export const useTabManager = () => {
       clearPersistedTabs();
     }
   }, [tabState, saveTabsToStorage, clearPersistedTabs]);
+
+  /**
+   * Auto-save tabs with unsaved changes after 2 seconds of no edits
+   */
+  useEffect(() => {
+    const tabsWithUnsavedChanges = tabState.openTabs.filter(tab => tab.hasUnsavedChanges);
+    
+    if (tabsWithUnsavedChanges.length === 0) {
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      console.log('Auto-saving tabs with unsaved changes...');
+      for (const tab of tabsWithUnsavedChanges) {
+        await saveTab(tab.id);
+      }
+    }, 2000); // 2 second debounce as per CLAUDE.md
+
+    return () => clearTimeout(timeoutId);
+  }, [tabState.openTabs, saveTab]);
 
   /**
    * Save tabs before page unload

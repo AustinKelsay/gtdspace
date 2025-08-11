@@ -155,7 +155,7 @@ export const App: React.FC = () => {
       console.error('File path is undefined or empty');
       return;
     }
-    
+
     try {
       const tabId = await openTab(file);
       if (tabId) {
@@ -229,12 +229,32 @@ export const App: React.FC = () => {
 
   // === KEYBOARD SHORTCUTS ===
 
+  // Helper function to check if a file requires project reload
+  const shouldReloadProjects = (filePath: string): boolean => {
+    if (!gtdSpace?.root_path) return false;
+    const projectsPath = `${gtdSpace.root_path}/Projects/`;
+    return filePath.startsWith(projectsPath) && filePath.endsWith('.md');
+  };
+
   const keyboardHandlers = {
     onSaveActive: activeTab ? async () => {
-      await saveTab(activeTab.id);
+      const saved = await saveTab(activeTab.id);
+      // Reload projects if we saved a file in the Projects folder
+      if (saved && shouldReloadProjects(activeTab.file.path)) {
+        await loadProjects(gtdSpace.root_path!);
+      }
     } : undefined,
     onSaveAll: async () => {
+      const hadProjectFiles = tabState.openTabs.some(tab => 
+        tab.hasUnsavedChanges && shouldReloadProjects(tab.file.path)
+      );
+      
       await saveAllTabs();
+      
+      // Reload projects if any project files were saved
+      if (hadProjectFiles && gtdSpace?.root_path) {
+        await loadProjects(gtdSpace.root_path);
+      }
     },
     onOpenFolder: selectFolder,
     onOpenGlobalSearch: () => openModal('globalSearch'),
@@ -273,9 +293,48 @@ export const App: React.FC = () => {
   // Derived state for GTD space
   const isGTDSpace = gtdSpace?.isGTDSpace || false;
 
+  // Set up callback for when files are saved to reload projects
+  // This is used by useTabManager to notify when files are saved
+  React.useEffect(() => {
+    if (!gtdSpace?.root_path) return;
+    
+    const projectsPath = `${gtdSpace.root_path}/Projects/`;
+    
+    window.onTabFileSaved = async (filePath: string) => {
+      // Only reload if the file is in the Projects directory
+      if (filePath.startsWith(projectsPath) && filePath.endsWith('.md')) {
+        console.log('Project file saved, reloading projects...');
+        await loadProjects(gtdSpace.root_path);
+      }
+    };
+
+    return () => {
+      delete window.onTabFileSaved;
+    };
+  }, [gtdSpace?.root_path, loadProjects]);
+
   // === SIDEBAR STATE ===
 
+  const MIN_SIDEBAR_WIDTH = 180; // Minimum width for usability
+  const MAX_SIDEBAR_WIDTH = 400; // Maximum width
+  const DEFAULT_SIDEBAR_WIDTH = 256; // Default 256px (w-64)
+
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+  const [sidebarWidth, setSidebarWidth] = React.useState(() => {
+    // Restore saved width from localStorage with validation
+    const saved = localStorage.getItem('gtdspace-sidebar-width');
+    if (saved) {
+      const parsedWidth = parseInt(saved, 10);
+      // Validate the parsed value
+      if (!isNaN(parsedWidth) && 
+          parsedWidth >= MIN_SIDEBAR_WIDTH && 
+          parsedWidth <= MAX_SIDEBAR_WIDTH) {
+        return parsedWidth;
+      }
+    }
+    return DEFAULT_SIDEBAR_WIDTH;
+  });
+  const [isResizing, setIsResizing] = React.useState(false);
 
   // === GTD SPACE CHECK ===
 
@@ -385,7 +444,7 @@ export const App: React.FC = () => {
     <ErrorBoundary>
       <div className="flex flex-col h-screen bg-background text-foreground">
         <Toaster />
-        
+
         {/* Header */}
         <AppHeader
           fileName={activeTab?.file.name || ''}
@@ -410,8 +469,14 @@ export const App: React.FC = () => {
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar */}
           <div
-            className={`transition-all duration-300 ${sidebarCollapsed ? 'w-0' : 'w-64'
-              } overflow-hidden`}
+            className={`relative flex-shrink-0 transition-all duration-300 ${
+              sidebarCollapsed ? 'w-0' : ''
+            } overflow-hidden`}
+            style={{
+              width: sidebarCollapsed ? 0 : `${sidebarWidth}px`,
+              minWidth: sidebarCollapsed ? 0 : `${MIN_SIDEBAR_WIDTH}px`,
+              maxWidth: sidebarCollapsed ? 0 : `${MAX_SIDEBAR_WIDTH}px`
+            }}
           >
             <GTDWorkspaceSidebar
               currentFolder={fileState.currentFolder}
@@ -423,6 +488,42 @@ export const App: React.FC = () => {
               checkGTDSpace={checkGTDSpace}
               loadProjects={loadProjects}
             />
+            
+            {/* Resize Handle */}
+            {!sidebarCollapsed && (
+              <div
+                className={`absolute top-0 right-0 w-1 h-full cursor-col-resize transition-colors ${
+                  isResizing ? 'bg-primary/40' : 'bg-transparent hover:bg-primary/20'
+                }`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsResizing(true);
+                  
+                  const startX = e.clientX;
+                  const startWidth = sidebarWidth;
+                  
+                  const handleMouseMove = (e: MouseEvent) => {
+                    const delta = e.clientX - startX;
+                    const newWidth = Math.min(
+                      MAX_SIDEBAR_WIDTH,
+                      Math.max(MIN_SIDEBAR_WIDTH, startWidth + delta)
+                    );
+                    setSidebarWidth(newWidth);
+                  };
+                  
+                  const handleMouseUp = () => {
+                    setIsResizing(false);
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                    // Save the width preference
+                    localStorage.setItem('gtdspace-sidebar-width', String(sidebarWidth));
+                  };
+                  
+                  document.addEventListener('mousemove', handleMouseMove);
+                  document.addEventListener('mouseup', handleMouseUp);
+                }}
+              />
+            )}
           </div>
 
           {/* Sidebar toggle button */}

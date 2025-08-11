@@ -76,42 +76,66 @@ export const MultiSelectBlock = createReactBlockSpec(
       const customOptions: Option[] = customOptionsJson ? JSON.parse(customOptionsJson) : [];
       
       const handleChange = (newValue: string[]) => {
-        try {
-          // Check if the block still exists in the document
-          const blockStillExists = props.editor.document.some((b: any) => b.id === block.id);
+        // Find and update the block in the current document
+        const findAndUpdateBlock = () => {
+          const blocks = props.editor.document;
           
-          if (!blockStillExists) {
-            console.warn('Block no longer exists in document, skipping update');
-            return;
-          }
-          
-          props.editor.updateBlock(block, {
-            type: 'multiselect',
-            props: {
-              ...block.props,
-              value: newValue.join(','),
-            },
-          });
-        } catch (error) {
-          console.error('Error updating multi select block:', error);
-          // Try to force a re-render by updating through the document
-          try {
-            const blocks = props.editor.document.map((b: any) => {
-              if (b.id === block.id) {
-                return {
-                  ...b,
-                  props: {
-                    ...b.props,
-                    value: newValue.join(','),
-                  },
-                };
+          // Recursively search for the block with matching properties
+          const findBlock = (blocks: any[], targetId: string): any => {
+            for (const block of blocks) {
+              if (block.id === targetId) {
+                return block;
               }
-              return b;
-            });
-            props.editor.replaceBlocks(props.editor.document, blocks);
-          } catch (fallbackError) {
-            console.error('Fallback update also failed:', fallbackError);
+              if (block.children && block.children.length > 0) {
+                const found = findBlock(block.children, targetId);
+                if (found) return found;
+              }
+            }
+            return null;
+          };
+          
+          // Try to find the block by ID first
+          let targetBlock = findBlock(blocks, block.id);
+          
+          // If not found by ID, try to find by content and type
+          if (!targetBlock) {
+            const findByContent = (blocks: any[]): any => {
+              for (const b of blocks) {
+                if (b.type === 'multiselect' && 
+                    b.props?.type === block.props.type &&
+                    b.props?.label === block.props.label) {
+                  return b;
+                }
+                if (b.children && b.children.length > 0) {
+                  const found = findByContent(b.children);
+                  if (found) return found;
+                }
+              }
+              return null;
+            };
+            targetBlock = findByContent(blocks);
           }
+          
+          if (targetBlock) {
+            try {
+              props.editor.updateBlock(targetBlock, {
+                props: {
+                  ...targetBlock.props,
+                  value: newValue.join(','),
+                },
+              });
+              return true;
+            } catch (e) {
+              console.error('Failed to update found block:', e);
+              return false;
+            }
+          }
+          return false;
+        };
+        
+        // Try the update
+        if (!findAndUpdateBlock()) {
+          console.warn('Could not find block to update, value may not persist');
         }
       };
 
@@ -190,15 +214,11 @@ export const MultiSelectBlock = createReactBlockSpec(
     toExternalHTML: (props) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const block = props.block as any;
-      const { type, value, label, placeholder, maxCount, customOptionsJson } = block.props;
-      const parsedValue = value ? value.split(',').filter(Boolean) : [];
-      const customOptions = customOptionsJson ? JSON.parse(customOptionsJson) : [];
-      const data = JSON.stringify({ type, value: parsedValue, label, placeholder, maxCount, customOptions });
-      return (
-        <div data-multiselect={data} className="multiselect-block">
-          {label && <strong>{label}:</strong>} {parsedValue.join(', ') || `[No ${type} selected]`}
-        </div>
-      );
+      const { type, value } = block.props;
+      // Return the markdown format that can be parsed back
+      const markdownFormat = `[!multiselect:${type}:${value || ''}]`;
+      // Wrap in a paragraph to ensure it's preserved in the markdown
+      return <p>{markdownFormat}</p>;
     },
   }
 );

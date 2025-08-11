@@ -17,6 +17,7 @@ import {
   Calendar,
   CheckCircle2,
   Circle,
+  CircleDot,
   FolderOpen,
   ChevronRight,
   Target,
@@ -115,6 +116,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const [expandedSections, setExpandedSections] = React.useState<string[]>(['projects']);
   const [expandedProjects, setExpandedProjects] = React.useState<string[]>([]);
   const [projectActions, setProjectActions] = React.useState<{ [projectPath: string]: MarkdownFile[] }>({});
+  const [actionStatuses, setActionStatuses] = React.useState<{ [actionPath: string]: string }>({});
   const [searchQuery, setSearchQuery] = React.useState('');
   const [showSearch, setShowSearch] = React.useState(false);
 
@@ -130,7 +132,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         const isGTD = await checkGTDSpace(pathToCheck);
         if (isGTD) {
           const projects = await loadProjects(pathToCheck);
-          console.log('Sidebar: loaded projects count =', projects?.length ?? 0);
+          // console.log('Sidebar: loaded projects count =', projects?.length ?? 0);
         }
       }
     };
@@ -151,11 +153,36 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       }
 
       const actions = files;
-      console.log(`Loaded ${actions.length} actions for project:`, projectPath, actions.map(a => a.name));
+      // console.log(`Loaded ${actions.length} actions for project:`, projectPath, actions.map(a => a.name));
 
       setProjectActions(prev => ({
         ...prev,
         [projectPath]: actions
+      }));
+
+      // Load status for each action
+      const statuses: { [path: string]: string } = {};
+      for (const action of actions) {
+        try {
+          const content = await invoke<string>('read_file', { path: action.path });
+          // Extract status from the markdown content
+          // Look for [!singleselect:status:xxx] pattern
+          const statusMatch = content.match(/\[!singleselect:status:([^\]]+)\]/);
+          if (statusMatch) {
+            statuses[action.path] = statusMatch[1];
+          } else {
+            // Default to in-progress if no status found
+            statuses[action.path] = 'in-progress';
+          }
+        } catch (error) {
+          console.warn(`Failed to read action status for ${action.path}:`, error);
+          statuses[action.path] = 'in-progress';
+        }
+      }
+      
+      setActionStatuses(prev => ({
+        ...prev,
+        ...statuses
       }));
     } catch (error) {
       console.error('Failed to load project actions:', projectPath, error);
@@ -222,26 +249,52 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     );
   };
 
-  const getProjectStatusColor = (statuses: string[]) => {
-    const status = statuses[0] || 'in-progress';
-    switch (status) {
-      case 'in-progress': return 'text-green-600';
-      case 'waiting': return 'text-yellow-600';
-      case 'completed': return 'text-blue-600';
-      default: return 'text-gray-600';
+  const getProjectStatusColor = (statusInput: string | string[]) => {
+    // Handle both string and array inputs
+    const status = Array.isArray(statusInput) ? statusInput[0] : statusInput;
+    const normalizedStatus = status || 'in-progress';
+    // console.log('getProjectStatusColor - status:', normalizedStatus, 'from input:', statusInput);
+    switch (normalizedStatus) {
+      case 'completed': return 'text-green-600 dark:text-green-500';
+      case 'waiting': return 'text-purple-600 dark:text-purple-500';
+      case 'in-progress': return 'text-blue-600 dark:text-blue-500';
+      default: return 'text-gray-600 dark:text-gray-400';
     }
   };
 
-  const getProjectStatusIcon = (statuses: string[]) => {
-    const status = statuses[0] || 'in-progress';
-    switch (status) {
-      case 'completed': return CheckCircle2;
+  const getProjectStatusIcon = (statusInput: string | string[]) => {
+    // Handle both string and array inputs
+    const status = Array.isArray(statusInput) ? statusInput[0] : statusInput;
+    const normalizedStatus = status || 'in-progress';
+    // console.log('getProjectStatusIcon - status:', normalizedStatus, 'from input:', statusInput);
+    switch (normalizedStatus) {
+      case 'completed': return CheckCircle2; // Filled circle with checkmark for completed
+      case 'waiting': return CircleDot; // Filled circle (dot in center) for waiting
+      case 'in-progress': return Circle; // Outline circle for in-progress
       default: return Circle;
     }
   };
 
+  const getActionStatusColor = (status: string) => {
+    const normalizedStatus = status || 'in-progress';
+    switch (normalizedStatus) {
+      case 'complete': return 'text-green-600 dark:text-green-500';
+      case 'waiting': return 'text-purple-600 dark:text-purple-500';
+      case 'in-progress': return 'text-blue-600 dark:text-blue-500';
+      default: return 'text-gray-600 dark:text-gray-400';
+    }
+  };
+
   const filteredProjects = React.useMemo(() => {
-    console.log('Sidebar: computing filteredProjects from', gtdSpace?.projects?.length ?? 0, 'projects, query=', searchQuery);
+    // console.log('Sidebar: computing filteredProjects from', gtdSpace?.projects?.length ?? 0, 'projects, query=', searchQuery);
+    
+    // Debug: Log project statuses
+    // if (gtdSpace?.projects) {
+    //   gtdSpace.projects.forEach(p => {
+    //     console.log(`Project: ${p.name}, Status:`, p.status);
+    //   });
+    // }
+    
     if (!gtdSpace?.projects || !searchQuery) {
       return gtdSpace?.projects || [];
     }
@@ -306,43 +359,43 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   return (
     <Card className={`flex flex-col h-full border-r ${className}`}>
       {/* Header */}
-      <div className="p-4 border-b">
+      <div className="p-3 border-b">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold flex items-center gap-2">
-            <Target className="h-4 w-4" />
-            GTD Workspace
+          <h3 className="font-semibold flex items-center gap-1">
+            <Target className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">GTD Workspace</span>
           </h3>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5 flex-shrink-0">
             <Button
               onClick={handleOpenFolderInExplorer}
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-7 w-7"
               title="Open in File Explorer"
             >
-              <Folder className="h-4 w-4" />
+              <Folder className="h-3.5 w-3.5" />
             </Button>
             <Button
               onClick={onRefresh}
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-7 w-7"
               title="Refresh"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="flex items-center gap-1">
-            <Briefcase className="h-3 w-3 text-muted-foreground" />
-            <span>{gtdSpace.projects?.length || 0} Projects</span>
+        <div className="flex gap-3 text-xs">
+          <div className="flex items-center gap-1 min-w-0">
+            <Briefcase className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+            <span className="truncate">{gtdSpace.projects?.length || 0} Projects</span>
           </div>
-          <div className="flex items-center gap-1">
-            <FileText className="h-3 w-3 text-muted-foreground" />
-            <span>
+          <div className="flex items-center gap-1 min-w-0">
+            <FileText className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+            <span className="truncate">
               {gtdSpace.projects?.reduce((sum, p) => sum + (p.action_count || 0), 0) || 0} Actions
             </span>
           </div>
@@ -350,25 +403,25 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       </div>
 
       {/* Search Toggle */}
-      <div className="px-4 pt-3">
+      <div className="px-3 pt-2">
         <Button
           onClick={() => setShowSearch(!showSearch)}
           variant="outline"
           size="sm"
           className="w-full justify-start"
         >
-          <Search className="h-4 w-4 mr-2" />
-          Search Projects
+          <Search className="h-3.5 w-3.5 mr-1.5 flex-shrink-0" />
+          <span className="truncate">Search Projects</span>
         </Button>
       </div>
 
       {/* Search Bar */}
       {showSearch && (
-        <div className="p-4 pt-2">
+        <div className="px-3 py-2">
           <FileSearch
             value={searchQuery}
             onChange={setSearchQuery}
-            placeholder="Search projects..."
+            placeholder="Search..."
           />
         </div>
       )}
@@ -381,14 +434,14 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             open={expandedSections.includes('projects')}
             onOpenChange={() => toggleSection('projects')}
           >
-            <div className="flex items-center justify-between">
-              <CollapsibleTrigger className="flex-1">
-                <div className="flex items-center gap-2 p-2 hover:bg-accent rounded-lg transition-colors">
-                  <ChevronRight className={`h-4 w-4 transition-transform ${expandedSections.includes('projects') ? 'rotate-90' : ''
+            <div className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors">
+              <CollapsibleTrigger className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${expandedSections.includes('projects') ? 'rotate-90' : ''
                     }`} />
-                  <Briefcase className="h-4 w-4 text-blue-600" />
-                  <span className="font-medium">Projects</span>
-                  <Badge variant="secondary" className="ml-2">
+                  <Briefcase className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
+                  <span className="font-medium text-sm truncate">Projects</span>
+                  <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
                     {filteredProjects.length}
                   </Badge>
                 </div>
@@ -400,7 +453,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                 }}
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 mr-2"
+                className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Add Project"
               >
                 <Plus className="h-3 w-3" />
               </Button>
@@ -423,10 +477,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                     return (
                       <div key={project.path}>
                         <div
-                          className="group flex items-center justify-between p-2 hover:bg-accent rounded-lg transition-colors"
+                          className="group flex items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors"
                         >
                           <div
-                            className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer"
+                            className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer"
                             role="button"
                             tabIndex={0}
                             onClick={() => {
@@ -448,19 +502,19 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                               }}
                               variant="ghost"
                               size="icon"
-                              className="h-5 w-5 p-0"
+                              className="h-5 w-5 p-0 flex-shrink-0"
                             >
                               <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                             </Button>
-                            <StatusIcon className={`h-4 w-4 ${getProjectStatusColor(project.status)}`} />
-                            <div className="flex-1 min-w-0">
+                            <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(project.status)}`} />
+                            <div className="flex-1 min-w-0 ml-1">
                               <div className="font-medium text-sm truncate">{project.name}</div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {project.action_count || 0} actions
+                              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                <span className="truncate">{project.action_count || 0} actions</span>
                                 {project.due_date && (
-                                  <span className="ml-2">
-                                    <Calendar className="inline h-3 w-3 mr-1" />
-                                    {new Date(project.due_date).toLocaleDateString()}
+                                  <span className="flex items-center flex-shrink-0">
+                                    <Calendar className="h-2.5 w-2.5 mr-0.5" />
+                                    <span className="truncate">{new Date(project.due_date).toLocaleDateString()}</span>
                                   </span>
                                 )}
                               </div>
@@ -474,7 +528,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                             }}
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Add Action"
                           >
                             <Plus className="h-3 w-3" />
                           </Button>
@@ -482,14 +537,14 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
                         {/* Actions list */}
                         {isExpanded && (
-                          <div className="ml-8 space-y-1 mt-1">
+                          <div className="ml-5 space-y-0.5 mt-0.5">
                             {actions.length === 0 ? (
-                              <div className="text-xs text-muted-foreground py-1 px-2">No actions yet</div>
+                              <div className="text-xs text-muted-foreground py-0.5 px-1">No actions yet</div>
                             ) : (
                               actions.map((action) => (
                                 <div
                                   key={action.path}
-                                  className="flex items-center gap-2 px-2 py-1 hover:bg-accent/50 rounded cursor-pointer text-sm"
+                                  className="flex items-center gap-1 px-1 py-0.5 hover:bg-accent/50 rounded cursor-pointer text-xs"
                                   role="button"
                                   tabIndex={0}
                                   onClick={() => {
@@ -504,7 +559,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                     }
                                   }}
                                 >
-                                  <FileText className="h-3 w-3 text-muted-foreground" />
+                                  <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(actionStatuses[action.path] || 'in-progress')}`} />
                                   <span className="truncate">{action.name.replace('.md', '')}</span>
                                 </div>
                               ))

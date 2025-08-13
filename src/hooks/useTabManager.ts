@@ -14,11 +14,13 @@ import type {
   TabManagerState, 
   TabAction
 } from '@/types';
+import { extractMetadata, getMetadataChanges } from '@/utils/metadata-extractor';
+import { emitContentChange, emitContentSaved, emitMetadataChange } from '@/utils/content-event-bus';
 
 // Extend the global Window interface to include our custom callback
 declare global {
   interface Window {
-    onTabFileSaved?: (path: string) => void;
+    onTabFileSaved?: (path: string) => Promise<void>;
   }
 }
 
@@ -297,9 +299,40 @@ export const useTabManager = () => {
   }, [tabState.openTabs]);
 
   /**
-   * Update content for a specific tab
+   * Update content for a specific tab and emit change events
    */
   const updateTabContent = useCallback((tabId: string, content: string) => {
+    // Get the current tab to compare metadata
+    const currentTab = tabState.openTabs.find(t => t.id === tabId);
+    
+    if (currentTab) {
+      // Extract metadata from old and new content
+      const oldMetadata = extractMetadata(currentTab.content);
+      const newMetadata = extractMetadata(content);
+      const metadataChanges = getMetadataChanges(oldMetadata, newMetadata);
+      
+      // Emit content change event
+      emitContentChange({
+        filePath: currentTab.file.path,
+        fileName: currentTab.file.name,
+        content,
+        metadata: newMetadata,
+        changedFields: metadataChanges
+      });
+      
+      // If metadata changed, emit specific metadata change event
+      if (Object.keys(metadataChanges).length > 0) {
+        console.log('[TabManager] Metadata changed:', metadataChanges, 'for file:', currentTab.file.path);
+        emitMetadataChange({
+          filePath: currentTab.file.path,
+          fileName: currentTab.file.name,
+          content,
+          metadata: newMetadata,
+          changedFields: metadataChanges
+        });
+      }
+    }
+    
     setTabState(prev => ({
       ...prev,
       openTabs: prev.openTabs.map(tab => 
@@ -312,7 +345,7 @@ export const useTabManager = () => {
           : tab
       ),
     }));
-  }, []);
+  }, [tabState.openTabs]);
 
 
   /**
@@ -340,6 +373,15 @@ export const useTabManager = () => {
       }));
 
       console.log('Tab saved successfully:', tabId);
+      
+      // Emit content saved event for sidebar updates
+      const metadata = extractMetadata(tab.content);
+      emitContentSaved({
+        filePath: tab.file.path,
+        fileName: tab.file.name,
+        content: tab.content,
+        metadata
+      });
       
       // Notify parent component that a file was saved
       // This will be used to reload projects when a README is saved
@@ -604,8 +646,30 @@ export const useTabManager = () => {
 
     const timeoutId = setTimeout(async () => {
       console.log('Auto-saving tabs with unsaved changes...');
-      for (const tab of tabsWithUnsavedChanges) {
-        await saveTab(tab.id);
+      // Run saves in parallel; handle failures per-tab so one failure doesn't block others
+      const MAX_PARALLEL_SAVES = 8; // optional limiter for very large numbers of tabs
+
+      if (tabsWithUnsavedChanges.length <= MAX_PARALLEL_SAVES) {
+        const results = await Promise.allSettled(
+          tabsWithUnsavedChanges.map(tab => saveTab(tab.id))
+        );
+        results.forEach((result, index) => {
+          const tab = tabsWithUnsavedChanges[index];
+          if (result.status === 'rejected') {
+            console.error('Auto-save failed for tab:', tab.file.path, result.reason);
+          }
+        });
+      } else {
+        for (let i = 0; i < tabsWithUnsavedChanges.length; i += MAX_PARALLEL_SAVES) {
+          const batch = tabsWithUnsavedChanges.slice(i, i + MAX_PARALLEL_SAVES);
+          const batchResults = await Promise.allSettled(batch.map(tab => saveTab(tab.id)));
+          batchResults.forEach((result, index) => {
+            const tab = batch[index];
+            if (result.status === 'rejected') {
+              console.error('Auto-save failed for tab:', tab.file.path, result.reason);
+            }
+          });
+        }
       }
     }, 2000); // 2 second debounce as per CLAUDE.md
 
@@ -628,6 +692,132 @@ export const useTabManager = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [tabState, saveTabsToStorage]);
+
+  /**
+   * Handle project rename events
+   */
+  useEffect(() => {
+    const handleProjectRename = (event: CustomEvent) => {
+      const { oldPath, newPath } = event.detail;
+      
+      setTabState(prev => {
+        const updatedTabs = prev.openTabs.map(tab => {
+          // Check if this tab's file is within the renamed project
+          if (tab.file.path.startsWith(oldPath)) {
+            // Update the file path
+            const relativePath = tab.file.path.substring(oldPath.length);
+            const newFilePath = newPath + relativePath;
+            
+            // Update the tab with new path
+            return {
+              ...tab,
+              file: {
+                ...tab.file,
+                path: newFilePath,
+                id: newFilePath, // Update ID as well since it's based on path
+              }
+            };
+          }
+          return tab;
+        });
+        
+        return {
+          ...prev,
+          openTabs: updatedTabs
+        };
+      });
+      
+      console.log(`Updated tab paths for project rename: ${oldPath} -> ${newPath}`);
+    };
+    
+    window.addEventListener('project-renamed', handleProjectRename as EventListener);
+    
+    return () => {
+      window.removeEventListener('project-renamed', handleProjectRename as EventListener);
+    };
+  }, []);
+
+  /**
+   * Handle action rename events
+   */
+  useEffect(() => {
+    const handleActionRename = (event: CustomEvent) => {
+      const { oldPath, newPath } = event.detail;
+      
+      setTabState(prev => {
+        const updatedTabs = prev.openTabs.map(tab => {
+          // Check if this tab is the renamed action
+          if (tab.file.path === oldPath) {
+            // Update the tab with new path
+            return {
+              ...tab,
+              file: {
+                ...tab.file,
+                path: newPath,
+                name: newPath.split('/').pop() || tab.file.name,
+                id: newPath, // Update ID as well since it's based on path
+              }
+            };
+          }
+          return tab;
+        });
+        
+        return {
+          ...prev,
+          openTabs: updatedTabs
+        };
+      });
+      
+      console.log(`Updated tab path for action rename: ${oldPath} -> ${newPath}`);
+    };
+    
+    window.addEventListener('action-renamed', handleActionRename as EventListener);
+    
+    return () => {
+      window.removeEventListener('action-renamed', handleActionRename as EventListener);
+    };
+  }, []);
+
+  /**
+   * Handle section file rename events (Someday Maybe, Cabinet)
+   */
+  useEffect(() => {
+    const handleSectionFileRename = (event: CustomEvent) => {
+      const { oldPath, newPath } = event.detail;
+      
+      setTabState(prev => {
+        const updatedTabs = prev.openTabs.map(tab => {
+          // Check if this tab is the renamed file
+          if (tab.file.path === oldPath) {
+            // Update the tab with new path
+            return {
+              ...tab,
+              file: {
+                ...tab.file,
+                path: newPath,
+                name: newPath.split('/').pop() || tab.file.name,
+                id: newPath, // Update ID as well since it's based on path
+              }
+            };
+          }
+          return tab;
+        });
+        
+        return {
+          ...prev,
+          openTabs: updatedTabs
+        };
+      });
+      
+      console.log(`Updated tab path for section file rename: ${oldPath} -> ${newPath}`);
+    };
+    
+    window.addEventListener('section-file-renamed', handleSectionFileRename as EventListener);
+    
+    return () => {
+      window.removeEventListener('section-file-renamed', handleSectionFileRename as EventListener);
+    };
+  }, []);
 
   // === RETURN STATE AND OPERATIONS ===
 

@@ -32,6 +32,9 @@ cd src-tauri && cargo build   # Full compilation
 
 # Frontend-only (limited - no file operations)
 npm run dev
+
+# Production preview
+npm run preview        # Preview production build
 ```
 
 ## Architecture: Frontend-Backend Communication
@@ -104,6 +107,13 @@ interface GTDAction {
   due_date?: string | null;    // Deadline (date only)
   effort: string;  // small | medium | large | extra-large
 }
+
+// Habits: Recurring routines in Habits folder
+interface GTDHabit {
+  name: string;
+  frequency: 'daily' | 'weekly' | 'monthly';
+  status: 'active' | 'paused' | 'archived';
+}
 ```
 
 ## Architecture: BlockNote Editor Customizations
@@ -128,7 +138,7 @@ interface GTDAction {
 3. **Theme**: DOM class mutation observer for light/dark switching
 
 ### Keyboard Shortcuts
-- **Single Select**: `Cmd/Ctrl+Alt+S` (Status), `+E` (Effort), `+P` (Project Status)
+- **Single Select**: `Cmd/Ctrl+Alt+S` (Status), `+E` (Effort), `+P` (Project Status), `+F` (Habit Frequency), `+H` (Habit Status)
 - **Multi Select**: `Cmd/Ctrl+Shift+S/E/P` (legacy)
 
 ## Critical Patterns & Constraints
@@ -140,21 +150,46 @@ interface GTDAction {
 - Auto-save: 2s debounce
 - File watcher: 500ms debounce
 
+### Storage Patterns
+- **localStorage keys**: Consistent `gtdspace-*` prefix
+  - `gtdspace-sidebar-width` - UI state
+  - `gtdspace-tabs` - Tab persistence
+  - `gtdspace-search-history` - Search history
+  - `gtdspace-saved-searches` - Saved queries
+- **Tauri Store**: User settings and preferences
+
 ### Event-Driven Updates
 - Rust backend emits file change events
 - Frontend receives via Tauri event system
 - `App.tsx` orchestrates responses
 - Tab conflicts trigger user prompts
+- Content Event Bus (`src/utils/content-event-bus.ts`) manages metadata updates
+- Custom events for project/action/section file renames
+- Recursive emission prevention with `isEmitting` flag
 
 ### TypeScript Configuration
 - **Strict mode disabled** - careful with null checks
 - Path alias `@/` → `src/`
 - Unused vars allowed with `_` prefix
 
+### ESLint Configuration
+- React Refresh plugin for HMR validation
+- TypeScript rules with `_` prefix for unused args
+- React hooks exhaustive deps as warning
+- Console statements allowed (no-console: off)
+
 ### Vite Configuration
 - Dev port: 1420 (strict)
-- Build targets: Chrome 105 (Windows), Safari 13 (others)
+- Build targets: Chrome 105 (Windows), Safari 13 (others)  
 - Source maps in debug builds
+- Environment variables: `VITE_*` prefix for frontend access
+
+### Tailwind Extensions
+- Custom breakpoints: `editor-sm`, `editor-md`, `editor-lg`, `editor-xl`
+- Sidebar widths: `sidebar: '280px'`, `sidebar-collapsed: '48px'`
+- Editor colors: `editor-bg`, `editor-border`, `editor-text`
+- Typography customizations for markdown rendering
+- Animation: Shimmer effects for loading states
 
 ### Security
 - Whitelisted Tauri commands only
@@ -167,10 +202,10 @@ interface GTDAction {
 `read_file`, `save_file`, `create_file`, `delete_file`, `rename_file`, `copy_file`, `move_file`, `list_markdown_files`
 
 **GTD Operations:**
-`initialize_gtd_space`, `create_gtd_project`, `create_gtd_action`, `list_gtd_projects`, `seed_example_gtd_content`
+`initialize_gtd_space`, `create_gtd_project`, `create_gtd_action`, `create_gtd_habit`, `list_gtd_projects`, `seed_example_gtd_content`, `rename_gtd_project`, `rename_gtd_action`, `list_project_actions`
 
 **System:**
-`select_folder`, `check_permissions`, `get_app_version`, `get_default_gtd_space_path`
+`select_folder`, `check_permissions`, `get_app_version`, `get_default_gtd_space_path`, `open_folder_in_explorer`, `check_directory_exists`, `create_directory`, `initialize_default_gtd_space`
 
 **File Watching:**
 `start_file_watcher`, `stop_file_watcher`
@@ -190,7 +225,33 @@ interface GTDAction {
 - **Recursive Scanning**: `list_markdown_files` scans project subdirectories
 - **Focus vs Due Dates**: Actions support both work timing and deadlines
 - **Toast Deduplication**: Prevents double notifications in React StrictMode
+- **Bidirectional Title Sync**: Document titles auto-rename files/folders when saved
+- **Content Event Bus**: Centralized event system for metadata updates with infinite loop prevention
+- **Parallel Loading**: Action statuses load in parallel for better performance
+- **Tab Path Updates**: Tabs automatically update paths when files/folders are renamed
+- **Create Page Dialog**: Generic page creation for Someday Maybe and Cabinet sections
+- **Habits Implementation**: Full habit tracking with frequency/status dropdowns and keyboard shortcuts (Cmd/Ctrl+Alt+F/H)
+- **Optimistic Updates**: Sidebar immediately adds new habits to state before confirming with backend
+- **Background Sync**: Loads actual files from disk after 500ms to correct any discrepancies
+- **Force Re-render**: Uses sectionRefreshKey to force component re-mount when needed
+
+## Key Dependencies
+
+### Frontend
+- **BlockNote v0.35**: Rich markdown editor (pinned version for stability)
+- **Radix UI**: 13+ primitive components for accessible UI
+- **@dnd-kit**: Drag-and-drop for tab reordering
+- **Syntax Highlighting**: Both `shiki` and `highlight.js` for code blocks
+- **react-hotkeys-hook**: Keyboard shortcut management
+- **lodash.debounce**: Performance optimization
+
+### Backend (Rust)
+- **notify + notify-debouncer-mini**: File system watching
+- **chrono**: Date/time handling
+- **tokio**: Async runtime with full features
+- **thiserror**: Structured error types
+- **regex**: Text processing
 
 ## Testing Status
 
-**No test suite exists.** Manual testing required for all changes.
+**No test suite exists.** Manual testing required for all changes. Test component available at `src/components/test/TestMultiSelect.tsx` for UI experimentation.

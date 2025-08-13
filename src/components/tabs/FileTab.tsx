@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { X, MoreVertical, Circle } from 'lucide-react';
+import { X, Circle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -72,7 +72,9 @@ export const FileTab: React.FC<FileTabProps> = ({
   const handleCloseClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    onClose(tab.id);
+    if (closable) {
+      onClose(tab.id);
+    }
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -121,7 +123,7 @@ export const FileTab: React.FC<FileTabProps> = ({
         onMouseDown={handleMiddleClick}
         title={getTabTitle()}
         className={`
-          h-8 px-3 py-1 text-xs font-normal rounded-none border-r border-border/50
+          h-8 px-3 pr-7 py-1 text-xs font-normal rounded-none border-r border-border/50
           transition-all duration-150 ease-in-out
           max-w-[200px] min-w-[100px] justify-start relative
           ${isActive
@@ -146,34 +148,33 @@ export const FileTab: React.FC<FileTabProps> = ({
           />
         )}
 
-        {/* Close button */}
-        {closable && (
-          <X
-            className={`
-              h-3 w-3 ml-1 flex-shrink-0 rounded-sm
-              transition-opacity duration-150
-              ${isActive || tab.hasUnsavedChanges 
-                ? 'opacity-70 hover:opacity-100' 
-                : 'opacity-0 group-hover:opacity-70 hover:opacity-100'
-              }
-              hover:bg-muted-foreground/20
-            `}
-            onClick={handleCloseClick}
-          />
-        )}
       </Button>
 
-      {/* Context Menu */}
+      {/* Close button - separate from main button to prevent conflicts */}
+      {closable && (
+        <button
+          className={`
+            absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded-sm
+            transition-all duration-150
+            ${isActive || tab.hasUnsavedChanges 
+              ? 'opacity-70 hover:opacity-100' 
+              : 'opacity-0 group-hover:opacity-70 hover:opacity-100'
+            }
+            hover:bg-muted-foreground/20
+          `}
+          onClick={handleCloseClick}
+          onMouseDown={(e) => e.stopPropagation()}
+          title="Close tab"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+
+      {/* Context Menu - triggered by right-click on the tab */}
       {onContextMenu && (
         <DropdownMenu open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute -right-1 top-0 h-full w-4 opacity-0 group-hover:opacity-100 rounded-none"
-            >
-              <MoreVertical className="h-3 w-3" />
-            </Button>
+            <div className="absolute inset-0 pointer-events-none" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-48">
             <DropdownMenuItem onClick={() => handleTabAction('close')}>

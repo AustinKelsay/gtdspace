@@ -4,7 +4,7 @@
  * @created 2025-01-XX
  */
 
-export type SingleSelectBlockType = 'status' | 'effort' | 'project-status' | 'custom';
+export type SingleSelectBlockType = 'status' | 'effort' | 'project-status' | 'habit-frequency' | 'habit-status' | 'custom';
 
 export interface SingleSelectOption {
   value: string;

@@ -20,13 +20,15 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 ### Productivity Features
 
 - **WYSIWYG Markdown Editing** - BlockNote editor with rich text formatting
-- **Multi-Tab Interface** - Work with multiple files simultaneously
-- **Auto-Save** - Never lose your work (2s debounce)
+- **Multi-Tab Interface** - Work with multiple files simultaneously with drag-and-drop reordering
+- **Auto-Save** - Never lose your work (2s debounce with parallel save optimization)
 - **Persistent Sidebar** - GTD workspace stays loaded even when collapsed
-- **Action List in Sidebar** - See all project actions at a glance
+- **Action List in Sidebar** - See all project actions at a glance with real-time status updates
 - **Real-time Updates** - File watcher detects external changes
 - **Smart Notifications** - Deduped alerts for file changes
-- **Interactive MultiSelect Fields** - Notion-like dropdowns for Status and Effort that can't be accidentally overwritten
+- **Interactive Single/MultiSelect Fields** - Notion-like dropdowns for Status, Effort, and Tags that can't be accidentally overwritten
+- **Bidirectional Title Sync** - Document titles automatically rename files/folders and vice versa
+- **Content Event System** - Real-time metadata updates across the UI
 
 ### Technical Features
 
@@ -94,12 +96,15 @@ GTD Space is designed from the ground up around David Allen's Getting Things Don
   - See all actions directly in the sidebar
   - Example content is created on first run to help you get started
 - **Actions** - Concrete next steps within projects
-  - Interactive Status tracking (Not Started, In Progress, Complete) via multiselect dropdowns
-  - Interactive Effort estimates (Small <30min, Medium 30-90min, Large >90min) via multiselect dropdowns
-  - Optional due dates
-- **Habits** - Recurring routines (coming soon)
-- **Someday Maybe** - Ideas for future consideration (coming soon)
-- **Cabinet** - Reference materials (coming soon)
+  - Interactive Status tracking (In Progress, Waiting, Complete) via single-select dropdowns
+  - Interactive Effort estimates (Small <30min, Medium 30-90min, Large >90min, Extra Large >3hr) via single-select dropdowns
+  - Optional focus dates (when to work on) and due dates (deadlines)
+- **Habits** - Recurring routines to track regularly
+  - Interactive Frequency tracking (Daily, Every Other Day, Twice Weekly, Weekly, Biweekly, Monthly)
+  - Interactive Status management (Active, Paused, Completed, Archived)
+  - Created date tracking for habit history
+- **Someday Maybe** - Ideas for future consideration with full page creation support
+- **Cabinet** - Reference materials with organized document storage
 
 ### Getting Started with GTD
 
@@ -123,9 +128,14 @@ See [GTD Implementation](docs/GTD_IMPLEMENTATION.md) for detailed usage.
 | Close Tab             | `Ctrl/Cmd+W`       |
 | Search                | `Ctrl/Cmd+F`       |
 | Settings              | `Ctrl/Cmd+,`       |
-| Insert Status Field   | `Ctrl/Cmd+Shift+S` |
-| Insert Effort Field   | `Ctrl/Cmd+Shift+E` |
-| Insert Project Status | `Ctrl/Cmd+Shift+P` |
+| Insert Status Field   | `Ctrl/Cmd+Alt+S`   |
+| Insert Effort Field   | `Ctrl/Cmd+Alt+E`   |
+| Insert Project Status | `Ctrl/Cmd+Alt+P`   |
+| Insert Habit Frequency| `Ctrl/Cmd+Alt+F`   |
+| Insert Habit Status   | `Ctrl/Cmd+Alt+H`   |
+| Next Tab              | `Ctrl/Cmd+Tab`     |
+| Previous Tab          | `Ctrl/Cmd+Shift+Tab`|
+| Tab by Number         | `Ctrl/Cmd+1-9`     |
 
 ## Contributing
 

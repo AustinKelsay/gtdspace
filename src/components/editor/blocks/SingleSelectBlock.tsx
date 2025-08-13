@@ -40,6 +40,24 @@ const GTD_PROJECT_STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed', group: 'Project Status' },
 ];
 
+// Define habit frequency options
+const HABIT_FREQUENCY_OPTIONS = [
+  { value: 'daily', label: 'Every Day', group: 'Frequency' },
+  { value: 'every-other-day', label: 'Every Other Day', group: 'Frequency' },
+  { value: 'twice-weekly', label: 'Twice a Week', group: 'Frequency' },
+  { value: 'weekly', label: 'Once Every Week', group: 'Frequency' },
+  { value: 'biweekly', label: 'Once Every Other Week', group: 'Frequency' },
+  { value: 'monthly', label: 'Once a Month', group: 'Frequency' },
+];
+
+// Define habit status options
+const HABIT_STATUS_OPTIONS = [
+  { value: 'active', label: 'Active', group: 'Habit Status' },
+  { value: 'paused', label: 'Paused', group: 'Habit Status' },
+  { value: 'completed', label: 'Completed', group: 'Habit Status' },
+  { value: 'archived', label: 'Archived', group: 'Habit Status' },
+];
+
 // Define prop schema with proper types
 const singleSelectPropSchema = {
   type: {
@@ -147,6 +165,10 @@ export const SingleSelectBlock = createReactBlockSpec(
             return GTD_EFFORT_OPTIONS;
           case 'project-status':
             return GTD_PROJECT_STATUS_OPTIONS;
+          case 'habit-frequency':
+            return HABIT_FREQUENCY_OPTIONS;
+          case 'habit-status':
+            return HABIT_STATUS_OPTIONS;
           case 'custom':
             return customOptions || [];
           default:

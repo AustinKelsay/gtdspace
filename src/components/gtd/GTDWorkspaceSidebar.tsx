@@ -5,12 +5,14 @@
  */
 
 import React from 'react';
+import { flushSync } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { onMetadataChange, onContentSaved } from '@/utils/content-event-bus';
 import {
   Briefcase,
   Plus,
@@ -29,7 +31,7 @@ import {
   Folder
 } from 'lucide-react';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
-import { GTDProjectDialog, GTDActionDialog } from '@/components/gtd';
+import { GTDProjectDialog, GTDActionDialog, CreatePageDialog, CreateHabitDialog } from '@/components/gtd';
 import { FileSearch } from '@/components/file-browser/FileSearch';
 import type { GTDProject, MarkdownFile, GTDSpace } from '@/types';
 
@@ -119,26 +121,41 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const [actionStatuses, setActionStatuses] = React.useState<{ [actionPath: string]: string }>({});
   const [searchQuery, setSearchQuery] = React.useState('');
   const [showSearch, setShowSearch] = React.useState(false);
+  const [showPageDialog, setShowPageDialog] = React.useState(false);
+  const [pageDialogDirectory, setPageDialogDirectory] = React.useState<{ path: string; name: string } | null>(null);
+  const [showHabitDialog, setShowHabitDialog] = React.useState(false);
+  const [sectionFiles, setSectionFiles] = React.useState<{ [sectionPath: string]: MarkdownFile[] }>({});
+  const [sectionRefreshKey, setSectionRefreshKey] = React.useState(0);
 
-  // Check if current folder is a GTD space
-  React.useEffect(() => {
-    const checkSpace = async () => {
-      // Prefer the known GTD root path if available to avoid flicker
-      const pathToCheck = (gtdSpace?.root_path && currentFolder?.startsWith(gtdSpace.root_path))
-        ? gtdSpace.root_path
-        : currentFolder;
+  // Local state for project metadata that can be updated dynamically
+  const [projectMetadata, setProjectMetadata] = React.useState<{ [projectPath: string]: { status?: string; title?: string; currentPath?: string } }>({});
 
-      if (pathToCheck) {
-        const isGTD = await checkGTDSpace(pathToCheck);
-        if (isGTD) {
-          const projects = await loadProjects(pathToCheck);
-          // console.log('Sidebar: loaded projects count =', projects?.length ?? 0);
-        }
-      }
-    };
-    checkSpace();
-  }, [currentFolder, gtdSpace?.root_path, checkGTDSpace, loadProjects]);
+  // Local state for action metadata that can be updated dynamically
+  const [actionMetadata, setActionMetadata] = React.useState<{ [actionPath: string]: { status?: string; title?: string; currentPath?: string } }>({});
 
+  // Local state for section file metadata that can be updated dynamically
+  const [sectionFileMetadata, setSectionFileMetadata] = React.useState<{ [filePath: string]: { title?: string; currentPath?: string } }>({});
+
+  const loadSectionFiles = React.useCallback(async (sectionPath: string) => {
+    try {
+      const files = await invoke<MarkdownFile[]>('list_markdown_files', {
+        path: sectionPath
+      });
+
+      // Use flushSync to force immediate state update
+      flushSync(() => {
+        setSectionFiles(prev => ({
+          ...prev,
+          [sectionPath]: files
+        }));
+      });
+
+      return files;
+    } catch (error) {
+      console.error('Failed to load section files:', sectionPath, error);
+      return [];
+    }
+  }, []);
 
   const loadProjectActions = React.useCallback(async (projectPath: string) => {
     try {
@@ -160,26 +177,33 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         [projectPath]: actions
       }));
 
-      // Load status for each action
-      const statuses: { [path: string]: string } = {};
-      for (const action of actions) {
+      // Load status for all actions in parallel
+      const statusPromises = actions.map(async (action) => {
         try {
           const content = await invoke<string>('read_file', { path: action.path });
           // Extract status from the markdown content
           // Look for [!singleselect:status:xxx] pattern
-          const statusMatch = content.match(/\[!singleselect:status:([^\]]+)\]/);
-          if (statusMatch) {
-            statuses[action.path] = statusMatch[1];
-          } else {
-            // Default to in-progress if no status found
-            statuses[action.path] = 'in-progress';
-          }
+          const match = content.match(/\[!singleselect:status:(in-progress|waiting|completed?|done)\]/i);
+          const raw = (match?.[1] ?? 'in-progress').trim().toLowerCase();
+          // Normalize to the canonical set used by the UI
+          const normalized = (raw === 'completed' || raw === 'done') ? 'complete' : raw;
+          return {
+            path: action.path,
+            status: normalized
+          };
         } catch (error) {
           console.warn(`Failed to read action status for ${action.path}:`, error);
-          statuses[action.path] = 'in-progress';
+          return {
+            path: action.path,
+            status: 'in-progress'
+          };
         }
-      }
-      
+      });
+
+      const statusResults = await Promise.all(statusPromises);
+      const statuses: { [path: string]: string } =
+        Object.fromEntries(statusResults.map(r => [r.path, r.status]));
+
       setActionStatuses(prev => ({
         ...prev,
         ...statuses
@@ -189,15 +213,359 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     }
   }, []);
 
+  // Check if current folder is a GTD space and preload section files
+  React.useEffect(() => {
+    const checkSpace = async () => {
+      // Prefer the known GTD root path if available to avoid flicker
+      const pathToCheck = (gtdSpace?.root_path && currentFolder?.startsWith(gtdSpace.root_path))
+        ? gtdSpace.root_path
+        : currentFolder;
+
+      if (pathToCheck) {
+        const isGTD = await checkGTDSpace(pathToCheck);
+        if (isGTD) {
+          await loadProjects(pathToCheck);
+          // console.log('Sidebar: loaded projects count =', projects?.length ?? 0);
+
+          // Preload files for all non-project sections
+          const somedayPath = `${pathToCheck}/Someday Maybe`;
+          const cabinetPath = `${pathToCheck}/Cabinet`;
+          const habitsPath = `${pathToCheck}/Habits`;
+
+          // Load files for these sections to show counts immediately
+          await Promise.all([
+            loadSectionFiles(somedayPath),
+            loadSectionFiles(cabinetPath),
+            loadSectionFiles(habitsPath)
+          ]);
+        }
+      }
+    };
+    checkSpace();
+  }, [currentFolder, gtdSpace?.root_path, checkGTDSpace, loadProjects, loadSectionFiles]);
+
+  // Listen for content changes to update sidebar dynamically
+  React.useEffect(() => {
+    // Subscribe to metadata changes for live UI updates
+    const unsubscribeMetadata = onMetadataChange((event) => {
+      console.log('[Sidebar] Received metadata change event:', event);
+      const { filePath, metadata, changedFields } = event;
+
+      // Check if this is a project README
+      if (filePath.includes('/Projects/') && filePath.endsWith('/README.md')) {
+        const projectPath = filePath.substring(0, filePath.lastIndexOf('/'));
+
+        // Update project status if it changed
+        if (changedFields?.status || changedFields?.projectStatus) {
+          const newStatus = metadata.projectStatus || metadata.status;
+          if (newStatus) {
+            console.log('[Sidebar] Updating project status for', projectPath, 'to', newStatus);
+            // Update local state immediately for instant UI update
+            setProjectMetadata(prev => ({
+              ...prev,
+              [projectPath]: {
+                ...prev[projectPath],
+                status: newStatus
+              }
+            }));
+          }
+        }
+
+        // Don't update title on metadata change - wait for save to keep in sync with folder name
+        // Title changes are handled in the content:saved event when folder is renamed
+      }
+
+      // Check if this is an action file
+      if (filePath.includes('/Projects/') && !filePath.endsWith('/README.md') && filePath.endsWith('.md')) {
+        // Update action status if it changed (status updates immediately)
+        if (changedFields?.status) {
+          const newStatus = metadata.status;
+          if (newStatus) {
+            // Update the action status in our local state
+            setActionStatuses(prev => ({
+              ...prev,
+              [filePath]: newStatus
+            }));
+
+            // Also update action metadata
+            setActionMetadata(prev => ({
+              ...prev,
+              [filePath]: {
+                ...prev[filePath],
+                status: newStatus
+              }
+            }));
+          }
+        }
+
+        // Don't update title on metadata change - wait for save to keep in sync with file name
+        // Title changes are handled in the content:saved event when file is renamed
+      }
+
+      // Check if this is a file in Someday Maybe, Cabinet, or Habits
+      const sectionPaths = ['/Someday Maybe/', '/Cabinet/', '/Habits/'];
+      for (const sectionPath of sectionPaths) {
+        if (filePath.includes(sectionPath)) {
+          // Reload the section files to get updated titles
+          const sectionFullPath = filePath.substring(0, filePath.lastIndexOf('/'));
+          loadSectionFiles(sectionFullPath);
+          break;
+        }
+      }
+    });
+
+    // Subscribe to content saved events for folder renaming
+    const unsubscribeSaved = onContentSaved(async (event) => {
+      console.log('[Sidebar] Received content saved event:', event);
+      const { filePath, metadata } = event;
+
+      // Check if this is a project README
+      if (filePath.includes('/Projects/') && filePath.endsWith('/README.md')) {
+        const projectPath = filePath.substring(0, filePath.lastIndexOf('/'));
+        const newTitle = metadata.title;
+
+        if (newTitle) {
+          // Get the current project name from the path
+          const currentProjectName = projectPath.split('/').pop();
+
+          // Only rename if the title actually differs from folder name
+          if (currentProjectName && currentProjectName !== newTitle) {
+            console.log('[Sidebar] Title changed on save - renaming project folder from', currentProjectName, 'to', newTitle);
+            console.log('[Sidebar] Calling rename_gtd_project with:', { oldProjectPath: projectPath, newProjectName: newTitle });
+
+            // Call rename synchronously to avoid issues with async event handlers
+            invoke<string>('rename_gtd_project', {
+              oldProjectPath: projectPath,
+              newProjectName: newTitle
+            })
+              .then(async (newProjectPath) => {
+                console.log('[Sidebar] Project renamed successfully, new path:', newProjectPath);
+
+                // Only update UI after successful rename
+                // Update local state - keep both old and new paths until projects reload
+                setProjectMetadata(prev => {
+                  const updated = { ...prev };
+                  // Update the title and current path at the OLD path (for UI display until reload)
+                  updated[projectPath] = {
+                    ...prev[projectPath],
+                    title: newTitle,
+                    currentPath: newProjectPath  // Track the new path for the folder button
+                  };
+                  // Also set at new path for after reload
+                  updated[newProjectPath] = {
+                    ...prev[projectPath],
+                    title: newTitle,
+                    currentPath: newProjectPath
+                  };
+                  return updated;
+                });
+
+                // Update expanded projects list if this project was expanded
+                setExpandedProjects(prev => prev.map(path =>
+                  path === projectPath ? newProjectPath : path
+                ));
+
+                // Update project actions if they were loaded
+                if (projectActions[projectPath]) {
+                  setProjectActions(prev => {
+                    const updated = { ...prev };
+                    // Move actions to new path
+                    updated[newProjectPath] = prev[projectPath];
+                    // Keep old path temporarily for UI until reload
+                    return updated;
+                  });
+                }
+
+                // Reload projects to update paths in the main state
+                if (gtdSpace?.root_path) {
+                  await loadProjects(gtdSpace.root_path);
+
+                  // After reload, clean up old path metadata
+                  setProjectMetadata(prev => {
+                    const updated = { ...prev };
+                    delete updated[projectPath];
+                    return updated;
+                  });
+
+                  // Clean up old project actions
+                  setProjectActions(prev => {
+                    const updated = { ...prev };
+                    delete updated[projectPath];
+                    return updated;
+                  });
+                }
+
+                // Update any open tabs with files from the renamed project
+                window.dispatchEvent(new CustomEvent('project-renamed', {
+                  detail: {
+                    oldPath: projectPath,
+                    newPath: newProjectPath,
+                    newName: newTitle
+                  }
+                }));
+              })
+              .catch((error) => {
+                console.error('[Sidebar] Failed to rename project folder:', error);
+                console.error('[Sidebar] Error details:', JSON.stringify(error));
+              });
+          }
+        }
+      }
+
+      // Check if this is an action file that was saved
+      if (filePath.includes('/Projects/') && !filePath.endsWith('/README.md') && filePath.endsWith('.md')) {
+        const newTitle = metadata.title;
+
+        if (newTitle) {
+          // Get the current action name from the file path
+          const currentActionName = filePath.split('/').pop()?.replace('.md', '');
+
+          // Only rename if the title actually differs from file name
+          if (currentActionName && currentActionName !== newTitle) {
+            console.log('[Sidebar] Action title changed on save - renaming action file from', currentActionName, 'to', newTitle);
+
+            // Call rename_gtd_action command
+            invoke<string>('rename_gtd_action', {
+              oldActionPath: filePath,
+              newActionName: newTitle
+            })
+              .then(async (newActionPath) => {
+                console.log('[Sidebar] Action renamed successfully, new path:', newActionPath);
+
+                // Update local state with new path
+                setActionMetadata(prev => {
+                  const updated = { ...prev };
+                  // Update the title and current path at the OLD path (for UI display until reload)
+                  updated[filePath] = {
+                    ...prev[filePath],
+                    title: newTitle,
+                    currentPath: newActionPath  // Track the new path
+                  };
+                  // Also set at new path for after reload
+                  updated[newActionPath] = {
+                    ...prev[filePath],
+                    title: newTitle,
+                    currentPath: newActionPath
+                  };
+                  return updated;
+                });
+
+                // Reload actions for the project
+                const projectPath = filePath.substring(0, filePath.lastIndexOf('/'));
+                await loadProjectActions(projectPath);
+
+                // Clean up old path metadata after reload
+                setActionMetadata(prev => {
+                  const updated = { ...prev };
+                  delete updated[filePath];
+                  return updated;
+                });
+
+                // Update any open tabs with the renamed action
+                window.dispatchEvent(new CustomEvent('action-renamed', {
+                  detail: {
+                    oldPath: filePath,
+                    newPath: newActionPath,
+                    newName: newTitle
+                  }
+                }));
+              })
+              .catch((error) => {
+                console.error('[Sidebar] Failed to rename action file:', error);
+                console.error('[Sidebar] Error details:', JSON.stringify(error));
+              });
+          }
+        }
+      }
+
+      // Check if this is a file in Someday Maybe or Cabinet that was saved
+      const sectionPaths = ['/Someday Maybe/', '/Cabinet/'];
+      for (const sectionPath of sectionPaths) {
+        if (filePath.includes(sectionPath) && filePath.endsWith('.md')) {
+          const newTitle = metadata.title;
+
+          if (newTitle) {
+            // Get the current file name from the file path
+            const currentFileName = filePath.split('/').pop()?.replace('.md', '');
+
+            // Only rename if the title actually differs from file name
+            if (currentFileName && currentFileName !== newTitle) {
+              console.log('[Sidebar] Section file title changed on save - renaming file from', currentFileName, 'to', newTitle);
+
+              // Call rename_gtd_action command (works for any markdown file)
+              invoke<string>('rename_gtd_action', {
+                oldActionPath: filePath,
+                newActionName: newTitle
+              })
+                .then(async (newFilePath) => {
+                  console.log('[Sidebar] Section file renamed successfully, new path:', newFilePath);
+
+                  // Update local state with new path
+                  setSectionFileMetadata(prev => {
+                    const updated = { ...prev };
+                    // Update the title and current path at the OLD path (for UI display until reload)
+                    updated[filePath] = {
+                      ...prev[filePath],
+                      title: newTitle,
+                      currentPath: newFilePath  // Track the new path
+                    };
+                    // Also set at new path for after reload
+                    updated[newFilePath] = {
+                      ...prev[filePath],
+                      title: newTitle,
+                      currentPath: newFilePath
+                    };
+                    return updated;
+                  });
+
+                  // Reload section files
+                  const sectionFullPath = filePath.substring(0, filePath.lastIndexOf('/'));
+                  await loadSectionFiles(sectionFullPath);
+
+                  // Clean up old path metadata after reload
+                  setSectionFileMetadata(prev => {
+                    const updated = { ...prev };
+                    delete updated[filePath];
+                    return updated;
+                  });
+
+                  // Update any open tabs with the renamed file
+                  window.dispatchEvent(new CustomEvent('section-file-renamed', {
+                    detail: {
+                      oldPath: filePath,
+                      newPath: newFilePath,
+                      newName: newTitle
+                    }
+                  }));
+                })
+                .catch((error) => {
+                  console.error('[Sidebar] Failed to rename section file:', error);
+                  console.error('[Sidebar] Error details:', JSON.stringify(error));
+                });
+            }
+          }
+          break;
+        }
+      }
+    });
+
+    return () => {
+      unsubscribeMetadata();
+      unsubscribeSaved();
+    };
+  }, [gtdSpace, loadProjects, loadProjectActions, loadSectionFiles]);
+
   // Prefetch actions after projects load so the UI always has items ready
   React.useEffect(() => {
     const prefetch = async () => {
       if (!gtdSpace?.projects || gtdSpace.projects.length === 0) return;
-      for (const project of gtdSpace.projects) {
-        if (!projectActions[project.path]) {
-          await loadProjectActions(project.path);
-        }
-      }
+      // Load all project actions in parallel
+      const projectsToLoad = gtdSpace.projects.filter(
+        project => !projectActions[project.path]
+      );
+      await Promise.all(
+        projectsToLoad.map(project => loadProjectActions(project.path))
+      );
     };
     prefetch();
   }, [gtdSpace?.projects, loadProjectActions, projectActions]);
@@ -237,8 +605,16 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     onFileSelect(readmeFile);
   };
 
-  const handleSectionClick = (section: GTDSection) => {
-    // Keep current folder stable; we may extend navigation later
+  const handleCreatePage = (section: GTDSection) => {
+    if (section.id === 'habits') {
+      // Show habit dialog for habits section
+      setShowHabitDialog(true);
+    } else {
+      // Show page dialog for other sections
+      const fullPath = `${gtdSpace?.root_path || currentFolder}/${section.path}`;
+      setPageDialogDirectory({ path: fullPath, name: section.name });
+      setShowPageDialog(true);
+    }
   };
 
   const toggleSection = (sectionId: string) => {
@@ -287,14 +663,14 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
   const filteredProjects = React.useMemo(() => {
     // console.log('Sidebar: computing filteredProjects from', gtdSpace?.projects?.length ?? 0, 'projects, query=', searchQuery);
-    
+
     // Debug: Log project statuses
     // if (gtdSpace?.projects) {
     //   gtdSpace.projects.forEach(p => {
     //     console.log(`Project: ${p.name}, Status:`, p.status);
     //   });
     // }
-    
+
     if (!gtdSpace?.projects || !searchQuery) {
       return gtdSpace?.projects || [];
     }
@@ -317,7 +693,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
   const handleOpenFolderInExplorer = async () => {
     if (!currentFolder) return;
-    
+
     try {
       await invoke('open_folder_in_explorer', { path: currentFolder });
     } catch (error) {
@@ -470,7 +846,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                   </div>
                 ) : (
                   filteredProjects.map((project) => {
-                    const StatusIcon = getProjectStatusIcon(project.status);
+                    // Use local metadata if available, otherwise fall back to project data
+                    const currentStatus = projectMetadata[project.path]?.status || project.status;
+                    const currentTitle = projectMetadata[project.path]?.title || project.name;
+                    const currentPath = projectMetadata[project.path]?.currentPath || project.path;
+                    const StatusIcon = getProjectStatusIcon(currentStatus);
                     const isExpanded = expandedProjects.includes(project.path);
                     const actions = projectActions[project.path] || [];
 
@@ -506,9 +886,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                             >
                               <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                             </Button>
-                            <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(project.status)}`} />
+                            <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(currentStatus)}`} />
                             <div className="flex-1 min-w-0 ml-1">
-                              <div className="font-medium text-sm truncate">{project.name}</div>
+                              <div className="font-medium text-sm truncate">{currentTitle}</div>
                               <div className="text-xs text-muted-foreground flex items-center gap-1">
                                 <span className="truncate">{project.action_count || 0} actions</span>
                                 {project.due_date && (
@@ -520,19 +900,37 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                               </div>
                             </div>
                           </div>
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedProject(project);
-                              setShowActionDialog(true);
-                            }}
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Add Action"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
+                          <div className="flex items-center gap-0.5 flex-shrink-0">
+                            <Button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  await invoke('open_folder_in_explorer', { path: currentPath });
+                                } catch (error) {
+                                  console.error('Failed to open project folder:', error);
+                                }
+                              }}
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Open Project Folder"
+                            >
+                              <Folder className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedProject(project);
+                                setShowActionDialog(true);
+                              }}
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Add Action"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
 
                         {/* Actions list */}
@@ -541,28 +939,36 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                             {actions.length === 0 ? (
                               <div className="text-xs text-muted-foreground py-0.5 px-1">No actions yet</div>
                             ) : (
-                              actions.map((action) => (
-                                <div
-                                  key={action.path}
-                                  className="flex items-center gap-1 px-1 py-0.5 hover:bg-accent/50 rounded cursor-pointer text-xs"
-                                  role="button"
-                                  tabIndex={0}
-                                  onClick={() => {
-                                    console.log('Sidebar: action click ->', action.path);
-                                    onFileSelect(action);
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                      e.preventDefault();
-                                      console.log('Sidebar: action key activate ->', action.path);
-                                      onFileSelect(action);
-                                    }
-                                  }}
-                                >
-                                  <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(actionStatuses[action.path] || 'in-progress')}`} />
-                                  <span className="truncate">{action.name.replace('.md', '')}</span>
-                                </div>
-                              ))
+                              actions.map((action) => {
+                                // Use metadata for title if available
+                                const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
+                                const currentPath = actionMetadata[action.path]?.currentPath || action.path;
+                                const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress';
+
+                                return (
+                                  <div
+                                    key={action.path}
+                                    className="flex items-center gap-1 px-1 py-0.5 hover:bg-accent/50 rounded cursor-pointer text-xs"
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => {
+                                      console.log('Sidebar: action click ->', currentPath);
+                                      // Create a modified action object with the current path
+                                      onFileSelect({ ...action, path: currentPath });
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        console.log('Sidebar: action key activate ->', currentPath);
+                                        onFileSelect({ ...action, path: currentPath });
+                                      }
+                                    }}
+                                  >
+                                    <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(currentStatus)}`} />
+                                    <span className="truncate">{currentTitle}</span>
+                                  </div>
+                                );
+                              })
                             )}
                           </div>
                         )}
@@ -575,16 +981,91 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           </Collapsible>
 
           {/* Other GTD Sections */}
-          {GTD_SECTIONS.slice(1).map((section) => (
-            <div
-              key={section.id}
-              className="flex items-center gap-2 p-2 hover:bg-accent rounded-lg cursor-pointer transition-colors"
-              onClick={() => handleSectionClick(section)}
-            >
-              <section.icon className={`h-4 w-4 ${section.color}`} />
-              <span className="font-medium">{section.name}</span>
-            </div>
-          ))}
+          {GTD_SECTIONS.slice(1).map((section) => {
+            const isExpanded = expandedSections.includes(section.id);
+            const sectionPath = `${gtdSpace?.root_path || currentFolder}/${section.path}`;
+            const files = sectionFiles[sectionPath] || [];
+
+            return (
+              <Collapsible
+                key={`${section.id}-${sectionRefreshKey}`}
+                open={isExpanded}
+                onOpenChange={() => {
+                  toggleSection(section.id);
+                  if (!isExpanded && !sectionFiles[sectionPath]) {
+                    loadSectionFiles(sectionPath);
+                  }
+                }}
+              >
+                <div className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors">
+                  <CollapsibleTrigger className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                      <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
+                      <span className="font-medium text-sm truncate">{section.name}</span>
+                      {files.length > 0 && (
+                        <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
+                          {files.length}
+                        </Badge>
+                      )}
+                    </div>
+                  </CollapsibleTrigger>
+                  {(section.id === 'someday' || section.id === 'cabinet' || section.id === 'habits') && (
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCreatePage(section);
+                      }}
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title={`Add ${section.name} Page`}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+
+                <CollapsibleContent>
+                  <div className="pl-6 pr-2 py-1 space-y-1">
+                    {files.length === 0 ? (
+                      <div className="text-sm text-muted-foreground py-2">No pages yet</div>
+                    ) : (
+                      files.map((file) => {
+                        // Use metadata for title if available
+                        const currentTitle = sectionFileMetadata[file.path]?.title || file.name.replace('.md', '');
+                        const currentPath = sectionFileMetadata[file.path]?.currentPath || file.path;
+
+                        return (
+                          <div
+                            key={file.path}
+                            className="flex items-center gap-1 px-1 py-0.5 hover:bg-accent/50 rounded cursor-pointer text-xs"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              console.log('Sidebar: file click ->', currentPath);
+                              // Create a modified file object with the current path
+                              onFileSelect({ ...file, path: currentPath });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                console.log('Sidebar: file key activate ->', currentPath);
+                                onFileSelect({ ...file, path: currentPath });
+                              }
+                            }}
+                          >
+                            <FileText className="h-2.5 w-2.5 flex-shrink-0 text-muted-foreground" />
+                            <span className="truncate">{currentTitle}</span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
         </div>
       </ScrollArea>
 
@@ -620,6 +1101,93 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           }}
         />
       )}
+
+      {pageDialogDirectory && (
+        <CreatePageDialog
+          isOpen={showPageDialog}
+          onClose={() => {
+            setShowPageDialog(false);
+            setPageDialogDirectory(null);
+          }}
+          directory={pageDialogDirectory.path}
+          directoryName={pageDialogDirectory.name}
+          onSuccess={async (filePath) => {
+            // Reload the section files
+            await loadSectionFiles(pageDialogDirectory.path);
+            // Open the newly created file
+            const newFile: MarkdownFile = {
+              id: filePath,
+              name: filePath.split('/').pop() || '',
+              path: filePath,
+              size: 0,
+              last_modified: Date.now(),
+              extension: 'md'
+            };
+            onFileSelect(newFile);
+          }}
+        />
+      )}
+
+      <CreateHabitDialog
+        isOpen={showHabitDialog}
+        onClose={() => setShowHabitDialog(false)}
+        spacePath={gtdSpace?.root_path || currentFolder || ''}
+        onSuccess={async (habitPath) => {
+          // Optimistically add the new habit to the UI
+          const habitsSection = GTD_SECTIONS.find(s => s.id === 'habits');
+          if (habitsSection) {
+            const habitsPath = `${gtdSpace?.root_path || currentFolder}/${habitsSection.path}`;
+
+            // Create the new file object
+            const newFile: MarkdownFile = {
+              id: habitPath,
+              name: habitPath.split('/').pop() || '',
+              path: habitPath,
+              size: 0,
+              last_modified: Date.now(),
+              extension: 'md'
+            };
+
+            // Optimistically update the sectionFiles state
+            setSectionFiles(prev => {
+              const currentHabits = prev[habitsPath] || [];
+              const updatedHabits = [...currentHabits, newFile].sort((a, b) =>
+                a.name.localeCompare(b.name)
+              );
+              return {
+                ...prev,
+                [habitsPath]: updatedHabits
+              };
+            });
+
+            // Force a refresh to ensure UI updates
+            setSectionRefreshKey(prev => prev + 1);
+
+            // Ensure the habits section is expanded
+            setExpandedSections(prev =>
+              prev.includes('habits') ? prev : [...prev, 'habits']
+            );
+
+            // Open the newly created habit
+            onFileSelect(newFile);
+
+            // Sync with actual files from disk after a short delay
+            setTimeout(async () => {
+              try {
+                const files = await invoke<MarkdownFile[]>('list_markdown_files', {
+                  path: habitsPath
+                });
+                setSectionFiles(prev => ({
+                  ...prev,
+                  [habitsPath]: files
+                }));
+              } catch (error) {
+                console.error('Failed to sync habit files:', error);
+              }
+            }, 500);
+          }
+        }}
+      />
     </Card>
   );
 };

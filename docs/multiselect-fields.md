@@ -1,7 +1,9 @@
 # MultiSelect Fields in GTD Space
 
+> **Note**: Single-select fields are now the primary implementation for Status, Effort, and Project Status. See [SingleSelect Fields](singleselect-fields.md) for the current approach. This document covers multi-select fields which are still supported for tags and legacy content.
+
 ## Overview
-GTD Space now includes interactive multiselect fields for standardized properties like Status, Effort, and Project Status. These fields work like Notion's select fields - they cannot be accidentally overwritten with text and provide a consistent dropdown interface.
+GTD Space includes interactive multiselect fields for properties that need multiple values like Tags and Categories. These fields work like Notion's multi-select fields - they cannot be accidentally overwritten with text and provide a consistent dropdown interface.
 
 ## Automatic Creation
 All new projects and actions are automatically created with multiselect fields:

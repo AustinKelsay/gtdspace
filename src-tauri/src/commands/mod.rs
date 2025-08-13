@@ -1746,17 +1746,112 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
     for dir_name in &directories {
         let dir_path = root_path.join(dir_name);
         
-        if dir_path.exists() {
-            log::info!("Directory already exists: {}", dir_name);
-        } else {
-            if let Err(e) = fs::create_dir_all(&dir_path) {
-                return Err(format!("Failed to create {} directory: {}", dir_name, e));
+        let preexisted = dir_path.exists();
+        match fs::create_dir_all(&dir_path) {
+            Ok(_) => {
+                if !preexisted {
+                    created_dirs.push(dir_name.to_string());
+                    log::info!("Created directory: {}", dir_name);
+                } else {
+                    log::info!("Directory already exists: {}", dir_name);
+                }
             }
-            created_dirs.push(dir_name.to_string());
-            log::info!("Created directory: {}", dir_name);
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    log::info!("Directory already exists: {}", dir_name);
+                } else {
+                    return Err(format!("Failed to create {} directory: {}", dir_name, e));
+                }
+            }
+        }
+        
+        // Create example files immediately after creating directories
+        match *dir_name {
+            "Someday Maybe" => {
+                let example_file = dir_path.join("Learn a New Language.md");
+                if !example_file.exists() {
+                    let content = r#"# Learn a New Language
+
+## Idea
+
+I've always wanted to learn Spanish to connect better with Spanish-speaking communities and travel more confidently in Latin America and Spain.
+
+## Why it matters
+
+- Opens up communication with 500+ million Spanish speakers worldwide
+- Enhances travel experiences in 20+ countries
+- Cognitive benefits of bilingualism
+- Career advancement opportunities
+- Cultural enrichment and understanding
+
+## Next steps when ready
+
+- [ ] Research language learning methods (apps, classes, tutors)
+- [ ] Set a realistic timeline and daily practice goal
+- [ ] Find a conversation partner or language exchange
+- [ ] Plan an immersion trip as a goal/reward
+- [ ] Start with basic conversational phrases
+"#;
+                    if let Err(e) = fs::write(&example_file, content) {
+                        log::warn!("Failed to create example Someday Maybe page: {}", e);
+                    } else {
+                        log::info!("Created example Someday Maybe page: Learn a New Language.md");
+                    }
+                }
+            },
+            "Cabinet" => {
+                let example_file = dir_path.join("GTD Principles Reference.md");
+                if !example_file.exists() {
+                    let content = r#"# GTD Principles Reference
+
+## Reference
+
+The Getting Things Done (GTD) methodology by David Allen - Core principles and practices.
+
+## Key Points
+
+- **Capture**: Collect what has your attention in trusted external systems
+- **Clarify**: Process what it means and what to do about it
+- **Organize**: Put it where it belongs based on what it is
+- **Reflect**: Review frequently to stay current and aligned
+- **Engage**: Use your trusted system to take action with confidence
+
+## Notes
+
+### The Five Steps of Mastering Workflow
+
+1. **Capture** everything that has your attention
+2. **Clarify** what each item means and what to do about it
+3. **Organize** the results into trusted external systems
+4. **Reflect** on your system regularly to keep it current
+5. **Engage** with confidence in your moment-to-moment choices
+
+### The Two-Minute Rule
+If something takes less than two minutes to complete, do it now rather than adding it to your list.
+
+### Weekly Review
+- Get clear: Collect loose papers and materials, empty your head
+- Get current: Review action lists, calendar, waiting-for lists
+- Get creative: Review someday/maybe lists, trigger new ideas
+
+### Natural Planning Model
+1. Define purpose and principles
+2. Envision the outcome
+3. Brainstorm ideas
+4. Organize into structure
+5. Identify next actions
+"#;
+                    if let Err(e) = fs::write(&example_file, content) {
+                        log::warn!("Failed to create example Cabinet page: {}", e);
+                    } else {
+                        log::info!("Created example Cabinet page: GTD Principles Reference.md");
+                    }
+                }
+            },
+            _ => {}
         }
     }
-    
+
     // Create a welcome file in the root directory
     let welcome_path = root_path.join("Welcome to GTD Space.md");
     if !welcome_path.exists() {
@@ -1982,13 +2077,410 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     )
     .await;
 
+    // Create example Someday Maybe pages
+    let someday_dir = Path::new(&space_path).join("Someday Maybe");
+    if someday_dir.exists() {
+        let someday_example1 = someday_dir.join("Start a Blog.md");
+        if !someday_example1.exists() {
+            let content = r#"# Start a Blog
+
+## Idea
+
+Share my experiences and insights about productivity, coding, and personal development through a regular blog.
+
+## Why it matters
+
+- Build a personal brand and online presence
+- Help others learn from my experiences
+- Improve writing and communication skills
+- Create a portfolio of thoughts and ideas
+- Potential passive income through affiliates/sponsorships
+
+## Next steps when ready
+
+- [ ] Choose a blogging platform (Ghost, WordPress, Medium, Substack)
+- [ ] Define the blog's niche and target audience
+- [ ] Create an editorial calendar with 10 post ideas
+- [ ] Write the first three posts before launching
+- [ ] Set up analytics and SEO basics
+- [ ] Establish a consistent publishing schedule
+"#;
+            let _ = fs::write(&someday_example1, content);
+        }
+
+        let someday_example2 = someday_dir.join("Home Automation Project.md");
+        if !someday_example2.exists() {
+            let content = r#"# Home Automation Project
+
+## Idea
+
+Create a smart home system to automate lighting, temperature, and security for better comfort and energy efficiency.
+
+## Why it matters
+
+- Reduce energy consumption and utility bills
+- Increase home security and peace of mind
+- Learn IoT and home automation technologies
+- Improve daily convenience and comfort
+- Fun technical project to work on
+
+## Next steps when ready
+
+- [ ] Research home automation platforms (Home Assistant, SmartThings, Hubitat)
+- [ ] List current devices and compatibility requirements
+- [ ] Create a budget for smart devices
+- [ ] Start with one room as a pilot project
+- [ ] Document the setup for future reference
+"#;
+            let _ = fs::write(&someday_example2, content);
+        }
+    }
+
+    // Create example Cabinet pages
+    let cabinet_dir = Path::new(&space_path).join("Cabinet");
+    if cabinet_dir.exists() {
+        let cabinet_example1 = cabinet_dir.join("Keyboard Shortcuts.md");
+        if !cabinet_example1.exists() {
+            let content = r#"# Keyboard Shortcuts
+
+## Reference
+
+Common keyboard shortcuts for productivity tools and GTD Space.
+
+## Key Points
+
+### GTD Space Shortcuts
+- **Cmd/Ctrl + Alt + S**: Insert Status field
+- **Cmd/Ctrl + Alt + E**: Insert Effort field
+- **Cmd/Ctrl + Alt + P**: Insert Project Status field
+- **Cmd/Ctrl + S**: Save current file
+- **Cmd/Ctrl + O**: Open folder
+
+### VS Code / Editor Shortcuts
+- **Cmd/Ctrl + P**: Quick file open
+- **Cmd/Ctrl + Shift + P**: Command palette
+- **Cmd/Ctrl + /**: Toggle comment
+- **Alt + Up/Down**: Move line up/down
+- **Cmd/Ctrl + D**: Select next occurrence
+
+### Mac System Shortcuts
+- **Cmd + Space**: Spotlight search
+- **Cmd + Tab**: Switch applications
+- **Cmd + ~**: Switch windows in same app
+- **Cmd + ,**: Open preferences
+- **Cmd + Q**: Quit application
+
+## Notes
+
+Keep this reference handy while learning the shortcuts. Muscle memory develops with consistent use.
+"#;
+            let _ = fs::write(&cabinet_example1, content);
+        }
+
+        let cabinet_example2 = cabinet_dir.join("Meeting Templates.md");
+        if !cabinet_example2.exists() {
+            let content = r#"# Meeting Templates
+
+## Reference
+
+Templates for different types of meetings to ensure productive discussions.
+
+## Key Points
+
+### One-on-One Template
+```
+Date: [Date]
+Attendees: [Names]
+
+Agenda:
+1. Check-in (5 min)
+2. Updates and progress (10 min)
+3. Challenges and blockers (10 min)
+4. Goals and priorities (10 min)
+5. Action items (5 min)
+
+Notes:
+- 
+
+Action Items:
+- [ ] 
+
+Next Meeting: [Date]
+```
+
+### Project Kickoff Template
+```
+Project: [Name]
+Date: [Date]
+Attendees: [Names]
+
+Purpose:
+- Define project goals and success criteria
+
+Agenda:
+1. Project overview and objectives
+2. Roles and responsibilities
+3. Timeline and milestones
+4. Resources and budget
+5. Communication plan
+6. Risk assessment
+7. Next steps
+
+Decisions Made:
+- 
+
+Action Items:
+- [ ] 
+
+Follow-up Date: [Date]
+```
+
+### Retrospective Template
+```
+Sprint/Period: [Timeframe]
+Date: [Date]
+Team: [Names]
+
+What went well:
+- 
+
+What didn't go well:
+- 
+
+What we learned:
+- 
+
+Action items for improvement:
+- [ ] 
+```
+
+## Notes
+
+Adapt these templates to your specific needs. The structure helps ensure all important topics are covered.
+"#;
+            let _ = fs::write(&cabinet_example2, content);
+        }
+    }
+
+    // Create example Habits
+    let habits_dir = Path::new(&space_path).join("Habits");
+    if habits_dir.exists() {
+        let today = chrono::Local::now().format("%Y-%m-%d");
+        
+        // Habit 1: Morning Exercise
+        let habit1 = habits_dir.join("Morning Exercise.md");
+        if !habit1.exists() {
+            let content = format!(r#"# Morning Exercise
+
+## Status
+[!singleselect:habit-status:active]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+{}
+
+## Notes
+Start the day with 30 minutes of physical activity to boost energy and focus.
+
+## Benefits
+- Improved physical health
+- Better mental clarity
+- Increased energy throughout the day
+- Better sleep quality
+- Stress reduction
+
+## Routine
+1. 5 min warm-up (stretching)
+2. 20 min main exercise (alternating: cardio, strength, yoga)
+3. 5 min cool-down
+
+## Log
+<!-- Track your habit completion here -->
+- Week 1: ✓ ✓ ✓ ✓ ✓ ✓ ✓
+- Week 2: ✓ ✓ ○ ✓ ✓ ✓ ✓
+
+"#, today);
+            let _ = fs::write(&habit1, content);
+        }
+
+        // Habit 2: Weekly Review
+        let habit2 = habits_dir.join("Weekly GTD Review.md");
+        if !habit2.exists() {
+            let content = format!(r#"# Weekly GTD Review
+
+## Status
+[!singleselect:habit-status:active]
+
+## Frequency
+[!singleselect:habit-frequency:weekly]
+
+## Created
+{}
+
+## Notes
+Comprehensive weekly review of all GTD lists and projects to maintain system integrity.
+
+## Review Checklist
+- [ ] Process all inboxes to zero
+- [ ] Review project list - update statuses
+- [ ] Review next actions list
+- [ ] Review waiting for list
+- [ ] Review someday/maybe list
+- [ ] Review calendar for upcoming week
+- [ ] Review completed items and celebrate wins
+
+## Time Allocation
+- Inbox processing: 15 minutes
+- Project review: 20 minutes
+- Lists review: 15 minutes
+- Planning ahead: 10 minutes
+- Total: ~1 hour
+
+## Log
+<!-- Track your weekly reviews -->
+- Week 1 (Jan 6): ✓ Completed - 55 mins
+- Week 2 (Jan 13): ✓ Completed - 62 mins
+
+"#, today);
+            let _ = fs::write(&habit2, content);
+        }
+
+        // Habit 3: Reading
+        let habit3 = habits_dir.join("Reading Practice.md");
+        if !habit3.exists() {
+            let content = format!(r#"# Reading Practice
+
+## Status
+[!singleselect:habit-status:active]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+{}
+
+## Notes
+Read for at least 30 minutes each day to expand knowledge and maintain learning momentum.
+
+## Current Books
+- **Active**: "Getting Things Done" by David Allen
+- **Next**: "Atomic Habits" by James Clear
+- **Queue**: "Deep Work" by Cal Newport
+
+## Reading Goals
+- Professional development: 2 books/month
+- Personal interest: 1 book/month
+- Fiction for relaxation: 1 book/month
+
+## Progress Tracking
+- January: 3/4 books
+- February: Goal 4 books
+
+## Log
+<!-- Track daily reading -->
+- Mon: ✓ 35 mins (GTD, Chapter 5)
+- Tue: ✓ 30 mins (GTD, Chapter 6)
+- Wed: ○ Missed
+- Thu: ✓ 45 mins (GTD, Finished!)
+
+"#, today);
+            let _ = fs::write(&habit3, content);
+        }
+
+        // Habit 4: Meditation
+        let habit4 = habits_dir.join("Mindfulness Meditation.md");
+        if !habit4.exists() {
+            let content = format!(r#"# Mindfulness Meditation
+
+## Status
+[!singleselect:habit-status:active]
+
+## Frequency
+[!singleselect:habit-frequency:twice-weekly]
+
+## Created
+{}
+
+## Notes
+Practice mindfulness meditation to reduce stress and improve focus.
+
+## Session Structure
+- 2 minutes: Settling and breathing
+- 10 minutes: Focused attention meditation
+- 3 minutes: Body scan
+- Total: 15 minutes
+
+## Preferred Times
+- Tuesday morning (7:00 AM)
+- Thursday evening (8:00 PM)
+- Optional weekend session
+
+## Benefits Noticed
+- Better stress management
+- Improved focus during work
+- Better emotional regulation
+- Improved sleep quality
+
+## Log
+<!-- Track meditation sessions -->
+- Week 1: Tue ✓ Thu ✓ Bonus: Sat ✓
+- Week 2: Tue ✓ Thu ○ (traveling)
+
+"#, today);
+            let _ = fs::write(&habit4, content);
+        }
+
+        // Habit 5: Journaling (paused example)
+        let habit5 = habits_dir.join("Evening Journal.md");
+        if !habit5.exists() {
+            let content = format!(r#"# Evening Journal
+
+## Status
+[!singleselect:habit-status:paused]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+{}
+
+## Notes
+Reflect on the day and capture thoughts, gratitude, and learnings. Currently paused while traveling.
+
+## Journal Prompts
+1. What went well today?
+2. What could have been better?
+3. What am I grateful for?
+4. What did I learn?
+5. What's the priority for tomorrow?
+
+## Format
+- 3 gratitudes
+- 1 win from today
+- 1 lesson learned
+- Tomorrow's top 3 priorities
+
+## Pause Reason
+Taking a break during vacation (Jan 10-20). Will resume with modified format focusing on weekly summaries instead of daily entries.
+
+## Previous Streak
+- 45 days consecutive journaling
+- Best insight: Morning planning is more effective than evening
+
+"#, today);
+            let _ = fs::write(&habit5, content);
+        }
+    }
+
     // Write seed marker
     let _ = fs::write(&seed_marker, format!(
         "seeded: {}",
         chrono::Local::now().to_rfc3339()
     ));
 
-    Ok("Seeded example projects and actions".to_string())
+    Ok("Seeded example projects, actions, habits, and reference materials".to_string())
 }
 
 /// Initialize default GTD space and optionally seed example content in one call
@@ -2038,6 +2530,37 @@ pub async fn initialize_default_gtd_space(app: AppHandle) -> Result<String, Stri
 pub async fn check_directory_exists(path: String) -> Result<bool, String> {
     let dir_path = Path::new(&path);
     Ok(dir_path.exists() && dir_path.is_dir())
+}
+
+/// Create a directory
+///
+/// # Arguments
+///
+/// * `path` - The directory path to create
+///
+/// # Example
+///
+/// ```typescript
+/// await invoke('create_directory', {
+///   path: '/Users/me/GTD Space/Cabinet'
+/// });
+/// ```
+#[tauri::command]
+pub async fn create_directory(path: String) -> Result<String, String> {
+    let dir_path = Path::new(&path);
+    
+    // Validate path doesn't contain dangerous patterns
+    if path.contains("..") {
+        return Err("Path cannot contain '..' for security reasons".to_string());
+    }
+    
+    // Optionally validate the path is within expected workspace
+    // This depends on your security requirements
+    
+    fs::create_dir_all(&dir_path)
+        .map_err(|e| format!("Failed to create directory: {}", e))?;
+    
+    Ok(format!("Directory created: {}", path))
 }
 
 /// Create a new GTD project
@@ -2267,6 +2790,111 @@ Created: {}
     }
 }
 
+/// Create a new GTD habit
+///
+/// Creates a new habit file in the Habits directory.
+///
+/// # Arguments
+///
+/// * `space_path` - Path to the GTD space root
+/// * `habit_name` - Name of the habit
+/// * `frequency` - Habit frequency (daily, every-other-day, twice-weekly, weekly, biweekly, monthly)
+/// * `status` - Habit status (active, paused, completed, archived)
+///
+/// # Returns
+///
+/// Path to the created habit file or error details
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// await invoke('create_gtd_habit', { 
+///   space_path: '/path/to/gtd/space',
+///   habit_name: 'Morning Exercise',
+///   frequency: 'daily',
+///   status: 'active'
+/// });
+/// ```
+#[tauri::command]
+pub fn create_gtd_habit(
+    space_path: String,
+    habit_name: String,
+    frequency: String,
+    status: String,
+) -> Result<String, String> {
+    log::info!("Creating GTD habit: {}", habit_name);
+    
+    let habits_path = Path::new(&space_path).join("Habits");
+    
+    // Ensure Habits directory exists
+    if !habits_path.exists() {
+        return Err("Habits directory does not exist. Initialize GTD space first.".to_string());
+    }
+    
+    // Sanitize habit name for filename
+    let file_name = format!("{}.md", habit_name.replace('/', "-"));
+    let habit_path = habits_path.join(&file_name);
+    
+    if habit_path.exists() {
+        return Err(format!("Habit '{}' already exists", habit_name));
+    }
+    
+    // Map frequency and status to single select values
+    let frequency_value = match frequency.as_str() {
+        "Every Day" | "daily" => "daily",
+        "Every Other Day" | "every-other-day" => "every-other-day",
+        "Twice a Week" | "twice-weekly" => "twice-weekly",
+        "Once Every Week" | "weekly" => "weekly",
+        "Once Every Other Week" | "biweekly" => "biweekly",
+        "Once a Month" | "monthly" => "monthly",
+        _ => "daily"
+    };
+    
+    let status_value = match status.as_str() {
+        "Active" | "active" => "active",
+        "Paused" | "paused" => "paused",
+        "Completed" | "completed" => "completed",
+        "Archived" | "archived" => "archived",
+        _ => "active"
+    };
+    
+    // Create habit file with template using single select fields
+    let habit_content = format!(
+        r#"# {}
+
+## Status
+[!singleselect:habit-status:{}]
+
+## Frequency
+[!singleselect:habit-frequency:{}]
+
+## Created
+{}
+
+## Notes
+<!-- Add any additional notes or details about this habit here -->
+
+## Log
+<!-- Track your habit completion here -->
+
+"#,
+        habit_name,
+        status_value,
+        frequency_value,
+        chrono::Local::now().format("%Y-%m-%d")
+    );
+    
+    match fs::write(&habit_path, habit_content) {
+        Ok(_) => {
+            log::info!("Successfully created habit: {}", habit_name);
+            Ok(habit_path.to_string_lossy().to_string())
+        }
+        Err(e) => Err(format!("Failed to create habit file: {}", e))
+    }
+}
+
 /// GTD Project metadata structure
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GTDProject {
@@ -2289,7 +2917,7 @@ pub struct GTDProject {
 /// List all GTD projects in a space
 ///
 /// Scans the Projects directory for project folders and extracts metadata
-/// from their README.md files.
+/// from their README.md files. Also syncs folder names with README titles.
 ///
 /// # Arguments
 ///
@@ -2329,7 +2957,7 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
                     
                     // Only process directories
                     if path.is_dir() {
-                        let project_name = path.file_name()
+                        let folder_name = path.file_name()
                             .unwrap_or_default()
                             .to_string_lossy()
                             .to_string();
@@ -2337,10 +2965,16 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
                         // Read README.md to extract project metadata
                         let readme_path = path.join("README.md");
                         
-                        let (description, due_date, status, created_date) = if readme_path.exists() {
+                        let (mut title, description, due_date, status, created_date) = if readme_path.exists() {
                             match fs::read_to_string(&readme_path) {
-                                Ok(content) => parse_project_readme(&content),
+                                Ok(content) => {
+                                    let (desc, due, stat, created) = parse_project_readme(&content);
+                                    // Extract title from README
+                                    let readme_title = extract_readme_title(&content);
+                                    (readme_title, desc, due, stat, created)
+                                },
                                 Err(_) => (
+                                    folder_name.clone(),
                                     "No description available".to_string(),
                                     None,
                                     "in-progress".to_string(),
@@ -2349,6 +2983,7 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
                             }
                         } else {
                             (
+                                folder_name.clone(),
                                 "No description available".to_string(),
                                 None,
                                 "in-progress".to_string(),
@@ -2356,11 +2991,30 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
                             )
                         };
                         
+                        // Sync folder name with README title if they don't match
+                        // Prefer folder name as it was likely renamed intentionally
+                        if title != folder_name && readme_path.exists() {
+                            log::info!("Syncing project title: folder='{}', README title='{}'", folder_name, title);
+                            
+                            // Update README to match folder name
+                            if let Ok(content) = fs::read_to_string(&readme_path) {
+                                let updated_content = update_readme_title(&content, &folder_name);
+                                if let Err(e) = fs::write(&readme_path, updated_content) {
+                                    log::error!("Failed to sync README title with folder name: {}", e);
+                                } else {
+                                    log::info!("Updated README title to match folder name: {}", folder_name);
+                                }
+                            }
+                            
+                            // Use folder name as the project name
+                            title = folder_name.clone();
+                        }
+                        
                         // Count action files in the project
                         let action_count = count_project_actions(&path);
                         
                         projects.push(GTDProject {
-                            name: project_name,
+                            name: title,
                             description,
                             due_date,
                             status,
@@ -2380,6 +3034,238 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
     
     log::info!("Found {} GTD projects", projects.len());
     Ok(projects)
+}
+
+/// Rename a GTD project folder and update its README title
+///
+/// Renames the project folder and updates the title in the README.md file
+/// to maintain consistency between folder name and project title.
+///
+/// # Arguments
+///
+/// * `old_project_path` - Full path to the current project folder
+/// * `new_project_name` - New name for the project (folder name)
+///
+/// # Returns
+///
+/// New project path or error message
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// const newPath = await invoke('rename_gtd_project', {
+///   oldProjectPath: '/path/to/gtd/Projects/Old Name',
+///   newProjectName: 'New Name'
+/// });
+/// ```
+#[tauri::command]
+pub fn rename_gtd_project(old_project_path: String, new_project_name: String) -> Result<String, String> {
+    log::info!("Renaming GTD project from {} to {}", old_project_path, new_project_name);
+    
+    let old_path = Path::new(&old_project_path);
+    
+    // Validate old path exists and is a directory
+    if !old_path.exists() {
+        return Err("Project directory does not exist".to_string());
+    }
+    
+    if !old_path.is_dir() {
+        return Err("Path is not a directory".to_string());
+    }
+    
+    // Get parent directory (Projects folder)
+    let parent = old_path.parent()
+        .ok_or_else(|| "Cannot get parent directory".to_string())?;
+    
+    // Create new path with the new name
+    let new_path = parent.join(&new_project_name);
+    
+    // Check if new path already exists
+    if new_path.exists() {
+        return Err(format!("A project with name '{}' already exists", new_project_name));
+    }
+    
+    // Rename the directory
+    match fs::rename(&old_path, &new_path) {
+        Ok(_) => {
+            log::info!("Successfully renamed project folder to: {}", new_path.display());
+            
+            // Update the title in README.md
+            let readme_path = new_path.join("README.md");
+            if readme_path.exists() {
+                match fs::read_to_string(&readme_path) {
+                    Ok(content) => {
+                        // Update the H1 title (first line starting with #)
+                        let updated_content = update_readme_title(&content, &new_project_name);
+                        
+                        if let Err(e) = fs::write(&readme_path, updated_content) {
+                            log::error!("Failed to update README title: {}", e);
+                            // Don't fail the operation, folder is already renamed
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to read README for title update: {}", e);
+                        // Don't fail the operation, folder is already renamed
+                    }
+                }
+            }
+            
+            Ok(new_path.to_string_lossy().to_string())
+        }
+        Err(e) => {
+            log::error!("Failed to rename project folder: {}", e);
+            Err(format!("Failed to rename project: {}", e))
+        }
+    }
+}
+
+/// Rename a GTD action file based on its title
+///
+/// Renames an action markdown file to match its title.
+/// Also updates the title inside the file if needed.
+///
+/// # Arguments
+///
+/// * `old_action_path` - Full path to the current action file
+/// * `new_action_name` - New name for the action (without .md extension)
+///
+/// # Returns
+///
+/// The new full path of the renamed action file, or error message
+///
+/// # Examples
+///
+/// ```javascript
+/// const newPath = await invoke('rename_gtd_action', {
+///   oldActionPath: '/path/to/gtd/Projects/MyProject/Old Action.md',
+///   newActionName: 'New Action'
+/// });
+/// ```
+#[tauri::command]
+pub fn rename_gtd_action(old_action_path: String, new_action_name: String) -> Result<String, String> {
+    log::info!("Renaming GTD action from {} to {}", old_action_path, new_action_name);
+    
+    let old_path = Path::new(&old_action_path);
+    
+    // Validate old path exists and is a file
+    if !old_path.exists() {
+        return Err("Action file does not exist".to_string());
+    }
+    
+    if !old_path.is_file() {
+        return Err("Path is not a file".to_string());
+    }
+    
+    // Get parent directory (project folder)
+    let parent = old_path.parent()
+        .ok_or_else(|| "Cannot get parent directory".to_string())?;
+    
+    // Create new path with the new name (add .md extension if not present)
+    let new_file_name = if new_action_name.ends_with(".md") {
+        new_action_name.clone()
+    } else {
+        format!("{}.md", new_action_name)
+    };
+    
+    let new_path = parent.join(&new_file_name);
+    
+    // Check if new path already exists
+    if new_path.exists() && new_path != old_path {
+        return Err(format!("An action with name '{}' already exists", new_file_name));
+    }
+    
+    // If the path is the same, just update the title in the content
+    if new_path == old_path {
+        // Read the file content
+        match fs::read_to_string(&old_path) {
+            Ok(content) => {
+                // Update the H1 title
+                let updated_content = update_readme_title(&content, &new_action_name);
+                
+                // Write back the updated content
+                if let Err(e) = fs::write(&old_path, updated_content) {
+                    log::error!("Failed to update action title: {}", e);
+                    return Err(format!("Failed to update action title: {}", e));
+                }
+                
+                log::info!("Updated action title in file: {}", old_path.display());
+                return Ok(old_path.to_string_lossy().to_string());
+            }
+            Err(e) => {
+                log::error!("Failed to read action file: {}", e);
+                return Err(format!("Failed to read action file: {}", e));
+            }
+        }
+    }
+    
+    // Rename the file
+    match fs::rename(&old_path, &new_path) {
+        Ok(_) => {
+            log::info!("Successfully renamed action file to: {}", new_path.display());
+            
+            // Update the title in the file content
+            match fs::read_to_string(&new_path) {
+                Ok(content) => {
+                    // Update the H1 title
+                    let updated_content = update_readme_title(&content, &new_action_name);
+                    
+                    if let Err(e) = fs::write(&new_path, updated_content) {
+                        log::error!("Failed to update action title: {}", e);
+                        // Don't fail the operation, file is already renamed
+                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to read action file for title update: {}", e);
+                    // Don't fail the operation, file is already renamed
+                }
+            }
+            
+            Ok(new_path.to_string_lossy().to_string())
+        }
+        Err(e) => {
+            log::error!("Failed to rename action file: {}", e);
+            Err(format!("Failed to rename action: {}", e))
+        }
+    }
+}
+
+/// Update the H1 title in README content
+fn update_readme_title(content: &str, new_title: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut updated_lines = Vec::new();
+    let mut title_updated = false;
+    
+    for line in lines {
+        if !title_updated && line.trim().starts_with("# ") {
+            // Replace the H1 title
+            updated_lines.push(format!("# {}", new_title));
+            title_updated = true;
+        } else {
+            updated_lines.push(line.to_string());
+        }
+    }
+    
+    // If no title was found, prepend one
+    if !title_updated {
+        updated_lines.insert(0, format!("# {}", new_title));
+        updated_lines.insert(1, String::new()); // Add blank line after title
+    }
+    
+    updated_lines.join("\n")
+}
+
+/// Extract the H1 title from README content
+fn extract_readme_title(content: &str) -> String {
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("# ") {
+            return trimmed[2..].trim().to_string();
+        }
+    }
+    // If no title found, return a default
+    "Untitled Project".to_string()
 }
 
 /// Parse project README.md to extract metadata

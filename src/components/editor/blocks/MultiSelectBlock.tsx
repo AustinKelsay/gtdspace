@@ -11,6 +11,21 @@ import { MultiSelect, Option } from '@/components/ui/multi-select';
 import { GTDTagSelector } from '@/components/gtd/GTDTagSelector';
 import type { MultiSelectBlockType } from '@/utils/multiselect-block-helpers';
 
+/**
+ * Minimal structural type for traversing the editor document tree
+ * without relying on BlockNote internals.
+ */
+type EditorBlockNode = {
+  id: string;
+  type: string;
+  props?: {
+    type?: string;
+    label?: string;
+    [key: string]: unknown;
+  };
+  children?: EditorBlockNode[];
+};
+
 // Define status options for GTD
 const GTD_STATUS_OPTIONS: Option[] = [
   { value: 'in-progress', label: 'In Progress', group: 'Status' },
@@ -68,46 +83,52 @@ export const MultiSelectBlock = createReactBlockSpec(
       const block = props.block as any; // Type assertion needed for BlockNote v0.35
       const { type, value, label, placeholder, maxCount, customOptionsJson } = block.props;
       // console.log('Block props:', { type, value, label, placeholder, maxCount, customOptionsJson });
-      
+
       // Parse value from comma-separated string
       const parsedValue = value ? value.split(',').filter(Boolean) : [];
-      
+
       // Parse custom options from JSON
       const customOptions: Option[] = customOptionsJson ? JSON.parse(customOptionsJson) : [];
-      
+
       const handleChange = (newValue: string[]) => {
         // Find and update the block in the current document
         const findAndUpdateBlock = () => {
-          const blocks = props.editor.document;
-          
+          if (!props.editor.document) {
+            console.error('Editor document is not available');
+            return false;
+          }
+          const blocks = props.editor.document as unknown as EditorBlockNode[];
+
           // Recursively search for the block with matching properties
-          const findBlock = (blocks: any[], targetId: string): any => {
-            for (const block of blocks) {
-              if (block.id === targetId) {
-                return block;
+          const findBlock = (nodes: EditorBlockNode[], targetId: string): EditorBlockNode | null => {
+            for (const node of nodes) {
+              if (node.id === targetId) {
+                return node;
               }
-              if (block.children && block.children.length > 0) {
-                const found = findBlock(block.children, targetId);
+              if (node.children && node.children.length > 0) {
+                const found = findBlock(node.children, targetId);
                 if (found) return found;
               }
             }
             return null;
           };
-          
+
           // Try to find the block by ID first
-          let targetBlock = findBlock(blocks, block.id);
-          
+          let targetBlock: EditorBlockNode | null = findBlock(blocks, block.id);
+
           // If not found by ID, try to find by content and type
           if (!targetBlock) {
-            const findByContent = (blocks: any[]): any => {
-              for (const b of blocks) {
-                if (b.type === 'multiselect' && 
-                    b.props?.type === block.props.type &&
-                    b.props?.label === block.props.label) {
-                  return b;
+            const findByContent = (nodes: EditorBlockNode[]): EditorBlockNode | null => {
+              for (const n of nodes) {
+                if (
+                  n.type === 'multiselect' &&
+                  n.props?.type === block.props.type &&
+                  n.props?.label === block.props.label
+                ) {
+                  return n;
                 }
-                if (b.children && b.children.length > 0) {
-                  const found = findByContent(b.children);
+                if (n.children && n.children.length > 0) {
+                  const found = findByContent(n.children);
                   if (found) return found;
                 }
               }
@@ -115,15 +136,18 @@ export const MultiSelectBlock = createReactBlockSpec(
             };
             targetBlock = findByContent(blocks);
           }
-          
+
           if (targetBlock) {
             try {
-              props.editor.updateBlock(targetBlock, {
-                props: {
-                  ...targetBlock.props,
-                  value: newValue.join(','),
-                },
-              });
+              props.editor.updateBlock(
+                targetBlock as unknown as typeof props.block,
+                {
+                  props: {
+                    ...targetBlock.props,
+                    value: newValue.join(','),
+                  },
+                }
+              );
               return true;
             } catch (e) {
               console.error('Failed to update found block:', e);
@@ -132,7 +156,7 @@ export const MultiSelectBlock = createReactBlockSpec(
           }
           return false;
         };
-        
+
         // Try the update
         if (!findAndUpdateBlock()) {
           console.warn('Could not find block to update, value may not persist');
@@ -193,6 +217,33 @@ export const MultiSelectBlock = createReactBlockSpec(
     },
     parse: (element) => {
       console.log('MultiSelectBlock parse called with element:', element.tagName, element.outerHTML?.substring(0, 100));
+
+      // Check for new markdown format in paragraph
+      if (element.tagName === 'P') {
+        const text = element.textContent || '';
+        const match = text.match(/\[!multiselect:([^:]+):([^\]]*)\]/);
+        if (match) {
+          const type = match[1] || 'status';
+          const value = match[2] || '';
+
+          // Get the label from the type
+          const label = type === 'status' ? 'Status' :
+            type === 'effort' ? 'Effort' :
+              type === 'project-status' ? 'Project Status' :
+                type === 'tags' ? 'Tags' : '';
+
+          return {
+            type,
+            value,
+            label,
+            placeholder: '',
+            maxCount: 0,
+            customOptionsJson: '',
+          };
+        }
+      }
+
+      // Legacy support for div with data-multiselect attribute
       if (element.tagName === 'DIV' && element.getAttribute('data-multiselect')) {
         try {
           const data = JSON.parse(element.getAttribute('data-multiselect') || '{}');

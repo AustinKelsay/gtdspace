@@ -49,6 +49,24 @@ export function useSingleSelectInsertion(editor: any) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         editor.insertBlocks([block as any], currentBlock, 'after');
       }
+
+      // Cmd+Alt+F (Mac) or Ctrl+Alt+F (Windows/Linux) for Habit Frequency field
+      if (modKey && e.altKey && e.key === 'f') {
+        e.preventDefault();
+        const block = createSingleSelectBlock('habit-frequency', 'Frequency', 'daily');
+        const currentBlock = editor.getTextCursorPosition().block;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        editor.insertBlocks([block as any], currentBlock, 'after');
+      }
+
+      // Cmd+Alt+H (Mac) or Ctrl+Alt+H (Windows/Linux) for Habit Status field
+      if (modKey && e.altKey && e.key === 'h') {
+        e.preventDefault();
+        const block = createSingleSelectBlock('habit-status', 'Habit Status', 'active');
+        const currentBlock = editor.getTextCursorPosition().block;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        editor.insertBlocks([block as any], currentBlock, 'after');
+      }
     };
 
     document.addEventListener('keydown', handleKeyDown);
@@ -59,7 +77,7 @@ export function useSingleSelectInsertion(editor: any) {
   }, [editor]);
 
   // Function to manually insert single select blocks
-  const insertSingleSelect = (type: 'status' | 'effort' | 'project-status') => {
+  const insertSingleSelect = (type: 'status' | 'effort' | 'project-status' | 'habit-frequency' | 'habit-status') => {
     if (!editor) return;
 
     let block;
@@ -72,6 +90,12 @@ export function useSingleSelectInsertion(editor: any) {
         break;
       case 'project-status':
         block = createSingleSelectBlock('project-status', 'Project Status', 'in-progress');
+        break;
+      case 'habit-frequency':
+        block = createSingleSelectBlock('habit-frequency', 'Frequency', 'daily');
+        break;
+      case 'habit-status':
+        block = createSingleSelectBlock('habit-status', 'Habit Status', 'active');
         break;
     }
 

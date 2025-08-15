@@ -108,11 +108,18 @@ interface GTDAction {
   effort: string;  // small | medium | large | extra-large
 }
 
-// Habits: Recurring routines in Habits folder
+// Habits: Recurring routines with automatic tracking
 interface GTDHabit {
   name: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
-  status: 'active' | 'paused' | 'archived';
+  frequency: 'daily' | 'every-other-day' | 'twice-weekly' | 'weekly' | 'biweekly' | 'monthly';
+  status: 'todo' | 'complete';  // Resets automatically based on frequency
+  history: HabitRecord[];  // Self-contained tracking history
+}
+
+interface HabitRecord {
+  date: string;  // YYYY-MM-DD HH:MM format
+  status: 'todo' | 'complete';
+  action: 'created' | 'changed' | 'auto-reset';
 }
 ```
 
@@ -202,7 +209,7 @@ interface GTDHabit {
 `read_file`, `save_file`, `create_file`, `delete_file`, `rename_file`, `copy_file`, `move_file`, `list_markdown_files`
 
 **GTD Operations:**
-`initialize_gtd_space`, `create_gtd_project`, `create_gtd_action`, `create_gtd_habit`, `list_gtd_projects`, `seed_example_gtd_content`, `rename_gtd_project`, `rename_gtd_action`, `list_project_actions`
+`initialize_gtd_space`, `create_gtd_project`, `create_gtd_action`, `create_gtd_habit`, `update_habit_status`, `check_and_reset_habits`, `list_gtd_projects`, `seed_example_gtd_content`, `rename_gtd_project`, `rename_gtd_action`, `list_project_actions`
 
 **System:**
 `select_folder`, `check_permissions`, `get_app_version`, `get_default_gtd_space_path`, `open_folder_in_explorer`, `check_directory_exists`, `create_directory`, `initialize_default_gtd_space`
@@ -234,6 +241,12 @@ interface GTDHabit {
 - **Optimistic Updates**: Sidebar immediately adds new habits to state before confirming with backend
 - **Background Sync**: Loads actual files from disk after 500ms to correct any discrepancies
 - **Force Re-render**: Uses sectionRefreshKey to force component re-mount when needed
+- **Habit Tracking System**: Habits have 'todo'/'complete' status that auto-resets based on frequency
+- **Habit History**: Each habit file contains self-documenting history of all status changes
+- **Automatic Reset Scheduler**: Runs at 00:01 daily to reset habits based on their frequency
+- **Catch-up Reset on Startup**: App checks for missed resets when starting, ensuring habits are always current
+- **Backend Status Updates**: Habit status changes trigger `update_habit_status` command to record history
+- **Smart Reset Logic**: Only resets habits marked 'complete' that have passed their frequency interval
 
 ## Key Dependencies
 

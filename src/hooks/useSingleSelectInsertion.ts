@@ -62,7 +62,7 @@ export function useSingleSelectInsertion(editor: any) {
       // Cmd+Alt+H (Mac) or Ctrl+Alt+H (Windows/Linux) for Habit Status field
       if (modKey && e.altKey && e.key === 'h') {
         e.preventDefault();
-        const block = createSingleSelectBlock('habit-status', 'Habit Status', 'active');
+        const block = createSingleSelectBlock('habit-status', 'Habit Status', 'todo');
         const currentBlock = editor.getTextCursorPosition().block;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         editor.insertBlocks([block as any], currentBlock, 'after');
@@ -95,7 +95,7 @@ export function useSingleSelectInsertion(editor: any) {
         block = createSingleSelectBlock('habit-frequency', 'Frequency', 'daily');
         break;
       case 'habit-status':
-        block = createSingleSelectBlock('habit-status', 'Habit Status', 'active');
+        block = createSingleSelectBlock('habit-status', 'Habit Status', 'todo');
         break;
     }
 

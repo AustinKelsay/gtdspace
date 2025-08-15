@@ -25,6 +25,7 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
   readOnly = false,
   autoFocus = false,
   className = '',
+  filePath,
 }) => {
   // === LOCAL STATE ===
   
@@ -68,6 +69,7 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
           darkMode={isDarkMode}
           readOnly={readOnly}
           autoFocus={autoFocus}
+          filePath={filePath}
         />
       </div>
 

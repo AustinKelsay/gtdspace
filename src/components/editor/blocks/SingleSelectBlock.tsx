@@ -42,6 +42,7 @@ const GTD_PROJECT_STATUS_OPTIONS = [
 
 // Define habit frequency options
 const HABIT_FREQUENCY_OPTIONS = [
+  { value: '5-minute', label: 'Every 5 Minutes (Testing)', group: 'Frequency' },
   { value: 'daily', label: 'Every Day', group: 'Frequency' },
   { value: 'every-other-day', label: 'Every Other Day', group: 'Frequency' },
   { value: 'twice-weekly', label: 'Twice a Week', group: 'Frequency' },
@@ -52,10 +53,8 @@ const HABIT_FREQUENCY_OPTIONS = [
 
 // Define habit status options
 const HABIT_STATUS_OPTIONS = [
-  { value: 'active', label: 'Active', group: 'Habit Status' },
-  { value: 'paused', label: 'Paused', group: 'Habit Status' },
-  { value: 'completed', label: 'Completed', group: 'Habit Status' },
-  { value: 'archived', label: 'Archived', group: 'Habit Status' },
+  { value: 'todo', label: 'To Do', group: 'Habit Status' },
+  { value: 'complete', label: 'Complete', group: 'Habit Status' },
 ];
 
 // Define prop schema with proper types
@@ -92,7 +91,47 @@ export const SingleSelectBlock = createReactBlockSpec(
       // Parse custom options from JSON
       const customOptions = customOptionsJson ? JSON.parse(customOptionsJson) : [];
       
-      const handleChange = (newValue: string) => {
+      const handleChange = async (newValue: string) => {
+        console.log('[SingleSelectBlock] handleChange called with:', { type, newValue, value });
+        
+        // If this is a habit status field, update the backend
+        if (type === 'habit-status') {
+          try {
+            // Get the current file path from the editor or tab context
+            // This assumes the editor has access to the file path
+            const filePath = (window as any).currentFilePath || '';
+            console.log('[SingleSelectBlock] Habit status change detected');
+            console.log('[SingleSelectBlock] Window object:', window);
+            console.log('[SingleSelectBlock] Window.currentFilePath:', (window as any).currentFilePath);
+            console.log('[SingleSelectBlock] Current file path:', filePath);
+            console.log('[SingleSelectBlock] New status value:', newValue);
+            console.log('[SingleSelectBlock] Old status value:', value);
+            
+            if (filePath) {
+              // Check if this is a habit file (case-insensitive and handle both forward and back slashes)
+              const isHabitFile = filePath.toLowerCase().includes('/habits/') || 
+                                 filePath.toLowerCase().includes('\\habits\\');
+              console.log('[SingleSelectBlock] Is habit file?', isHabitFile);
+              
+              if (isHabitFile) {
+                console.log('[SingleSelectBlock] Calling update_habit_status backend...');
+                const { invoke } = await import('@tauri-apps/api/core');
+                await invoke('update_habit_status', {
+                  habitPath: filePath,  // Use camelCase for Tauri 2.0
+                  newStatus: newValue,   // Use camelCase for Tauri 2.0
+                });
+                console.log('[SingleSelectBlock] Habit status updated in backend successfully');
+              } else {
+                console.log('[SingleSelectBlock] Not a habit file, skipping backend update');
+              }
+            } else {
+              console.log('[SingleSelectBlock] File path not set, skipping backend update');
+            }
+          } catch (error) {
+            console.error('[SingleSelectBlock] Failed to update habit status in backend:', error);
+          }
+        }
+        
         // Find and update the block in the current document
         const findAndUpdateBlock = () => {
           const blocks = props.editor.document;

@@ -223,28 +223,107 @@
   font-style: italic;
 }
 
-/* Tables */
+/* Tables - Enhanced for habit tracking */
 .bn-block-content table {
   border-collapse: collapse;
   width: 100%;
-  margin: 0.5rem 0;
+  margin: 1rem 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .bn-block-content th,
 .bn-block-content td {
   border: 1px solid rgb(var(--border));
-  padding: 0.5rem;
+  padding: 0.625rem 0.75rem;
   text-align: left;
   color: rgb(var(--foreground));
+  transition: background-color 0.2s;
 }
 
 .bn-block-content th {
   background: rgb(var(--muted) / 0.5);
   font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: rgb(var(--muted-foreground));
 }
 
+.bn-block-content td {
+  font-size: 0.9375rem;
+}
+
+/* Zebra striping for better readability */
+.bn-block-content tbody tr:nth-child(even) {
+  background: rgb(var(--muted) / 0.15);
+}
+
+/* Hover effect on rows */
+.bn-block-content tbody tr:hover {
+  background: rgb(var(--accent) / 0.25);
+}
+
+/* First column (Date) - slightly bolder */
+.bn-block-content td:first-child {
+  font-weight: 500;
+  color: rgb(var(--foreground));
+}
+
+/* Status column highlighting */
+.bn-block-content td:nth-child(3) {
+  font-weight: 500;
+}
+
+/* Color coding for status values */
+.bn-block-content td:contains("Complete") {
+  color: rgb(34 197 94);
+}
+
+.bn-block-content td:contains("To Do") {
+  color: rgb(245 158 11);
+}
+
+/* Action column styling */
+.bn-block-content td:nth-child(4) {
+  font-size: 0.875rem;
+  font-style: italic;
+  color: rgb(var(--muted-foreground));
+}
+
+/* Dark mode table enhancements */
 .dark .bn-block-content th {
   background: rgb(var(--muted) / 0.8);
+  color: rgb(var(--foreground) / 0.9);
+}
+
+.dark .bn-block-content tbody tr:nth-child(even) {
+  background: rgb(var(--muted) / 0.2);
+}
+
+.dark .bn-block-content tbody tr:hover {
+  background: rgb(var(--accent) / 0.35);
+}
+
+.dark .bn-block-content td:contains("Complete") {
+  color: rgb(74 222 128);
+}
+
+.dark .bn-block-content td:contains("To Do") {
+  color: rgb(251 191 36);
+}
+
+/* Responsive table - scroll on small screens */
+@media (max-width: 640px) {
+  .bn-block-content table {
+    font-size: 0.875rem;
+  }
+  
+  .bn-block-content th,
+  .bn-block-content td {
+    padding: 0.5rem;
+  }
 }
 
 /* Slash menu */

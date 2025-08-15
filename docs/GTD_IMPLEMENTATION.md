@@ -395,15 +395,125 @@ const {
 - Medium: Focused work sessions, 30-90 minutes
 - Large: Major tasks, plan for multiple sessions
 
+## Habits
+
+Habits are recurring routines that automatically reset based on their frequency, providing a self-contained tracking system.
+
+### Habit Structure
+
+Each habit is a markdown file in the `Habits/` folder containing:
+
+```markdown
+# Habit Name
+
+## Status
+[!singleselect:habit-status:todo]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+YYYY-MM-DD
+
+## Notes
+Description and details about the habit
+
+## History
+| Date | Time | Status | Action | Notes |
+|------|------|--------|--------|-------|
+| 2025-01-13 | 14:30 | To Do | Created | Initial habit creation |
+| 2025-01-13 | 16:45 | Complete | Manual | Changed from To Do |
+| 2025-01-14 | 00:01 | To Do | Auto-Reset | Was Complete, reset per daily schedule |
+```
+
+### Habit System Features
+
+1. **Two-State System**: Habits have only 'todo' and 'complete' status
+2. **Automatic Reset**: Status resets to 'todo' based on frequency at 00:01 daily
+3. **History Tracking**: Every status change is recorded in a markdown table
+4. **Self-Contained**: Each habit file contains its complete history
+
+### Frequency Options
+
+- **Daily**: Resets every day
+- **Every Other Day**: Resets every 2 days
+- **Twice Weekly**: Resets approximately every 3 days
+- **Weekly**: Resets every 7 days
+- **Biweekly**: Resets every 14 days
+- **Monthly**: Resets every 30 days
+
+### Creating Habits
+
+```typescript
+// Via UI
+- Click "Create Habit" button
+- Enter habit name
+- Select frequency
+- Habit automatically starts as 'todo'
+
+// Backend command
+await invoke('create_gtd_habit', {
+  spacePath,
+  habitName,
+  frequency,
+  status: 'todo' // Always starts as todo
+});
+```
+
+### Habit Status Updates
+
+When you change a habit's status through the UI:
+
+1. The SingleSelectBlock updates the visual status
+2. Backend records the change in the history table
+3. History entry includes date, time, old/new status
+
+```typescript
+// Automatic backend call when status changes
+await invoke('update_habit_status', {
+  habitPath,
+  newStatus: 'complete' // or 'todo'
+});
+```
+
+### Automatic Reset System
+
+The application handles habit resets in two ways:
+
+#### Scheduled Reset (If App is Running)
+- Checks every minute at 00:01
+- Resets habits that have passed their frequency interval
+- Records as "Auto-Reset" in the history table
+
+#### Catch-up Reset (On App Startup)
+- Immediately checks all habits when the app starts
+- Catches up on any missed resets if the app wasn't running
+- Records as "Catch-up Reset" in the history table
+- Ensures habits are always current regardless of app uptime
+
+The reset logic:
+1. Only resets habits currently marked as 'complete'
+2. Checks time since last action (not just resets)
+3. Respects the frequency interval (daily, weekly, etc.)
+4. Records all resets with timestamp for full traceability
+
+### Keyboard Shortcuts
+
+- **Cmd/Ctrl+Alt+F**: Insert Frequency field
+- **Cmd/Ctrl+Alt+H**: Insert Habit Status field
+
+### Example Habits
+
+The system seeds 5 example habits:
+- **Morning Exercise**: Daily physical activity routine
+- **Weekly GTD Review**: Weekly system maintenance
+- **Reading Practice**: Daily learning habit
+- **Mindfulness Meditation**: Twice-weekly stress reduction
+- **Evening Journal**: Daily reflection
+
 ## Future Enhancements
 
 ### Planned Features
-
-1. **Habits Directory**
-
-   - Recurring tasks
-   - Tracking streaks
-   - Habit templates
 
 2. **Someday Maybe**
 

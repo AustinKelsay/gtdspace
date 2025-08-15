@@ -36,6 +36,7 @@ interface CreateHabitDialogProps {
 }
 
 const FREQUENCY_OPTIONS = [
+  { value: '5-minute', label: 'Every 5 Minutes (Testing)' },
   { value: 'daily', label: 'Every Day' },
   { value: 'every-other-day', label: 'Every Other Day' },
   { value: 'twice-weekly', label: 'Twice a Week' },
@@ -44,10 +45,7 @@ const FREQUENCY_OPTIONS = [
   { value: 'monthly', label: 'Once a Month' },
 ];
 
-const STATUS_OPTIONS = [
-  { value: 'active', label: 'Active' },
-  { value: 'paused', label: 'Paused' },
-];
+// Habits always start as 'todo' - removed status selection from UI
 
 export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
   isOpen,
@@ -57,7 +55,6 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
 }) => {
   const [habitName, setHabitName] = useState('');
   const [frequency, setFrequency] = useState('daily');
-  const [status, setStatus] = useState('active');
   const [isCreating, setIsCreating] = useState(false);
   const { withErrorHandling } = useErrorHandler();
   const { showSuccess } = useToast();
@@ -77,7 +74,7 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
           spacePath: spacePath,
           habitName: habitName.trim(),
           frequency: frequency,
-          status: status,
+          status: 'todo', // Always start habits as 'todo'
         });
         return habitPath;
       },
@@ -99,7 +96,6 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
   const handleClose = () => {
     setHabitName('');
     setFrequency('daily');
-    setStatus('active');
     setIsCreating(false);
     onClose();
   };
@@ -152,24 +148,6 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
               </p>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="status">Initial Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger id="status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Start active or paused?
-              </p>
-            </div>
           </div>
           <DialogFooter>
             <Button

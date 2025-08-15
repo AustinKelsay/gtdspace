@@ -1,0 +1,71 @@
+/**
+ * @fileoverview Hook for managing habit tracking and status updates
+ * @author Development Team
+ * @created 2025-01-13
+ */
+
+import { useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { useErrorHandler } from './useErrorHandler';
+import { useToast } from './useToast';
+
+export function useHabitTracking() {
+  const { withErrorHandling } = useErrorHandler();
+  const { showSuccess } = useToast();
+
+  /**
+   * Updates a habit's status and records it in the history
+   */
+  const updateHabitStatus = useCallback(
+    async (habitPath: string, newStatus: 'todo' | 'complete') => {
+      const result = await withErrorHandling(
+        async () => {
+          await invoke('update_habit_status', {
+            habitPath,
+            newStatus,
+          });
+          return true;
+        },
+        'Failed to update habit status',
+        'habit'
+      );
+
+      if (result) {
+        showSuccess(`Habit marked as ${newStatus === 'complete' ? 'complete' : 'to do'}`);
+      }
+
+      return result;
+    },
+    [withErrorHandling, showSuccess]
+  );
+
+  /**
+   * Manually trigger habit reset check
+   */
+  const checkAndResetHabits = useCallback(
+    async (spacePath: string) => {
+      const result = await withErrorHandling(
+        async () => {
+          const resetHabits = await invoke<string[]>('check_and_reset_habits', {
+            spacePath,
+          });
+          return resetHabits;
+        },
+        'Failed to check habits',
+        'habit'
+      );
+
+      if (result && result.length > 0) {
+        showSuccess(`Reset ${result.length} habit${result.length > 1 ? 's' : ''}`);
+      }
+
+      return result;
+    },
+    [withErrorHandling, showSuccess]
+  );
+
+  return {
+    updateHabitStatus,
+    checkAndResetHabits,
+  };
+}

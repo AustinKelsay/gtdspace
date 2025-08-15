@@ -124,6 +124,7 @@ export const useTabManager = () => {
             content: fileContent,
             hasUnsavedChanges: false, // Reset unsaved changes on restore
             isActive: tabInfo.id === persistedState.activeTabId,
+            filePath: tabInfo.filePath,
           };
 
           validTabs.push(tab);
@@ -194,6 +195,7 @@ export const useTabManager = () => {
         originalContent: content,
         hasUnsavedChanges: false,
         isActive: true,
+        filePath: file.path,
         cursorPosition: 0,
         scrollPosition: 0,
       };

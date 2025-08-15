@@ -34,6 +34,8 @@ export interface BlockNoteEditorProps {
   onFocus?: () => void;
   /** Callback when editor loses focus */
   onBlur?: () => void;
+  /** File path for context */
+  filePath?: string;
 }
 
 /**
@@ -48,6 +50,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   darkMode = false,
   readOnly = false,
   className = '',
+  filePath,
 }) => {
   // Create custom schema with multiselect and singleselect blocks
   const schema = BlockNoteSchema.create({
@@ -109,6 +112,16 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
     };
     loadContent();
   }, [content, editor]); // Now safe to include content in deps
+
+  // Set file path in window context for SingleSelectBlock
+  useEffect(() => {
+    if (filePath) {
+      (window as any).currentFilePath = filePath;
+    }
+    return () => {
+      delete (window as any).currentFilePath;
+    };
+  }, [filePath]);
 
   // Handle content changes
   useEffect(() => {

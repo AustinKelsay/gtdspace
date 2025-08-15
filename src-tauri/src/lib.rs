@@ -52,6 +52,8 @@ pub fn run() {
             commands::create_gtd_project,
             commands::create_gtd_action,
             commands::create_gtd_habit,
+            commands::update_habit_status,
+            commands::check_and_reset_habits,
             commands::list_gtd_projects,
             commands::rename_gtd_project,
             commands::rename_gtd_action,

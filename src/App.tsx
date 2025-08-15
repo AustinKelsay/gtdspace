@@ -286,7 +286,7 @@ export const App: React.FC = () => {
 
   // === GTD STATE ===
 
-  const { gtdSpace, checkGTDSpace, loadProjects, initializeDefaultSpaceIfNeeded } = useGTDSpace();
+  const { gtdSpace, checkGTDSpace, loadProjects, initializeDefaultSpaceIfNeeded, refreshSpace: refreshGTDSpace } = useGTDSpace();
   const [currentProject, setCurrentProject] = React.useState<GTDProject | null>(null);
   const [showGTDInit, setShowGTDInit] = React.useState(false);
 
@@ -438,6 +438,79 @@ export const App: React.FC = () => {
     checkTauri();
   }, []);
 
+  // === HABIT RESET SCHEDULER ===
+  React.useEffect(() => {
+    if (!gtdSpace?.root_path) return;
+
+    // Function to check and reset habits
+    const checkHabits = async () => {
+      try {
+        const now = new Date();
+        console.log(`[App] Checking habits at ${now.toISOString()}`);
+        
+        // For production: only run at 00:01 (one minute past midnight)
+        // For testing: always run to support 5-minute frequency
+        const shouldCheckProduction = now.getHours() === 0 && now.getMinutes() === 1;
+        const hasTestFrequency = true; // Always check for now to support 5-minute testing
+        
+        if (shouldCheckProduction || hasTestFrequency) {
+          console.log('[App] Calling check_and_reset_habits backend...');
+          const resetHabits = await invoke<string[]>('check_and_reset_habits', {
+            spacePath: gtdSpace.root_path,
+          });
+          
+          console.log('[App] Backend returned:', resetHabits);
+          if (resetHabits.length > 0) {
+            console.log(`[App] Reset ${resetHabits.length} habits:`, resetHabits);
+            // Refresh the sidebar to show updated statuses
+            refreshGTDSpace();
+            
+            // Also refresh the current tab if it's a habit
+            if (activeTab?.filePath?.toLowerCase().includes('/habits/')) {
+              console.log('[App] Refreshing active habit tab...');
+              // Reload the file content from disk
+              try {
+                const freshContent = await invoke<string>('read_file', { path: activeTab.filePath });
+                updateTabContent(activeTab.id, freshContent);
+                console.log('[App] Habit tab content refreshed');
+              } catch (error) {
+                console.error('[App] Failed to refresh habit tab:', error);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[App] Failed to check and reset habits:', error);
+      }
+    };
+
+    // Check for missed resets on startup
+    const checkMissedResets = async () => {
+      try {
+        console.log('Checking for missed habit resets on startup...');
+        const resetHabits = await invoke<string[]>('check_and_reset_habits', {
+          spacePath: gtdSpace.root_path,
+        });
+        
+        if (resetHabits.length > 0) {
+          console.log(`Caught up on ${resetHabits.length} missed habit resets:`, resetHabits);
+          // Refresh the sidebar to show updated statuses
+          refreshGTDSpace();
+        }
+      } catch (error) {
+        console.error('Failed to check for missed habit resets:', error);
+      }
+    };
+
+    // Check for missed resets immediately on startup
+    checkMissedResets();
+
+    // Check every 30 seconds for testing (normally would be every minute)
+    const interval = setInterval(checkHabits, 30000); // 30 seconds for testing
+
+    return () => clearInterval(interval);
+  }, [gtdSpace?.root_path, refreshGTDSpace]);
+
 
 
   return (
@@ -573,6 +646,7 @@ export const App: React.FC = () => {
                       autoFocus={true}
                       className="flex-1"
                       data-editor-root
+                      filePath={displayedTab.filePath}
                     />
                   ) : tabState.openTabs.length > 0 ? (
                     <div className="h-full flex items-center justify-center text-muted-foreground">

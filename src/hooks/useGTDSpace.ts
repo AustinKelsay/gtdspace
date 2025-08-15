@@ -329,6 +329,13 @@ export function useGTDSpace() {
     return result;
   }, [withErrorHandling]);
 
+  const refreshSpace = useCallback(async () => {
+    if (gtdSpace?.root_path) {
+      await checkGTDSpace(gtdSpace.root_path);
+      await loadProjects(gtdSpace.root_path);
+    }
+  }, [gtdSpace?.root_path, checkGTDSpace, loadProjects]);
+
   return {
     gtdSpace,
     isLoading,
@@ -339,5 +346,6 @@ export function useGTDSpace() {
     checkGTDSpace,
     loadProjects,
     initializeDefaultSpaceIfNeeded,
+    refreshSpace,
   };
 }

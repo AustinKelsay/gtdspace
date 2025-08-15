@@ -207,6 +207,8 @@ export interface TextEditorProps extends BaseComponentProps {
   readOnly?: boolean;
   /** Auto-focus on mount */
   autoFocus?: boolean;
+  /** File path for context */
+  filePath?: string;
 }
 
 // === PHASE 2 TAB MANAGEMENT TYPES ===
@@ -225,6 +227,8 @@ export interface FileTab {
   originalContent?: string;
   /** Whether this tab has unsaved changes */
   hasUnsavedChanges: boolean;
+  /** File path for the tab */
+  filePath: string;
   /** Whether this tab is currently active */
   isActive: boolean;
   /** Cursor position in the editor */

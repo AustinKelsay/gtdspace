@@ -2282,21 +2282,6 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 ## Created
 {}
 
-## Notes
-Start the day with 30 minutes of physical activity to boost energy and focus.
-
-## Benefits
-- Improved physical health
-- Better mental clarity
-- Increased energy throughout the day
-- Better sleep quality
-- Stress reduction
-
-## Routine
-1. 5 min warm-up (stretching)
-2. 20 min main exercise (alternating: cardio, strength, yoga)
-3. 5 min cool-down
-
 ## History
 | Date | Time | Status | Action | Notes |
 |------|------|--------|--------|-------|
@@ -2320,25 +2305,6 @@ Start the day with 30 minutes of physical activity to boost energy and focus.
 
 ## Created
 {}
-
-## Notes
-Comprehensive weekly review of all GTD lists and projects to maintain system integrity.
-
-## Review Checklist
-- [ ] Process all inboxes to zero
-- [ ] Review project list - update statuses
-- [ ] Review next actions list
-- [ ] Review waiting for list
-- [ ] Review someday/maybe list
-- [ ] Review calendar for upcoming week
-- [ ] Review completed items and celebrate wins
-
-## Time Allocation
-- Inbox processing: 15 minutes
-- Project review: 20 minutes
-- Lists review: 15 minutes
-- Planning ahead: 10 minutes
-- Total: ~1 hour
 
 ## History
 | Date | Time | Status | Action | Notes |
@@ -2364,19 +2330,6 @@ Comprehensive weekly review of all GTD lists and projects to maintain system int
 ## Created
 {}
 
-## Notes
-Read for at least 30 minutes each day to expand knowledge and maintain learning momentum.
-
-## Current Books
-- **Active**: "Getting Things Done" by David Allen
-- **Next**: "Atomic Habits" by James Clear
-- **Queue**: "Deep Work" by Cal Newport
-
-## Reading Goals
-- Professional development: 2 books/month
-- Personal interest: 1 book/month
-- Fiction for relaxation: 1 book/month
-
 ## History
 | Date | Time | Status | Action | Notes |
 |------|------|--------|--------|-------|
@@ -2401,26 +2354,6 @@ Read for at least 30 minutes each day to expand knowledge and maintain learning 
 ## Created
 {}
 
-## Notes
-Practice mindfulness meditation to reduce stress and improve focus.
-
-## Session Structure
-- 2 minutes: Settling and breathing
-- 10 minutes: Focused attention meditation
-- 3 minutes: Body scan
-- Total: 15 minutes
-
-## Preferred Times
-- Tuesday morning (7:00 AM)
-- Thursday evening (8:00 PM)
-- Optional weekend session
-
-## Benefits Noticed
-- Better stress management
-- Improved focus during work
-- Better emotional regulation
-- Improved sleep quality
-
 ## History
 | Date | Time | Status | Action | Notes |
 |------|------|--------|--------|-------|
@@ -2444,22 +2377,6 @@ Practice mindfulness meditation to reduce stress and improve focus.
 
 ## Created
 {}
-
-## Notes
-Reflect on the day and capture thoughts, gratitude, and learnings.
-
-## Journal Prompts
-1. What went well today?
-2. What could have been better?
-3. What am I grateful for?
-4. What did I learn?
-5. What's the priority for tomorrow?
-
-## Format
-- 3 gratitudes
-- 1 win from today
-- 1 lesson learned
-- Tomorrow's top 3 priorities
 
 ## History
 | Date | Time | Status | Action | Notes |
@@ -2865,9 +2782,6 @@ pub fn create_gtd_habit(
 ## Created
 {}
 
-## Notes
-<!-- Add any additional notes or details about this habit here -->
-
 ## History
 | Date | Time | Status | Action | Notes |
 |------|------|--------|--------|-------|
@@ -2892,7 +2806,17 @@ pub fn create_gtd_habit(
 }
 
 /// Updates a habit's status and records it in the history
-/// Also handles automatic status reset based on frequency
+/// 
+/// This function handles manual status changes made by the user through the UI.
+/// It records the change in the habit's history table with proper timestamps.
+/// 
+/// # Arguments
+/// * `habit_path` - Full path to the habit markdown file
+/// * `new_status` - New status value ("todo" or "complete")
+/// 
+/// # Returns
+/// * `Ok(())` if successful
+/// * `Err(String)` with error message if operation fails
 #[tauri::command]
 pub fn update_habit_status(
     habit_path: String,
@@ -2901,38 +2825,35 @@ pub fn update_habit_status(
     use chrono::Local;
     use regex::Regex;
     
-    println!("[update_habit_status] Called with path: {}, new_status: {}", habit_path, new_status);
-    log::info!("[update_habit_status] Called with path: {}, new_status: {}", habit_path, new_status);
+    log::info!("Updating habit status: path={}, new_status={}", habit_path, new_status);
     
-    // Read the current habit file
+    // Read and validate habit file
     let content = fs::read_to_string(&habit_path)
         .map_err(|e| format!("Failed to read habit file: {}", e))?;
     
-    println!("[update_habit_status] File content length: {}", content.len());
-    
-    // Extract current status and frequency
-    let status_regex = Regex::new(r"\[!singleselect:habit-status:([^\]]+)\]").unwrap();
-    let frequency_regex = Regex::new(r"\[!singleselect:habit-frequency:([^\]]+)\]").unwrap();
+    // Extract current status and frequency using validated regex patterns
+    let status_regex = Regex::new(r"\[!singleselect:habit-status:([^\]]+)\]")
+        .map_err(|e| format!("Invalid status regex: {}", e))?;
+    let frequency_regex = Regex::new(r"\[!singleselect:habit-frequency:([^\]]+)\]")
+        .map_err(|e| format!("Invalid frequency regex: {}", e))?;
     
     let current_status = status_regex.captures(&content)
         .and_then(|cap| cap.get(1))
         .map(|m| m.as_str())
-        .ok_or("Could not find current status")?;
-    
-    println!("[update_habit_status] Current status: {}, New status: {}", current_status, new_status);
+        .ok_or("Could not find current status in habit file")?;
     
     let _frequency = frequency_regex.captures(&content)
         .and_then(|cap| cap.get(1))
         .map(|m| m.as_str())
-        .ok_or("Could not find frequency")?;
+        .ok_or("Could not find frequency in habit file")?;
     
-    // Don't record if status isn't actually changing
+    // Skip if status isn't changing
     if current_status == new_status {
-        println!("[update_habit_status] Status unchanged, skipping history update");
+        log::debug!("Status unchanged, skipping history update");
         return Ok(());
     }
     
-    // Record the status change in history
+    // Create history entry for the manual status change
     let now = Local::now();
     let status_display = if new_status == "todo" { "To Do" } else { "Complete" };
     let old_status_display = if current_status == "todo" { "To Do" } else { "Complete" };
@@ -2944,78 +2865,46 @@ pub fn update_habit_status(
         old_status_display
     );
     
-    println!("[update_habit_status] History entry: {}", history_entry);
-    
-    // Update the status field
+    // Update the status field in the content
     let updated_content = status_regex.replace(
         &content,
         format!("[!singleselect:habit-status:{}]", new_status).as_str()
     ).to_string();
     
-    println!("[update_habit_status] Status field updated in content");
-    
-    // Simple approach: find the last line that starts with | and isn't a header/separator
-    // and insert the new entry after it
-    let lines: Vec<&str> = updated_content.lines().collect();
-    let mut last_table_line_idx = None;
-    let mut in_history_table = false;
-    
-    for (i, line) in lines.iter().enumerate() {
-        if line.starts_with("## History") {
-            in_history_table = true;
-            continue;
-        }
-        
-        if in_history_table && line.starts_with("|") {
-            // Skip header and separator lines
-            if !line.contains("Date") && !line.contains("---") {
-                last_table_line_idx = Some(i);
-            }
-        }
-        
-        // Stop if we hit another section
-        if in_history_table && line.starts_with("##") && !line.starts_with("## History") {
-            break;
-        }
-    }
-    
-    let final_content = if let Some(idx) = last_table_line_idx {
-        // Insert after the last table row
-        let mut new_lines = lines[..=idx].to_vec();
-        new_lines.push(&history_entry);
-        new_lines.extend_from_slice(&lines[idx + 1..]);
-        new_lines.join("\n")
-    } else {
-        println!("[update_habit_status] WARNING: Could not find history table, appending at end");
-        // Fallback: append at the end with a new history section
-        format!("{}\n\n## History\n\n| Date | Time | Status | Action | Notes |\n|------|------|--------|--------|-------|\n{}", 
-                updated_content.trim_end(), history_entry)
-    };
-    
-    println!("[update_habit_status] Final content length: {}", final_content.len());
+    // Insert the history entry using our standardized function
+    let final_content = insert_history_entry(&updated_content, &history_entry)?;
     
     // OLD complex regex code removed - using simpler line-based approach above
     
     // Removed - using simpler line-based approach above
     
-    // Write the updated file
+    // Write the updated file with proper error handling
     fs::write(&habit_path, final_content)
         .map_err(|e| format!("Failed to write habit file: {}", e))?;
     
-    println!("[update_habit_status] Successfully wrote file");
-    log::info!("Successfully updated habit status");
+    log::info!("Successfully updated habit status for: {}", habit_path);
     Ok(())
 }
 
 /// Checks all habits and resets their status based on frequency
-/// This should be called periodically (e.g., every minute past midnight)
+/// 
+/// This function should be called periodically (e.g., every minute) to:
+/// 1. Check if any habits need to be reset based on their frequency
+/// 2. Record the current status in history before resetting
+/// 3. Handle backfilling for missed periods when the app was closed
+/// 
+/// # Arguments
+/// * `space_path` - Path to the GTD space directory
+/// 
+/// # Returns
+/// * `Ok(Vec<String>)` - List of habit names that were reset
+/// * `Err(String)` - Error message if operation fails
 #[tauri::command]
 pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String> {
-    use chrono::{Local, Timelike};
+    use chrono::Local;
     use regex::Regex;
     
-    log::info!("[check_and_reset_habits] Called for space: {}", space_path);
-    println!("[check_and_reset_habits] Called at {}", Local::now());
+    log::info!("Checking habits for reset in space: {}", space_path);
     
     let habits_path = Path::new(&space_path).join("Habits");
     if !habits_path.exists() {
@@ -3050,12 +2939,14 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                 .map(|m| m.as_str());
             
             if let (Some(freq), Some(status)) = (frequency, current_status) {
-                println!("[check_and_reset_habits] Checking habit: {}, frequency: {}, status: {}", 
-                         path.file_name().unwrap_or_default().to_str().unwrap_or("unknown"),
-                         freq, status);
+                let habit_name = path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown");
+                
+                log::debug!("Checking habit '{}': frequency={}, status={}", habit_name, freq, status);
+                
                 // Check if we need to reset based on frequency
                 let should_reset = should_reset_habit(&content, freq);
-                println!("[check_and_reset_habits] Should reset: {}", should_reset);
                 
                 if should_reset {
                     // Get last action time for backfilling calculation
@@ -3091,30 +2982,38 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                         vec![Local::now()]
                     };
                     
-                    println!("[check_and_reset_habits] Found {} missed periods for backfilling", missed_periods.len());
+                    if !missed_periods.is_empty() {
+                        log::debug!("Found {} missed periods for habit '{}'", missed_periods.len(), habit_name);
+                    }
                     
                     if !missed_periods.is_empty() {
                         let mut history_entries = Vec::new();
                         let old_status_display = if status == "todo" { "To Do" } else { "Complete" };
                         
                         // Create history entries for each missed period
-                        for (i, period_time) in missed_periods.iter().enumerate() {
-                        // For all but the last period, assume it was complete (since we're resetting)
-                        // For the last period, use the current status
-                        let period_status = if i < missed_periods.len() - 1 {
-                            // Historical periods - assume they were completed if we have a regular schedule
-                            if freq == "5-minute" || old_status_display == "Complete" {
-                                "Complete"
-                            } else {
-                                "To Do"
-                            }
+                        // Limit backfilling to prevent excessive entries (max 100)
+                        let periods_to_process = if missed_periods.len() > 100 {
+                            log::warn!("Limiting backfill to 100 entries for habit '{}' (found {})", 
+                                     habit_name, missed_periods.len());
+                            &missed_periods[missed_periods.len() - 100..]
                         } else {
-                            // Current period - use actual status
-                            &old_status_display
+                            &missed_periods[..]
                         };
                         
-                        let is_catchup = period_time.hour() != 0 || period_time.minute() > 1 || i < missed_periods.len() - 1;
-                        let action_type = if is_catchup { "Catch-up Reset" } else { "Auto-Reset" };
+                        for (i, period_time) in periods_to_process.iter().enumerate() {
+                            // Determine status for this period
+                            let period_status = if i < periods_to_process.len() - 1 {
+                                // For historical periods during backfilling:
+                                // Assume habits were completed if we're resetting them
+                                "Complete"
+                            } else {
+                                // Current period - use actual status before reset
+                                &old_status_display
+                            };
+                        
+                            // Determine if this is a catch-up reset (backfilling) or regular auto-reset
+                            let is_catchup = i < periods_to_process.len() - 1;
+                            let action_type = if is_catchup { "Catch-up Reset" } else { "Auto-Reset" };
                         
                         let history_entry = format!(
                             "| {} | {} | {} | {} | Reset per {} schedule |",
@@ -3137,63 +3036,8 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                         let mut final_content = updated_content.clone();
                         
                         for history_entry in history_entries {
-                        // Use simpler line-based approach for inserting history
-                        let lines: Vec<&str> = final_content.lines().collect();
-                        let mut last_table_line_idx = None;
-                        let mut in_history_table = false;
-                        let mut has_history_section = false;
-                        
-                        for (i, line) in lines.iter().enumerate() {
-                            if line.starts_with("## History") {
-                                in_history_table = true;
-                                has_history_section = true;
-                                continue;
-                            }
-                            
-                            if in_history_table && line.starts_with("|") {
-                                // Skip header and separator lines
-                                if !line.contains("Date") && !line.contains("---") {
-                                    last_table_line_idx = Some(i);
-                                }
-                            }
-                            
-                            // Stop if we hit another section
-                            if in_history_table && line.starts_with("##") && !line.starts_with("## History") {
-                                break;
-                            }
-                        }
-                        
-                        final_content = if let Some(idx) = last_table_line_idx {
-                            // Insert after the last table row
-                            let mut new_lines = lines[..=idx].to_vec();
-                            new_lines.push(&history_entry);
-                            new_lines.extend_from_slice(&lines[idx + 1..]);
-                            new_lines.join("\n")
-                        } else if has_history_section {
-                            // Has history section but no data rows yet, find where to insert
-                            let mut insert_idx = None;
-                            for (i, line) in lines.iter().enumerate() {
-                                if line.contains("---") && line.contains("|") {
-                                    // Found separator line, insert after it
-                                    insert_idx = Some(i);
-                                    break;
-                                }
-                            }
-                            
-                            if let Some(idx) = insert_idx {
-                                let mut new_lines = lines[..=idx].to_vec();
-                                new_lines.push(&history_entry);
-                                new_lines.extend_from_slice(&lines[idx + 1..]);
-                                new_lines.join("\n")
-                            } else {
-                                // Fallback: append at end
-                                format!("{}\n{}", final_content.trim_end(), history_entry)
-                            }
-                        } else {
-                            // No history section, add one
-                            format!("{}\n\n## History\n\n| Date | Time | Status | Action | Notes |\n|------|------|--------|--------|-------|\n{}", 
-                                    final_content.trim_end(), history_entry)
-                            };
+                            final_content = insert_history_entry(&final_content, &history_entry)
+                                .map_err(|e| format!("Failed to insert history entry: {}", e))?;
                         }
                     
                         // Write updated file
@@ -3214,9 +3058,87 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
     Ok(reset_habits)
 }
 
-/// Calculate missed reset periods for backfilling
+/// Inserts a history entry into a habit file's history table
+/// 
+/// This function provides a standardized way to insert history entries,
+/// handling table creation if needed and proper formatting.
+/// 
+/// # Arguments
+/// * `content` - The habit file content
+/// * `entry` - The formatted history table row to insert
+/// 
+/// # Returns
+/// * `Ok(String)` - The updated content with the entry inserted
+/// * `Err(String)` - Error message if insertion fails
+fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut last_table_line_idx = None;
+    let mut in_history_table = false;
+    let mut has_history_section = false;
+    let mut separator_idx = None;
+    
+    // Find the history section and last table row
+    for (i, line) in lines.iter().enumerate() {
+        if line.starts_with("## History") {
+            in_history_table = true;
+            has_history_section = true;
+            continue;
+        }
+        
+        if in_history_table {
+            if line.contains("---") && line.contains("|") {
+                separator_idx = Some(i);
+            } else if line.starts_with("|") && !line.contains("Date") {
+                last_table_line_idx = Some(i);
+            } else if line.starts_with("##") {
+                // Hit another section, stop looking
+                break;
+            }
+        }
+    }
+    
+    // Insert the entry in the appropriate location
+    let result = if let Some(idx) = last_table_line_idx {
+        // Insert after the last existing table row
+        let mut new_lines = lines[..=idx].to_vec();
+        new_lines.push(entry);
+        new_lines.extend_from_slice(&lines[idx + 1..]);
+        new_lines.join("\n")
+    } else if let Some(idx) = separator_idx {
+        // No data rows yet, insert after separator
+        let mut new_lines = lines[..=idx].to_vec();
+        new_lines.push(entry);
+        new_lines.extend_from_slice(&lines[idx + 1..]);
+        new_lines.join("\n")
+    } else if has_history_section {
+        // History section exists but no table, append entry
+        format!("{}\n{}", content.trim_end(), entry)
+    } else {
+        // No history section, create it with proper table structure
+        format!(
+            "{}\n\n## History\n\n| Date | Time | Status | Action | Notes |\n|------|------|--------|--------|-------|\n{}",
+            content.trim_end(),
+            entry
+        )
+    };
+    
+    Ok(result)
+}
+
+/// Calculates missed reset periods for backfilling when app was closed
+/// 
+/// This function determines all the periods that should have been reset
+/// while the application was not running, allowing for proper backfilling
+/// of habit history.
+/// 
+/// # Arguments
+/// * `last_action_time` - The timestamp of the last recorded action
+/// * `frequency` - The habit frequency
+/// 
+/// # Returns
+/// * Vector of DateTime objects representing missed reset periods
 fn calculate_missed_periods(last_action_time: chrono::NaiveDateTime, frequency: &str) -> Vec<chrono::DateTime<chrono::Local>> {
-    use chrono::{Local, Duration, TimeZone};
+    use chrono::{Local, Duration, TimeZone, Datelike};
     
     let mut missed_periods = Vec::new();
     let now = Local::now();
@@ -3226,34 +3148,67 @@ fn calculate_missed_periods(last_action_time: chrono::NaiveDateTime, frequency: 
         "5-minute" => Duration::minutes(5),
         "daily" => Duration::days(1),
         "every-other-day" => Duration::days(2),
-        "twice-weekly" => Duration::days(3),
+        "twice-weekly" => Duration::days(3),  // Simplified approximation
         "weekly" => Duration::days(7),
         "biweekly" => Duration::days(14),
-        "monthly" => Duration::days(30),
-        _ => return missed_periods,
+        "monthly" => Duration::days(30),  // Simplified approximation
+        _ => {
+            log::warn!("Unknown frequency '{}' for missed periods calculation", frequency);
+            return missed_periods;
+        }
     };
     
-    // Calculate all missed periods
+    // Convert naive time to local time with proper handling
     let check_time_opt = Local.from_local_datetime(&last_action_time).single();
     let mut check_time = match check_time_opt {
         Some(t) => t + reset_period,
-        None => return missed_periods,
+        None => {
+            log::error!("Failed to convert last action time to local time");
+            return missed_periods;
+        }
     };
     
-    while check_time <= now {
+    // Calculate all missed periods up to current time
+    // Limit to reasonable number to prevent memory issues
+    const MAX_PERIODS: usize = 1000;
+    
+    while check_time <= now && missed_periods.len() < MAX_PERIODS {
         missed_periods.push(check_time);
-        check_time = check_time + reset_period;
+        
+        // For monthly frequency, handle month boundaries properly
+        if frequency == "monthly" {
+            // Add one month properly, accounting for different month lengths
+            let next_month = if check_time.month() == 12 {
+                check_time.with_month(1)
+                    .and_then(|t| t.with_year(check_time.year() + 1))
+            } else {
+                check_time.with_month(check_time.month() + 1)
+            };
+            
+            check_time = next_month.unwrap_or(check_time + Duration::days(30));
+        } else {
+            check_time = check_time + reset_period;
+        }
+    }
+    
+    if missed_periods.len() >= MAX_PERIODS {
+        log::warn!("Reached maximum backfill limit of {} periods", MAX_PERIODS);
     }
     
     missed_periods
 }
 
-/// Helper function to determine if a habit should be reset based on frequency
+/// Determines if a habit should be reset based on its frequency and last action time
+/// 
+/// # Arguments
+/// * `content` - The habit file content
+/// * `frequency` - The habit frequency (e.g., "daily", "weekly", etc.)
+/// 
+/// # Returns
+/// * `true` if the habit should be reset, `false` otherwise
 fn should_reset_habit(content: &str, frequency: &str) -> bool {
     use chrono::{Local, Duration, NaiveDateTime, NaiveDate};
     use regex::Regex;
-    
-    println!("[should_reset_habit] Checking for frequency: {}", frequency);
     
     // Find the most recent meaningful action (reset or status change) in the history table
     // Look for any reset or status change, not just auto-resets
@@ -3304,15 +3259,11 @@ fn should_reset_habit(content: &str, frequency: &str) -> bool {
         .map(|m| m.as_str())
         .unwrap_or("todo");
     
-    // For testing with 5-minute frequency, always allow reset to see the history build up
-    // For production frequencies, only reset if the habit is marked as 'complete'
+    // For non-test frequencies, only reset if habit is marked as complete
+    // This prevents unnecessary resets and history entries
     if frequency != "5-minute" && current_status == "todo" {
-        println!("[should_reset_habit] Skipping reset - status is already 'todo' and not 5-minute frequency");
+        log::trace!("Skipping reset - habit already in 'todo' state");
         return false;
-    }
-    
-    if frequency == "5-minute" {
-        println!("[should_reset_habit] 5-minute frequency detected, will check time regardless of status");
     }
     
     let now = Local::now().naive_local();
@@ -3330,10 +3281,14 @@ fn should_reset_habit(content: &str, frequency: &str) -> bool {
         _ => return false,
     };
     
-    // Reset if enough time has passed since the last action
+    // Check if enough time has passed for a reset
     let should_reset = duration_since_action >= reset_period;
-    println!("[should_reset_habit] Time since last action: {:?}, Reset period: {:?}, Should reset: {}", 
-             duration_since_action, reset_period, should_reset);
+    
+    if should_reset {
+        log::trace!("Habit should reset: time_since_last={:?}, period={:?}", 
+                   duration_since_action, reset_period);
+    }
+    
     should_reset
 }
 

@@ -438,41 +438,64 @@ export const App: React.FC = () => {
     checkTauri();
   }, []);
 
+  // Listen for habit status updates to refresh the editor
+  React.useEffect(() => {
+    const handleHabitStatusUpdate = (event: CustomEvent<{ habitPath: string }>) => {
+      // Check if the updated habit is currently open in the editor
+      if (activeTab?.filePath === event.detail.habitPath) {
+        // Reload the file content from disk
+        invoke<string>('read_file', { path: event.detail.habitPath })
+          .then(freshContent => {
+            updateTabContent(activeTab.id, freshContent);
+          })
+          .catch(error => {
+            console.error('Failed to refresh habit after status update:', error);
+          });
+      }
+      
+      // Also refresh the sidebar to show updated status
+      if (event.detail.habitPath.toLowerCase().includes('/habits/')) {
+        refreshGTDSpace();
+      }
+    };
+    
+    window.addEventListener('habit-status-updated', handleHabitStatusUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('habit-status-updated', handleHabitStatusUpdate as EventListener);
+    };
+  }, [activeTab?.filePath, activeTab?.id, updateTabContent, refreshGTDSpace]);
+  
   // === HABIT RESET SCHEDULER ===
   React.useEffect(() => {
-    if (!gtdSpace?.root_path) return;
+    if (!gtdSpace?.root_path) {
+      return;
+    }
 
     // Function to check and reset habits
     const checkHabits = async () => {
       try {
-        const now = new Date();
-        console.log(`[App] Checking habits at ${now.toISOString()}`);
+        // Always run the check - the backend will determine if any habits need resetting
+        // This ensures we catch all frequency intervals properly
+        const resetHabits = await invoke<string[]>('check_and_reset_habits', {
+          spacePath: gtdSpace.root_path,
+        }).catch(error => {
+          console.error('[App] Failed to check_and_reset_habits:', error);
+          return [];
+        });
         
-        // Check habits at specific times:
-        // - Once per day at 00:01 for daily/weekly/monthly habits
-        // - Every 5 minutes for any habits with 5-minute test frequency
-        const shouldCheckProduction = now.getHours() === 0 && now.getMinutes() === 1;
-        const isTestingInterval = now.getMinutes() % 5 === 0; // Check every 5 minutes for test habits
-        
-        // In production, only check at midnight or if on a 5-minute interval
-        if (shouldCheckProduction || isTestingInterval) {
-          const resetHabits = await invoke<string[]>('check_and_reset_habits', {
-            spacePath: gtdSpace.root_path,
-          });
+        if (resetHabits.length > 0) {
+          // Refresh the sidebar to show updated statuses
+          refreshGTDSpace();
           
-          if (resetHabits.length > 0) {
-            // Refresh the sidebar to show updated statuses
-            refreshGTDSpace();
-            
-            // Also refresh the current tab if it's a habit
-            if (activeTab?.filePath?.toLowerCase().includes('/habits/')) {
-              // Reload the file content from disk
-              try {
-                const freshContent = await invoke<string>('read_file', { path: activeTab.filePath });
-                updateTabContent(activeTab.id, freshContent);
-              } catch (error) {
-                console.error('Failed to refresh habit tab:', error);
-              }
+          // Also refresh the current tab if it's a habit
+          if (activeTab?.filePath?.toLowerCase().includes('/habits/')) {
+            // Reload the file content from disk
+            try {
+              const freshContent = await invoke<string>('read_file', { path: activeTab.filePath });
+              updateTabContent(activeTab.id, freshContent);
+            } catch (error) {
+              console.error('Failed to refresh habit tab:', error);
             }
           }
         }
@@ -500,12 +523,16 @@ export const App: React.FC = () => {
     // Check for missed resets immediately on startup
     checkMissedResets();
 
-    // Check every minute in production
-    // This is frequent enough to catch 5-minute test habits and efficient for daily habits
-    const interval = setInterval(checkHabits, 60000); // 1 minute interval
-
-    return () => clearInterval(interval);
-  }, [gtdSpace?.root_path, refreshGTDSpace, activeTab?.filePath, activeTab?.id, updateTabContent]);
+    // Check every minute to catch all frequency intervals
+    // The backend will determine if any habits actually need resetting
+    const interval = setInterval(() => {
+      checkHabits();
+    }, 60000); // 1 minute interval
+    
+    return () => {
+      clearInterval(interval);
+    };
+  }, [gtdSpace, refreshGTDSpace, activeTab?.filePath, activeTab?.id, updateTabContent]);
 
 
 

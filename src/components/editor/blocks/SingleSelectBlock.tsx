@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { createReactBlockSpec } from '@blocknote/react';
-import { PropSchema, Block } from '@blocknote/core';
+import { PropSchema } from '@blocknote/core';
 import {
   Select,
   SelectContent,
@@ -42,13 +42,14 @@ const GTD_PROJECT_STATUS_OPTIONS = [
 
 // Define habit frequency options
 const HABIT_FREQUENCY_OPTIONS = [
-  { value: '5-minute', label: 'Every 5 Minutes (Testing)', group: 'Frequency' },
   { value: 'daily', label: 'Every Day', group: 'Frequency' },
+  { value: 'weekdays', label: 'Weekdays (Mon-Fri)', group: 'Frequency' },
   { value: 'every-other-day', label: 'Every Other Day', group: 'Frequency' },
   { value: 'twice-weekly', label: 'Twice a Week', group: 'Frequency' },
   { value: 'weekly', label: 'Once Every Week', group: 'Frequency' },
   { value: 'biweekly', label: 'Once Every Other Week', group: 'Frequency' },
   { value: 'monthly', label: 'Once a Month', group: 'Frequency' },
+  { value: '5-minute', label: 'Every 5 Minutes (Testing)', group: 'Frequency' },
 ];
 
 // Define habit status options
@@ -92,40 +93,84 @@ export const SingleSelectBlock = createReactBlockSpec(
       const customOptions = customOptionsJson ? JSON.parse(customOptionsJson) : [];
       
       const handleChange = async (newValue: string) => {
-        console.log('[SingleSelectBlock] handleChange called with:', { type, newValue, value });
-        
         // If this is a habit status field, update the backend
         if (type === 'habit-status') {
           try {
             // Get the current file path from the editor or tab context
             // This assumes the editor has access to the file path
             const filePath = (window as Window & { currentFilePath?: string }).currentFilePath || '';
-            console.log('[SingleSelectBlock] Habit status change detected');
-            console.log('[SingleSelectBlock] Window object:', window);
-            console.log('[SingleSelectBlock] Window.currentFilePath:', (window as Window & { currentFilePath?: string }).currentFilePath);
-            console.log('[SingleSelectBlock] Current file path:', filePath);
-            console.log('[SingleSelectBlock] New status value:', newValue);
-            console.log('[SingleSelectBlock] Old status value:', value);
             
             if (filePath) {
               // Check if this is a habit file (case-insensitive and handle both forward and back slashes)
               const isHabitFile = filePath.toLowerCase().includes('/habits/') || 
                                  filePath.toLowerCase().includes('\\habits\\');
-              console.log('[SingleSelectBlock] Is habit file?', isHabitFile);
               
               if (isHabitFile) {
-                console.log('[SingleSelectBlock] Calling update_habit_status backend...');
                 const { invoke } = await import('@tauri-apps/api/core');
                 await invoke('update_habit_status', {
                   habitPath: filePath,  // Use camelCase for Tauri 2.0
                   newStatus: newValue,   // Use camelCase for Tauri 2.0
                 });
-                console.log('[SingleSelectBlock] Habit status updated in backend successfully');
-              } else {
-                console.log('[SingleSelectBlock] Not a habit file, skipping backend update');
+                
+                // After marking as complete, backend immediately resets to "todo"
+                // Update the UI to reflect this
+                if (newValue === 'complete') {
+                  // Give a brief moment to show the completion, then reset UI
+                  setTimeout(() => {
+                    newValue = 'todo';
+                    // Update the block to show "todo"
+                    const findAndUpdateBlock = () => {
+                      const blocks = props.editor.document;
+                      const findBlock = (blocks: any[], targetId: string): any => {
+                        for (const block of blocks) {
+                          if (block.id === targetId) {
+                            return block;
+                          }
+                          if (block.children && block.children.length > 0) {
+                            const found = findBlock(block.children, targetId);
+                            if (found) return found;
+                          }
+                        }
+                        return null;
+                      };
+                      
+                      let targetBlock = findBlock(blocks, block.id);
+                      if (!targetBlock) {
+                        const findByContent = (blocks: any[]): any => {
+                          for (const b of blocks) {
+                            if (b.type === 'singleselect' && 
+                                (b.props as { type?: string })?.type === block.props.type) {
+                              return b;
+                            }
+                            if (b.children && b.children.length > 0) {
+                              const found = findByContent(b.children);
+                              if (found) return found;
+                            }
+                          }
+                          return null;
+                        };
+                        targetBlock = findByContent(blocks);
+                      }
+                      
+                      if (targetBlock) {
+                        props.editor.updateBlock(targetBlock, {
+                          props: {
+                            ...targetBlock.props,
+                            value: 'todo',
+                          },
+                        });
+                      }
+                    };
+                    findAndUpdateBlock();
+                  }, 500); // Brief delay to show completion
+                }
+                
+                // Emit custom event to notify the app that habit status was updated
+                const event = new CustomEvent('habit-status-updated', {
+                  detail: { habitPath: filePath }
+                });
+                window.dispatchEvent(event);
               }
-            } else {
-              console.log('[SingleSelectBlock] File path not set, skipping backend update');
             }
           } catch (error) {
             console.error('[SingleSelectBlock] Failed to update habit status in backend:', error);
@@ -137,7 +182,8 @@ export const SingleSelectBlock = createReactBlockSpec(
           const blocks = props.editor.document;
           
           // Recursively search for the block with matching properties
-          const findBlock = (blocks: Block[], targetId: string): Block | null => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const findBlock = (blocks: any[], targetId: string): any => {
             for (const block of blocks) {
               if (block.id === targetId) {
                 return block;
@@ -155,7 +201,8 @@ export const SingleSelectBlock = createReactBlockSpec(
           
           // If not found by ID, try to find by content and type
           if (!targetBlock) {
-            const findByContent = (blocks: Block[]): Block | null => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const findByContent = (blocks: any[]): any => {
               for (const b of blocks) {
                 if (b.type === 'singleselect' && 
                     (b.props as { type?: string; label?: string })?.type === block.props.type &&
@@ -241,8 +288,6 @@ export const SingleSelectBlock = createReactBlockSpec(
       );
     },
     parse: (element) => {
-      console.log('SingleSelectBlock parse called with element:', element.tagName, element.outerHTML?.substring(0, 100));
-      
       // Check for new single select format
       if (element.tagName === 'DIV' && element.getAttribute('data-singleselect')) {
         try {

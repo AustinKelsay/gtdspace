@@ -36,13 +36,14 @@ interface CreateHabitDialogProps {
 }
 
 const FREQUENCY_OPTIONS = [
-  { value: '5-minute', label: 'Every 5 Minutes (Testing)' },
   { value: 'daily', label: 'Every Day' },
+  { value: 'weekdays', label: 'Weekdays (Mon-Fri)' },
   { value: 'every-other-day', label: 'Every Other Day' },
   { value: 'twice-weekly', label: 'Twice a Week' },
   { value: 'weekly', label: 'Once Every Week' },
   { value: 'biweekly', label: 'Once Every Other Week' },
   { value: 'monthly', label: 'Once a Month' },
+  { value: '5-minute', label: 'Every 5 Minutes (Testing)' },
 ];
 
 // Habits always start as 'todo' - removed status selection from UI

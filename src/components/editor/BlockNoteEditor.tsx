@@ -9,7 +9,7 @@ import React, { useEffect, useRef } from 'react';
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
-import { BlockNoteSchema, defaultBlockSpecs, Block } from "@blocknote/core";
+import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
 import { MultiSelectBlock } from './blocks/MultiSelectBlock';
 import { SingleSelectBlock } from './blocks/SingleSelectBlock';
 import { postProcessBlockNoteBlocks } from '@/utils/blocknote-preprocessing';
@@ -93,9 +93,11 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
           blocks = postProcessBlockNoteBlocks(blocks, content);
           
           // Log to see if multiselect blocks are being created
-          const hasMultiselect = blocks.some((b: Block) => b.type === 'multiselect');
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const hasMultiselect = blocks.some((b: any) => b.type === 'multiselect');
           if (hasMultiselect) {
-            console.log('Found multiselect blocks in parsed content:', blocks.filter((b: Block) => b.type === 'multiselect'));
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            console.log('Found multiselect blocks in parsed content:', blocks.filter((b: any) => b.type === 'multiselect'));
           }
           
           editor.replaceBlocks(editor.document, blocks);

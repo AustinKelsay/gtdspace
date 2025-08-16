@@ -9,7 +9,7 @@ import React, { useEffect, useRef } from 'react';
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
-import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
+import { BlockNoteSchema, defaultBlockSpecs, Block } from "@blocknote/core";
 import { MultiSelectBlock } from './blocks/MultiSelectBlock';
 import { SingleSelectBlock } from './blocks/SingleSelectBlock';
 import { postProcessBlockNoteBlocks } from '@/utils/blocknote-preprocessing';
@@ -93,9 +93,9 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
           blocks = postProcessBlockNoteBlocks(blocks, content);
           
           // Log to see if multiselect blocks are being created
-          const hasMultiselect = blocks.some((b: any) => b.type === 'multiselect');
+          const hasMultiselect = blocks.some((b: Block) => b.type === 'multiselect');
           if (hasMultiselect) {
-            console.log('Found multiselect blocks in parsed content:', blocks.filter((b: any) => b.type === 'multiselect'));
+            console.log('Found multiselect blocks in parsed content:', blocks.filter((b: Block) => b.type === 'multiselect'));
           }
           
           editor.replaceBlocks(editor.document, blocks);
@@ -116,10 +116,10 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   // Set file path in window context for SingleSelectBlock
   useEffect(() => {
     if (filePath) {
-      (window as any).currentFilePath = filePath;
+      (window as Window & { currentFilePath?: string }).currentFilePath = filePath;
     }
     return () => {
-      delete (window as any).currentFilePath;
+      delete (window as Window & { currentFilePath?: string }).currentFilePath;
     };
   }, [filePath]);
 

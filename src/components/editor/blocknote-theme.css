@@ -276,12 +276,14 @@
   font-weight: 500;
 }
 
-/* Color coding for status values */
-.bn-block-content td:contains("Complete") {
+/* Color coding for status values - using data attributes and classes */
+.bn-block-content td[data-status="complete"],
+.bn-block-content td.status-complete {
   color: rgb(34 197 94);
 }
 
-.bn-block-content td:contains("To Do") {
+.bn-block-content td[data-status="todo"],
+.bn-block-content td.status-todo {
   color: rgb(245 158 11);
 }
 
@@ -306,11 +308,13 @@
   background: rgb(var(--accent) / 0.35);
 }
 
-.dark .bn-block-content td:contains("Complete") {
+.dark .bn-block-content td[data-status="complete"],
+.dark .bn-block-content td.status-complete {
   color: rgb(74 222 128);
 }
 
-.dark .bn-block-content td:contains("To Do") {
+.dark .bn-block-content td[data-status="todo"],
+.dark .bn-block-content td.status-todo {
   color: rgb(251 191 36);
 }
 

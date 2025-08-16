@@ -553,7 +553,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       unsubscribeMetadata();
       unsubscribeSaved();
     };
-  }, [gtdSpace, loadProjects, loadProjectActions, loadSectionFiles]);
+  }, [gtdSpace, loadProjects, loadProjectActions, loadSectionFiles, projectActions]);
 
   // Prefetch actions after projects load so the UI always has items ready
   React.useEffect(() => {

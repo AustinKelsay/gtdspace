@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { createReactBlockSpec } from '@blocknote/react';
-import { PropSchema } from '@blocknote/core';
+import { PropSchema, Block } from '@blocknote/core';
 import {
   Select,
   SelectContent,
@@ -99,10 +99,10 @@ export const SingleSelectBlock = createReactBlockSpec(
           try {
             // Get the current file path from the editor or tab context
             // This assumes the editor has access to the file path
-            const filePath = (window as any).currentFilePath || '';
+            const filePath = (window as Window & { currentFilePath?: string }).currentFilePath || '';
             console.log('[SingleSelectBlock] Habit status change detected');
             console.log('[SingleSelectBlock] Window object:', window);
-            console.log('[SingleSelectBlock] Window.currentFilePath:', (window as any).currentFilePath);
+            console.log('[SingleSelectBlock] Window.currentFilePath:', (window as Window & { currentFilePath?: string }).currentFilePath);
             console.log('[SingleSelectBlock] Current file path:', filePath);
             console.log('[SingleSelectBlock] New status value:', newValue);
             console.log('[SingleSelectBlock] Old status value:', value);
@@ -137,7 +137,7 @@ export const SingleSelectBlock = createReactBlockSpec(
           const blocks = props.editor.document;
           
           // Recursively search for the block with matching properties
-          const findBlock = (blocks: any[], targetId: string): any => {
+          const findBlock = (blocks: Block[], targetId: string): Block | null => {
             for (const block of blocks) {
               if (block.id === targetId) {
                 return block;
@@ -155,11 +155,11 @@ export const SingleSelectBlock = createReactBlockSpec(
           
           // If not found by ID, try to find by content and type
           if (!targetBlock) {
-            const findByContent = (blocks: any[]): any => {
+            const findByContent = (blocks: Block[]): Block | null => {
               for (const b of blocks) {
                 if (b.type === 'singleselect' && 
-                    b.props?.type === block.props.type &&
-                    b.props?.label === block.props.label) {
+                    (b.props as { type?: string; label?: string })?.type === block.props.type &&
+                    (b.props as { type?: string; label?: string })?.label === block.props.label) {
                   return b;
                 }
                 if (b.children && b.children.length > 0) {

@@ -10,17 +10,15 @@
  * Preprocesses markdown content to handle custom multiselect blocks
  * Converts custom HTML elements into BlockNote block format
  */
+import type { Block } from '@blocknote/core';
+
 export function preprocessMarkdownForBlockNote(markdown: string): string {
-  // Pattern to match our custom multiselect HTML
-  // Pattern to match multiselect markers in markdown (e.g., [!multiselect:status:not-started])
-  const multiSelectMarkerPattern = /\[!multiselect:([^:]+):([^\]]+)\]/g;
   // Pattern to match HTML multiselect blocks (legacy support)
   const multiSelectHTMLPattern = /<div\s+data-multiselect='([^']+)'\s+class="multiselect-block">([^<]+)<\/div>/g;
   
   let processedMarkdown = markdown;
   let match;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const blocksToInsert: Array<{ position: number; block: any }> = [];
+  const blocksToInsert: Array<{ position: number; block: { type: string; props: Record<string, unknown> } }> = [];
   
   while ((match = multiSelectHTMLPattern.exec(markdown)) !== null) {
     try {
@@ -60,8 +58,7 @@ export function preprocessMarkdownForBlockNote(markdown: string): string {
 /**
  * Post-processes BlockNote blocks after markdown parsing to insert custom blocks
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any[] {
+export function postProcessBlockNoteBlocks(blocks: Block[], markdown: string): Block[] {
   console.log('postProcessBlockNoteBlocks called');
   console.log('Number of blocks:', blocks.length);
   console.log('Markdown contains multiselect?', markdown.includes('data-multiselect'));
@@ -89,9 +86,7 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
   const singleSelectHTMLPattern = /<div\s+data-singleselect='([^']+)'\s+class="singleselect-block">([^<]+)<\/div>/g;
   
   // Find all multiselect blocks in the original markdown
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const multiSelectBlocks: Array<{ text: string; type: string; value: string[]; label?: string }> = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const singleSelectBlocks: Array<{ text: string; type: string; value: string; label?: string }> = [];
   let match;
   
@@ -187,8 +182,7 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
               maxCount: 0,
               customOptionsJson: '[]',
             },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any);
+          } as Block);
           blockReplaced = true;
           console.log('Replaced paragraph with multiselect block:', msBlock);
           break; // Exit the inner loop once we've replaced the block
@@ -211,8 +205,7 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
                 placeholder: '',
                 customOptionsJson: '[]',
               },
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } as any);
+            } as Block);
             blockReplaced = true;
             console.log('Replaced paragraph with singleselect block:', ssBlock);
             break; // Exit the inner loop once we've replaced the block
@@ -233,8 +226,7 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
 /**
  * Helper function to extract text from a block
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getTextFromBlock(block: any): string {
+function getTextFromBlock(block: Block): string {
   if (!block.content) return '';
   
   if (typeof block.content === 'string') {
@@ -242,8 +234,7 @@ function getTextFromBlock(block: any): string {
   }
   
   if (Array.isArray(block.content)) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return block.content.map((item: any) => {
+    return block.content.map((item: { text?: string; type?: string }) => {
       if (typeof item === 'string') return item;
       if (item.text) return item.text;
       return '';

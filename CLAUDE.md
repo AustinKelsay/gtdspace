@@ -146,6 +146,13 @@ interface HabitRecord {
 [!multiselect:tags:urgent,important]
 ```
 
+**DateTime Fields** (Dates and Times):
+```markdown
+[!datetime:due_date:2025-01-20]  # Date only
+[!datetime:focus_date_time:2025-01-20T14:30:00]  # Date with time
+[!datetime:created_date_time:2025-01-17T10:00:00Z]  # ISO 8601 with timezone
+```
+
 ### Content Processing Pipeline
 1. **Load**: Markdown → `preprocessMarkdownForBlockNote()` → `postProcessBlockNoteBlocks()` → Interactive blocks
 2. **Save**: BlockNote blocks → `toExternalHTML()` → Markdown with field markers
@@ -153,6 +160,7 @@ interface HabitRecord {
 
 ### Keyboard Shortcuts
 - **Single Select**: `Cmd/Ctrl+Alt+S` (Status), `+E` (Effort), `+P` (Project Status), `+F` (Habit Frequency), `+H` (Habit Status)
+- **DateTime**: `Cmd/Ctrl+Alt+D` (Due Date), `+T` (Focus DateTime), `+C` (Created Date)
 - **Multi Select**: `Cmd/Ctrl+Shift+S/E/P` (legacy)
 
 ## Critical Patterns & Constraints
@@ -260,6 +268,9 @@ interface HabitRecord {
 - **Visual Animations**: Subtle green highlight when habit file updates
 - **Weekdays Frequency**: Added Monday-Friday option for business day habits
 - **Backfill Support**: Automatically backfills missed habit periods when app was offline
+- **DateTime Fields**: Beautiful calendar/time picker components using shadcn/ui, stored as `[!datetime:type:value]` in markdown
+- **Field-Specific Colors**: Due dates (orange/red), focus dates (blue), completed (green) for visual distinction
+- **ISO 8601 Support**: Full datetime storage with timezone support for accurate scheduling
 
 ## Key Dependencies
 
@@ -270,6 +281,9 @@ interface HabitRecord {
 - **Syntax Highlighting**: Both `shiki` and `highlight.js` for code blocks
 - **react-hotkeys-hook**: Keyboard shortcut management
 - **lodash.debounce**: Performance optimization
+- **react-day-picker**: Calendar component for date selection
+- **date-fns**: Date manipulation and formatting
+- **lucide-react**: Modern icon library
 
 ### Backend (Rust)
 - **notify + notify-debouncer-mini**: File system watching

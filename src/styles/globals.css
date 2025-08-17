@@ -247,6 +247,185 @@ body {
   min-height: 200px;
 }
 
+/* Date picker styles - remove blue focus rings */
+[data-radix-popper-content-wrapper] {
+  outline: none !important;
+}
+
+/* Remove focus outline from date picker trigger buttons */
+button[aria-haspopup="dialog"] {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+button[aria-haspopup="dialog"]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+button[aria-haspopup="dialog"]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Calendar styles */
+.rdp {
+  --rdp-cell-size: 40px;
+  --rdp-accent-color: rgb(var(--primary));
+  --rdp-background-color: rgb(var(--primary) / 0.1);
+  --rdp-accent-color-dark: rgb(var(--primary));
+  --rdp-disabled-color: rgb(var(--muted-foreground) / 0.5);
+  --rdp-outline: 2px solid transparent;
+  --rdp-outline-selected: 2px solid rgb(var(--primary));
+}
+
+/* Fix weekday headers and calendar grid */
+.rdp {
+  margin: 0 auto;
+}
+
+.rdp-month {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Fix navigation buttons positioning and visibility */
+.rdp-nav {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  padding: 0 0.5rem !important;
+}
+
+.rdp-nav_button,
+.rdp-button_previous,
+.rdp-button_next {
+  position: absolute !important;
+  color: rgb(var(--muted-foreground)) !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  padding: 0.25rem !important;
+  border-radius: 0.25rem !important;
+  transition: all 0.2s !important;
+}
+
+.rdp-nav_button:hover,
+.rdp-button_previous:hover,
+.rdp-button_next:hover {
+  color: rgb(var(--foreground)) !important;
+  background: rgb(var(--accent)) !important;
+}
+
+.rdp-button_previous {
+  left: 1rem !important;
+}
+
+.rdp-button_next {
+  right: 1rem !important;
+}
+
+/* Ensure chevron icons are visible */
+.rdp-chevron {
+  fill: currentColor !important;
+  width: 1rem !important;
+  height: 1rem !important;
+}
+
+.rdp-caption {
+  position: relative !important;
+}
+
+.rdp-table {
+  margin: 0 auto;
+}
+
+.rdp-head_row,
+.rdp-weekdays {
+  display: grid !important;
+  grid-template-columns: repeat(7, 2.25rem) !important;
+  gap: 0 !important;
+}
+
+.rdp-head_cell,
+.rdp-weekday {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 2.25rem !important;
+  height: 2rem !important;
+}
+
+.rdp-row,
+.rdp-week {
+  display: grid !important;
+  grid-template-columns: repeat(7, 2.25rem) !important;
+  gap: 0 !important;
+}
+
+.rdp-cell {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+}
+
+/* Center the day button content */
+.rdp-day button,
+.rdp button.rdp-day {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Ensure selected dates are visible - more specific selectors */
+.rdp-day_selected:not(.rdp-day_disabled),
+.rdp-day[aria-selected="true"]:not(.rdp-day_disabled),
+.rdp button[aria-selected="true"]:not(:disabled),
+.rdp .rdp-day_selected,
+[role="gridcell"] button[aria-selected="true"],
+[data-selected="true"] {
+  background-color: rgb(var(--primary)) !important;
+  color: rgb(var(--primary-foreground)) !important;
+}
+
+.rdp-day_selected:hover:not(.rdp-day_disabled),
+.rdp-day[aria-selected="true"]:hover:not(.rdp-day_disabled),
+.rdp button[aria-selected="true"]:hover:not(:disabled) {
+  background-color: rgb(var(--primary) / 0.9) !important;
+  color: rgb(var(--primary-foreground)) !important;
+}
+
+/* Force selected state for buttons with aria-selected */
+.rdp button[aria-selected="true"],
+.rdp .rdp-button[aria-selected="true"],
+.rdp .rdp-day[aria-selected="true"] button {
+  background-color: rgb(var(--primary)) !important;
+  color: rgb(var(--primary-foreground)) !important;
+  font-weight: 600;
+}
+
+/* Additional specificity for DayPicker */
+[aria-label*="calendar"] button[aria-selected="true"],
+.DayPicker button[aria-selected="true"] {
+  background-color: rgb(var(--primary)) !important;
+  color: rgb(var(--primary-foreground)) !important;
+}
+
+/* Remove blue outline from all Radix UI popover elements */
+[data-radix-popper-content-wrapper] * {
+  outline: none !important;
+}
+
 /* Ensure WYSIWYG editor scrolls properly */
 .wysiwyg-editor .ProseMirror-focused {
   outline: none;

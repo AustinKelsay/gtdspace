@@ -879,7 +879,7 @@ pub async fn create_file(directory: String, name: String) -> Result<FileOperatio
     
     // Create appropriate template content
     let template_content = if is_in_projects && is_project_dir {
-        // Use GTD action template with single select fields
+        // Use GTD action template with single select and datetime fields
         let clean_name = name.trim_end_matches(".md");
         format!(
             r#"# {}
@@ -888,10 +888,10 @@ pub async fn create_file(directory: String, name: String) -> Result<FileOperatio
 [!singleselect:status:in-progress]
 
 ## Focus Date
-Not set
+[!datetime:focus_date_time:]
 
 ## Due Date
-Not set
+[!datetime:due_date:]
 
 ## Effort
 [!singleselect:effort:medium]
@@ -900,10 +900,10 @@ Not set
 <!-- Add any additional notes or details about this action here -->
 
 ---
-Created: {}
+[!datetime:created_date_time:{}]
 "#,
             clean_name,
-            chrono::Local::now().format("%Y-%m-%d %H:%M")
+            chrono::Local::now().to_rfc3339()
         )
     } else {
         // Use basic template for non-GTD files
@@ -2444,7 +2444,7 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
     // Create example Habits
     let habits_dir = Path::new(&space_path).join("Habits");
     if habits_dir.exists() {
-        let today = chrono::Local::now().format("%Y-%m-%d");
+        let _today = chrono::Local::now().format("%Y-%m-%d");
         
         // Habit 1: Morning Exercise
         let habit1 = habits_dir.join("Morning Exercise.md");
@@ -2453,20 +2453,20 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
             let content = format!(r#"# Morning Exercise
 
 ## Status
-[!singleselect:habit-status:todo]
+[!checkbox:habit-status:false]
 
 ## Frequency
 [!singleselect:habit-frequency:daily]
 
 ## Created
-{}
+[!datetime:created_date:{}]
 
 ## History
 | Date | Time | Status | Action | Notes |
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, today, now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
             let _ = fs::write(&habit1, content);
         }
 
@@ -2477,20 +2477,20 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
             let content = format!(r#"# Weekly GTD Review
 
 ## Status
-[!singleselect:habit-status:todo]
+[!checkbox:habit-status:false]
 
 ## Frequency
 [!singleselect:habit-frequency:weekly]
 
 ## Created
-{}
+[!datetime:created_date:{}]
 
 ## History
 | Date | Time | Status | Action | Notes |
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, today, now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
             let _ = fs::write(&habit2, content);
         }
 
@@ -2501,20 +2501,20 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
             let content = format!(r#"# Reading Practice
 
 ## Status
-[!singleselect:habit-status:todo]
+[!checkbox:habit-status:false]
 
 ## Frequency
 [!singleselect:habit-frequency:daily]
 
 ## Created
-{}
+[!datetime:created_date:{}]
 
 ## History
 | Date | Time | Status | Action | Notes |
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, today, now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
             let _ = fs::write(&habit3, content);
         }
 
@@ -2525,20 +2525,20 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
             let content = format!(r#"# Mindfulness Meditation
 
 ## Status
-[!singleselect:habit-status:todo]
+[!checkbox:habit-status:false]
 
 ## Frequency
 [!singleselect:habit-frequency:twice-weekly]
 
 ## Created
-{}
+[!datetime:created_date:{}]
 
 ## History
 | Date | Time | Status | Action | Notes |
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, today, now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
             let _ = fs::write(&habit4, content);
         }
 
@@ -2549,20 +2549,20 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
             let content = format!(r#"# Evening Journal
 
 ## Status
-[!singleselect:habit-status:todo]
+[!checkbox:habit-status:false]
 
 ## Frequency
 [!singleselect:habit-frequency:daily]
 
 ## Created
-{}
+[!datetime:created_date:{}]
 
 ## History
 | Date | Time | Status | Action | Notes |
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, today, now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
             let _ = fs::write(&habit5, content);
         }
     }
@@ -2723,7 +2723,7 @@ pub async fn create_gtd_project(
 {}
 
 ## Due Date
-{}
+[!datetime:due_date:{}]
 
 ## Status
 [!singleselect:project-status:{}]
@@ -2734,16 +2734,16 @@ Actions for this project are stored as individual markdown files in this directo
 ### Action Template
 Each action file contains:
 - **Status**: Single select field for tracking progress
-- **Focus Date**: When to work on this action
-- **Due Date**: Optional deadline
+- **Focus Date**: DateTime field for when to work on this action
+- **Due Date**: Date field for optional deadline
 - **Effort**: Single select field for time estimate
 
 ---
-Created: {}
+[!datetime:created_date:{}]
 "#,
         project_name,
         description,
-        due_date.as_deref().unwrap_or("Not set"),
+        due_date.as_deref().unwrap_or(""),
         project_status,
         chrono::Local::now().format("%Y-%m-%d")
     );
@@ -2828,23 +2828,7 @@ pub async fn create_gtd_action(
         _ => "medium"
     };
     
-    // Format focus date for display
-    let focus_date_display = if let Some(ref fd) = focus_date {
-        // Parse ISO datetime and format for display
-        if fd.contains('T') {
-            // Full datetime format
-            match chrono::DateTime::parse_from_rfc3339(fd) {
-                Ok(dt) => dt.format("%Y-%m-%d %l:%M %p").to_string(),
-                Err(_) => fd.clone()
-            }
-        } else {
-            fd.clone()
-        }
-    } else {
-        "Not set".to_string()
-    };
-    
-    // Create action file with template using single select fields
+    // Create action file with template using single select and datetime fields
     let action_content = format!(
         r#"# {}
 
@@ -2852,10 +2836,10 @@ pub async fn create_gtd_action(
 [!singleselect:status:{}]
 
 ## Focus Date
-{}
+[!datetime:focus_date_time:{}]
 
 ## Due Date
-{}
+[!datetime:due_date:{}]
 
 ## Effort
 [!singleselect:effort:{}]
@@ -2864,14 +2848,14 @@ pub async fn create_gtd_action(
 <!-- Add any additional notes or details about this action here -->
 
 ---
-Created: {}
+[!datetime:created_date_time:{}]
 "#,
         action_name,
         status_value,
-        focus_date_display,
-        due_date.as_deref().unwrap_or("Not set"),
+        focus_date.as_deref().unwrap_or(""),
+        due_date.as_deref().unwrap_or(""),
         effort_value,
-        chrono::Local::now().format("%Y-%m-%d %H:%M")
+        chrono::Local::now().to_rfc3339()
     );
     
     match fs::write(&action_path, action_content) {
@@ -2961,7 +2945,7 @@ pub fn create_gtd_habit(
 [!singleselect:habit-frequency:{}]
 
 ## Created
-{}
+[!datetime:created_date:{}]
 
 ## History
 | Date | Time | Status | Action | Notes |
@@ -3912,7 +3896,20 @@ fn parse_project_readme(content: &str) -> (String, Option<String>, String, Strin
                     }
                 }
                 "due_date" => {
-                    if trimmed != "Not set" {
+                    // Parse datetime syntax [!datetime:due_date:value]
+                    if trimmed.starts_with("[!datetime:due_date:") {
+                        if let Some(last_colon) = trimmed.rfind(':') {
+                            if let Some(end_bracket) = trimmed.rfind(']') {
+                                if last_colon < end_bracket {
+                                    let value = &trimmed[last_colon + 1..end_bracket];
+                                    if !value.is_empty() && value != "Not set" {
+                                        due_date = Some(value.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    } else if trimmed != "Not set" && !trimmed.is_empty() {
+                        // Fallback to raw text for backward compatibility
                         due_date = Some(trimmed.to_string());
                     }
                 }

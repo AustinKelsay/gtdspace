@@ -13,9 +13,11 @@ import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
 import { MultiSelectBlock } from './blocks/MultiSelectBlock';
 import { SingleSelectBlock } from './blocks/SingleSelectBlock';
 import { CheckboxBlock } from './blocks/CheckboxBlock';
+import { DateTimeSelectBlock } from './blocks/DateTimeSelectBlock';
 import { postProcessBlockNoteBlocks } from '@/utils/blocknote-preprocessing';
 import { useMultiSelectInsertion } from '@/hooks/useMultiSelectInsertion';
 import { useSingleSelectInsertion } from '@/hooks/useSingleSelectInsertion';
+import { useDateTimeInsertion } from '@/hooks/useDateTimeInsertion';
 import './blocknote-theme.css';
 
 export interface BlockNoteEditorProps {
@@ -53,13 +55,14 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   className = '',
   filePath,
 }) => {
-  // Create custom schema with multiselect, singleselect, and checkbox blocks
+  // Create custom schema with multiselect, singleselect, checkbox, and datetime blocks
   const schema = BlockNoteSchema.create({
     blockSpecs: {
       ...defaultBlockSpecs,
       multiselect: MultiSelectBlock,
       singleselect: SingleSelectBlock,
       checkbox: CheckboxBlock,
+      datetime: DateTimeSelectBlock,
     },
   });
   
@@ -74,6 +77,9 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
 
   // Add singleselect insertion capabilities
   useSingleSelectInsertion(editor);
+
+  // Add datetime insertion capabilities
+  useDateTimeInsertion(editor);
 
   // Track if initial content has been loaded
   const initialContentLoaded = useRef(false);

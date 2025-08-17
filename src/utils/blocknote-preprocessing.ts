@@ -89,10 +89,16 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
   // Pattern to match HTML checkbox blocks
   const checkboxHTMLPattern = /<div\s+data-checkbox='([^']+)'\s+class="checkbox-block">([^<]+)<\/div>/g;
   
+  // Pattern to match datetime markers in markdown (e.g., [!datetime:due_date:2025-01-17T10:30:00])
+  const dateTimeMarkerPattern = /\[!datetime:([^:]+):([^\]]*)\]/g;
+  // Pattern to match HTML datetime blocks
+  const dateTimeHTMLPattern = /<div\s+data-datetime='([^']+)'\s+class="datetime-block">([^<]+)<\/div>/g;
+  
   // Find all multiselect blocks in the original markdown
   const multiSelectBlocks: Array<{ text: string; type: string; value: string[]; label?: string }> = [];
   const singleSelectBlocks: Array<{ text: string; type: string; value: string; label?: string }> = [];
   const checkboxBlocks: Array<{ text: string; type: string; checked: boolean; label?: string }> = [];
+  const dateTimeBlocks: Array<{ text: string; type: string; value: string; includeTime?: boolean; label?: string }> = [];
   let match;
   
   // First check for new marker syntax
@@ -177,11 +183,41 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
     }
   }
   
+  // Check for datetime marker syntax
+  while ((match = dateTimeMarkerPattern.exec(markdown)) !== null) {
+    const type = match[1];
+    const value = match[2];
+    const includeTime = type.endsWith('_time');
+    const baseType = includeTime ? type.replace('_time', '') : type;
+    dateTimeBlocks.push({ text: match[0], type: baseType, value, includeTime });
+  }
+  
+  // Check for datetime HTML syntax
+  while ((match = dateTimeHTMLPattern.exec(markdown)) !== null) {
+    try {
+      let jsonStr = match[1];
+      if (jsonStr.includes('\\"')) {
+        jsonStr = jsonStr.replace(/\\"/g, '"');
+      }
+      const data = JSON.parse(jsonStr);
+      dateTimeBlocks.push({ 
+        text: match[0], 
+        type: data.type || 'due_date', 
+        value: data.value || '',
+        includeTime: data.includeTime || false,
+        label: data.label 
+      });
+    } catch (e) {
+      console.error('Error parsing datetime data:', e, 'JSON string:', match[1]);
+    }
+  }
+  
   console.log('Found multiselect blocks in markdown:', multiSelectBlocks.length);
   console.log('Found singleselect blocks in markdown:', singleSelectBlocks.length);
   console.log('Found checkbox blocks in markdown:', checkboxBlocks.length);
+  console.log('Found datetime blocks in markdown:', dateTimeBlocks.length);
   
-  if (multiSelectBlocks.length === 0 && singleSelectBlocks.length === 0 && checkboxBlocks.length === 0) {
+  if (multiSelectBlocks.length === 0 && singleSelectBlocks.length === 0 && checkboxBlocks.length === 0 && dateTimeBlocks.length === 0) {
     console.log('No custom blocks found, returning original blocks');
     return blocks;
   }
@@ -278,6 +314,30 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
             } as any);
             blockReplaced = true;
             console.log('Replaced paragraph with checkbox block:', cbBlock);
+            break; // Exit the inner loop once we've replaced the block
+          }
+        }
+      }
+      
+      // Check if this paragraph contains our datetime markers or HTML
+      if (!blockReplaced) {
+        for (const dtBlock of dateTimeBlocks) {
+          if (blockText.includes(dtBlock.text) || 
+              blockText.includes(`[!datetime:${dtBlock.type}:`) ||
+              (dtBlock.label && blockText.includes(dtBlock.label))) {
+            // Replace this paragraph with a datetime block
+            processedBlocks.push({
+              type: 'datetime',
+              props: {
+                type: dtBlock.type || 'due_date',
+                value: dtBlock.value || '',
+                includeTime: dtBlock.includeTime || false,
+                label: dtBlock.label || '',
+                optional: true,
+              },
+            } as any);
+            blockReplaced = true;
+            console.log('Replaced paragraph with datetime block:', dtBlock);
             break; // Exit the inner loop once we've replaced the block
           }
         }

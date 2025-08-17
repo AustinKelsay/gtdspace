@@ -27,6 +27,7 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 - **Real-time Updates** - File watcher detects external changes
 - **Smart Notifications** - Deduped alerts for file changes
 - **Interactive Single/MultiSelect Fields** - Notion-like dropdowns for Status, Effort, and Tags that can't be accidentally overwritten
+- **Beautiful Date & Time Pickers** - Visual calendar and time selection for due dates, focus dates, and scheduling
 - **Bidirectional Title Sync** - Document titles automatically rename files/folders and vice versa
 - **Content Event System** - Real-time metadata updates across the UI
 
@@ -68,6 +69,7 @@ npm run tauri:build
 - [Architecture Overview](docs/architecture.md) - System design and patterns
 - [GTD Implementation](docs/GTD_IMPLEMENTATION.md) - Getting Things Done methodology integration
 - [MultiSelect Fields](docs/multiselect-fields.md) - Interactive dropdown fields for Status and Effort
+- [DateTime Fields](docs/datetime-fields.md) - Beautiful date and time pickers for deadlines and planning
 - [Theming & Styles](docs/theming.md) - CSS variables and theme system
 - [Tauri Integration](docs/tauri.md) - Backend commands and IPC
 - [BlockNote Editor](docs/blocknote.md) - Editor configuration and extensions
@@ -136,6 +138,9 @@ See [GTD Implementation](docs/GTD_IMPLEMENTATION.md) for detailed usage.
 | Insert Project Status | `Ctrl/Cmd+Alt+P`   |
 | Insert Habit Frequency| `Ctrl/Cmd+Alt+F`   |
 | Insert Habit Status   | `Ctrl/Cmd+Alt+H`   |
+| Insert Due Date       | `Ctrl/Cmd+Alt+D`   |
+| Insert Focus DateTime | `Ctrl/Cmd+Alt+T`   |
+| Insert Created Date   | `Ctrl/Cmd+Alt+C`   |
 | Next Tab              | `Ctrl/Cmd+Tab`     |
 | Previous Tab          | `Ctrl/Cmd+Shift+Tab`|
 | Tab by Number         | `Ctrl/Cmd+1-9`     |

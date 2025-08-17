@@ -153,7 +153,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const [projectMetadata, setProjectMetadata] = React.useState<{ [projectPath: string]: { status?: string; title?: string; currentPath?: string } }>({});
 
   // Local state for action metadata that can be updated dynamically
-  const [actionMetadata, setActionMetadata] = React.useState<{ [actionPath: string]: { status?: string; title?: string; currentPath?: string } }>({});
+  const [actionMetadata, setActionMetadata] = React.useState<{ [actionPath: string]: { status?: string; title?: string; currentPath?: string; due_date?: string } }>({});
 
   // Local state for section file metadata that can be updated dynamically
   const [sectionFileMetadata, setSectionFileMetadata] = React.useState<{ [filePath: string]: { title?: string; currentPath?: string } }>({});
@@ -199,7 +199,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         [projectPath]: actions
       }));
 
-      // Load status for all actions in parallel
+      // Load status and due date for all actions in parallel
       const statusPromises = actions.map(async (action) => {
         try {
           const content = await invoke<string>('read_file', { path: action.path });
@@ -209,9 +209,16 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           const raw = (match?.[1] ?? 'in-progress').trim().toLowerCase();
           // Normalize to the canonical set used by the UI
           const normalized = (raw === 'completed' || raw === 'done') ? 'complete' : raw;
+          
+          // Extract due date from the markdown content
+          // Look for [!datetime:due_date:xxx] pattern
+          const dueDateMatch = content.match(/\[!datetime:due_date:([^\]]*)\]/i);
+          const dueDate = dueDateMatch?.[1]?.trim() || '';
+          
           return {
             path: action.path,
-            status: normalized
+            status: normalized,
+            due_date: dueDate
           };
         } catch (error) {
           console.warn(`Failed to read action status for ${action.path}:`, error);
@@ -230,6 +237,19 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         ...prev,
         ...statuses
       }));
+      
+      // Update action metadata with due dates
+      statusResults.forEach(({ path, due_date }) => {
+        if (due_date) {
+          setActionMetadata(prev => ({
+            ...prev,
+            [path]: {
+              ...prev[path],
+              due_date
+            }
+          }));
+        }
+      });
     } catch (error) {
       console.error('Failed to load project actions:', projectPath, error);
     }
@@ -1042,12 +1062,15 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                               <div className="font-medium text-sm truncate">{currentTitle}</div>
                               <div className="text-xs text-muted-foreground flex items-center gap-1">
                                 <span className="truncate">{project.action_count || 0} actions</span>
-                                {project.due_date && (
-                                  <span className="flex items-center flex-shrink-0">
-                                    <Calendar className="h-2.5 w-2.5 mr-0.5" />
-                                    <span className="truncate">{new Date(project.due_date).toLocaleDateString()}</span>
-                                  </span>
-                                )}
+                                {project.due_date && project.due_date.trim() !== '' && (() => {
+                                  const date = new Date(project.due_date);
+                                  return !isNaN(date.getTime()) ? (
+                                    <span className="flex items-center flex-shrink-0">
+                                      <Calendar className="h-2.5 w-2.5 mr-0.5" />
+                                      <span className="truncate">{date.toLocaleDateString()}</span>
+                                    </span>
+                                  ) : null;
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -1145,7 +1168,16 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                       }}
                                     >
                                       <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(currentStatus)}`} />
-                                      <span className="truncate">{currentTitle}</span>
+                                      <span className="truncate flex-1">{currentTitle}</span>
+                                      {actionMetadata[action.path]?.due_date && actionMetadata[action.path].due_date.trim() !== '' && (() => {
+                                        const date = new Date(actionMetadata[action.path].due_date);
+                                        return !isNaN(date.getTime()) ? (
+                                          <span className="flex items-center flex-shrink-0 ml-1 text-muted-foreground">
+                                            <Calendar className="h-2 w-2 mr-0.5" />
+                                            <span className="text-[10px]">{date.toLocaleDateString()}</span>
+                                          </span>
+                                        ) : null;
+                                      })()}
                                     </div>
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>

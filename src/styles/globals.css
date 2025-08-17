@@ -54,6 +54,10 @@
   --destructive-foreground: 250 250 250;
   --popover: 24 24 27;
   --popover-foreground: 250 250 250;
+  
+  /* Calendar semantic colors for dark mode */
+  --calendar-due-color: 251 146 60; /* Brighter orange */
+  --calendar-focus-color: 96 165 250; /* Brighter blue */
 }
 
 /* === BASE STYLES === */
@@ -64,7 +68,7 @@
 body {
   background-color: rgb(var(--background));
   color: rgb(var(--foreground));
-  font-feature-settings: 'rlig' 1, 'calt' 1;
+  font-feature-settings: "rlig" 1, "calt" 1;
 }
 
 /* === COMPONENT BASE STYLES === */
@@ -247,25 +251,20 @@ body {
   min-height: 200px;
 }
 
-/* Date picker styles - remove blue focus rings */
-[data-radix-popper-content-wrapper] {
-  outline: none !important;
+/* Date picker accessibility-focused focus handling */
+/* Suppress focus outline for mouse interactions only */
+[data-radix-popper-content-wrapper]:focus:not(:focus-visible),
+button[aria-haspopup="dialog"]:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
 }
 
-/* Remove focus outline from date picker trigger buttons */
-button[aria-haspopup="dialog"] {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-button[aria-haspopup="dialog"]:focus {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
+/* Provide a subtle, accessible indicator for keyboard focus */
+[data-radix-popper-content-wrapper]:focus-visible,
 button[aria-haspopup="dialog"]:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
+  outline: 2px solid rgb(var(--ring));
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgb(var(--ring) / 0.2);
 }
 
 /* Calendar styles */
@@ -290,28 +289,49 @@ button[aria-haspopup="dialog"]:focus-visible {
   align-items: center;
 }
 
+/* Calendar container and navigation containment */
+.rdp {
+  position: relative !important;
+  overflow: visible !important;
+}
+
+.rdp-month {
+  position: relative !important;
+}
+
 /* Fix navigation buttons positioning and visibility */
 .rdp-nav {
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
+  position: relative !important;
   display: flex !important;
-  justify-content: space-between !important;
-  padding: 0 0.5rem !important;
+  justify-content: center !important;
+  align-items: center !important;
+  padding: 0 2.5rem !important;
+  margin-bottom: 0.5rem !important;
+  height: 2rem !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
 }
 
 .rdp-nav_button,
 .rdp-button_previous,
 .rdp-button_next {
   position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
   color: rgb(var(--muted-foreground)) !important;
-  background: transparent !important;
-  border: none !important;
+  background: rgb(var(--background)) !important;
+  border: 1px solid rgb(var(--border)) !important;
   cursor: pointer !important;
   padding: 0.25rem !important;
   border-radius: 0.25rem !important;
   transition: all 0.2s !important;
+  width: 28px !important;
+  height: 28px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 1 !important;
 }
 
 .rdp-nav_button:hover,
@@ -322,11 +342,11 @@ button[aria-haspopup="dialog"]:focus-visible {
 }
 
 .rdp-button_previous {
-  left: 1rem !important;
+  left: 0 !important;
 }
 
 .rdp-button_next {
-  right: 1rem !important;
+  right: 0 !important;
 }
 
 /* Ensure chevron icons are visible */
@@ -338,6 +358,10 @@ button[aria-haspopup="dialog"]:focus-visible {
 
 .rdp-caption {
   position: relative !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  min-height: 2rem !important;
 }
 
 .rdp-table {
@@ -421,10 +445,60 @@ button[aria-haspopup="dialog"]:focus-visible {
   color: rgb(var(--primary-foreground)) !important;
 }
 
-/* Remove blue outline from all Radix UI popover elements */
-[data-radix-popper-content-wrapper] * {
-  outline: none !important;
+/* Calendar date indicators - using semantic colors */
+:root {
+  /* Calendar semantic colors */
+  --calendar-due-color: 249 115 22; /* Orange for due dates */
+  --calendar-focus-color: 59 130 246; /* Blue for focus dates */
 }
+
+.calendar-has-due button,
+.rdp-day.calendar-has-due button {
+  position: relative;
+}
+
+.calendar-has-due button::after,
+.rdp-day.calendar-has-due button::after {
+  content: "";
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: rgb(var(--calendar-due-color));
+}
+
+.calendar-has-focus button,
+.rdp-day.calendar-has-focus button {
+  position: relative;
+}
+
+.calendar-has-focus button::before,
+.rdp-day.calendar-has-focus button::before {
+  content: "";
+  position: absolute;
+  bottom: 2px;
+  left: calc(50% - 6px);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: rgb(var(--calendar-focus-color));
+}
+
+/* When a date has both due and focus */
+.calendar-has-due.calendar-has-focus button::before,
+.rdp-day.calendar-has-due.calendar-has-focus button::before {
+  left: calc(50% - 6px);
+}
+
+.calendar-has-due.calendar-has-focus button::after,
+.rdp-day.calendar-has-due.calendar-has-focus button::after {
+  left: calc(50% + 2px);
+}
+
+/* (Removed broad outline suppression for Radix popover descendants to preserve keyboard accessibility) */
 
 /* Ensure WYSIWYG editor scrolls properly */
 .wysiwyg-editor .ProseMirror-focused {
@@ -491,8 +565,8 @@ button[aria-haspopup="dialog"]:focus-visible {
   padding: 1rem;
   border-radius: 0;
   margin: 0;
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas,
-    'Courier New', monospace;
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
+    "Courier New", monospace;
   font-size: 0.875rem;
   line-height: 1.5;
   white-space: pre; /* Preserve whitespace and line breaks */
@@ -704,7 +778,8 @@ button[aria-haspopup="dialog"]:focus-visible {
 
 /* CodeMirror code block styling */
 .cm-editor .cm-content {
-  /* Better code block appearance */
+  /* CodeMirror content styles are handled by the editor */
+  font-family: inherit;
 }
 
 /* CodeMirror specific syntax highlighting */

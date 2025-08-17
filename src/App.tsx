@@ -12,6 +12,7 @@ import { AppHeader } from '@/components/app/AppHeader';
 import { GTDWorkspaceSidebar, GTDDashboard, GTDQuickActions, GTDInitDialog } from '@/components/gtd';
 import { FileChangeManager } from '@/components/file-browser/FileChangeManager';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
+import { CalendarView } from '@/components/calendar/CalendarView';
 import { TabManager } from '@/components/tabs';
 import {
   SettingsManagerLazy,
@@ -677,18 +678,28 @@ export const App: React.FC = () => {
                 {/* Editor */}
                 <div className="flex-1 flex flex-col min-h-0">
                   {displayedTab ? (
-                    <EnhancedTextEditor
-                      key={displayedTab.id}
-                      content={displayedTab.content}
-                      onChange={(content) => updateTabContent(displayedTab.id, content)}
-                      mode={settings.editor_mode as EditorMode}
-                      showLineNumbers={true}
-                      readOnly={false}
-                      autoFocus={true}
-                      className="flex-1"
-                      data-editor-root
-                      filePath={displayedTab.filePath}
-                    />
+                    // Check if this is the calendar tab
+                    displayedTab.file.path === '::calendar::' ? (
+                      <CalendarView
+                        onFileSelect={handleFileSelect}
+                        spacePath={gtdSpace?.root_path || fileState.currentFolder || ''}
+                        gtdSpace={gtdSpace}
+                        files={fileState.files}
+                      />
+                    ) : (
+                      <EnhancedTextEditor
+                        key={displayedTab.id}
+                        content={displayedTab.content}
+                        onChange={(content) => updateTabContent(displayedTab.id, content)}
+                        mode={settings.editor_mode as EditorMode}
+                        showLineNumbers={true}
+                        readOnly={false}
+                        autoFocus={true}
+                        className="flex-1"
+                        data-editor-root
+                        filePath={displayedTab.filePath}
+                      />
+                    )
                   ) : tabState.openTabs.length > 0 ? (
                     <div className="h-full flex items-center justify-center text-muted-foreground">
                       <div className="text-center">

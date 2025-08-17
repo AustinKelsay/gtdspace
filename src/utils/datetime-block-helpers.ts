@@ -62,13 +62,23 @@ export function parseDateTimeField(markdown: string): {
   value: string;
   includeTime: boolean;
 } | null {
-  const match = markdown.match(/\[!datetime:([^:]+):([^\]]*)\]/);
+  // Match patterns like:
+  // [!datetime:due_date:2025-01-17]
+  // [!datetime:due_date_time:2025-01-17T10:30:00]
+  // Captures:
+  //  - Group 1: base type (e.g., "due_date")
+  //  - Group 2: optional suffix "_time" if present
+  //  - Group 3: value (may contain colons)
+  const match = markdown.match(/\[!datetime:([^:\]]+?)(?:(_time))?:([^\]]*)\]/);
   if (!match) return null;
 
-  const type = match[1];
-  const value = match[2];
-  const includeTime = type.endsWith('_time');
-  const baseType = includeTime ? type.replace('_time', '') : type;
+  const capturedBaseType = match[1];
+  const capturedSuffix = match[2];
+  const value = match[3];
+
+  const rawType = capturedBaseType + (capturedSuffix || '');
+  const includeTime = Boolean(capturedSuffix) || rawType.endsWith('_time');
+  const baseType = includeTime ? rawType.replace(/_time$/, '') : rawType;
 
   return {
     type: baseType as DateTimeFieldType,

@@ -200,12 +200,17 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
         jsonStr = jsonStr.replace(/\\"/g, '"');
       }
       const data = JSON.parse(jsonStr);
-      dateTimeBlocks.push({ 
-        text: match[0], 
-        type: data.type || 'due_date', 
-        value: data.value || '',
-        includeTime: data.includeTime || false,
-        label: data.label 
+      // Normalize type and includeTime semantics
+      const rawType = (data.type ?? 'due_date') as string;
+      const includeTimeFromType = /_time$/.test(rawType);
+      const normalizedType = rawType.replace(/_time$/, '');
+
+      dateTimeBlocks.push({
+        text: match[0],
+        type: normalizedType,
+        value: data.value ?? '',
+        includeTime: data.includeTime ?? includeTimeFromType,
+        label: data.label
       });
     } catch (e) {
       console.error('Error parsing datetime data:', e, 'JSON string:', match[1]);

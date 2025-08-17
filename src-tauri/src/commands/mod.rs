@@ -24,6 +24,7 @@
 //! - `load_settings()` - Load user settings from persistent storage
 //! - `save_settings()` - Save user settings to persistent storage
 
+use chrono::{Datelike, Timelike};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::path::PathBuf;
@@ -2152,50 +2153,52 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         }
     }
 
-    // Project 1: Getting Started
+    // Project 1: Getting Started (with due date 3 days from now)
+    let three_days = chrono::Local::now() + chrono::Duration::days(3);
     let project1_path = ensure_project(
         &space_path,
         "Getting Started",
         "A quick tour of how GTD Space works.",
-        None,
+        Some(three_days.format("%Y-%m-%d").to_string()),
         Some("in-progress".to_string()),
     )
     .await?;
 
-    // Actions for Project 1
+    // Actions for Project 1 with various dates
+    let tomorrow = chrono::Local::now() + chrono::Duration::days(1);
     let _ = create_gtd_action(
         project1_path.clone(),
         "Read the welcome file".to_string(),
-        "In Progress".to_string(),
-        None,
-        Some(chrono::Local::now().to_rfc3339()),
-        "Small".to_string(),
+        "in-progress".to_string(),
+        Some(tomorrow.format("%Y-%m-%d").to_string()),  // Due tomorrow
+        Some(chrono::Local::now().to_rfc3339()),  // Focus today
+        "small".to_string(),
     )
     .await;
 
+    let two_days = chrono::Local::now() + chrono::Duration::days(2);
     let _ = create_gtd_action(
         project1_path.clone(),
         "Create your first project".to_string(),
-        "Waiting".to_string(),
-        None,
-        None,
-        "Medium".to_string(),
+        "waiting".to_string(),
+        Some(three_days.format("%Y-%m-%d").to_string()),  // Due in 3 days
+        Some(two_days.to_rfc3339()),  // Focus in 2 days
+        "medium".to_string(),
     )
     .await;
 
     let _ = create_gtd_action(
         project1_path.clone(),
         "Mark a task complete".to_string(),
-        "Complete".to_string(),
+        "complete".to_string(),
         None,
         None,
-        "Small".to_string(),
+        "small".to_string(),
     )
     .await;
 
     // Project 2: Demo Project - Website
     let seven_days = chrono::Local::now() + chrono::Duration::days(7);
-    let two_days = chrono::Local::now() + chrono::Duration::days(2);
 
     let project2_path = ensure_project(
         &space_path,
@@ -2209,30 +2212,31 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     let _ = create_gtd_action(
         project2_path.clone(),
         "Design homepage".to_string(),
-        "In Progress".to_string(),
-        Some(seven_days.format("%Y-%m-%d").to_string()),
-        Some(two_days.to_rfc3339()),
-        "Large".to_string(),
+        "in-progress".to_string(),
+        Some(seven_days.format("%Y-%m-%d").to_string()),  // Due in 7 days
+        Some(tomorrow.to_rfc3339()),  // Focus tomorrow
+        "large".to_string(),
     )
     .await;
 
     let _ = create_gtd_action(
         project2_path.clone(),
         "Set up repository".to_string(),
-        "Complete".to_string(),
+        "complete".to_string(),
         None,
         None,
-        "Small".to_string(),
+        "small".to_string(),
     )
     .await;
 
+    let five_days = chrono::Local::now() + chrono::Duration::days(5);
     let _ = create_gtd_action(
         project2_path.clone(),
         "Plan content".to_string(),
-        "Waiting".to_string(),
-        None,
-        None,
-        "Medium".to_string(),
+        "waiting".to_string(),
+        Some(seven_days.format("%Y-%m-%d").to_string()),  // Due in 7 days
+        Some(five_days.to_rfc3339()),  // Focus in 5 days
+        "medium".to_string(),
     )
     .await;
 
@@ -2255,6 +2259,117 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         "Small".to_string(),
     )
     .await;
+
+    // Create example Habits with dates
+    let habits_dir = Path::new(&space_path).join("Habits");
+    if habits_dir.exists() {
+        // Morning Review habit (daily with focus time)
+        let morning_review = habits_dir.join("Morning Review.md");
+        if !morning_review.exists() {
+            let morning_time = chrono::Local::now()
+                .with_hour(9)
+                .unwrap()
+                .with_minute(0)
+                .unwrap()
+                .with_second(0)
+                .unwrap();
+            let content = format!(r#"# Morning Review
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Status
+[!checkbox:habit-status:false]
+
+## Focus Time
+[!datetime:focus_date_time:{}]
+
+## Notes
+Review today's actions and priorities. Check calendar, update task statuses, and set focus for the day.
+
+---
+Created: {}"#, 
+                morning_time.to_rfc3339(),
+                chrono::Local::now().format("%Y-%m-%d")
+            );
+            let _ = fs::write(&morning_review, content);
+        }
+
+        // Evening Journal habit (daily with evening focus time)
+        let evening_journal = habits_dir.join("Evening Journal.md");
+        if !evening_journal.exists() {
+            let evening_time = chrono::Local::now()
+                .with_hour(20)
+                .unwrap()
+                .with_minute(0)
+                .unwrap()
+                .with_second(0)
+                .unwrap();
+            let content = format!(r#"# Evening Journal
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Status
+[!checkbox:habit-status:false]
+
+## Focus Time
+[!datetime:focus_date_time:{}]
+
+## Notes
+Reflect on the day's accomplishments and lessons learned. Write down three things you're grateful for.
+
+---
+Created: {}"#,
+                evening_time.to_rfc3339(),
+                chrono::Local::now().format("%Y-%m-%d")
+            );
+            let _ = fs::write(&evening_journal, content);
+        }
+
+        // Weekly Review habit (weekly with Sunday afternoon focus)
+        let weekly_review = habits_dir.join("Weekly Review.md");
+        if !weekly_review.exists() {
+            // Find next Sunday at 2 PM
+            let mut next_sunday = chrono::Local::now();
+            while next_sunday.weekday() != chrono::Weekday::Sun {
+                next_sunday += chrono::Duration::days(1);
+            }
+            next_sunday = next_sunday
+                .with_hour(14)
+                .unwrap()
+                .with_minute(0)
+                .unwrap()
+                .with_second(0)
+                .unwrap();
+            
+            let content = format!(r#"# Weekly Review
+
+## Frequency
+[!singleselect:habit-frequency:weekly]
+
+## Status
+[!checkbox:habit-status:false]
+
+## Focus Time
+[!datetime:focus_date_time:{}]
+
+## Notes
+Complete weekly GTD review:
+- Process all inboxes to zero
+- Review project lists
+- Update action lists
+- Review Someday/Maybe items
+- Clean up and organize
+
+---
+Created: {}"#,
+                next_sunday.to_rfc3339(),
+                chrono::Local::now().format("%Y-%m-%d")
+            );
+            let _ = fs::write(&weekly_review, content);
+        }
+    }
 
     // Create example Someday Maybe pages
     let someday_dir = Path::new(&space_path).join("Someday Maybe");

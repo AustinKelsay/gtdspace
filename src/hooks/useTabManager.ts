@@ -181,10 +181,21 @@ export const useTabManager = () => {
     }
 
     try {
-      // Load file content
-      console.log('Loading file content for new tab:', file.path);
-      const content = await invoke<string>('read_file', { path: file.path });
-      console.log('useTabManager: File content loaded, length:', content.length);
+      // Check if this is a special tab (like Calendar)
+      let content = '';
+      let originalContent = '';
+      
+      if (file.path === '::calendar::') {
+        // Special calendar tab - no file content to load
+        content = ''; // Calendar view doesn't need content
+        originalContent = '';
+      } else {
+        // Normal file - load content
+        console.log('Loading file content for new tab:', file.path);
+        content = await invoke<string>('read_file', { path: file.path });
+        originalContent = content;
+        console.log('useTabManager: File content loaded, length:', content.length);
+      }
 
       // Create new tab
       const tabId = generateTabId(file);
@@ -192,7 +203,7 @@ export const useTabManager = () => {
         id: tabId,
         file,
         content,
-        originalContent: content,
+        originalContent,
         hasUnsavedChanges: false,
         isActive: true,
         filePath: file.path,
@@ -308,6 +319,10 @@ export const useTabManager = () => {
     const currentTab = tabState.openTabs.find(t => t.id === tabId);
     
     if (currentTab) {
+      // Skip updating content for special tabs
+      if (currentTab.file.path === '::calendar::') {
+        return;
+      }
       // Extract metadata from old and new content
       const oldMetadata = extractMetadata(currentTab.content);
       const newMetadata = extractMetadata(content);
@@ -356,6 +371,11 @@ export const useTabManager = () => {
   const saveTab = useCallback(async (tabId: string): Promise<boolean> => {
     const tab = tabState.openTabs.find(t => t.id === tabId);
     if (!tab || !tab.hasUnsavedChanges) return false;
+
+    // Skip saving for special tabs
+    if (tab.file.path === '::calendar::') {
+      return false;
+    }
 
     try {
       console.log('Saving tab content:', tab.file.path);

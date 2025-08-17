@@ -13,8 +13,26 @@ export function useDateTimeInsertion(editor: any) {
   useEffect(() => {
     if (!editor) return;
 
+    // Safely resolve an insertion anchor; fallback to last doc block
+    const getInsertionAnchor = () => {
+      try {
+        const pos = editor.getTextCursorPosition?.();
+        return pos?.block ?? editor.document?.[editor.document.length - 1] ?? undefined;
+      } catch {
+        return editor?.document?.[editor.document.length - 1];
+      }
+    };
+
+    const insertAfterCurrent = (block: unknown) => {
+      const anchor = getInsertionAnchor();
+      if (!anchor) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      editor.insertBlocks([block as any], anchor, 'after');
+    };
+
     // Add keyboard shortcuts for datetime fields
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       // Check if we're in the editor
       const isInEditor = document.activeElement?.closest('.bn-editor');
       if (!isInEditor) return;
@@ -27,18 +45,14 @@ export function useDateTimeInsertion(editor: any) {
       if (modKey && e.altKey && e.key === 'd') {
         e.preventDefault();
         const block = createDateTimeBlock('due_date', 'Due Date', '', false);
-        const currentBlock = editor.getTextCursorPosition().block;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        editor.insertBlocks([block as any], currentBlock, 'after');
+        insertAfterCurrent(block);
       }
 
       // Cmd+Alt+T (Mac) or Ctrl+Alt+T (Windows/Linux) for Focus Date with Time field
       if (modKey && e.altKey && e.key === 't') {
         e.preventDefault();
         const block = createDateTimeBlock('focus_date', 'Focus Date', '', true);
-        const currentBlock = editor.getTextCursorPosition().block;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        editor.insertBlocks([block as any], currentBlock, 'after');
+        insertAfterCurrent(block);
       }
 
       // Cmd+Alt+C (Mac) or Ctrl+Alt+C (Windows/Linux) for Created Date field
@@ -46,9 +60,7 @@ export function useDateTimeInsertion(editor: any) {
         e.preventDefault();
         const now = new Date().toISOString();
         const block = createDateTimeBlock('created_date', 'Created', now, true);
-        const currentBlock = editor.getTextCursorPosition().block;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        editor.insertBlocks([block as any], currentBlock, 'after');
+        insertAfterCurrent(block);
       }
     };
 

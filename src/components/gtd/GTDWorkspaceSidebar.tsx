@@ -76,6 +76,14 @@ interface GTDSection {
 
 const GTD_SECTIONS: GTDSection[] = [
   {
+    id: 'calendar',
+    name: 'Calendar',
+    icon: Calendar,
+    path: '::calendar::', // Special virtual path
+    description: 'View all dated items',
+    color: 'text-orange-600'
+  },
+  {
     id: 'projects',
     name: 'Projects',
     icon: Briefcase,
@@ -976,6 +984,28 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       {/* GTD Sections */}
       <ScrollArea className="flex-1">
         <div className="p-2">
+          {/* Calendar Section - Special non-collapsible section */}
+          <div 
+            className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors cursor-pointer"
+            onClick={() => {
+              // Open calendar as a special tab
+              const calendarFile: MarkdownFile = {
+                id: '::calendar::',
+                name: 'Calendar',
+                path: '::calendar::',
+                size: 0,
+                last_modified: Date.now(),
+                extension: 'calendar'
+              };
+              onFileSelect(calendarFile);
+            }}
+          >
+            <div className="flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 text-orange-600 flex-shrink-0" />
+              <span className="font-medium text-sm">Calendar</span>
+            </div>
+          </div>
+
           {/* Projects Section - Always show first */}
           <Collapsible
             open={expandedSections.includes('projects')}
@@ -1236,7 +1266,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           </Collapsible>
 
           {/* Other GTD Sections */}
-          {GTD_SECTIONS.slice(1).map((section) => {
+          {GTD_SECTIONS.filter(s => s.id !== 'projects' && s.id !== 'calendar').map((section) => {
             const isExpanded = expandedSections.includes(section.id);
             const sectionPath = `${gtdSpace?.root_path || currentFolder}/${section.path}`;
             const files = sectionFiles[sectionPath] || [];

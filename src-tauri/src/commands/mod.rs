@@ -444,6 +444,70 @@ pub fn open_folder_in_explorer(path: String) -> Result<String, String> {
     }
 }
 
+/// Open a file's location in the system file explorer
+/// 
+/// Opens the parent folder of the specified file in the system's default file manager
+/// and selects the file if possible.
+///
+/// # Arguments
+/// * `file_path` - Path to the file whose location to open
+///
+/// # Example
+/// ```javascript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// await invoke('open_file_location', { file_path: '/path/to/file.md' });
+/// ```
+#[tauri::command]
+pub fn open_file_location(file_path: String) -> Result<String, String> {
+    use std::process::Command;
+    
+    log::info!("Opening file location: {}", file_path);
+    
+    // Get the parent directory of the file
+    let path_buf = PathBuf::from(&file_path);
+    if !path_buf.exists() {
+        return Err(format!("File does not exist: {}", file_path));
+    }
+    
+    // Get the parent directory
+    let parent_dir = path_buf.parent()
+        .ok_or_else(|| format!("Could not get parent directory of: {}", file_path))?;
+    
+    // Open the folder and select the file based on the operating system
+    let result = if cfg!(target_os = "windows") {
+        // On Windows, explorer can select a file with /select
+        Command::new("explorer")
+            .arg("/select,")
+            .arg(&file_path)
+            .spawn()
+    } else if cfg!(target_os = "macos") {
+        // On macOS, we can use open -R to reveal the file
+        Command::new("open")
+            .arg("-R")
+            .arg(&file_path)
+            .spawn()
+    } else {
+        // On Linux, just open the parent directory
+        // Different file managers have different ways to select files
+        // So we'll just open the parent directory
+        Command::new("xdg-open")
+            .arg(parent_dir.to_str().unwrap_or(&file_path))
+            .spawn()
+    };
+    
+    match result {
+        Ok(_) => {
+            log::info!("Successfully opened file location: {}", file_path);
+            Ok(format!("Opened file location: {}", file_path))
+        }
+        Err(e) => {
+            log::error!("Failed to open file location: {}", e);
+            Err(format!("Failed to open file location: {}", e))
+        }
+    }
+}
+
 /// Get the default GTD space path for the current user
 ///
 /// Returns a platform-appropriate path in the user's home directory:
@@ -977,7 +1041,7 @@ pub async fn rename_file(old_path: String, new_name: String) -> Result<FileOpera
 /// });
 /// ```
 #[tauri::command]
-pub async fn delete_file(path: String) -> Result<FileOperationResult, String> {
+pub fn delete_file(path: String) -> Result<FileOperationResult, String> {
     log::info!("Deleting file: {}", path);
     
     let file_path = Path::new(&path);
@@ -1013,6 +1077,58 @@ pub async fn delete_file(path: String) -> Result<FileOperationResult, String> {
                 success: false,
                 path: None,
                 message: Some(format!("Failed to delete file: {}", e)),
+            })
+        }
+    }
+}
+
+/// Delete a folder and all its contents
+/// 
+/// # Example
+/// ```javascript
+/// import { invoke } from '@tauri-apps/api/core';
+/// 
+/// const result = await invoke('delete_folder', { 
+///   path: '/path/to/folder'
+/// });
+/// ```
+#[tauri::command]
+pub fn delete_folder(path: String) -> Result<FileOperationResult, String> {
+    log::info!("Deleting folder: {}", path);
+    
+    let folder_path = Path::new(&path);
+    
+    if !folder_path.exists() {
+        return Ok(FileOperationResult {
+            success: false,
+            path: None,
+            message: Some("Folder does not exist".to_string()),
+        });
+    }
+    
+    if !folder_path.is_dir() {
+        return Ok(FileOperationResult {
+            success: false,
+            path: None,
+            message: Some("Path is not a folder".to_string()),
+        });
+    }
+    
+    match fs::remove_dir_all(folder_path) {
+        Ok(_) => {
+            log::info!("Successfully deleted folder: {}", path);
+            Ok(FileOperationResult {
+                success: true,
+                path: Some(path),
+                message: Some("Folder deleted successfully".to_string()),
+            })
+        }
+        Err(e) => {
+            log::error!("Failed to delete folder {}: {}", path, e);
+            Ok(FileOperationResult {
+                success: false,
+                path: None,
+                message: Some(format!("Failed to delete folder: {}", e)),
             })
         }
     }

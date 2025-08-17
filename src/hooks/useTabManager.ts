@@ -821,6 +821,46 @@ export const useTabManager = () => {
     };
   }, []);
 
+  /**
+   * Handle file/folder deletion events
+   */
+  useEffect(() => {
+    const handleFileDeleted = (event: CustomEvent<{ path: string }>) => {
+      const { path } = event.detail;
+      console.log('[TabManager] File/folder deleted event:', path);
+      
+      // Close any tabs that match the deleted path or are within a deleted folder
+      setTabState(prev => {
+        const updatedTabs = prev.openTabs.filter(tab => {
+          // Check if this tab's file was deleted or is within a deleted folder
+          const shouldRemove = tab.filePath === path || tab.filePath.startsWith(path + '/');
+          if (shouldRemove) {
+            console.log('[TabManager] Closing tab due to deletion:', tab.filePath);
+          }
+          return !shouldRemove;
+        });
+        
+        // If the active tab was closed, activate the last remaining tab
+        let newActiveTabId = prev.activeTabId;
+        if (prev.activeTabId && !updatedTabs.find(t => t.id === prev.activeTabId)) {
+          newActiveTabId = updatedTabs.length > 0 ? updatedTabs[updatedTabs.length - 1].id : null;
+        }
+        
+        return {
+          ...prev,
+          openTabs: updatedTabs,
+          activeTabId: newActiveTabId
+        };
+      });
+    };
+    
+    window.addEventListener('file-deleted', handleFileDeleted as EventListener);
+    
+    return () => {
+      window.removeEventListener('file-deleted', handleFileDeleted as EventListener);
+    };
+  }, []);
+
   // === RETURN STATE AND OPERATIONS ===
 
   return {

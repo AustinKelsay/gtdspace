@@ -12,6 +12,23 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { onMetadataChange, onContentSaved } from '@/utils/content-event-bus';
 import {
   Briefcase,
@@ -28,7 +45,9 @@ import {
   FileText,
   Search,
   RefreshCw,
-  Folder
+  Folder,
+  MoreHorizontal,
+  Trash2
 } from 'lucide-react';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { GTDProjectDialog, GTDActionDialog, CreatePageDialog, CreateHabitDialog } from '@/components/gtd';
@@ -126,6 +145,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const [showHabitDialog, setShowHabitDialog] = React.useState(false);
   const [sectionFiles, setSectionFiles] = React.useState<{ [sectionPath: string]: MarkdownFile[] }>({});
   const [sectionRefreshKey, setSectionRefreshKey] = React.useState(0);
+  
+  // Delete dialog state
+  const [deleteItem, setDeleteItem] = React.useState<{ type: 'project' | 'action' | 'file'; path: string; name: string } | null>(null);
 
   // Local state for project metadata that can be updated dynamically
   const [projectMetadata, setProjectMetadata] = React.useState<{ [projectPath: string]: { status?: string; title?: string; currentPath?: string } }>({});
@@ -478,8 +500,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         }
       }
 
-      // Check if this is a file in Someday Maybe or Cabinet that was saved
-      const sectionPaths = ['/Someday Maybe/', '/Cabinet/'];
+      // Check if this is a file in Someday Maybe, Cabinet, or Habits that was saved
+      const sectionPaths = ['/Someday Maybe/', '/Cabinet/', '/Habits/'];
       for (const sectionPath of sectionPaths) {
         if (filePath.includes(sectionPath) && filePath.endsWith('.md')) {
           const newTitle = metadata.title;
@@ -688,6 +710,135 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       onFolderSelect(folderPath);
     } catch (error) {
       console.error('Failed to select folder:', error);
+    }
+  };
+
+  const handleDelete = async () => {
+    console.log('[Sidebar] handleDelete called with:', deleteItem);
+    if (!deleteItem) return;
+
+    try {
+      if (deleteItem.type === 'project') {
+        // For projects, we need to delete the entire folder
+        const result = await invoke<{ success: boolean; path?: string | null; message?: string | null }>('delete_folder', { path: deleteItem.path });
+        
+        if (!result || !result.success) {
+          console.error('Failed to delete project:', result?.message || 'Unknown error');
+          alert(`Failed to delete project: ${result?.message || 'Unknown error'}`);
+          return;
+        }
+        
+        console.log('[Sidebar] Project deleted successfully:', deleteItem.path);
+        
+        // Update local state
+        setExpandedProjects(prev => prev.filter(p => p !== deleteItem.path));
+        setProjectActions(prev => {
+          const updated = { ...prev };
+          delete updated[deleteItem.path];
+          return updated;
+        });
+        setProjectMetadata(prev => {
+          const updated = { ...prev };
+          delete updated[deleteItem.path];
+          return updated;
+        });
+        
+        // Reload projects
+        if (gtdSpace?.root_path) {
+          await loadProjects(gtdSpace.root_path);
+          // Force a re-render
+          setSectionRefreshKey(prev => prev + 1);
+        }
+      } else {
+        // For actions and other files, use delete_file
+        console.log('[Sidebar] Attempting to delete file:', deleteItem.path);
+        
+        try {
+          // Add a timeout to the invoke call
+          const deletePromise = invoke<{ success: boolean; path?: string | null; message?: string | null }>('delete_file', { path: deleteItem.path });
+          
+          // Create a timeout promise
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Delete operation timed out after 5 seconds')), 5000);
+          });
+          
+          // Race between the delete and timeout
+          const result = await Promise.race([deletePromise, timeoutPromise]) as { success: boolean; path?: string | null; message?: string | null };
+          
+          console.log('[Sidebar] Delete file result:', result);
+          if (!result || !result.success) {
+            console.error('Failed to delete file:', result?.message || 'Unknown error');
+            alert(`Failed to delete file: ${result?.message || 'Unknown error'}`);
+            return;
+          }
+          
+          console.log('[Sidebar] File deleted successfully:', deleteItem.path);
+          
+          // Update UI based on type
+          if (deleteItem.type === 'action') {
+            // Update action state
+            setActionStatuses(prev => {
+              const updated = { ...prev };
+              delete updated[deleteItem.path];
+              return updated;
+            });
+            setActionMetadata(prev => {
+              const updated = { ...prev };
+              delete updated[deleteItem.path];
+              return updated;
+            });
+            
+            // Reload actions for the project
+            const projectPath = deleteItem.path.substring(0, deleteItem.path.lastIndexOf('/'));
+            
+            // First remove the action from the local state for immediate UI update
+            setProjectActions(prev => ({
+              ...prev,
+              [projectPath]: prev[projectPath]?.filter(a => a.path !== deleteItem.path) || []
+            }));
+            
+            // Then reload from disk
+            await loadProjectActions(projectPath);
+          } else {
+            // For section files (Habits, Someday Maybe, Cabinet)
+            // Clear metadata for the deleted file
+            setSectionFileMetadata(prev => {
+              const updated = { ...prev };
+              delete updated[deleteItem.path];
+              return updated;
+            });
+            
+            const sectionPath = deleteItem.path.substring(0, deleteItem.path.lastIndexOf('/'));
+            console.log('[Sidebar] Reloading section files for:', sectionPath);
+            
+            // First clear the section files to force UI update
+            setSectionFiles(prev => ({
+              ...prev,
+              [sectionPath]: prev[sectionPath]?.filter(f => f.path !== deleteItem.path) || []
+            }));
+            
+            // Then reload from disk
+            await loadSectionFiles(sectionPath);
+            
+            // Force a re-render of the section
+            setSectionRefreshKey(prev => prev + 1);
+          }
+          
+          // Close any open tabs for the deleted item
+          window.dispatchEvent(new CustomEvent('file-deleted', {
+            detail: { path: deleteItem.path }
+          }));
+          
+        } catch (invokeError) {
+          console.error('[Sidebar] Error invoking delete_file:', invokeError);
+          alert(`Error deleting file: ${invokeError}`);
+          return;
+        }
+      }
+      
+      setDeleteItem(null);
+    } catch (error) {
+      console.error(`Failed to delete ${deleteItem.type}:`, error);
     }
   };
 
@@ -902,22 +1053,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                           </div>
                           <div className="flex items-center gap-0.5 flex-shrink-0">
                             <Button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  await invoke('open_folder_in_explorer', { path: currentPath });
-                                } catch (error) {
-                                  console.error('Failed to open project folder:', error);
-                                }
-                              }}
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Open Project Folder"
-                            >
-                              <Folder className="h-3 w-3" />
-                            </Button>
-                            <Button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedProject(project);
@@ -930,6 +1065,48 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                             >
                               <Plus className="h-3 w-3" />
                             </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreHorizontal className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      await invoke('open_folder_in_explorer', { path: currentPath });
+                                    } catch (error) {
+                                      console.error('Failed to open project folder:', error);
+                                    }
+                                  }}
+                                >
+                                  <Folder className="h-4 w-4 mr-2" />
+                                  Open Folder
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteItem({
+                                      type: 'project',
+                                      path: project.path,
+                                      name: currentTitle
+                                    });
+                                  }}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </div>
 
@@ -948,24 +1125,70 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                 return (
                                   <div
                                     key={action.path}
-                                    className="flex items-center gap-1 px-1 py-0.5 hover:bg-accent/50 rounded cursor-pointer text-xs"
-                                    role="button"
-                                    tabIndex={0}
-                                    onClick={() => {
-                                      console.log('Sidebar: action click ->', currentPath);
-                                      // Create a modified action object with the current path
-                                      onFileSelect({ ...action, path: currentPath });
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault();
-                                        console.log('Sidebar: action key activate ->', currentPath);
-                                        onFileSelect({ ...action, path: currentPath });
-                                      }
-                                    }}
+                                    className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs"
                                   >
-                                    <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(currentStatus)}`} />
-                                    <span className="truncate">{currentTitle}</span>
+                                    <div
+                                      className="flex items-center gap-1 flex-1 cursor-pointer"
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={() => {
+                                        console.log('Sidebar: action click ->', currentPath);
+                                        // Create a modified action object with the current path
+                                        onFileSelect({ ...action, path: currentPath });
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                          e.preventDefault();
+                                          console.log('Sidebar: action key activate ->', currentPath);
+                                          onFileSelect({ ...action, path: currentPath });
+                                        }
+                                      }}
+                                    >
+                                      <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(currentStatus)}`} />
+                                      <span className="truncate">{currentTitle}</span>
+                                    </div>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <MoreHorizontal className="h-2.5 w-2.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-40">
+                                        <DropdownMenuItem
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            try {
+                                              await invoke('open_file_location', { file_path: currentPath });
+                                            } catch (error) {
+                                              console.error('Failed to open file location:', error);
+                                            }
+                                          }}
+                                        >
+                                          <Folder className="h-3 w-3 mr-2" />
+                                          Open File Location
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setDeleteItem({
+                                              type: 'action',
+                                              path: currentPath,  // Use currentPath instead of action.path
+                                              name: currentTitle
+                                            });
+                                          }}
+                                          className="text-destructive focus:text-destructive"
+                                        >
+                                          <Trash2 className="h-3 w-3 mr-2" />
+                                          Delete
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
                                   </div>
                                 );
                               })
@@ -1039,24 +1262,71 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                         return (
                           <div
                             key={file.path}
-                            className="flex items-center gap-1 px-1 py-0.5 hover:bg-accent/50 rounded cursor-pointer text-xs"
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => {
-                              console.log('Sidebar: file click ->', currentPath);
-                              // Create a modified file object with the current path
-                              onFileSelect({ ...file, path: currentPath });
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                console.log('Sidebar: file key activate ->', currentPath);
-                                onFileSelect({ ...file, path: currentPath });
-                              }
-                            }}
+                            className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs"
                           >
-                            <FileText className="h-2.5 w-2.5 flex-shrink-0 text-muted-foreground" />
-                            <span className="truncate">{currentTitle}</span>
+                            <div
+                              className="flex items-center gap-1 flex-1 cursor-pointer"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => {
+                                console.log('Sidebar: file click ->', currentPath);
+                                // Create a modified file object with the current path
+                                onFileSelect({ ...file, path: currentPath });
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  console.log('Sidebar: file key activate ->', currentPath);
+                                  onFileSelect({ ...file, path: currentPath });
+                                }
+                              }}
+                            >
+                              <FileText className="h-2.5 w-2.5 flex-shrink-0 text-muted-foreground" />
+                              <span className="truncate">{currentTitle}</span>
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreHorizontal className="h-2.5 w-2.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      await invoke('open_file_location', { file_path: currentPath });
+                                    } catch (error) {
+                                      console.error('Failed to open file location:', error);
+                                    }
+                                  }}
+                                >
+                                  <Folder className="h-3 w-3 mr-2" />
+                                  Open File Location
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    console.log('[Sidebar] Setting delete item for file:', currentPath, currentTitle);
+                                    setDeleteItem({
+                                      type: 'file',
+                                      path: currentPath,  // Use currentPath instead of file.path
+                                      name: currentTitle
+                                    });
+                                  }}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="h-3 w-3 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         );
                       })
@@ -1188,6 +1458,29 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           }
         }}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteItem !== null} onOpenChange={(open) => {
+        console.log('[Sidebar] AlertDialog open state changing to:', open, 'deleteItem:', deleteItem);
+        if (!open) setDeleteItem(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteItem?.type === 'project' ? 'Project' : deleteItem?.type === 'action' ? 'Action' : 'File'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteItem?.name}"?
+              {deleteItem?.type === 'project' && ' This will delete the project folder and all its contents including actions.'}
+              {' This action cannot be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 };

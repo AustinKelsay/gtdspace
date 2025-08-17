@@ -41,16 +41,22 @@ Each habit maintains a complete history table:
 - **History Management**: Appends entries to markdown table in habit file
 
 ### Frontend (React)
+- **Checkbox UI**: Interactive checkbox for status (replaces dropdown for cleaner UX)
+- **Real-time Updates**: History log updates immediately without closing/reopening files
+- **Visual Feedback**: Subtle green highlight animation when habit updates
+- **Toast Notifications**: Shows "Habit Recorded" with habit name when status changes
 - **Scheduler**: Runs every minute to check habits
 - **UI Updates**: Automatically refreshes sidebar and open tabs when habits reset
-- **Keyboard Shortcuts**: Cmd/Ctrl+Alt+H for habit status
+- **Keyboard Shortcuts**: 
+  - Cmd/Ctrl+Alt+F for habit frequency
+  - Cmd/Ctrl+Alt+H for habit status (legacy)
 
 ### File Format
 ```markdown
 # Habit Name
 
 ## Status
-[!singleselect:habit-status:todo]
+[!checkbox:habit-status:false]
 
 ## Frequency
 [!singleselect:habit-frequency:daily]

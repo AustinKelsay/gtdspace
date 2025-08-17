@@ -12,6 +12,7 @@ import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
 import { MultiSelectBlock } from './blocks/MultiSelectBlock';
 import { SingleSelectBlock } from './blocks/SingleSelectBlock';
+import { CheckboxBlock } from './blocks/CheckboxBlock';
 import { postProcessBlockNoteBlocks } from '@/utils/blocknote-preprocessing';
 import { useMultiSelectInsertion } from '@/hooks/useMultiSelectInsertion';
 import { useSingleSelectInsertion } from '@/hooks/useSingleSelectInsertion';
@@ -52,12 +53,13 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   className = '',
   filePath,
 }) => {
-  // Create custom schema with multiselect and singleselect blocks
+  // Create custom schema with multiselect, singleselect, and checkbox blocks
   const schema = BlockNoteSchema.create({
     blockSpecs: {
       ...defaultBlockSpecs,
       multiselect: MultiSelectBlock,
       singleselect: SingleSelectBlock,
+      checkbox: CheckboxBlock,
     },
   });
   
@@ -114,6 +116,56 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
     };
     loadContent();
   }, [content, editor]); // Now safe to include content in deps
+
+  // Track previous content to detect external updates
+  const previousContent = useRef(content);
+  
+  // Handle content updates after initial load (for real-time updates like habit history)
+  useEffect(() => {
+    const updateContent = async () => {
+      // Skip if editor not ready or content hasn't changed
+      if (!editor || !initialContentLoaded.current || content === previousContent.current) {
+        return;
+      }
+      
+      try {
+        // Set flag to ignore the onChange event from content update
+        ignoreNextChange.current = true;
+        
+        // Parse and update blocks
+        let blocks = await editor.tryParseMarkdownToBlocks(content);
+        blocks = postProcessBlockNoteBlocks(blocks, content);
+        
+        // Check if this is a habit file to add special animation
+        const isHabitFile = content.includes('## History') && content.includes('[!checkbox:habit-status:');
+        
+        if (isHabitFile) {
+          // Add a subtle animation by briefly highlighting the editor
+          const editorElement = document.querySelector('.bn-editor') as HTMLElement;
+          if (editorElement) {
+            editorElement.style.transition = 'background-color 0.3s ease';
+            editorElement.style.backgroundColor = 'rgba(34, 197, 94, 0.1)'; // Green tint for habit updates
+            setTimeout(() => {
+              editorElement.style.backgroundColor = '';
+            }, 500);
+          }
+        }
+        
+        editor.replaceBlocks(editor.document, blocks);
+        previousContent.current = content;
+        
+        // Reset the flag after a short delay
+        setTimeout(() => {
+          ignoreNextChange.current = false;
+        }, 100);
+      } catch (error) {
+        console.error('Error updating content:', error);
+        previousContent.current = content; // Update even on error to prevent infinite retries
+      }
+    };
+    
+    updateContent();
+  }, [content, editor]);
 
   // Set file path in window context for SingleSelectBlock
   useEffect(() => {

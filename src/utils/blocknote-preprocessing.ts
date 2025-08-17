@@ -84,9 +84,15 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
   // Pattern to match HTML singleselect blocks
   const singleSelectHTMLPattern = /<div\s+data-singleselect='([^']+)'\s+class="singleselect-block">([^<]+)<\/div>/g;
   
+  // Pattern to match checkbox markers in markdown (e.g., [!checkbox:habit-status:true])
+  const checkboxMarkerPattern = /\[!checkbox:([^:]+):([^\]]+)\]/g;
+  // Pattern to match HTML checkbox blocks
+  const checkboxHTMLPattern = /<div\s+data-checkbox='([^']+)'\s+class="checkbox-block">([^<]+)<\/div>/g;
+  
   // Find all multiselect blocks in the original markdown
   const multiSelectBlocks: Array<{ text: string; type: string; value: string[]; label?: string }> = [];
   const singleSelectBlocks: Array<{ text: string; type: string; value: string; label?: string }> = [];
+  const checkboxBlocks: Array<{ text: string; type: string; checked: boolean; label?: string }> = [];
   let match;
   
   // First check for new marker syntax
@@ -145,11 +151,38 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
     }
   }
   
+  // Check for checkbox marker syntax
+  while ((match = checkboxMarkerPattern.exec(markdown)) !== null) {
+    const type = match[1];
+    const checked = match[2] === 'true';
+    checkboxBlocks.push({ text: match[0], type, checked });
+  }
+  
+  // Check for checkbox HTML syntax
+  while ((match = checkboxHTMLPattern.exec(markdown)) !== null) {
+    try {
+      let jsonStr = match[1];
+      if (jsonStr.includes('\\"')) {
+        jsonStr = jsonStr.replace(/\\"/g, '"');
+      }
+      const data = JSON.parse(jsonStr);
+      checkboxBlocks.push({ 
+        text: match[0], 
+        type: data.type || 'habit-status', 
+        checked: data.checked || false,
+        label: data.label 
+      });
+    } catch (e) {
+      console.error('Error parsing checkbox data:', e, 'JSON string:', match[1]);
+    }
+  }
+  
   console.log('Found multiselect blocks in markdown:', multiSelectBlocks.length);
   console.log('Found singleselect blocks in markdown:', singleSelectBlocks.length);
+  console.log('Found checkbox blocks in markdown:', checkboxBlocks.length);
   
-  if (multiSelectBlocks.length === 0 && singleSelectBlocks.length === 0) {
-    console.log('No custom select blocks found, returning original blocks');
+  if (multiSelectBlocks.length === 0 && singleSelectBlocks.length === 0 && checkboxBlocks.length === 0) {
+    console.log('No custom blocks found, returning original blocks');
     return blocks;
   }
   
@@ -194,19 +227,57 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
           if (blockText.includes(ssBlock.text) || 
               blockText.includes(`[!singleselect:${ssBlock.type}:`) ||
               (ssBlock.label && blockText.includes(ssBlock.label))) {
-            // Replace this paragraph with a singleselect block
+            // Special handling for habit-status: convert to checkbox block
+            if (ssBlock.type === 'habit-status') {
+              // Convert old habit status to checkbox
+              const checked = ssBlock.value === 'complete' || ssBlock.value === 'true';
+              processedBlocks.push({
+                type: 'checkbox',
+                props: {
+                  type: 'habit-status',
+                  checked: checked,
+                  label: '',
+                },
+              } as any);
+              blockReplaced = true;
+              console.log('Replaced habit-status singleselect with checkbox block:', { checked });
+            } else {
+              // Keep as singleselect for other types
+              processedBlocks.push({
+                type: 'singleselect',
+                props: {
+                  type: ssBlock.type || 'status',
+                  value: ssBlock.value || '',
+                  label: ssBlock.label || '',
+                  placeholder: '',
+                  customOptionsJson: '[]',
+                },
+              } as any);
+              blockReplaced = true;
+              console.log('Replaced paragraph with singleselect block:', ssBlock);
+            }
+            break; // Exit the inner loop once we've replaced the block
+          }
+        }
+      }
+      
+      // Check if this paragraph contains our checkbox markers or HTML
+      if (!blockReplaced) {
+        for (const cbBlock of checkboxBlocks) {
+          if (blockText.includes(cbBlock.text) || 
+              blockText.includes(`[!checkbox:${cbBlock.type}:`) ||
+              (cbBlock.label && blockText.includes(cbBlock.label))) {
+            // Replace this paragraph with a checkbox block
             processedBlocks.push({
-              type: 'singleselect',
+              type: 'checkbox',
               props: {
-                type: ssBlock.type || 'status',
-                value: ssBlock.value || '',
-                label: ssBlock.label || '',
-                placeholder: '',
-                customOptionsJson: '[]',
+                type: cbBlock.type || 'habit-status',
+                checked: cbBlock.checked || false,
+                label: cbBlock.label || '',
               },
             } as any);
             blockReplaced = true;
-            console.log('Replaced paragraph with singleselect block:', ssBlock);
+            console.log('Replaced paragraph with checkbox block:', cbBlock);
             break; // Exit the inner loop once we've replaced the block
           }
         }

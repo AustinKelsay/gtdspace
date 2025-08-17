@@ -99,10 +99,13 @@ GTD Space is designed from the ground up around David Allen's Getting Things Don
   - Interactive Status tracking (In Progress, Waiting, Complete) via single-select dropdowns
   - Interactive Effort estimates (Small <30min, Medium 30-90min, Large >90min, Extra Large >3hr) via single-select dropdowns
   - Optional focus dates (when to work on) and due dates (deadlines)
-- **Habits** - Recurring routines to track regularly
-  - Interactive Frequency tracking (Daily, Every Other Day, Twice Weekly, Weekly, Biweekly, Monthly)
-  - Interactive Status management (Active, Paused, Completed, Archived)
-  - Created date tracking for habit history
+- **Habits** - Recurring routines with automatic tracking
+  - Interactive checkbox for status (To Do / Complete) with real-time updates
+  - Smart frequency options (Daily, Every Other Day, Twice Weekly, Weekly, Weekdays, Biweekly, Monthly)
+  - Automatic status reset based on frequency intervals
+  - Self-documenting history log with timestamps
+  - Backfills missed periods when app was offline
+  - Toast notifications and visual feedback on status changes
 - **Someday Maybe** - Ideas for future consideration with full page creation support
 - **Cabinet** - Reference materials with organized document storage
 

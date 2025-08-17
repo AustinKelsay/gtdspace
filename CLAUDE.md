@@ -111,7 +111,7 @@ interface GTDAction {
 // Habits: Recurring routines with automatic tracking
 interface GTDHabit {
   name: string;
-  frequency: 'daily' | 'every-other-day' | 'twice-weekly' | 'weekly' | 'biweekly' | 'monthly';
+  frequency: 'daily' | 'every-other-day' | 'twice-weekly' | 'weekly' | 'weekdays' | 'biweekly' | 'monthly';
   status: 'todo' | 'complete';  // Resets automatically based on frequency
   history: HabitRecord[];  // Self-contained tracking history
 }
@@ -127,11 +127,18 @@ interface HabitRecord {
 
 ### Custom GTD Blocks
 
+**Checkbox Fields** (Habit Status):
+```markdown
+[!checkbox:habit-status:false]  # Todo state
+[!checkbox:habit-status:true]   # Complete state
+```
+
 **Single Select Fields** (Status, Effort):
 ```markdown
 [!singleselect:status:in-progress]
 [!singleselect:effort:medium]
 [!singleselect:project-status:waiting]
+[!singleselect:habit-frequency:daily]
 ```
 
 **Multi Select Fields** (Tags, legacy support):
@@ -247,6 +254,12 @@ interface HabitRecord {
 - **Catch-up Reset on Startup**: App checks for missed resets when starting, ensuring habits are always current
 - **Backend Status Updates**: Habit status changes trigger `update_habit_status` command to record history
 - **Smart Reset Logic**: Only resets habits marked 'complete' that have passed their frequency interval
+- **Checkbox UI for Habits**: Habit status uses checkbox instead of dropdown for cleaner UX
+- **Real-time History Updates**: Habit history updates immediately without file reload
+- **Toast Notifications**: User feedback when habits are recorded
+- **Visual Animations**: Subtle green highlight when habit file updates
+- **Weekdays Frequency**: Added Monday-Friday option for business day habits
+- **Backfill Support**: Automatically backfills missed habit periods when app was offline
 
 ## Key Dependencies
 

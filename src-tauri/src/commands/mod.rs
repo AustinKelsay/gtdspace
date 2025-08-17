@@ -2830,16 +2830,16 @@ pub fn create_gtd_habit(
         _ => "daily"
     };
     
-    // Habits always start as 'todo'
-    let status_value = "todo";
+    // Habits always start as 'todo' (false in checkbox format)
+    let checkbox_value = "false";
     
-    // Create habit file with template using single select fields
+    // Create habit file with template using checkbox for status
     let now = chrono::Local::now();
     let habit_content = format!(
         r#"# {}
 
 ## Status
-[!singleselect:habit-status:{}]
+[!checkbox:habit-status:{}]
 
 ## Frequency
 [!singleselect:habit-frequency:{}]
@@ -2853,7 +2853,7 @@ pub fn create_gtd_habit(
 
 "#,
         habit_name,
-        status_value,
+        checkbox_value,
         frequency_value,
         now.format("%Y-%m-%d")
     );
@@ -2892,11 +2892,21 @@ pub fn update_habit_status(
     let content = fs::read_to_string(&habit_path)
         .map_err(|e| format!("Failed to read habit file: {}", e))?;
     
-    // Extract current status and frequency using the static regex constants
-    let current_status = HABIT_STATUS_FIELD_REGEX.captures(&content)
-        .and_then(|cap| cap.get(1))
-        .map(|m| m.as_str())
-        .ok_or("Could not find current status in habit file")?;
+    // Check for new checkbox format first
+    let checkbox_regex = Regex::new(r"\[!checkbox:habit-status:([^\]]+)\]").unwrap();
+    let (current_status, is_checkbox_format) = if let Some(cap) = checkbox_regex.captures(&content) {
+        let checkbox_value = cap.get(1).map(|m| m.as_str()).unwrap_or("false");
+        // Convert checkbox values to status values for internal processing
+        let status = if checkbox_value == "true" { "complete" } else { "todo" };
+        (status.to_string(), true)
+    } else {
+        // Fall back to old format
+        let status = HABIT_STATUS_FIELD_REGEX.captures(&content)
+            .and_then(|cap| cap.get(1))
+            .map(|m| m.as_str())
+            .ok_or("Could not find current status in habit file")?;
+        (status.to_string(), false)
+    };
     
     let _frequency = HABIT_FREQUENCY_FIELD_REGEX.captures(&content)
         .and_then(|cap| cap.get(1))
@@ -2909,7 +2919,7 @@ pub fn update_habit_status(
         return Ok(());
     }
     
-    log::info!("Habit status changing from '{}' to '{}'", current_status, new_status);
+    log::info!("Habit status changing from '{}' to '{}' (checkbox format: {})", current_status, new_status, is_checkbox_format);
     
     // Create history entry for the manual status change
     let now = Local::now();
@@ -2927,11 +2937,21 @@ pub fn update_habit_status(
     // This ensures each cycle starts fresh and auto-reset can detect if it was missed
     let final_status = if new_status == "complete" { "todo" } else { new_status.as_str() };
     
-    // Update the status field in the content
-    let updated_content = HABIT_STATUS_FIELD_REGEX.replace(
-        &content,
-        format!("[!singleselect:habit-status:{}]", final_status).as_str()
-    ).to_string();
+    // Update the status field in the content based on format
+    let updated_content = if is_checkbox_format {
+        // Convert status to checkbox value
+        let checkbox_value = if final_status == "complete" { "true" } else { "false" };
+        checkbox_regex.replace(
+            &content,
+            format!("[!checkbox:habit-status:{}]", checkbox_value).as_str()
+        ).to_string()
+    } else {
+        // Use old format
+        HABIT_STATUS_FIELD_REGEX.replace(
+            &content,
+            format!("[!singleselect:habit-status:{}]", final_status).as_str()
+        ).to_string()
+    };
     
     // Insert the history entry using our standardized function
     let final_content = insert_history_entry(&updated_content, &history_entry)?;
@@ -2987,14 +3007,25 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
             let content = fs::read_to_string(&path)
                 .map_err(|e| format!("Failed to read habit file: {}", e))?;
             
-            // Extract frequency and status using the static regex constants
+            // Extract frequency using the static regex constants
             let frequency = HABIT_FREQUENCY_FIELD_REGEX.captures(&content)
                 .and_then(|cap| cap.get(1))
                 .map(|m| m.as_str());
             
-            let current_status = HABIT_STATUS_FIELD_REGEX.captures(&content)
-                .and_then(|cap| cap.get(1))
-                .map(|m| m.as_str());
+            // Check for new checkbox format first
+            let checkbox_regex = Regex::new(r"\[!checkbox:habit-status:([^\]]+)\]").unwrap();
+            let (current_status, is_checkbox_format) = if let Some(cap) = checkbox_regex.captures(&content) {
+                let checkbox_value = cap.get(1).map(|m| m.as_str()).unwrap_or("false");
+                // Convert checkbox values to status values
+                let status = if checkbox_value == "true" { "complete" } else { "todo" };
+                (Some(status), true)
+            } else {
+                // Fall back to old format
+                let status = HABIT_STATUS_FIELD_REGEX.captures(&content)
+                    .and_then(|cap| cap.get(1))
+                    .map(|m| m.as_str());
+                (status, false)
+            };
             
             if let (Some(freq), Some(status)) = (frequency, current_status) {
                 let habit_name = path.file_name()
@@ -3081,10 +3112,20 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                     }
                     
                     // ALWAYS update status to 'todo' after a reset (do this AFTER inserting history)
-                    let final_content = HABIT_STATUS_FIELD_REGEX.replace(
-                        &content_with_history,
-                        "[!singleselect:habit-status:todo]"
-                    ).to_string();
+                    let final_content = if is_checkbox_format {
+                        // Use checkbox format
+                        let checkbox_regex = Regex::new(r"\[!checkbox:habit-status:([^\]]+)\]").unwrap();
+                        checkbox_regex.replace(
+                            &content_with_history,
+                            "[!checkbox:habit-status:false]"  // false = todo
+                        ).to_string()
+                    } else {
+                        // Use old format
+                        HABIT_STATUS_FIELD_REGEX.replace(
+                            &content_with_history,
+                            "[!singleselect:habit-status:todo]"
+                        ).to_string()
+                    };
                 
                     // Write updated file
                     fs::write(&path, final_content)

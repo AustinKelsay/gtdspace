@@ -459,10 +459,28 @@ export const App: React.FC = () => {
       }
     };
     
+    // Handle real-time content changes for habits
+    const handleHabitContentChanged = (event: CustomEvent<{ filePath: string }>) => {
+      const { filePath } = event.detail;
+      
+      // If the changed file is the currently active tab, reload its content
+      if (activeTab?.filePath === filePath) {
+        invoke<string>('read_file', { path: filePath })
+          .then(freshContent => {
+            updateTabContent(activeTab.id, freshContent);
+          })
+          .catch(error => {
+            console.error('Failed to reload habit content:', error);
+          });
+      }
+    };
+
     window.addEventListener('habit-status-updated', handleHabitStatusUpdate as EventListener);
+    window.addEventListener('habit-content-changed', handleHabitContentChanged as EventListener);
     
     return () => {
       window.removeEventListener('habit-status-updated', handleHabitStatusUpdate as EventListener);
+      window.removeEventListener('habit-content-changed', handleHabitContentChanged as EventListener);
     };
   }, [activeTab?.filePath, activeTab?.id, updateTabContent, refreshGTDSpace]);
   

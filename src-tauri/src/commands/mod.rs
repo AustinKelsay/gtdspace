@@ -2153,36 +2153,61 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         }
     }
 
-    // Project 1: Getting Started (with due date 3 days from now)
-    let three_days = chrono::Local::now() + chrono::Duration::days(3);
+    // Project 1: Getting Started (with due date 3 days from now at 5 PM)
+    let three_days_deadline = (chrono::Local::now() + chrono::Duration::days(3))
+        .with_hour(17)
+        .unwrap()
+        .with_minute(0)
+        .unwrap()
+        .with_second(0)
+        .unwrap();
     let project1_path = ensure_project(
         &space_path,
         "Getting Started",
         "A quick tour of how GTD Space works.",
-        Some(three_days.format("%Y-%m-%d").to_string()),
+        Some(three_days_deadline.to_rfc3339()),  // Use RFC3339 to include time
         Some("in-progress".to_string()),
     )
     .await?;
 
-    // Actions for Project 1 with various dates
-    let tomorrow = chrono::Local::now() + chrono::Duration::days(1);
+    // Actions for Project 1 with various dates and times
+    let tomorrow_morning = (chrono::Local::now() + chrono::Duration::days(1))
+        .with_hour(10)
+        .unwrap()
+        .with_minute(30)
+        .unwrap()
+        .with_second(0)
+        .unwrap();
     let _ = create_gtd_action(
         project1_path.clone(),
         "Read the welcome file".to_string(),
         "in-progress".to_string(),
-        Some(tomorrow.format("%Y-%m-%d").to_string()),  // Due tomorrow
+        Some(tomorrow_morning.to_rfc3339()),  // Due tomorrow at 10:30 AM
         Some(chrono::Local::now().to_rfc3339()),  // Focus today
         "small".to_string(),
     )
     .await;
 
-    let two_days = chrono::Local::now() + chrono::Duration::days(2);
+    let two_days_afternoon = (chrono::Local::now() + chrono::Duration::days(2))
+        .with_hour(14)
+        .unwrap()
+        .with_minute(0)
+        .unwrap()
+        .with_second(0)
+        .unwrap();
+    let three_days_evening = (chrono::Local::now() + chrono::Duration::days(3))
+        .with_hour(17)
+        .unwrap()
+        .with_minute(0)
+        .unwrap()
+        .with_second(0)
+        .unwrap();
     let _ = create_gtd_action(
         project1_path.clone(),
         "Create your first project".to_string(),
         "waiting".to_string(),
-        Some(three_days.format("%Y-%m-%d").to_string()),  // Due in 3 days
-        Some(two_days.to_rfc3339()),  // Focus in 2 days
+        Some(three_days_evening.to_rfc3339()),  // Due in 3 days at 5:00 PM
+        Some(two_days_afternoon.to_rfc3339()),  // Focus in 2 days at 2:00 PM
         "medium".to_string(),
     )
     .await;
@@ -2197,24 +2222,37 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     )
     .await;
 
-    // Project 2: Demo Project - Website
-    let seven_days = chrono::Local::now() + chrono::Duration::days(7);
+    // Project 2: Demo Project - Website with deadline time
+    let seven_days_noon = (chrono::Local::now() + chrono::Duration::days(7))
+        .with_hour(12)
+        .unwrap()
+        .with_minute(0)
+        .unwrap()
+        .with_second(0)
+        .unwrap();
 
     let project2_path = ensure_project(
         &space_path,
         "Demo Project - Website",
         "Build a simple marketing website.",
-        Some(seven_days.format("%Y-%m-%d").to_string()),
+        Some(seven_days_noon.to_rfc3339()),  // Due in 7 days at noon
         Some("in-progress".to_string()),
     )
     .await?;
 
+    let tomorrow_afternoon = (chrono::Local::now() + chrono::Duration::days(1))
+        .with_hour(15)
+        .unwrap()
+        .with_minute(0)
+        .unwrap()
+        .with_second(0)
+        .unwrap();
     let _ = create_gtd_action(
         project2_path.clone(),
         "Design homepage".to_string(),
         "in-progress".to_string(),
-        Some(seven_days.format("%Y-%m-%d").to_string()),  // Due in 7 days
-        Some(tomorrow.to_rfc3339()),  // Focus tomorrow
+        Some(seven_days_noon.to_rfc3339()),  // Due in 7 days at noon (same as project)
+        Some(tomorrow_afternoon.to_rfc3339()),  // Focus tomorrow at 3:00 PM
         "large".to_string(),
     )
     .await;
@@ -2229,13 +2267,26 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     )
     .await;
 
-    let five_days = chrono::Local::now() + chrono::Duration::days(5);
+    let five_days_morning = (chrono::Local::now() + chrono::Duration::days(5))
+        .with_hour(9)
+        .unwrap()
+        .with_minute(30)
+        .unwrap()
+        .with_second(0)
+        .unwrap();
+    let six_days_afternoon = (chrono::Local::now() + chrono::Duration::days(6))
+        .with_hour(16)
+        .unwrap()
+        .with_minute(0)
+        .unwrap()
+        .with_second(0)
+        .unwrap();
     let _ = create_gtd_action(
         project2_path.clone(),
         "Plan content".to_string(),
         "waiting".to_string(),
-        Some(seven_days.format("%Y-%m-%d").to_string()),  // Due in 7 days
-        Some(five_days.to_rfc3339()),  // Focus in 5 days
+        Some(six_days_afternoon.to_rfc3339()),  // Due in 6 days at 4:00 PM
+        Some(five_days_morning.to_rfc3339()),  // Focus in 5 days at 9:30 AM
         "medium".to_string(),
     )
     .await;
@@ -2447,6 +2498,12 @@ Common keyboard shortcuts for productivity tools and GTD Space.
 - **Cmd/Ctrl + Alt + S**: Insert Status field
 - **Cmd/Ctrl + Alt + E**: Insert Effort field
 - **Cmd/Ctrl + Alt + P**: Insert Project Status field
+- **Cmd/Ctrl + Alt + D**: Insert Due Date (date only)
+- **Cmd/Ctrl + Alt + Shift + D**: Insert Due Date with time
+- **Cmd/Ctrl + Alt + T**: Insert Focus Date with time
+- **Cmd/Ctrl + Alt + C**: Insert Created Date
+- **Cmd/Ctrl + Alt + F**: Insert Habit Frequency
+- **Cmd/Ctrl + Alt + H**: Insert Habit Status checkbox
 - **Cmd/Ctrl + S**: Save current file
 - **Cmd/Ctrl + O**: Open folder
 
@@ -2573,6 +2630,9 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 ## Frequency
 [!singleselect:habit-frequency:daily]
 
+## Focus Time
+[!datetime:focus_date_time:{}T07:00:00]
+
 ## Created
 [!datetime:created_date:{}]
 
@@ -2581,7 +2641,7 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
             let _ = fs::write(&habit1, content);
         }
 
@@ -2597,6 +2657,9 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 ## Frequency
 [!singleselect:habit-frequency:weekly]
 
+## Focus Time
+[!datetime:focus_date_time:{}T16:00:00]
+
 ## Created
 [!datetime:created_date:{}]
 
@@ -2605,7 +2668,7 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
             let _ = fs::write(&habit2, content);
         }
 
@@ -2621,6 +2684,9 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 ## Frequency
 [!singleselect:habit-frequency:daily]
 
+## Focus Time
+[!datetime:focus_date_time:{}T20:30:00]
+
 ## Created
 [!datetime:created_date:{}]
 
@@ -2629,7 +2695,7 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
             let _ = fs::write(&habit3, content);
         }
 
@@ -2645,6 +2711,9 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 ## Frequency
 [!singleselect:habit-frequency:twice-weekly]
 
+## Focus Time
+[!datetime:focus_date_time:{}T12:00:00]
+
 ## Created
 [!datetime:created_date:{}]
 
@@ -2653,7 +2722,7 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
             let _ = fs::write(&habit4, content);
         }
 
@@ -2669,6 +2738,9 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 ## Frequency
 [!singleselect:habit-frequency:daily]
 
+## Focus Time
+[!datetime:focus_date_time:{}T21:00:00]
+
 ## Created
 [!datetime:created_date:{}]
 
@@ -2677,7 +2749,7 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
             let _ = fs::write(&habit5, content);
         }
     }
@@ -3015,6 +3087,7 @@ pub fn create_gtd_habit(
     habit_name: String,
     frequency: String,
     _status: String,  // Always 'todo', kept for API compatibility
+    focus_time: Option<String>,  // Optional focus time (HH:MM format)
 ) -> Result<String, String> {
     log::info!("Creating GTD habit: {}", habit_name);
     
@@ -3050,6 +3123,23 @@ pub fn create_gtd_habit(
     
     // Create habit file with template using checkbox for status
     let now = chrono::Local::now();
+    
+    // Format focus time if provided
+    let focus_time_section = if let Some(time) = focus_time {
+        // Validate time format (HH:MM)
+        if time.len() == 5 && time.chars().nth(2) == Some(':') {
+            // Create a datetime with today's date and the specified time
+            format!("\n## Focus Time\n[!datetime:focus_date_time:{}T{}:00]\n", 
+                now.format("%Y-%m-%d"), 
+                time
+            )
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+    
     let habit_content = format!(
         r#"# {}
 
@@ -3058,7 +3148,7 @@ pub fn create_gtd_habit(
 
 ## Frequency
 [!singleselect:habit-frequency:{}]
-
+{}
 ## Created
 [!datetime:created_date:{}]
 
@@ -3070,6 +3160,7 @@ pub fn create_gtd_habit(
         habit_name,
         checkbox_value,
         frequency_value,
+        focus_time_section,
         now.format("%Y-%m-%d")
     );
     

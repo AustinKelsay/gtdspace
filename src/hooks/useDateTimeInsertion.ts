@@ -41,10 +41,11 @@ export function useDateTimeInsertion(editor: any) {
       const isMac = navigator.platform.toLowerCase().includes('mac');
       const modKey = isMac ? e.metaKey : e.ctrlKey;
 
-      // Cmd+Alt+D (Mac) or Ctrl+Alt+D (Windows/Linux) for Due Date field
+      // Cmd+Alt+D (Mac) or Ctrl+Alt+D (Windows/Linux) for Due Date field (with Shift for time)
       if (modKey && e.altKey && e.key === 'd') {
         e.preventDefault();
-        const block = createDateTimeBlock('due_date', 'Due Date', '', false);
+        const includeTime = e.shiftKey; // Add Shift to include time
+        const block = createDateTimeBlock('due_date', 'Due Date', '', includeTime);
         insertAfterCurrent(block);
       }
 
@@ -82,7 +83,21 @@ export function useDateTimeInsertion(editor: any) {
     const value = defaultValue || (type === 'created_date' ? new Date().toISOString() : '');
     const block = createDateTimeBlock(type, undefined, value, includeTime);
 
-    const currentBlock = editor.getTextCursorPosition().block;
+    // Safely resolve current block from cursor position with fallbacks
+    let cursorPos: unknown;
+    try {
+      cursorPos = editor.getTextCursorPosition?.();
+    } catch {
+      cursorPos = undefined;
+    }
+
+    // Prefer the cursor block, then root block, then last document block
+    const currentBlock = (cursorPos as { block?: unknown } | undefined)?.block
+      ?? editor.getRootBlock?.()
+      ?? editor.document?.[editor.document.length - 1]
+      ?? undefined;
+
+    if (!currentBlock) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     editor.insertBlocks([block as any], currentBlock, 'after');
   };

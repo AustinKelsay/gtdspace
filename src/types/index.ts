@@ -421,12 +421,12 @@ export type GTDProjectStatus = 'in-progress' | 'waiting' | 'completed';
 /**
  * GTD Action status options
  */
-export type GTDActionStatus = 'In Progress' | 'Waiting' | 'Complete';
+export type GTDActionStatus = 'in-progress' | 'waiting' | 'complete';
 
 /**
  * GTD Action effort estimation
  */
-export type GTDActionEffort = 'Small' | 'Medium' | 'Large';
+export type GTDActionEffort = 'small' | 'medium' | 'large' | 'extra-large';
 
 /**
  * GTD Project structure

@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/select';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useToast } from '@/hooks/useToast';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Clock } from 'lucide-react';
 
 interface CreateHabitDialogProps {
   isOpen: boolean;
@@ -56,6 +56,7 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
 }) => {
   const [habitName, setHabitName] = useState('');
   const [frequency, setFrequency] = useState('daily');
+  const [focusTime, setFocusTime] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const { withErrorHandling } = useErrorHandler();
   const { showSuccess } = useToast();
@@ -72,10 +73,11 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
     const result = await withErrorHandling(
       async () => {
         const habitPath = await invoke<string>('create_gtd_habit', {
-          spacePath: spacePath,
-          habitName: habitName.trim(),
+          space_path: spacePath,
+          habit_name: habitName.trim(),
           frequency: frequency,
-          status: 'todo', // Always start habits as 'todo'
+          _status: 'todo', // Always start habits as 'todo'
+          focus_time: focusTime.trim() || null, // Optional focus time
         });
         return habitPath;
       },
@@ -97,6 +99,7 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
   const handleClose = () => {
     setHabitName('');
     setFrequency('daily');
+    setFocusTime('');
     setIsCreating(false);
     onClose();
   };
@@ -146,6 +149,23 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
               </Select>
               <p className="text-xs text-muted-foreground">
                 How often will you practice this habit?
+              </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="focus-time" className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                Focus Time (Optional)
+              </Label>
+              <Input
+                id="focus-time"
+                type="time"
+                value={focusTime}
+                onChange={(e) => setFocusTime(e.target.value)}
+                placeholder="09:00"
+              />
+              <p className="text-xs text-muted-foreground">
+                What time of day will you do this habit? (e.g., 09:00 for 9 AM)
               </p>
             </div>
 

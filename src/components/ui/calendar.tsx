@@ -1,4 +1,5 @@
 import * as React from "react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { DayPicker } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
@@ -15,20 +16,26 @@ function Calendar({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      className={cn("p-3 bg-card text-card-foreground rounded-md", className)}
+      className={cn("p-3", className)}
+      components={{
+        Chevron: ({ orientation }) => {
+          const Icon = orientation === "left" ? ChevronLeft : ChevronRight;
+          return <Icon className="h-4 w-4" />;
+        }
+      }}
       classNames={{
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
-        month: "space-y-4",
-        caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium text-foreground",
-        nav: "space-x-1 flex items-center",
+        month: "space-y-3",
+        caption: "flex items-center justify-between relative pt-1",
+        caption_label: "text-sm font-medium flex-1 text-center",
+        nav: "flex items-center gap-1 absolute inset-x-0 justify-between px-1",
         nav_button: cn(
           buttonVariants({ variant: "ghost" }),
-          "h-7 w-7 bg-transparent p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
+          "h-7 w-7 bg-transparent p-0 hover:bg-accent hover:text-accent-foreground rounded-md"
         ),
         nav_button_previous: "absolute left-1",
         nav_button_next: "absolute right-1",
-        table: "mx-auto",
+        table: "w-full",
         weekdays: "grid grid-cols-7",
         weekday: "text-muted-foreground font-normal text-[0.8rem] text-center w-9",
         weeks: "mt-2",
@@ -38,7 +45,7 @@ function Calendar({
           "text-muted-foreground font-normal text-[0.8rem] text-center w-9",
         row: "grid grid-cols-7 mt-2",
         cell: cn(
-          "h-9 w-9 text-center text-sm p-0 relative flex items-center justify-center",
+          "h-9 w-9 text-center text-sm p-0 relative",
           "[&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
           "focus-within:relative focus-within:z-20"
         ),

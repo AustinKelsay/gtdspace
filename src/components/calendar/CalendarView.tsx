@@ -1,30 +1,26 @@
 /**
- * @fileoverview Calendar view component for displaying all dated GTD items
+ * @fileoverview Full-view calendar component displaying GTD items as event blocks
  * @author Development Team
  * @created 2025-01-17
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar } from '@/components/ui/calendar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+// import { Card } from '@/components/ui/card';  // Removed: unused
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   Calendar as CalendarIcon, 
-  Clock, 
-  Target, 
-  Circle, 
-  CheckCircle2, 
-  CircleDot,
   ChevronLeft,
-  ChevronRight,
-  FileText,
-  Briefcase
+  ChevronRight
 } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, isValid } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, 
+         isSameDay, parseISO, isValid, startOfWeek, endOfWeek,
+         isSameMonth, isToday, addDays, addWeeks, addMonths,
+         isMonday, isTuesday, isWednesday,
+         isThursday, isFriday, setHours } from 'date-fns';
 import { useCalendarData } from '@/hooks/useCalendarData';
 import type { MarkdownFile, GTDSpace } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface CalendarViewProps {
   onFileSelect: (file: MarkdownFile) => void;
@@ -33,131 +29,362 @@ interface CalendarViewProps {
   files?: MarkdownFile[];
 }
 
-interface CalendarItem {
+interface CalendarEvent {
   id: string;
   title: string;
   type: 'project' | 'action' | 'habit';
   status?: string;
-  dateType: 'due' | 'focus';
+  eventType: 'due' | 'focus' | 'habit';
   date: Date;
+  time?: string;
   path: string;
   projectName?: string;
 }
 
-const getStatusIcon = (status?: string) => {
-  switch (status) {
-    case 'complete':
-      return CheckCircle2;
-    case 'waiting':
-      return CircleDot;
-    case 'in-progress':
-    default:
-      return Circle;
+
+const getEventColorClass = (type: 'project' | 'action' | 'habit', eventType: 'due' | 'focus' | 'habit') => {
+  if (type === 'habit') {
+    return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-300 dark:border-green-700';
   }
+  if (eventType === 'due') {
+    return 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-300 dark:border-orange-700';
+  }
+  return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-700';
 };
 
-const getStatusColor = (status?: string) => {
-  switch (status) {
-    case 'complete':
-      return 'text-green-600 dark:text-green-400';
-    case 'waiting':
-      return 'text-yellow-600 dark:text-yellow-400';
-    case 'in-progress':
-    default:
-      return 'text-blue-600 dark:text-blue-400';
+
+/**
+ * Generate recurring dates for habits based on frequency - optimized for view window
+ * 
+ * Performance optimization: Only generates dates within the specified view window
+ * instead of generating all dates from creation and then filtering.
+ * 
+ * For a daily habit created 1 year ago:
+ * - Old approach: Generate 365+ dates, then filter to ~30 for month view
+ * - New approach: Generate only the ~30 dates needed for the current view
+ * 
+ * @param createdDate - The date the habit was created (ISO string)
+ * @param frequency - The recurrence frequency of the habit
+ * @param viewStart - Start of the current view window
+ * @param viewEnd - End of the current view window
+ * @returns Array of dates when the habit should appear in the current view
+ */
+const generateHabitDates = (
+  createdDate: string, 
+  frequency: string, 
+  viewStart: Date,
+  viewEnd: Date
+): Date[] => {
+  const dates: Date[] = [];
+  const created = parseISO(createdDate);
+  if (!isValid(created)) return dates;
+  
+  // Add a small buffer to handle edge cases at view boundaries
+  const bufferDays = 1;
+  const bufferedStart = addDays(viewStart, -bufferDays);
+  const bufferedEnd = addDays(viewEnd, bufferDays);
+  
+  // Calculate the first occurrence within or after the view start
+  let currentDate = created;
+  
+  // Fast-forward to the view window based on frequency
+  if (created < bufferedStart) {
+    const daysDiff = Math.floor((viewStart.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+    
+    switch (frequency) {
+      case 'daily':
+        currentDate = addDays(created, daysDiff);
+        break;
+        
+      case 'weekdays':
+        // Approximate - will be adjusted in the loop
+        currentDate = addDays(created, daysDiff);
+        break;
+        
+      case 'every-other-day': {
+        const cycles = Math.floor(daysDiff / 2);
+        currentDate = addDays(created, cycles * 2);
+        break;
+      }
+        
+      case 'twice-weekly': {
+        const twiceWeeklyCycles = Math.floor(daysDiff / 3);
+        currentDate = addDays(created, twiceWeeklyCycles * 3);
+        break;
+      }
+        
+      case 'weekly': {
+        const weeks = Math.floor(daysDiff / 7);
+        currentDate = addWeeks(created, weeks);
+        break;
+      }
+        
+      case 'biweekly': {
+        const biweeks = Math.floor(daysDiff / 14);
+        currentDate = addWeeks(created, biweeks * 2);
+        break;
+      }
+        
+      case 'monthly': {
+        const monthsDiff = Math.floor(daysDiff / 30);
+        currentDate = addMonths(created, monthsDiff);
+        break;
+      }
+        
+      default:
+        currentDate = addDays(created, daysDiff);
+        break;
+    }
   }
+  
+  // Generate dates only within the view window (with buffer)
+  while (currentDate <= bufferedEnd) {
+    // Only include dates that are actually within the view (not in buffer)
+    if (currentDate >= viewStart && currentDate <= viewEnd) {
+      switch (frequency) {
+        case 'daily':
+          dates.push(new Date(currentDate));
+          break;
+          
+        case 'weekdays':
+          // Only Monday through Friday
+          if (isMonday(currentDate) || isTuesday(currentDate) || 
+              isWednesday(currentDate) || isThursday(currentDate) || 
+              isFriday(currentDate)) {
+            dates.push(new Date(currentDate));
+          }
+          break;
+          
+        case 'every-other-day':
+        case 'twice-weekly':
+        case 'weekly':
+        case 'biweekly':
+        case 'monthly':
+        default:
+          dates.push(new Date(currentDate));
+          break;
+      }
+    }
+    
+    // Move to next occurrence
+    switch (frequency) {
+      case 'daily':
+      case 'weekdays':
+        currentDate = addDays(currentDate, 1);
+        break;
+        
+      case 'every-other-day':
+        currentDate = addDays(currentDate, 2);
+        break;
+        
+      case 'twice-weekly':
+        currentDate = addDays(currentDate, 3);
+        break;
+        
+      case 'weekly':
+        currentDate = addWeeks(currentDate, 1);
+        break;
+        
+      case 'biweekly':
+        currentDate = addWeeks(currentDate, 2);
+        break;
+        
+      case 'monthly':
+        currentDate = addMonths(currentDate, 1);
+        break;
+        
+      default:
+        currentDate = addDays(currentDate, 1);
+        break;
+    }
+  }
+  
+  return dates;
 };
 
-export const CalendarView: React.FC<CalendarViewProps> = ({ onFileSelect, spacePath, gtdSpace, files }) => {
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+type ViewMode = 'month' | 'week';
+
+export const CalendarView: React.FC<CalendarViewProps> = ({ 
+  onFileSelect, 
+  spacePath, 
+  gtdSpace, 
+  files 
+}) => {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [viewMode, setViewMode] = useState<ViewMode>('week');
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const weekScrollRef = useRef<HTMLDivElement>(null);
   
   // Get all dated items from the hook
-  const { items, isLoading, refresh } = useCalendarData(spacePath, gtdSpace, files);
+  const { items, refresh } = useCalendarData(spacePath, gtdSpace, files);
   
-  // Process items into calendar format
-  const calendarItems = useMemo(() => {
-    const processedItems: CalendarItem[] = [];
+  // Update current time every minute for the time indicator
+  useEffect(() => {
+    const updateTime = () => setCurrentTime(new Date());
+    const interval = setInterval(updateTime, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Auto-scroll to 7am when week view loads
+  useEffect(() => {
+    if (viewMode === 'week') {
+      // Find the ScrollArea's viewport element specifically in the week time grid
+      // ScrollArea creates a div with data-radix-scroll-area-viewport
+      const scrollToMorning = () => {
+        // More specific selector to target the week grid ScrollArea
+        const weekGrid = document.getElementById('week-time-grid');
+        if (weekGrid) {
+          const scrollViewport = weekGrid.querySelector('[data-radix-scroll-area-viewport]');
+          
+          if (scrollViewport && scrollViewport instanceof HTMLElement) {
+            // Each hour row is 80px (h-20), scroll to 7am
+            const targetHour = 7;
+            const scrollPosition = targetHour * 80;
+            scrollViewport.scrollTop = scrollPosition;
+          }
+        }
+      };
+      
+      // Use requestAnimationFrame to ensure DOM is painted
+      requestAnimationFrame(() => {
+        // Additional delay for ScrollArea to fully initialize
+        setTimeout(scrollToMorning, 200);
+      });
+    }
+  }, [viewMode, currentMonth]); // Re-scroll when changing weeks or switching to week view
+  
+  // Process items into calendar events
+  const calendarEvents = useMemo(() => {
+    const events: CalendarEvent[] = [];
+    
+    // Calculate view range for habit generation based on view mode
+    const viewStart = viewMode === 'week' 
+      ? startOfWeek(currentMonth)
+      : startOfWeek(startOfMonth(currentMonth));
+    const viewEnd = viewMode === 'week'
+      ? endOfWeek(currentMonth)
+      : endOfWeek(endOfMonth(currentMonth));
     
     items.forEach(item => {
-      // Parse dates
-      if (item.due_date) {
-        const dueDate = typeof item.due_date === 'string' ? parseISO(item.due_date) : item.due_date;
-        if (isValid(dueDate)) {
-          processedItems.push({
-            id: `${item.path}-due`,
-            title: item.name,
-            type: item.type,
-            status: item.status,
-            dateType: 'due',
-            date: dueDate,
-            path: item.path,
-            projectName: item.projectName
+      // Handle habits separately - generate recurring events
+      if (item.type === 'habit' && item.frequency && item.createdDate) {
+        // Generate dates only for the current view window
+        const habitDates = generateHabitDates(item.createdDate, item.frequency, viewStart, viewEnd);
+        
+        // Process the generated dates (already filtered to view window)
+        habitDates
+          .forEach((date, _index) => {
+            events.push({
+              id: `${item.path}-habit-${_index}-${date.getTime()}`,
+              title: item.name,
+              type: 'habit',
+              status: item.status,
+              eventType: 'habit',
+              date: date,
+              path: item.path,
+              projectName: undefined
+            });
           });
-        }
-      }
-      
-      if (item.focus_date) {
-        const focusDate = typeof item.focus_date === 'string' ? parseISO(item.focus_date) : item.focus_date;
-        if (isValid(focusDate)) {
-          processedItems.push({
-            id: `${item.path}-focus`,
-            title: item.name,
-            type: item.type,
-            status: item.status,
-            dateType: 'focus',
-            date: focusDate,
-            path: item.path,
-            projectName: item.projectName
-          });
-        }
-      }
-    });
-    
-    return processedItems;
-  }, [items]);
-  
-  // Get items for selected date
-  const selectedDateItems = useMemo(() => {
-    if (!selectedDate) return [];
-    return calendarItems.filter(item => isSameDay(item.date, selectedDate));
-  }, [calendarItems, selectedDate]);
-  
-  // Get items for current month view
-  const currentMonthItems = useMemo(() => {
-    const start = startOfMonth(currentMonth);
-    const end = endOfMonth(currentMonth);
-    
-    return calendarItems.filter(item => {
-      return item.date >= start && item.date <= end;
-    });
-  }, [calendarItems, currentMonth]);
-  
-  // Get dates that have items
-  const datesWithItems = useMemo(() => {
-    const dateSet = new Set<string>();
-    const dueSet = new Set<string>();
-    const focusSet = new Set<string>();
-    
-    currentMonthItems.forEach(item => {
-      const dayKey = format(item.date, 'yyyy-MM-dd');
-      dateSet.add(dayKey);
-      if (item.dateType === 'due') {
-        dueSet.add(dayKey);
       } else {
-        focusSet.add(dayKey);
+        // Handle projects and actions
+        if (item.due_date) {
+          const dueDate = typeof item.due_date === 'string' ? parseISO(item.due_date) : item.due_date;
+          if (isValid(dueDate)) {
+            // Extract time if it's a datetime
+            const timeMatch = item.due_date.match(/T(\d{2}:\d{2})/);
+            events.push({
+              id: `${item.path}-due`,
+              title: item.name,
+              type: item.type,
+              status: item.status,
+              eventType: 'due',
+              date: dueDate,
+              time: timeMatch ? timeMatch[1] : undefined,
+              path: item.path,
+              projectName: item.projectName
+            });
+          }
+        }
+        
+        if (item.focus_date) {
+          const focusDate = typeof item.focus_date === 'string' ? parseISO(item.focus_date) : item.focus_date;
+          if (isValid(focusDate)) {
+            // Extract time if it's a datetime
+            const timeMatch = item.focus_date.match(/T(\d{2}:\d{2})/);
+            events.push({
+              id: `${item.path}-focus`,
+              title: item.name,
+              type: item.type,
+              status: item.status,
+              eventType: 'focus',
+              date: focusDate,
+              time: timeMatch ? timeMatch[1] : undefined,
+              path: item.path,
+              projectName: item.projectName
+            });
+          }
+        }
       }
     });
     
-    return { all: dateSet, due: dueSet, focus: focusSet };
-  }, [currentMonthItems]);
+    return events;
+  }, [items, currentMonth, viewMode]);
   
-  const handleItemClick = (item: CalendarItem) => {
-    // Create a file object to open
+  // Get calendar days for current view
+  const calendarDays = useMemo(() => {
+    if (viewMode === 'week') {
+      const start = startOfWeek(currentMonth);
+      const end = endOfWeek(currentMonth);
+      return eachDayOfInterval({ start, end });
+    } else {
+      const start = startOfWeek(startOfMonth(currentMonth));
+      const end = endOfWeek(endOfMonth(currentMonth));
+      return eachDayOfInterval({ start, end });
+    }
+  }, [currentMonth, viewMode]);
+  
+  // Get hours for weekly view
+  const weekHours = useMemo(() => {
+    const hours = [];
+    for (let i = 0; i < 24; i++) {
+      hours.push(i);
+    }
+    return hours;
+  }, []);
+  
+  // Group events by date
+  const eventsByDate = useMemo(() => {
+    const grouped = new Map<string, CalendarEvent[]>();
+    
+    calendarEvents.forEach(event => {
+      const dateKey = format(event.date, 'yyyy-MM-dd');
+      const existing = grouped.get(dateKey) || [];
+      existing.push(event);
+      grouped.set(dateKey, existing);
+    });
+    
+    // Sort events within each day
+    grouped.forEach((events) => {
+      events.sort((a, b) => {
+        // Timed events first
+        if (a.time && !b.time) return -1;
+        if (!a.time && b.time) return 1;
+        if (a.time && b.time) return a.time.localeCompare(b.time);
+        // Then by type: habits, actions, projects
+        const typeOrder = { habit: 0, action: 1, project: 2 };
+        return typeOrder[a.type] - typeOrder[b.type];
+      });
+    });
+    
+    return grouped;
+  }, [calendarEvents]);
+  
+  const handleEventClick = (event: CalendarEvent) => {
     const file: MarkdownFile = {
-      id: item.path,
-      name: item.title,
-      path: item.path,
+      id: event.path,
+      name: event.title,
+      path: event.path,
       size: 0,
       last_modified: Date.now(),
       extension: 'md'
@@ -165,164 +392,406 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onFileSelect, spaceP
     onFileSelect(file);
   };
   
-  const handleMonthChange = (date: Date | undefined) => {
-    if (date) {
-      setCurrentMonth(date);
-    }
+  const navigate = (direction: 'prev' | 'next') => {
+    setCurrentMonth(prev => {
+      const newDate = new Date(prev);
+      if (viewMode === 'week') {
+        // Navigate by week
+        if (direction === 'prev') {
+          return addWeeks(newDate, -1);
+        } else {
+          return addWeeks(newDate, 1);
+        }
+      } else {
+        // Navigate by month
+        if (direction === 'prev') {
+          newDate.setMonth(newDate.getMonth() - 1);
+        } else {
+          newDate.setMonth(newDate.getMonth() + 1);
+        }
+        return newDate;
+      }
+    });
+  };
+  
+  const goToToday = () => {
+    setCurrentMonth(new Date());
+    setSelectedDate(new Date());
   };
   
   return (
-    <div className="flex h-full">
-      {/* Calendar Panel */}
-      <div className="flex-1 p-6">
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
-              GTD Calendar
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center">
-            <div className="w-full max-w-md relative" style={{ contain: 'layout' }}>
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={setSelectedDate}
-                month={currentMonth}
-                onMonthChange={handleMonthChange}
-                className="rounded-md border relative"
-                modifiers={{
-                  hasItems: (date: Date) => {
-                    const dayKey = format(date, 'yyyy-MM-dd');
-                    return datesWithItems.all.has(dayKey);
-                  },
-                  hasDue: (date: Date) => {
-                    const dayKey = format(date, 'yyyy-MM-dd');
-                    return datesWithItems.due.has(dayKey);
-                  },
-                  hasFocus: (date: Date) => {
-                    const dayKey = format(date, 'yyyy-MM-dd');
-                    return datesWithItems.focus.has(dayKey);
-                  }
-                }}
-                modifiersClassNames={{
-                  hasItems: 'font-bold',
-                  hasDue: 'calendar-has-due',
-                  hasFocus: 'calendar-has-focus'
-                }}
-              />
-            </div>
+    <div className="h-full flex flex-col bg-background">
+      {/* Calendar Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b bg-card">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <CalendarIcon className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-xl font-semibold">GTD Calendar</h1>
+          </div>
+          
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('prev')}
+              className="h-8 w-8"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
             
-            {/* Month Summary */}
-            <div className="mt-6 w-full max-w-md">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium">Month Overview</h3>
-                <Button variant="ghost" size="sm" onClick={refresh}>
-                  Refresh
-                </Button>
-              </div>
-              <div className="flex gap-4 text-sm">
-                <div className="flex items-center gap-1">
-                  <div 
-                    className="w-2 h-2 rounded-full" 
-                    style={{ backgroundColor: 'rgb(var(--calendar-due-color))' }}
-                  />
-                  <span className="text-muted-foreground">
-                    {currentMonthItems.filter(i => i.dateType === 'due').length} Due Dates
-                  </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div 
-                    className="w-2 h-2 rounded-full" 
-                    style={{ backgroundColor: 'rgb(var(--calendar-focus-color))' }}
-                  />
-                  <span className="text-muted-foreground">
-                    {currentMonthItems.filter(i => i.dateType === 'focus').length} Focus Dates
-                  </span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      
-      {/* Selected Date Items Panel */}
-      <div className="w-96 border-l bg-muted/30 p-6">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            {selectedDate ? format(selectedDate, 'MMMM d, yyyy') : 'Select a date'}
-          </h2>
-          {selectedDateItems.length > 0 && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {selectedDateItems.length} item{selectedDateItems.length !== 1 ? 's' : ''}
-            </p>
-          )}
+            <h2 className="text-lg font-medium w-48 text-center">
+              {viewMode === 'week' 
+                ? `Week of ${format(startOfWeek(currentMonth), 'MMM d, yyyy')}`
+                : format(currentMonth, 'MMMM yyyy')}
+            </h2>
+            
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('next')}
+              className="h-8 w-8"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         
-        <ScrollArea className="h-[calc(100vh-200px)]">
-          {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Loading items...
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border bg-muted p-1">
+            <Button
+              variant={viewMode === 'month' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('month')}
+              className="h-7 px-3"
+            >
+              Month
+            </Button>
+            <Button
+              variant={viewMode === 'week' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('week')}
+              className="h-7 px-3"
+            >
+              Week
+            </Button>
+          </div>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToToday}
+          >
+            Today
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={refresh}
+          >
+            Refresh
+          </Button>
+        </div>
+      </div>
+      
+      {/* Calendar Grid */}
+      <div className="flex-1 p-4 overflow-hidden">
+        {viewMode === 'month' ? (
+          /* Month View */
+          <div className="h-full bg-card rounded-lg border">
+            {/* Weekday Headers */}
+            <div className="grid grid-cols-7 border-b">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <div
+                  key={day}
+                  className="p-2 text-center text-sm font-medium text-muted-foreground border-r last:border-r-0"
+                >
+                  {day}
+                </div>
+              ))}
             </div>
-          ) : selectedDateItems.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {selectedDate ? 'No items scheduled for this date' : 'Select a date to view items'}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {selectedDateItems.map(item => {
-                const StatusIcon = getStatusIcon(item.status);
-                const TypeIcon = item.type === 'project' ? Briefcase : FileText;
+            
+            {/* Calendar Days Grid */}
+            <div className="grid grid-cols-7 h-[calc(100%-2.5rem)]">
+              {calendarDays.map((day) => {
+                const dateKey = format(day, 'yyyy-MM-dd');
+                const dayEvents = eventsByDate.get(dateKey) || [];
+                const isCurrentMonth = isSameMonth(day, currentMonth);
+                const isSelectedDay = selectedDate && isSameDay(day, selectedDate);
+                const isTodayDate = isToday(day);
                 
                 return (
-                  <Card
-                    key={item.id}
-                    className="cursor-pointer hover:bg-accent/50 transition-colors"
-                    onClick={() => handleItemClick(item)}
+                  <div
+                    key={day.toISOString()}
+                    className={cn(
+                      "border-r border-b last:border-r-0 p-1 overflow-hidden",
+                      "hover:bg-accent/5 transition-colors cursor-pointer",
+                      !isCurrentMonth && "bg-muted/30",
+                      isSelectedDay && "bg-accent/10",
+                      isTodayDate && "bg-blue-50/50 dark:bg-blue-950/20"
+                    )}
+                    onClick={() => setSelectedDate(day)}
                   >
-                    <CardContent className="p-3">
-                      <div className="flex items-start gap-2">
-                        <TypeIcon className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-medium text-sm truncate">{item.title}</h3>
-                            <Badge 
-                              variant={item.dateType === 'due' ? 'destructive' : 'default'}
-                              className="text-xs px-1 py-0"
-                            >
-                              {item.dateType === 'due' ? 'Due' : 'Focus'}
-                            </Badge>
-                          </div>
-                          
-                          {item.projectName && (
-                            <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                              {item.projectName}
-                            </p>
-                          )}
-                          
-                          {item.status && (
-                            <div className="flex items-center gap-1 mt-1">
-                              <StatusIcon className={`h-3 w-3 ${getStatusColor(item.status)}`} />
-                              <span className="text-xs capitalize">{item.status}</span>
+                    {/* Day Number */}
+                    <div className={cn(
+                      "text-sm font-medium mb-1 px-1",
+                      !isCurrentMonth && "text-muted-foreground",
+                      isTodayDate && "text-blue-600 dark:text-blue-400"
+                    )}>
+                      {format(day, 'd')}
+                    </div>
+                    
+                    {/* Events */}
+                    <ScrollArea className="h-[calc(100%-1.5rem)]">
+                      <div className="space-y-1 px-1">
+                        {dayEvents.slice(0, 4).map(event => (
+                          <div
+                            key={event.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEventClick(event);
+                            }}
+                            className={cn(
+                              "px-1.5 py-0.5 rounded text-xs truncate cursor-pointer",
+                              "border transition-all hover:shadow-sm hover:scale-105",
+                              getEventColorClass(event.type, event.eventType)
+                            )}
+                            title={`${event.time || ''} ${event.title}${event.projectName ? ` (${event.projectName})` : ''}`}
+                          >
+                            <div className="flex items-center gap-1">
+                              {event.time && (
+                                <span className="font-medium shrink-0">
+                                  {event.time}
+                                </span>
+                              )}
+                              <span className="truncate">{event.title}</span>
                             </div>
-                          )}
-                          
-                          <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            {item.dateType === 'focus' && item.date.getHours() !== 0 
-                              ? format(item.date, 'h:mm a')
-                              : 'All day'
-                            }
                           </div>
-                        </div>
+                        ))}
+                        
+                        {dayEvents.length > 4 && (
+                          <div className="text-xs text-muted-foreground px-1">
+                            +{dayEvents.length - 4} more
+                          </div>
+                        )}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </ScrollArea>
+                  </div>
                 );
               })}
             </div>
-          )}
-        </ScrollArea>
+          </div>
+        ) : (
+          /* Week View */
+          <div className="h-full bg-card rounded-lg border overflow-hidden flex flex-col">
+            {/* Week Day Headers */}
+            <div className="grid grid-cols-8 border-b bg-card z-10">
+              <div className="p-2 text-xs font-medium text-muted-foreground border-r">
+                {/* Empty corner for time column */}
+              </div>
+              {calendarDays.map(day => (
+                <div
+                  key={day.toISOString()}
+                  className={cn(
+                    "p-2 text-center border-r last:border-r-0",
+                    isToday(day) && "bg-blue-50/50 dark:bg-blue-950/20"
+                  )}
+                >
+                  <div className="text-xs text-muted-foreground">
+                    {format(day, 'EEE')}
+                  </div>
+                  <div className={cn(
+                    "text-lg font-medium",
+                    isToday(day) && "text-blue-600 dark:text-blue-400"
+                  )}>
+                    {format(day, 'd')}
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* No time events row */}
+            <div className="grid grid-cols-8 border-b min-h-[3rem] bg-muted/30">
+              <div className="p-2 text-xs text-muted-foreground border-r">
+                No time
+              </div>
+              {calendarDays.map(day => {
+                const dateKey = format(day, 'yyyy-MM-dd');
+                const dayEvents = eventsByDate.get(dateKey) || [];
+                const allDayEvents = dayEvents.filter(event => !event.time);
+                
+                return (
+                  <div
+                    key={`${day.toISOString()}-allday`}
+                    className={cn(
+                      "border-r last:border-r-0 p-1",
+                      isToday(day) && "bg-blue-50/30 dark:bg-blue-950/10"
+                    )}
+                  >
+                    <div className="space-y-1">
+                      {allDayEvents.map(event => (
+                        <div
+                          key={event.id}
+                          onClick={() => handleEventClick(event)}
+                          className={cn(
+                            "px-2 py-1 rounded text-xs cursor-pointer",
+                            "border transition-all hover:shadow-md hover:scale-105",
+                            getEventColorClass(event.type, event.eventType)
+                          )}
+                          title={`${event.title}${event.projectName ? ` (${event.projectName})` : ''}`}
+                        >
+                          <div className="font-medium truncate">
+                            {event.title}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Time Grid */}
+            <ScrollArea className="flex-1" id="week-time-grid">
+              <div className="relative">
+                {/* Current Time Indicator */}
+                {(() => {
+                  const now = currentTime;
+                  const currentHour = now.getHours();
+                  const currentMinutes = now.getMinutes();
+                  // Each hour is 80px (h-20), calculate position
+                  const topPosition = (currentHour * 80) + (currentMinutes / 60 * 80);
+                  const todayIndex = calendarDays.findIndex(day => isToday(day));
+                  
+                  // Only show the indicator if today is in the current week view
+                  if (todayIndex >= 0 && currentHour >= 0 && currentHour < 24) {
+                    // Calculate the exact left position for today's column
+                    // First column is time (12.5%), then each day is 12.5%
+                    const leftPosition = (todayIndex + 1) * 12.5; // +1 to skip time column
+                    
+                    return (
+                      <>
+                        {/* Time label positioned close to the bar */}
+                        <div
+                          className="absolute z-20 pointer-events-none"
+                          style={{
+                            top: `${topPosition}px`,
+                            left: `calc(${leftPosition}% - 55px)`, // Closer to the bar
+                            transform: 'translateY(-50%)',
+                          }}
+                        >
+                          <span className="text-xs font-medium text-red-500 bg-background px-1 rounded whitespace-nowrap">
+                            {format(now, 'h:mm a')}
+                          </span>
+                        </div>
+                        
+                        {/* Line across today's column only */}
+                        <div
+                          className="absolute z-20 pointer-events-none"
+                          style={{
+                            top: `${topPosition}px`,
+                            left: `${leftPosition}%`,
+                            width: '12.5%',
+                            transform: 'translateY(-50%)', // Center the line vertically
+                          }}
+                        >
+                          <div className="flex items-center">
+                            <div className="w-3 h-3 bg-red-500 rounded-full" />
+                            <div className="flex-1 h-0.5 bg-red-500" />
+                          </div>
+                        </div>
+                      </>
+                    );
+                  }
+                  return null;
+                })()}
+                {weekHours.map(hour => (
+                  <div key={hour} className="grid grid-cols-8 border-b h-20">
+                    <div className="p-2 text-xs text-muted-foreground border-r">
+                      {format(setHours(new Date(), hour), 'ha')}
+                    </div>
+                    {calendarDays.map(day => {
+                      const dateKey = format(day, 'yyyy-MM-dd');
+                      const dayEvents = eventsByDate.get(dateKey) || [];
+                      const hourEvents = dayEvents.filter(event => {
+                        if (event.time) {
+                          const eventHour = parseInt(event.time.split(':')[0]);
+                          return eventHour === hour;
+                        }
+                        return false; // All-day events handled separately
+                      });
+                      
+                      return (
+                        <div
+                          key={`${day.toISOString()}-${hour}`}
+                          className={cn(
+                            "relative border-r last:border-r-0 p-1",
+                            "hover:bg-accent/5 transition-colors",
+                            isToday(day) && "bg-blue-50/30 dark:bg-blue-950/10"
+                          )}
+                        >
+                          <div className="space-y-1">
+                            {hourEvents.map((event) => (
+                              <div
+                                key={event.id}
+                                onClick={() => handleEventClick(event)}
+                                className={cn(
+                                  "px-2 py-1 rounded text-xs cursor-pointer",
+                                  "border transition-all hover:shadow-md hover:scale-105 hover:z-10",
+                                  getEventColorClass(event.type, event.eventType)
+                                )}
+                                title={`${event.time || ''} ${event.title}${event.projectName ? ` (${event.projectName})` : ''}`}
+                              >
+                                <div className="flex items-center gap-1">
+                                  {event.time && (
+                                    <span className="font-medium shrink-0 text-[10px]">
+                                      {event.time}
+                                    </span>
+                                  )}
+                                  <span className="truncate font-medium">
+                                    {event.title}
+                                  </span>
+                                </div>
+                                {event.projectName && (
+                                  <div className="text-[10px] opacity-75 truncate">
+                                    {event.projectName}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+      </div>
+      
+      {/* Legend */}
+      <div className="px-6 py-3 border-t bg-card">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-6 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded border bg-orange-100 dark:bg-orange-900/30 border-orange-300 dark:border-orange-700" />
+              <span className="text-muted-foreground">Due Date</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded border bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700" />
+              <span className="text-muted-foreground">Focus Date</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded border bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700" />
+              <span className="text-muted-foreground">Habit</span>
+            </div>
+          </div>
+          
+          <div className="text-sm text-muted-foreground">
+            {calendarEvents.length} total events
+          </div>
+        </div>
       </div>
     </div>
   );

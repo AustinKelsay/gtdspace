@@ -17,6 +17,8 @@ export interface CalendarItem {
   due_date?: string;
   focus_date?: string;
   projectName?: string;
+  frequency?: string; // For habits
+  createdDate?: string; // For habits
 }
 
 interface UseCalendarDataReturn {
@@ -26,9 +28,38 @@ interface UseCalendarDataReturn {
   refresh: () => void;
 }
 
+// Pre-compile regex patterns for better performance
+const DATETIME_REGEX_CACHE = new Map<string, RegExp>();
+const SINGLESELECT_REGEX_CACHE = new Map<string, RegExp>();
+const CHECKBOX_REGEX_CACHE = new Map<string, RegExp>();
+
+// Get or create regex for datetime field
+const getDateTimeRegex = (fieldName: string): RegExp => {
+  if (!DATETIME_REGEX_CACHE.has(fieldName)) {
+    DATETIME_REGEX_CACHE.set(fieldName, new RegExp(`\\[!datetime:${fieldName}:([^\\]]+)\\]`, 'i'));
+  }
+  return DATETIME_REGEX_CACHE.get(fieldName)!;
+};
+
+// Get or create regex for single select field
+const getSingleSelectRegex = (fieldName: string): RegExp => {
+  if (!SINGLESELECT_REGEX_CACHE.has(fieldName)) {
+    SINGLESELECT_REGEX_CACHE.set(fieldName, new RegExp(`\\[!singleselect:${fieldName}:([^\\]]+)\\]`, 'i'));
+  }
+  return SINGLESELECT_REGEX_CACHE.get(fieldName)!;
+};
+
+// Get or create regex for checkbox field
+const getCheckboxRegex = (fieldName: string): RegExp => {
+  if (!CHECKBOX_REGEX_CACHE.has(fieldName)) {
+    CHECKBOX_REGEX_CACHE.set(fieldName, new RegExp(`\\[!checkbox:${fieldName}:(true|false)\\]`, 'i'));
+  }
+  return CHECKBOX_REGEX_CACHE.get(fieldName)!;
+};
+
 // Parse datetime field from markdown content
 const parseDateTimeField = (content: string, fieldName: string): string | undefined => {
-  const regex = new RegExp(`\\[!datetime:${fieldName}:([^\\]]+)\\]`, 'i');
+  const regex = getDateTimeRegex(fieldName);
   const match = content.match(regex);
   if (!match || !match[1] || match[1].trim() === '') return undefined;
   return match[1];
@@ -36,7 +67,7 @@ const parseDateTimeField = (content: string, fieldName: string): string | undefi
 
 // Parse single select field from markdown content
 const parseSingleSelectField = (content: string, fieldName: string): string | undefined => {
-  const regex = new RegExp(`\\[!singleselect:${fieldName}:([^\\]]+)\\]`, 'i');
+  const regex = getSingleSelectRegex(fieldName);
   const match = content.match(regex);
   if (!match || !match[1] || match[1].trim() === '') return undefined;
   return match[1];
@@ -44,7 +75,7 @@ const parseSingleSelectField = (content: string, fieldName: string): string | un
 
 // Parse checkbox field from markdown content
 const parseCheckboxField = (content: string, fieldName: string): boolean => {
-  const regex = new RegExp(`\\[!checkbox:${fieldName}:(true|false)\\]`, 'i');
+  const regex = getCheckboxRegex(fieldName);
   const match = content.match(regex);
   return match ? match[1] === 'true' : false;
 };
@@ -73,7 +104,8 @@ export const useCalendarData = (
       
       // 1. Load all project README files directly
       if (files) {
-        for (const file of files) {
+        for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+          const file = files[fileIndex];
           // Check if it's a project README
           if (file.path.includes('/Projects/') && file.path.endsWith('README.md')) {
             try {
@@ -88,7 +120,7 @@ export const useCalendarData = (
               
               if (dueDate) {
                 allItems.push({
-                  id: `project-${projectName}-${Date.now()}`,
+                  id: `project-${projectName}-${fileIndex}`,
                   name: projectName,
                   path: file.path,
                   type: 'project',
@@ -123,7 +155,7 @@ export const useCalendarData = (
               
               if (finalFocusDate || dueDate) {
                 allItems.push({
-                  id: `action-${projectName}-${actionName}-${Date.now()}`,
+                  id: `action-${projectName}-${actionName}-${fileIndex}`,
                   name: actionName,
                   path: file.path,
                   type: 'action',
@@ -145,29 +177,35 @@ export const useCalendarData = (
               const habitName = file.path.split('/').pop()?.replace('.md', '') || '';
               
               // Parse habit fields
-              const focusDateTime = parseDateTimeField(content, 'focus_date_time');
-              const focusDate = parseDateTimeField(content, 'focus_date');
               const habitStatus = parseCheckboxField(content, 'habit-status') ? 'complete' : 'todo';
-              const frequency = parseSingleSelectField(content, 'habit-frequency');
+              const frequency = parseSingleSelectField(content, 'habit-frequency') || 'daily';
               
-              const finalFocusDate = focusDateTime || focusDate;
-              const today = new Date().toISOString().split('T')[0];
-              
-              console.log(`[CalendarData] Habit ${habitName}: focus=${finalFocusDate}, freq=${frequency}`);
-              
-              // Show habit if it has a focus date or is daily
-              if (finalFocusDate || frequency === 'daily') {
-                allItems.push({
-                  id: `habit-${habitName}-${Date.now()}`,
-                  name: habitName,
-                  path: file.path,
-                  type: 'habit',
-                  status: habitStatus,
-                  due_date: undefined,
-                  focus_date: finalFocusDate || (frequency === 'daily' ? today : undefined),
-                  projectName: undefined
-                });
+              // Parse created date using the existing DateTime parser
+              let createdDate: string;
+              const createdDateRaw = parseDateTimeField(content, 'created_date');
+              if (createdDateRaw) {
+                // Extract just the date part (YYYY-MM-DD) from the parsed value
+                createdDate = createdDateRaw.split('T')[0];
+              } else {
+                // Fallback to current date if not found
+                createdDate = new Date().toISOString().split('T')[0];
               }
+              
+              console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDate}`);
+              
+              // Add the habit with frequency and created date info
+              allItems.push({
+                id: `habit-${habitName}-${fileIndex}`,
+                name: habitName,
+                path: file.path,
+                type: 'habit',
+                status: habitStatus,
+                due_date: undefined,
+                focus_date: undefined, // Will be generated in CalendarView
+                projectName: undefined,
+                frequency: frequency,
+                createdDate: createdDate
+              });
             } catch (err) {
               console.error(`[CalendarData] Failed to read habit ${file.path}:`, err);
             }
@@ -177,13 +215,14 @@ export const useCalendarData = (
       
       // 2. Also add project data from gtdSpace if available (as backup)
       if (gtdSpace?.projects) {
+        let gtdProjectIndex = 0;
         for (const project of gtdSpace.projects) {
           if (project.due_date && !allItems.some(item => 
             item.type === 'project' && item.name === project.name
           )) {
             console.log(`[CalendarData] Adding project from gtdSpace: ${project.name}`);
             allItems.push({
-              id: `project-gtd-${project.name}-${Date.now()}`,
+              id: `project-gtd-${project.name}-${gtdProjectIndex}`,
               name: project.name,
               path: project.path,
               type: 'project',
@@ -192,6 +231,7 @@ export const useCalendarData = (
               focus_date: undefined,
               projectName: undefined
             });
+            gtdProjectIndex++;
           }
         }
       }

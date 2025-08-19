@@ -4,7 +4,76 @@
  * @created 2025-01-XX
  */
 
-// Using any for Block type due to complex type constraints in BlockNote
+// Local minimal BlockNote-like types to avoid using `any`
+type TextChild = string | { text?: string; type?: string };
+
+interface UnknownBlock {
+  id?: string;
+  type: string;
+  content?: unknown;
+  props?: Record<string, unknown>;
+}
+
+interface ParagraphBlock {
+  type: 'paragraph';
+  content?: TextChild[] | string;
+  props?: Record<string, unknown>;
+}
+
+interface MultiselectBlock {
+  type: 'multiselect';
+  props: {
+    type: string;
+    value: string; // comma-separated values
+    label: string;
+    placeholder: string;
+    maxCount: number;
+    customOptionsJson: string;
+  };
+}
+
+interface SingleselectBlock {
+  type: 'singleselect';
+  props: {
+    type: string;
+    value: string;
+    label: string;
+    placeholder: string;
+    customOptionsJson: string;
+  };
+}
+
+interface CheckboxBlock {
+  type: 'checkbox';
+  props: {
+    type: string;
+    checked: boolean;
+    label: string;
+  };
+}
+
+interface DatetimeBlock {
+  type: 'datetime';
+  props: {
+    type: string;
+    value: string;
+    includeTime: boolean;
+    label: string;
+    optional: boolean;
+  };
+}
+
+type ProcessedBlock =
+  | UnknownBlock
+  | ParagraphBlock
+  | MultiselectBlock
+  | SingleselectBlock
+  | CheckboxBlock
+  | DatetimeBlock;
+
+function isParagraphBlock(block: UnknownBlock): block is ParagraphBlock {
+  return block.type === 'paragraph';
+}
 
 /**
  * Preprocesses markdown content to handle custom multiselect blocks
@@ -56,15 +125,14 @@ export function preprocessMarkdownForBlockNote(markdown: string): string {
 /**
  * Post-processes BlockNote blocks after markdown parsing to insert custom blocks
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any[] {
+export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string): unknown[] {
   console.log('postProcessBlockNoteBlocks called');
   console.log('Number of blocks:', blocks.length);
   console.log('Markdown contains multiselect?', markdown.includes('data-multiselect'));
   console.log('Markdown contains singleselect?', markdown.includes('data-singleselect'));
   
   // Debug: Log all blocks to see what BlockNote parsed
-  blocks.forEach((block, index) => {
+  (blocks as UnknownBlock[]).forEach((block, index) => {
     console.log(`Block ${index}:`, {
       type: block.type,
       content: block.content,
@@ -187,7 +255,9 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
   while ((match = dateTimeMarkerPattern.exec(markdown)) !== null) {
     const type = match[1];
     const value = match[2];
-    const includeTime = type.endsWith('_time');
+    // Check if type ends with _time OR if the value contains time (T followed by time)
+    const hasTimeInValue = value && value.includes('T') && /T\d{2}:\d{2}/.test(value);
+    const includeTime = type.endsWith('_time') || hasTimeInValue;
     const baseType = includeTime ? type.replace('_time', '') : type;
     dateTimeBlocks.push({ text: match[0], type: baseType, value, includeTime });
   }
@@ -228,15 +298,14 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
   }
   
   // Process blocks and insert multiselect blocks where needed
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const processedBlocks: any[] = [];
+  const processedBlocks: ProcessedBlock[] = [];
   // let multiSelectIndex = 0; // Keeping for potential future use
   
-  for (const block of blocks) {
+  for (const block of blocks as UnknownBlock[]) {
     let blockReplaced = false;
     
     // Check if this block contains multiselect or singleselect markers or HTML
-    if (block.type === 'paragraph' && block.content) {
+    if (isParagraphBlock(block) && block.content) {
       const blockText = getTextFromBlock(block);
       
       // Check if this paragraph contains our multiselect markers or HTML
@@ -255,7 +324,7 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
               maxCount: 0,
               customOptionsJson: '[]',
             },
-          } as any);
+          });
           blockReplaced = true;
           console.log('Replaced paragraph with multiselect block:', msBlock);
           break; // Exit the inner loop once we've replaced the block
@@ -279,7 +348,7 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
                   checked: checked,
                   label: '',
                 },
-              } as any);
+              });
               blockReplaced = true;
               console.log('Replaced habit-status singleselect with checkbox block:', { checked });
             } else {
@@ -293,7 +362,7 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
                   placeholder: '',
                   customOptionsJson: '[]',
                 },
-              } as any);
+              });
               blockReplaced = true;
               console.log('Replaced paragraph with singleselect block:', ssBlock);
             }
@@ -316,7 +385,7 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
                 checked: cbBlock.checked || false,
                 label: cbBlock.label || '',
               },
-            } as any);
+            });
             blockReplaced = true;
             console.log('Replaced paragraph with checkbox block:', cbBlock);
             break; // Exit the inner loop once we've replaced the block
@@ -340,7 +409,7 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
                 label: dtBlock.label || '',
                 optional: true,
               },
-            } as any);
+            });
             blockReplaced = true;
             console.log('Replaced paragraph with datetime block:', dtBlock);
             break; // Exit the inner loop once we've replaced the block
@@ -355,22 +424,22 @@ export function postProcessBlockNoteBlocks(blocks: any[], markdown: string): any
     }
   }
   
-  return processedBlocks;
+  return processedBlocks as unknown[];
 }
 
 /**
  * Helper function to extract text from a block
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getTextFromBlock(block: any): string {
+function getTextFromBlock(block: ParagraphBlock | UnknownBlock): string {
   if (!block.content) return '';
   
-  if (typeof block.content === 'string') {
-    return block.content;
+  if (typeof (block as ParagraphBlock).content === 'string') {
+    return (block as ParagraphBlock).content as string;
   }
   
-  if (Array.isArray(block.content)) {
-    return block.content.map((item: { text?: string; type?: string }) => {
+  if (Array.isArray((block as ParagraphBlock).content)) {
+    const arr = (block as ParagraphBlock).content as TextChild[];
+    return arr.map((item: { text?: string; type?: string } | string) => {
       if (typeof item === 'string') return item;
       if (item.text) return item.text;
       return '';

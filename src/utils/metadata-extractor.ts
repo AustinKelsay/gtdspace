@@ -38,6 +38,23 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
       return { key: field, value: match[2] };
     }
   },
+
+  // Datetime fields: [!datetime:fieldname:value]
+  // Map common field names to camelCase keys used in the app's metadata
+  {
+    pattern: /\[!datetime:([\w-]+):([^\]]*)\]/g,
+    extract: (match) => {
+      const fieldMap: Record<string, string> = {
+        'due_date': 'dueDate',
+        'focus_date': 'focusDate',
+        'focus_date_time': 'focusDate',
+        'created_date': 'createdDate',
+        'created_date_time': 'createdDate'
+      };
+      const field = fieldMap[match[1]] || match[1];
+      return { key: field, value: match[2] };
+    }
+  },
   
   // Multi select fields: [!multiselect:fieldname:value1,value2]
   {

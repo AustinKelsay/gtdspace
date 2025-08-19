@@ -38,6 +38,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
   const [projectName, setProjectName] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [dueDate, setDueDate] = React.useState('');
+  const [dueTime, setDueTime] = React.useState('');
   const [status, setStatus] = React.useState<GTDProjectStatus>('in-progress');
   const [isCreating, setIsCreating] = React.useState(false);
   const { createProject } = useGTDSpace();
@@ -46,11 +47,24 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
     if (!projectName.trim() || !description.trim()) return;
 
     setIsCreating(true);
+    
+    // Combine due date and time into ISO datetime string
+    let dueDateTime: string | null = null;
+    if (dueDate) {
+      if (dueTime) {
+        // Combine date and time
+        dueDateTime = `${dueDate}T${dueTime}:00`;
+      } else {
+        // Default to 5 PM if no time specified (typical end of workday)
+        dueDateTime = `${dueDate}T17:00:00`;
+      }
+    }
+    
     const projectData: GTDProjectCreate = {
       space_path: spacePath,
       project_name: projectName.trim(),
       description: description.trim(),
-      due_date: dueDate || null,
+      due_date: dueDateTime,
       status: status,
     };
 
@@ -62,6 +76,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       setProjectName('');
       setDescription('');
       setDueDate('');
+      setDueTime('');
       setStatus('in-progress');
       
       // Call success callback if provided
@@ -78,6 +93,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       setProjectName('');
       setDescription('');
       setDueDate('');
+      setDueTime('');
       setStatus('in-progress');
       onClose();
     }
@@ -133,15 +149,29 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
 
           <div className="space-y-2">
             <Label htmlFor="due-date">Due Date (Optional)</Label>
-            <div className="relative">
+            <p className="text-xs text-muted-foreground mb-2">
+              When does this project need to be completed?
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="relative">
+                <Input
+                  id="due-date"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  disabled={isCreating}
+                  placeholder="Date"
+                />
+                <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              </div>
               <Input
-                id="due-date"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                id="due-time"
+                type="time"
+                value={dueTime}
+                onChange={(e) => setDueTime(e.target.value)}
                 disabled={isCreating}
+                placeholder="Time"
               />
-              <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             </div>
           </div>
 

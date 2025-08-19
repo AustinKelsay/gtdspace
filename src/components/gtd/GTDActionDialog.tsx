@@ -39,11 +39,12 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
   onSuccess,
 }) => {
   const [actionName, setActionName] = React.useState('');
-  const [status, setStatus] = React.useState<GTDActionStatus>('In Progress');
+  const [status, setStatus] = React.useState<GTDActionStatus>('in-progress');
   const [focusDate, setFocusDate] = React.useState('');
   const [focusTime, setFocusTime] = React.useState('');
   const [dueDate, setDueDate] = React.useState('');
-  const [effort, setEffort] = React.useState<GTDActionEffort>('Medium');
+  const [dueTime, setDueTime] = React.useState('');
+  const [effort, setEffort] = React.useState<GTDActionEffort>('medium');
   const [notes, setNotes] = React.useState('');
   const [contexts, setContexts] = React.useState<string[]>([]);
   const [isCreating, setIsCreating] = React.useState(false);
@@ -66,12 +67,24 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
       }
     }
     
+    // Combine due date and time into ISO datetime string
+    let dueDateTime: string | null = null;
+    if (dueDate) {
+      if (dueTime) {
+        // Combine date and time
+        dueDateTime = `${dueDate}T${dueTime}:00`;
+      } else {
+        // Default to 5 PM if no time specified (typical deadline)
+        dueDateTime = `${dueDate}T17:00:00`;
+      }
+    }
+    
     const actionData: GTDActionCreate = {
       project_path: projectPath,
       action_name: actionName.trim(),
       status,
       focus_date: focusDateTime,
-      due_date: dueDate || null,
+      due_date: dueDateTime,
       effort,
       contexts: contexts.length > 0 ? contexts : undefined,
     };
@@ -82,11 +95,12 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
     if (result) {
       // Reset form
       setActionName('');
-      setStatus('In Progress');
+      setStatus('in-progress');
       setFocusDate('');
       setFocusTime('');
       setDueDate('');
-      setEffort('Medium');
+      setDueTime('');
+      setEffort('medium');
       setNotes('');
       setContexts([]);
       
@@ -102,11 +116,12 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
   const handleClose = () => {
     if (!isCreating) {
       setActionName('');
-      setStatus('In Progress');
+      setStatus('in-progress');
       setFocusDate('');
       setFocusTime('');
       setDueDate('');
-      setEffort('Medium');
+      setDueTime('');
+      setEffort('medium');
       setNotes('');
       setContexts([]);
       onClose();
@@ -143,9 +158,9 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Waiting">Waiting</SelectItem>
-                  <SelectItem value="Complete">Complete</SelectItem>
+                  <SelectItem value="in-progress">In Progress</SelectItem>
+                  <SelectItem value="waiting">Waiting</SelectItem>
+                  <SelectItem value="complete">Complete</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -157,9 +172,9 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Small">Small (&lt;30 min)</SelectItem>
-                  <SelectItem value="Medium">Medium (30-90 min)</SelectItem>
-                  <SelectItem value="Large">Large (&gt;90 min)</SelectItem>
+                  <SelectItem value="small">Small (&lt;30 min)</SelectItem>
+                  <SelectItem value="medium">Medium (30-90 min)</SelectItem>
+                  <SelectItem value="large">Large (&gt;90 min)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -195,15 +210,29 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
 
           <div className="space-y-2">
             <Label htmlFor="due-date">Due Date (Optional)</Label>
-            <div className="relative">
+            <p className="text-xs text-muted-foreground mb-2">
+              When must this action be completed?
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="relative">
+                <Input
+                  id="due-date"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  disabled={isCreating}
+                  placeholder="Date"
+                />
+                <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              </div>
               <Input
-                id="due-date"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                id="due-time"
+                type="time"
+                value={dueTime}
+                onChange={(e) => setDueTime(e.target.value)}
                 disabled={isCreating}
+                placeholder="Time"
               />
-              <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             </div>
           </div>
 

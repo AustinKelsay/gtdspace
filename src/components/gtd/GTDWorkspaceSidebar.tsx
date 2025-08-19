@@ -29,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { onMetadataChange, onContentSaved } from '@/utils/content-event-bus';
+import { onMetadataChange, onContentSaved, onContentChange } from '@/utils/content-event-bus';
 import {
   Briefcase,
   Plus,
@@ -153,12 +153,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const [showHabitDialog, setShowHabitDialog] = React.useState(false);
   const [sectionFiles, setSectionFiles] = React.useState<{ [sectionPath: string]: MarkdownFile[] }>({});
   const [sectionRefreshKey, setSectionRefreshKey] = React.useState(0);
-  
+
   // Delete dialog state
   const [deleteItem, setDeleteItem] = React.useState<{ type: 'project' | 'action' | 'file'; path: string; name: string } | null>(null);
 
   // Local state for project metadata that can be updated dynamically
-  const [projectMetadata, setProjectMetadata] = React.useState<{ [projectPath: string]: { status?: string; title?: string; currentPath?: string } }>({});
+  const [projectMetadata, setProjectMetadata] = React.useState<{ [projectPath: string]: { status?: string; title?: string; currentPath?: string; due_date?: string } }>({});
 
   // Local state for action metadata that can be updated dynamically
   const [actionMetadata, setActionMetadata] = React.useState<{ [actionPath: string]: { status?: string; title?: string; currentPath?: string; due_date?: string } }>({});
@@ -186,6 +186,26 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       return [];
     }
   }, []);
+
+  // Parse YYYY-MM-DD as a local date to avoid timezone off-by-one issues
+  function parseLocalDateString(dateStr: string): Date | null {
+    const trimmed = dateStr?.trim();
+    if (!trimmed) return null;
+    if (/\d{4}-\d{2}-\d{2}T/.test(trimmed)) {
+      const dt = new Date(trimmed);
+      return isNaN(dt.getTime()) ? null : dt;
+    }
+    const m = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      const year = Number(m[1]);
+      const month = Number(m[2]) - 1;
+      const day = Number(m[3]);
+      const dt = new Date(year, month, day);
+      return isNaN(dt.getTime()) ? null : dt;
+    }
+    const dt = new Date(trimmed);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
 
   const loadProjectActions = React.useCallback(async (projectPath: string) => {
     try {
@@ -217,12 +237,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           const raw = (match?.[1] ?? 'in-progress').trim().toLowerCase();
           // Normalize to the canonical set used by the UI
           const normalized = (raw === 'completed' || raw === 'done') ? 'complete' : raw;
-          
+
           // Extract due date from the markdown content
           // Look for [!datetime:due_date:xxx] pattern
           const dueDateMatch = content.match(/\[!datetime:due_date:([^\]]*)\]/i);
           const dueDate = dueDateMatch?.[1]?.trim() || '';
-          
+
           return {
             path: action.path,
             status: normalized,
@@ -245,7 +265,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         ...prev,
         ...statuses
       }));
-      
+
       // Update action metadata with due dates
       statusResults.forEach(({ path, due_date }) => {
         if (due_date) {
@@ -321,6 +341,21 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           }
         }
 
+        // Update project due date if it changed
+        if (changedFields?.due_date || changedFields?.dueDate || changedFields?.datetime) {
+          const meta = metadata as { due_date?: string; dueDate?: string };
+          const newDue = meta.due_date || meta.dueDate;
+          if (typeof newDue === 'string') {
+            setProjectMetadata(prev => ({
+              ...prev,
+              [projectPath]: {
+                ...prev[projectPath],
+                due_date: newDue
+              }
+            }));
+          }
+        }
+
         // Don't update title on metadata change - wait for save to keep in sync with folder name
         // Title changes are handled in the content:saved event when folder is renamed
       }
@@ -360,6 +395,27 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           const sectionFullPath = filePath.substring(0, filePath.lastIndexOf('/'));
           loadSectionFiles(sectionFullPath);
           break;
+        }
+      }
+    });
+
+    // Also respond to generic content changes (live typing) for immediate date updates
+    const unsubscribeChanged = onContentChange((event) => {
+      const { filePath, metadata, changedFields } = event;
+      if (filePath.includes('/Projects/') && filePath.endsWith('/README.md')) {
+        const projectPath = filePath.substring(0, filePath.lastIndexOf('/'));
+        if (changedFields?.dueDate || changedFields?.due_date || changedFields?.datetime) {
+          const meta = metadata as { due_date?: string; dueDate?: string };
+          const newDue = meta.dueDate || meta.due_date;
+          if (typeof newDue === 'string') {
+            setProjectMetadata(prev => ({
+              ...prev,
+              [projectPath]: {
+                ...prev[projectPath],
+                due_date: newDue
+              }
+            }));
+          }
         }
       }
     });
@@ -459,6 +515,21 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                 console.error('[Sidebar] Error details:', JSON.stringify(error));
               });
           }
+        }
+        // Also update due date from saved metadata and refresh projects so sidebar reflects persisted values
+        const meta = metadata as { due_date?: string; dueDate?: string };
+        const newDue = meta.due_date || meta.dueDate;
+        if (typeof newDue === 'string') {
+          setProjectMetadata(prev => ({
+            ...prev,
+            [projectPath]: {
+              ...prev[projectPath],
+              due_date: newDue
+            }
+          }));
+        }
+        if (gtdSpace?.root_path) {
+          await loadProjects(gtdSpace.root_path);
         }
       }
 
@@ -601,6 +672,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
     return () => {
       unsubscribeMetadata();
+      unsubscribeChanged();
       unsubscribeSaved();
     };
   }, [gtdSpace, loadProjects, loadProjectActions, loadSectionFiles, projectActions]);
@@ -749,15 +821,15 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       if (deleteItem.type === 'project') {
         // For projects, we need to delete the entire folder
         const result = await invoke<{ success: boolean; path?: string | null; message?: string | null }>('delete_folder', { path: deleteItem.path });
-        
+
         if (!result || !result.success) {
           console.error('Failed to delete project:', result?.message || 'Unknown error');
           alert(`Failed to delete project: ${result?.message || 'Unknown error'}`);
           return;
         }
-        
+
         console.log('[Sidebar] Project deleted successfully:', deleteItem.path);
-        
+
         // Update local state
         setExpandedProjects(prev => prev.filter(p => p !== deleteItem.path));
         setProjectActions(prev => {
@@ -770,7 +842,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           delete updated[deleteItem.path];
           return updated;
         });
-        
+
         // Reload projects
         if (gtdSpace?.root_path) {
           await loadProjects(gtdSpace.root_path);
@@ -780,28 +852,28 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       } else {
         // For actions and other files, use delete_file
         console.log('[Sidebar] Attempting to delete file:', deleteItem.path);
-        
+
         try {
           // Add a timeout to the invoke call
           const deletePromise = invoke<{ success: boolean; path?: string | null; message?: string | null }>('delete_file', { path: deleteItem.path });
-          
+
           // Create a timeout promise
           const timeoutPromise = new Promise((_, reject) => {
             setTimeout(() => reject(new Error('Delete operation timed out after 5 seconds')), 5000);
           });
-          
+
           // Race between the delete and timeout
           const result = await Promise.race([deletePromise, timeoutPromise]) as { success: boolean; path?: string | null; message?: string | null };
-          
+
           console.log('[Sidebar] Delete file result:', result);
           if (!result || !result.success) {
             console.error('Failed to delete file:', result?.message || 'Unknown error');
             alert(`Failed to delete file: ${result?.message || 'Unknown error'}`);
             return;
           }
-          
+
           console.log('[Sidebar] File deleted successfully:', deleteItem.path);
-          
+
           // Update UI based on type
           if (deleteItem.type === 'action') {
             // Update action state
@@ -815,16 +887,16 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
               delete updated[deleteItem.path];
               return updated;
             });
-            
+
             // Reload actions for the project
             const projectPath = deleteItem.path.substring(0, deleteItem.path.lastIndexOf('/'));
-            
+
             // First remove the action from the local state for immediate UI update
             setProjectActions(prev => ({
               ...prev,
               [projectPath]: prev[projectPath]?.filter(a => a.path !== deleteItem.path) || []
             }));
-            
+
             // Then reload from disk
             await loadProjectActions(projectPath);
           } else {
@@ -835,35 +907,35 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
               delete updated[deleteItem.path];
               return updated;
             });
-            
+
             const sectionPath = deleteItem.path.substring(0, deleteItem.path.lastIndexOf('/'));
             console.log('[Sidebar] Reloading section files for:', sectionPath);
-            
+
             // First clear the section files to force UI update
             setSectionFiles(prev => ({
               ...prev,
               [sectionPath]: prev[sectionPath]?.filter(f => f.path !== deleteItem.path) || []
             }));
-            
+
             // Then reload from disk
             await loadSectionFiles(sectionPath);
-            
+
             // Force a re-render of the section
             setSectionRefreshKey(prev => prev + 1);
           }
-          
+
           // Close any open tabs for the deleted item
           window.dispatchEvent(new CustomEvent('file-deleted', {
             detail: { path: deleteItem.path }
           }));
-          
+
         } catch (invokeError) {
           console.error('[Sidebar] Error invoking delete_file:', invokeError);
           alert(`Error deleting file: ${invokeError}`);
           return;
         }
       }
-      
+
       setDeleteItem(null);
     } catch (error) {
       console.error(`Failed to delete ${deleteItem.type}:`, error);
@@ -985,7 +1057,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       <ScrollArea className="flex-1">
         <div className="p-2">
           {/* Calendar Section - Special non-collapsible section */}
-          <div 
+          <div
             className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors cursor-pointer"
             onClick={() => {
               // Open calendar as a special tab
@@ -1092,9 +1164,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                               <div className="font-medium text-sm truncate">{currentTitle}</div>
                               <div className="text-xs text-muted-foreground flex items-center gap-1">
                                 <span className="truncate">{project.action_count || 0} actions</span>
-                                {project.due_date && project.due_date.trim() !== '' && (() => {
-                                  const date = new Date(project.due_date);
-                                  return !isNaN(date.getTime()) ? (
+                                {(() => {
+                                  const dueStr = projectMetadata[project.path]?.due_date ?? project.due_date ?? '';
+                                  if (!dueStr || dueStr.trim() === '') return null;
+                                  const date = parseLocalDateString(dueStr);
+                                  return date ? (
                                     <span className="flex items-center flex-shrink-0">
                                       <Calendar className="h-2.5 w-2.5 mr-0.5" />
                                       <span className="truncate">{date.toLocaleDateString()}</span>

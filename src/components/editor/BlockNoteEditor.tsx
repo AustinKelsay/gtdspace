@@ -65,8 +65,8 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       datetime: DateTimeSelectBlock,
     },
   });
-  
-  
+
+
   // Create the BlockNote editor instance with custom schema
   const editor = useCreateBlockNote({
     schema,
@@ -93,24 +93,24 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         try {
           // Set flag to ignore the onChange event from initial content load
           ignoreNextChange.current = true;
-          
+
           // First parse markdown to blocks
-          let blocks = await editor.tryParseMarkdownToBlocks(content);
-          
-          // Then post-process to handle custom multiselect blocks
-          blocks = postProcessBlockNoteBlocks(blocks, content);
-          
+          const parsedBlocks = await editor.tryParseMarkdownToBlocks(content);
+
+          // Then post-process to handle custom blocks; cast to the schema's block type
+          const processedBlocks = postProcessBlockNoteBlocks(parsedBlocks as unknown[], content) as typeof parsedBlocks;
+
           // Log to see if multiselect blocks are being created
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const hasMultiselect = blocks.some((b: any) => b.type === 'multiselect');
+          const hasMultiselect = (processedBlocks as any[]).some((b: any) => b.type === 'multiselect');
           if (hasMultiselect) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            console.log('Found multiselect blocks in parsed content:', blocks.filter((b: any) => b.type === 'multiselect'));
+            console.log('Found multiselect blocks in parsed content:', (processedBlocks as any[]).filter((b: any) => b.type === 'multiselect'));
           }
-          
-          editor.replaceBlocks(editor.document, blocks);
+
+          editor.replaceBlocks(editor.document, processedBlocks);
           initialContentLoaded.current = true;
-          
+
           // Reset the flag after a short delay to ensure the onChange has fired
           setTimeout(() => {
             ignoreNextChange.current = false;
@@ -125,7 +125,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
 
   // Track previous content to detect external updates
   const previousContent = useRef(content);
-  
+
   // Handle content updates after initial load (for real-time updates like habit history)
   useEffect(() => {
     const updateContent = async () => {
@@ -133,18 +133,18 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       if (!editor || !initialContentLoaded.current || content === previousContent.current) {
         return;
       }
-      
+
       try {
         // Set flag to ignore the onChange event from content update
         ignoreNextChange.current = true;
-        
+
         // Parse and update blocks
-        let blocks = await editor.tryParseMarkdownToBlocks(content);
-        blocks = postProcessBlockNoteBlocks(blocks, content);
-        
+        const parsedBlocks = await editor.tryParseMarkdownToBlocks(content);
+        const processedBlocks = postProcessBlockNoteBlocks(parsedBlocks as unknown[], content) as typeof parsedBlocks;
+
         // Check if this is a habit file to add special animation
         const isHabitFile = content.includes('## History') && content.includes('[!checkbox:habit-status:');
-        
+
         if (isHabitFile) {
           // Add a subtle animation by briefly highlighting the editor
           const editorElement = document.querySelector('.bn-editor') as HTMLElement;
@@ -156,10 +156,10 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
             }, 500);
           }
         }
-        
-        editor.replaceBlocks(editor.document, blocks);
+
+        editor.replaceBlocks(editor.document, processedBlocks);
         previousContent.current = content;
-        
+
         // Reset the flag after a short delay
         setTimeout(() => {
           ignoreNextChange.current = false;
@@ -169,7 +169,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         previousContent.current = content; // Update even on error to prevent infinite retries
       }
     };
-    
+
     updateContent();
   }, [content, editor]);
 
@@ -192,7 +192,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       if (ignoreNextChange.current) {
         return;
       }
-      
+
       try {
         const markdown = await editor.blocksToMarkdownLossy(editor.document);
         onChange(markdown);

@@ -121,13 +121,13 @@ export const SingleSelectBlock = createReactBlockSpec(
                     // Update the block to show "todo"
                     const findAndUpdateBlock = () => {
                       const blocks = props.editor.document;
-                      const findBlock = (blocks: any[], targetId: string): any => {
+                      const findBlock = (blocks: Array<{id: string; children?: Array<unknown>; type?: string; props?: Record<string, unknown>}>, targetId: string): {id: string; children?: Array<unknown>; type?: string; props?: Record<string, unknown>} | null => {
                         for (const block of blocks) {
                           if (block.id === targetId) {
                             return block;
                           }
                           if (block.children && block.children.length > 0) {
-                            const found = findBlock(block.children, targetId);
+                            const found = findBlock(block.children as Array<{id: string; children?: Array<unknown>; type?: string; props?: Record<string, unknown>}>, targetId);
                             if (found) return found;
                           }
                         }
@@ -136,14 +136,14 @@ export const SingleSelectBlock = createReactBlockSpec(
                       
                       let targetBlock = findBlock(blocks, block.id);
                       if (!targetBlock) {
-                        const findByContent = (blocks: any[]): any => {
+                        const findByContent = (blocks: Array<{id: string; children?: Array<unknown>; type?: string; props?: Record<string, unknown>}>): {id: string; children?: Array<unknown>; type?: string; props?: Record<string, unknown>} | null => {
                           for (const b of blocks) {
                             if (b.type === 'singleselect' && 
                                 (b.props as { type?: string })?.type === block.props.type) {
                               return b;
                             }
                             if (b.children && b.children.length > 0) {
-                              const found = findByContent(b.children);
+                              const found = findByContent(b.children as Array<{id: string; children?: Array<unknown>; type?: string; props?: Record<string, unknown>}>);
                               if (found) return found;
                             }
                           }
@@ -306,8 +306,7 @@ export const SingleSelectBlock = createReactBlockSpec(
       }
     },
     toExternalHTML: (props) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const block = props.block as any;
+      const block = props.block as {props: {type: string; value: string}};
       const { type, value } = block.props;
       // Return the markdown format that can be parsed back
       const markdownFormat = `[!singleselect:${type}:${value || ''}]`;

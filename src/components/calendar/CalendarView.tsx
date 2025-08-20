@@ -272,18 +272,42 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         // Generate dates only for the current view window
         const habitDates = generateHabitDates(item.createdDate, item.frequency, viewStart, viewEnd);
         
+        // Extract time from focus_date if available
+        let timeString: string | undefined;
+        let formattedTime: string | undefined;
+        if (item.focus_date) {
+          const timeMatch = item.focus_date.match(/T(\d{2}:\d{2})/);
+          if (timeMatch) {
+            timeString = timeMatch[1];
+            // Convert to 12-hour format for display
+            const [hours, minutes] = timeString.split(':').map(Number);
+            const period = hours >= 12 ? 'PM' : 'AM';
+            const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+            formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+          }
+        }
+        
         // Process the generated dates (already filtered to view window)
         habitDates
           .forEach((date, _index) => {
+            // Apply the time to the date if available
+            let eventDate = date;
+            if (timeString) {
+              const [hours, minutes] = timeString.split(':').map(Number);
+              eventDate = new Date(date);
+              eventDate.setHours(hours, minutes, 0, 0);
+            }
+            
             events.push({
               id: `${item.path}-habit-${_index}-${date.getTime()}`,
               title: item.name,
               type: 'habit',
               status: item.status,
               eventType: 'habit',
-              date: date,
+              date: eventDate,
               path: item.path,
-              projectName: undefined
+              projectName: undefined,
+              time: formattedTime // Include the formatted time for display
             });
           });
       } else {
@@ -293,6 +317,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           if (isValid(dueDate)) {
             // Extract time if it's a datetime
             const timeMatch = item.due_date.match(/T(\d{2}:\d{2})/);
+            let formattedTime: string | undefined;
+            if (timeMatch) {
+              const [hours, minutes] = timeMatch[1].split(':').map(Number);
+              const period = hours >= 12 ? 'PM' : 'AM';
+              const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+              formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+            }
             events.push({
               id: `${item.path}-due`,
               title: item.name,
@@ -300,7 +331,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               status: item.status,
               eventType: 'due',
               date: dueDate,
-              time: timeMatch ? timeMatch[1] : undefined,
+              time: formattedTime,
               path: item.path,
               projectName: item.projectName
             });
@@ -312,6 +343,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           if (isValid(focusDate)) {
             // Extract time if it's a datetime
             const timeMatch = item.focus_date.match(/T(\d{2}:\d{2})/);
+            let formattedTime: string | undefined;
+            if (timeMatch) {
+              const [hours, minutes] = timeMatch[1].split(':').map(Number);
+              const period = hours >= 12 ? 'PM' : 'AM';
+              const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+              formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+            }
             events.push({
               id: `${item.path}-focus`,
               title: item.name,
@@ -319,7 +357,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               status: item.status,
               eventType: 'focus',
               date: focusDate,
-              time: timeMatch ? timeMatch[1] : undefined,
+              time: formattedTime,
               path: item.path,
               projectName: item.projectName
             });

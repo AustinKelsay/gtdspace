@@ -180,6 +180,9 @@ export const useCalendarData = (
               const habitStatus = parseCheckboxField(content, 'habit-status') ? 'complete' : 'todo';
               const frequency = parseSingleSelectField(content, 'habit-frequency') || 'daily';
               
+              // Parse focus time for the habit
+              const focusDateTime = parseDateTimeField(content, 'focus_date_time');
+              
               // Parse created date using the existing DateTime parser
               let createdDate: string;
               const createdDateRaw = parseDateTimeField(content, 'created_date');
@@ -191,7 +194,7 @@ export const useCalendarData = (
                 createdDate = new Date().toISOString().split('T')[0];
               }
               
-              console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDate}`);
+              console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDate}, focus=${focusDateTime}`);
               
               // Add the habit with frequency and created date info
               allItems.push({
@@ -201,7 +204,7 @@ export const useCalendarData = (
                 type: 'habit',
                 status: habitStatus,
                 due_date: undefined,
-                focus_date: undefined, // Will be generated in CalendarView
+                focus_date: focusDateTime, // Now includes the parsed focus time
                 projectName: undefined,
                 frequency: frequency,
                 createdDate: createdDate

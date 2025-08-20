@@ -70,6 +70,8 @@ Each hook in `src/hooks/` encapsulates specific domain logic:
 - **`useErrorHandler`** - Centralized error handling with toasts
 - **`useKeyboardShortcuts`** - Platform-aware keyboard shortcuts
 - **`useSingleSelectInsertion`** / **`useMultiSelectInsertion`** - GTD field insertion
+- **`useHabitTracking`** - Habit-specific operations and state management
+- **`useCalendarData`** - Aggregates all dated items across workspace
 
 ## Architecture: GTD Implementation
 
@@ -77,12 +79,14 @@ Each hook in `src/hooks/` encapsulates specific domain logic:
 1. On startup, derives default path: `~/GTD Space` (platform-specific)
 2. Auto-initializes if not a GTD space (creates folders, seeds examples)
 3. Loads workspace automatically (no folder dialog)
+4. Runs habit reset scheduler every minute at :01 seconds
+5. Catches up on missed habit resets when app starts
 
 ### Directory Structure
 ```
 gtd-space/
 ├── Projects/          # Active projects (folders with README.md + actions)
-├── Habits/           # Recurring routines
+├── Habits/           # Recurring routines with automatic tracking
 ├── Someday Maybe/    # Future ideas
 └── Cabinet/          # Reference materials
 ```
@@ -157,6 +161,8 @@ interface HabitRecord {
 1. **Load**: Markdown → `preprocessMarkdownForBlockNote()` → `postProcessBlockNoteBlocks()` → Interactive blocks
 2. **Save**: BlockNote blocks → `toExternalHTML()` → Markdown with field markers
 3. **Theme**: DOM class mutation observer for light/dark switching
+4. **Metadata Extraction**: `metadata-extractor.ts` parses GTD fields with regex
+5. **Live Updates**: Content changes trigger event bus for real-time UI sync
 
 ### Keyboard Shortcuts
 - **Single Select**: `Cmd/Ctrl+Alt+S` (Status), `+E` (Effort), `+P` (Project Status), `+F` (Habit Frequency), `+H` (Habit Status)
@@ -180,14 +186,13 @@ interface HabitRecord {
   - `gtdspace-saved-searches` - Saved queries
 - **Tauri Store**: User settings and preferences
 
-### Event-Driven Updates
-- Rust backend emits file change events
-- Frontend receives via Tauri event system
-- `App.tsx` orchestrates responses
-- Tab conflicts trigger user prompts
-- Content Event Bus (`src/utils/content-event-bus.ts`) manages metadata updates
-- Custom events for project/action/section file renames
-- Recursive emission prevention with `isEmitting` flag
+### Event-Driven Architecture
+- **File Change Events**: Rust backend emits, frontend receives via Tauri
+- **Content Event Bus** (`src/utils/content-event-bus.ts`): Centralized metadata updates
+- **Custom Window Events**: Cross-component communication for habit updates, renames
+- **Tab Conflicts**: External changes trigger user prompts for resolution
+- **Recursive Prevention**: `isEmitting` flag prevents infinite loops
+- **Real-Time Sync**: Live UI updates as content changes in editor
 
 ### TypeScript Configuration
 - **Strict mode disabled** - careful with null checks
@@ -240,37 +245,42 @@ interface HabitRecord {
 
 ## Recent Architecture Decisions (Jan 2025)
 
+### Core GTD Features
 - **GTD-First**: GTD is the default mode, not optional
 - **Single Select**: Status/Effort fields use single select for cleaner UX
-- **Smart Detection**: Subdirectory detection prevents re-initialization
-- **IPC Fix**: Rust commands are synchronous for Tauri 2.0 compatibility
-- **Recursive Scanning**: `list_markdown_files` scans project subdirectories
 - **Focus vs Due Dates**: Actions support both work timing and deadlines
-- **Toast Deduplication**: Prevents double notifications in React StrictMode
+- **Smart Detection**: Subdirectory detection prevents re-initialization
 - **Bidirectional Title Sync**: Document titles auto-rename files/folders when saved
-- **Content Event Bus**: Centralized event system for metadata updates with infinite loop prevention
-- **Parallel Loading**: Action statuses load in parallel for better performance
-- **Tab Path Updates**: Tabs automatically update paths when files/folders are renamed
-- **Create Page Dialog**: Generic page creation for Someday Maybe and Cabinet sections
-- **Habits Implementation**: Full habit tracking with frequency/status dropdowns and keyboard shortcuts (Cmd/Ctrl+Alt+F/H)
-- **Optimistic Updates**: Sidebar immediately adds new habits to state before confirming with backend
-- **Background Sync**: Loads actual files from disk after 500ms to correct any discrepancies
-- **Force Re-render**: Uses sectionRefreshKey to force component re-mount when needed
+
+### Habit System
 - **Habit Tracking System**: Habits have 'todo'/'complete' status that auto-resets based on frequency
 - **Habit History**: Each habit file contains self-documenting history of all status changes
-- **Automatic Reset Scheduler**: Runs at 00:01 daily to reset habits based on their frequency
-- **Catch-up Reset on Startup**: App checks for missed resets when starting, ensuring habits are always current
-- **Backend Status Updates**: Habit status changes trigger `update_habit_status` command to record history
-- **Smart Reset Logic**: Only resets habits marked 'complete' that have passed their frequency interval
-- **Checkbox UI for Habits**: Habit status uses checkbox instead of dropdown for cleaner UX
-- **Real-time History Updates**: Habit history updates immediately without file reload
-- **Toast Notifications**: User feedback when habits are recorded
-- **Visual Animations**: Subtle green highlight when habit file updates
+- **Automatic Reset Scheduler**: Runs every minute at :01 seconds to reset habits
+- **Catch-up Reset on Startup**: App checks for missed resets when starting
+- **Checkbox UI for Habits**: Habit status uses checkbox instead of dropdown
 - **Weekdays Frequency**: Added Monday-Friday option for business day habits
 - **Backfill Support**: Automatically backfills missed habit periods when app was offline
-- **DateTime Fields**: Beautiful calendar/time picker components using shadcn/ui, stored as `[!datetime:type:value]` in markdown
-- **Field-Specific Colors**: Due dates (orange/red), focus dates (blue), completed (green) for visual distinction
-- **ISO 8601 Support**: Full datetime storage with timezone support for accurate scheduling
+
+### Calendar View
+- **Calendar Integration**: Full calendar view aggregating all dated items
+- **Performance Optimized**: Pre-compiled regex patterns and parallel file reading
+- **Multi-Source Data**: Combines project due dates, action focus dates, and habit schedules
+
+### UI/UX Improvements
+- **DateTime Fields**: Beautiful calendar/time picker components using shadcn/ui
+- **12-Hour Time Format**: All times display in 12-hour format with AM/PM
+- **Field-Specific Colors**: Due dates (orange/red), focus dates (blue), completed (green)
+- **Toast Deduplication**: Prevents double notifications in React StrictMode
+- **Visual Animations**: Subtle green highlight when habit file updates
+- **Optimistic Updates**: UI updates immediately, then syncs with disk
+
+### Technical Improvements
+- **IPC Fix**: Rust commands are synchronous for Tauri 2.0 compatibility
+- **Content Event Bus**: Centralized event system with infinite loop prevention
+- **Parallel Loading**: Action statuses load in parallel for better performance
+- **Tab Path Updates**: Tabs automatically update paths when files/folders are renamed
+- **Recursive Scanning**: `list_markdown_files` scans project subdirectories
+- **ISO 8601 Support**: Full datetime storage with timezone support
 
 ## Key Dependencies
 
@@ -291,6 +301,21 @@ interface HabitRecord {
 - **tokio**: Async runtime with full features
 - **thiserror**: Structured error types
 - **regex**: Text processing
+
+## Important Multi-File Patterns
+
+### State Flow Patterns
+1. **Content Changes**: Editor → useTabManager → content-event-bus → GTDWorkspaceSidebar
+2. **File Operations**: UI → Tauri commands → File system → File watcher → UI updates  
+3. **GTD Operations**: Forms → useGTDSpace → Rust backend → State refresh
+4. **Habit Updates**: Checkbox → useHabitTracking → update_habit_status → File content
+
+### Critical File Dependencies
+- **App.tsx** orchestrates all major hooks and components
+- **useTabManager** depends on content-event-bus for metadata updates
+- **GTDWorkspaceSidebar** requires useGTDSpace and content event subscriptions
+- **BlockNote Editor** integrates with custom blocks and preprocessing utilities
+- **Calendar View** aggregates data from all GTD sections in parallel
 
 ## Testing Status
 

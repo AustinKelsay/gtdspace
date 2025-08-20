@@ -2641,7 +2641,7 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%-I:%M %p"));
             let _ = fs::write(&habit1, content);
         }
 
@@ -2668,7 +2668,7 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%-I:%M %p"));
             let _ = fs::write(&habit2, content);
         }
 
@@ -2695,7 +2695,7 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%-I:%M %p"));
             let _ = fs::write(&habit3, content);
         }
 
@@ -2722,7 +2722,7 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%-I:%M %p"));
             let _ = fs::write(&habit4, content);
         }
 
@@ -2749,7 +2749,7 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
 |------|------|--------|--------|-------|
 | {} | {} | To Do | Created | Initial habit creation |
 
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%H:%M"));
+"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%-I:%M %p"));
             let _ = fs::write(&habit5, content);
         }
     }
@@ -3234,7 +3234,7 @@ pub fn update_habit_status(
     let history_entry = format!(
         "| {} | {} | {} | Manual | Changed from {} |",
         now.format("%Y-%m-%d"),
-        now.format("%H:%M"),
+        now.format("%-I:%M %p"),
         status_display,
         old_status_display
     );
@@ -3401,7 +3401,7 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                         let history_entry = format!(
                             "| {} | {} | {} | {} | {} |",
                             period_time.format("%Y-%m-%d"),
-                            period_time.format("%H:%M"),
+                            period_time.format("%-I:%M %p"),
                             period_status,
                             action_type,
                             notes

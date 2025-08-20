@@ -142,7 +142,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
     }
     
     if (value.includes('T')) {
-      return format(dateValue, 'MMM dd, yyyy HH:mm');
+      return format(dateValue, 'MMM dd, yyyy h:mm a');
     } else {
       return format(dateValue, 'MMM dd, yyyy');
     }

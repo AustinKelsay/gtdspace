@@ -4,7 +4,7 @@
  * @created 2025-01-17
  */
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 // import { Card } from '@/components/ui/card';  // Removed: unused
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -214,7 +214,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const weekScrollRef = useRef<HTMLDivElement>(null);
   
   // Get all dated items from the hook
   const { items, refresh } = useCalendarData(spacePath, gtdSpace, files);

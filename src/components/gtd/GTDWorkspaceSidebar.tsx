@@ -84,6 +84,14 @@ const GTD_SECTIONS: GTDSection[] = [
     color: 'text-orange-600'
   },
   {
+    id: 'horizons',
+    name: 'Horizons',
+    icon: Target,
+    path: 'Horizons',
+    description: 'Higher-level perspectives and life direction',
+    color: 'text-indigo-600'
+  },
+  {
     id: 'projects',
     name: 'Projects',
     icon: Briefcase,
@@ -168,9 +176,23 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
   const loadSectionFiles = React.useCallback(async (sectionPath: string) => {
     try {
-      const files = await invoke<MarkdownFile[]>('list_markdown_files', {
+      let files = await invoke<MarkdownFile[]>('list_markdown_files', {
         path: sectionPath
       });
+
+      // Sort Horizons files by altitude level
+      if (sectionPath.includes('Horizons')) {
+        const horizonOrder = ['Areas of Focus', 'Goals', 'Vision', 'Purpose'];
+        files = files.sort((a, b) => {
+          const aName = a.name.replace('.md', '');
+          const bName = b.name.replace('.md', '');
+          const aIndex = horizonOrder.findIndex(h => aName.includes(h));
+          const bIndex = horizonOrder.findIndex(h => bName.includes(h));
+          if (aIndex === -1) return 1;
+          if (bIndex === -1) return -1;
+          return aIndex - bIndex;
+        });
+      }
 
       // Use flushSync to force immediate state update
       flushSync(() => {
@@ -301,12 +323,14 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           const somedayPath = `${pathToCheck}/Someday Maybe`;
           const cabinetPath = `${pathToCheck}/Cabinet`;
           const habitsPath = `${pathToCheck}/Habits`;
+          const horizonsPath = `${pathToCheck}/Horizons`;
 
           // Load files for these sections to show counts immediately
           await Promise.all([
             loadSectionFiles(somedayPath),
             loadSectionFiles(cabinetPath),
-            loadSectionFiles(habitsPath)
+            loadSectionFiles(habitsPath),
+            loadSectionFiles(horizonsPath)
           ]);
         }
       }
@@ -387,8 +411,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         // Title changes are handled in the content:saved event when file is renamed
       }
 
-      // Check if this is a file in Someday Maybe, Cabinet, or Habits
-      const sectionPaths = ['/Someday Maybe/', '/Cabinet/', '/Habits/'];
+      // Check if this is a file in Someday Maybe, Cabinet, Habits, or Horizons
+      const sectionPaths = ['/Someday Maybe/', '/Cabinet/', '/Habits/', '/Horizons/'];
       for (const sectionPath of sectionPaths) {
         if (filePath.includes(sectionPath)) {
           // Reload the section files to get updated titles
@@ -599,8 +623,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         }
       }
 
-      // Check if this is a file in Someday Maybe, Cabinet, or Habits that was saved
-      const sectionPaths = ['/Someday Maybe/', '/Cabinet/', '/Habits/'];
+      // Check if this is a file in Someday Maybe, Cabinet, Habits, or Horizons that was saved
+      const sectionPaths = ['/Someday Maybe/', '/Cabinet/', '/Habits/', '/Horizons/'];
       for (const sectionPath of sectionPaths) {
         if (filePath.includes(sectionPath) && filePath.endsWith('.md')) {
           const newTitle = metadata.title;
@@ -1078,273 +1102,276 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             </div>
           </div>
 
-          {/* Projects Section - Always show first */}
-          <Collapsible
-            open={expandedSections.includes('projects')}
-            onOpenChange={() => toggleSection('projects')}
-          >
-            <div className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors">
-              <CollapsibleTrigger className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${expandedSections.includes('projects') ? 'rotate-90' : ''
-                    }`} />
-                  <Briefcase className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                  <span className="font-medium text-sm truncate">Projects</span>
-                  <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
-                    {filteredProjects.length}
-                  </Badge>
-                </div>
-              </CollapsibleTrigger>
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowProjectDialog(true);
-                }}
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Add Project"
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-            </div>
-
-            <CollapsibleContent>
-              <div className="pl-6 pr-2 py-1 space-y-1">
-                {isLoading ? (
-                  <div className="text-sm text-muted-foreground py-2">Loading projects...</div>
-                ) : filteredProjects.length === 0 ? (
-                  <div className="text-sm text-muted-foreground py-2">
-                    {searchQuery ? 'No projects match your search' : 'No projects yet'}
-                  </div>
-                ) : (
-                  filteredProjects.map((project) => {
-                    // Use local metadata if available, otherwise fall back to project data
-                    const currentStatus = projectMetadata[project.path]?.status || project.status;
-                    const currentTitle = projectMetadata[project.path]?.title || project.name;
-                    const currentPath = projectMetadata[project.path]?.currentPath || project.path;
-                    const StatusIcon = getProjectStatusIcon(currentStatus);
-                    const isExpanded = expandedProjects.includes(project.path);
-                    const actions = projectActions[project.path] || [];
-
-                    return (
-                      <div key={project.path}>
-                        <div
-                          className="group flex items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors"
-                        >
-                          <div
-                            className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer"
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => {
-                              console.log('Sidebar: project click ->', project.path);
-                              handleProjectClick(project)
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                console.log('Sidebar: project key activate ->', project.path);
-                                handleProjectClick(project);
-                              }
-                            }}
-                          >
-                            <Button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleProjectExpand(project);
-                              }}
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5 p-0 flex-shrink-0"
-                            >
-                              <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                            </Button>
-                            <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(currentStatus)}`} />
-                            <div className="flex-1 min-w-0 ml-1">
-                              <div className="font-medium text-sm truncate">{currentTitle}</div>
-                              <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                <span className="truncate">{project.action_count || 0} actions</span>
-                                {(() => {
-                                  const dueStr = projectMetadata[project.path]?.due_date ?? project.due_date ?? '';
-                                  if (!dueStr || dueStr.trim() === '') return null;
-                                  const date = parseLocalDateString(dueStr);
-                                  return date ? (
-                                    <span className="flex items-center flex-shrink-0">
-                                      <Calendar className="h-2.5 w-2.5 mr-0.5" />
-                                      <span className="truncate">{date.toLocaleDateString()}</span>
-                                    </span>
-                                  ) : null;
-                                })()}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-0.5 flex-shrink-0">
-                            <Button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedProject(project);
-                                setShowActionDialog(true);
-                              }}
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Add Action"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <MoreHorizontal className="h-3 w-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-40">
-                                <DropdownMenuItem
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    try {
-                                      await invoke('open_folder_in_explorer', { path: currentPath });
-                                    } catch (error) {
-                                      console.error('Failed to open project folder:', error);
-                                    }
-                                  }}
-                                >
-                                  <Folder className="h-4 w-4 mr-2" />
-                                  Open Folder
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDeleteItem({
-                                      type: 'project',
-                                      path: project.path,
-                                      name: currentTitle
-                                    });
-                                  }}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-
-                        {/* Actions list */}
-                        {isExpanded && (
-                          <div className="ml-5 space-y-0.5 mt-0.5">
-                            {actions.length === 0 ? (
-                              <div className="text-xs text-muted-foreground py-0.5 px-1">No actions yet</div>
-                            ) : (
-                              actions.map((action) => {
-                                // Use metadata for title if available
-                                const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
-                                const currentPath = actionMetadata[action.path]?.currentPath || action.path;
-                                const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress';
-
-                                return (
-                                  <div
-                                    key={action.path}
-                                    className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs"
-                                  >
-                                    <div
-                                      className="flex items-center gap-1 flex-1 cursor-pointer"
-                                      role="button"
-                                      tabIndex={0}
-                                      onClick={() => {
-                                        console.log('Sidebar: action click ->', currentPath);
-                                        // Create a modified action object with the current path
-                                        onFileSelect({ ...action, path: currentPath });
-                                      }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter' || e.key === ' ') {
-                                          e.preventDefault();
-                                          console.log('Sidebar: action key activate ->', currentPath);
-                                          onFileSelect({ ...action, path: currentPath });
-                                        }
-                                      }}
-                                    >
-                                      <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(currentStatus)}`} />
-                                      <span className="truncate flex-1">{currentTitle}</span>
-                                      {actionMetadata[action.path]?.due_date && actionMetadata[action.path].due_date.trim() !== '' && (() => {
-                                        const date = new Date(actionMetadata[action.path].due_date);
-                                        return !isNaN(date.getTime()) ? (
-                                          <span className="flex items-center flex-shrink-0 ml-1 text-muted-foreground">
-                                            <Calendar className="h-2 w-2 mr-0.5" />
-                                            <span className="text-[10px]">{date.toLocaleDateString()}</span>
-                                          </span>
-                                        ) : null;
-                                      })()}
-                                    </div>
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <MoreHorizontal className="h-2.5 w-2.5" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className="w-40">
-                                        <DropdownMenuItem
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            try {
-                                              await invoke('open_file_location', { file_path: currentPath });
-                                            } catch (error) {
-                                              console.error('Failed to open file location:', error);
-                                            }
-                                          }}
-                                        >
-                                          <Folder className="h-3 w-3 mr-2" />
-                                          Open File Location
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setDeleteItem({
-                                              type: 'action',
-                                              path: currentPath,  // Use currentPath instead of action.path
-                                              name: currentTitle
-                                            });
-                                          }}
-                                          className="text-destructive focus:text-destructive"
-                                        >
-                                          <Trash2 className="h-3 w-3 mr-2" />
-                                          Delete
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-
-          {/* Other GTD Sections */}
-          {GTD_SECTIONS.filter(s => s.id !== 'projects' && s.id !== 'calendar').map((section) => {
+          {/* GTD Sections in correct order: Calendar, Horizons, Projects, etc. */}
+          {GTD_SECTIONS.filter(s => s.id !== 'calendar').map((section) => {
             const isExpanded = expandedSections.includes(section.id);
             const sectionPath = `${gtdSpace?.root_path || currentFolder}/${section.path}`;
             const files = sectionFiles[sectionPath] || [];
 
+            // Handle Projects section specially
+            if (section.id === 'projects') {
+              return (
+                <Collapsible
+                  key={`${section.id}-${sectionRefreshKey}`}
+                  open={isExpanded}
+                  onOpenChange={() => toggleSection('projects')}
+                >
+                  <div className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors">
+                    <CollapsibleTrigger className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                        <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
+                        <span className="font-medium text-sm truncate">{section.name}</span>
+                        <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
+                          {filteredProjects.length}
+                        </Badge>
+                      </div>
+                    </CollapsibleTrigger>
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowProjectDialog(true);
+                      }}
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Add Project"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </div>
+
+                  <CollapsibleContent>
+                    <div className="pl-6 pr-2 py-1 space-y-1">
+                      {isLoading ? (
+                        <div className="text-sm text-muted-foreground py-2">Loading projects...</div>
+                      ) : filteredProjects.length === 0 ? (
+                        <div className="text-sm text-muted-foreground py-2">
+                          {searchQuery ? 'No projects match your search' : 'No projects yet'}
+                        </div>
+                      ) : (
+                        filteredProjects.map((project) => {
+                          const isProjectExpanded = expandedProjects.includes(project.path);
+                          const actions = projectActions[project.path] || [];
+                          const currentStatus = projectMetadata[project.path]?.status || project.status || 'in-progress';
+                          const currentTitle = projectMetadata[project.path]?.title || project.name;
+                          const StatusIcon = getProjectStatusIcon(currentStatus);
+
+                          return (
+                            <div key={project.path}>
+                              <div className="group flex items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors">
+                                <div
+                                  className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer"
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => {
+                                    console.log('Sidebar: project click ->', project.path);
+                                    handleProjectClick(project)
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault();
+                                      console.log('Sidebar: project key activate ->', project.path);
+                                      handleProjectClick(project);
+                                    }
+                                  }}
+                                >
+                                  <Button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleProjectExpand(project);
+                                    }}
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 p-0 flex-shrink-0"
+                                  >
+                                    <ChevronRight className={`h-3 w-3 transition-transform ${isProjectExpanded ? 'rotate-90' : ''}`} />
+                                  </Button>
+                                  <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(currentStatus)}`} />
+                                  <div className="flex-1 min-w-0 ml-1">
+                                    <div className="font-medium text-sm truncate">{currentTitle}</div>
+                                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                      <span className="truncate">{project.action_count || 0} actions</span>
+                                      {(() => {
+                                        const dueStr = projectMetadata[project.path]?.due_date ?? project.due_date ?? '';
+                                        if (!dueStr || dueStr.trim() === '') return null;
+                                        const date = parseLocalDateString(dueStr);
+                                        return date ? (
+                                          <span className="flex items-center flex-shrink-0">
+                                            <Calendar className="h-2.5 w-2.5 mr-0.5" />
+                                            <span className="truncate">{date.toLocaleDateString()}</span>
+                                          </span>
+                                        ) : null;
+                                      })()}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-0.5 flex-shrink-0">
+                                  <Button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedProject(project);
+                                      setShowActionDialog(true);
+                                    }}
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Add Action"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <MoreHorizontal className="h-3 w-3" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-40">
+                                      <DropdownMenuItem
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          try {
+                                            await invoke('open_file_location', { file_path: project.path });
+                                          } catch (error) {
+                                            console.error('Failed to open project location:', error);
+                                          }
+                                        }}
+                                      >
+                                        <Folder className="h-3 w-3 mr-2" />
+                                        Open Project Folder
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          console.log('[Sidebar] Setting delete item for project:', project.path, project.name);
+                                          setDeleteItem({
+                                            type: 'project',
+                                            path: project.path,
+                                            name: project.name
+                                          });
+                                        }}
+                                        className="text-destructive focus:text-destructive"
+                                      >
+                                        <Trash2 className="h-3 w-3 mr-2" />
+                                        Delete Project
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </div>
+
+                              {/* Actions */}
+                              {isProjectExpanded && (
+                                <div className="pl-8 py-0.5">
+                                  {actions.length === 0 ? (
+                                    <div className="text-xs text-muted-foreground py-1 px-1">No actions yet</div>
+                                  ) : (
+                                    actions
+                                      .filter(action => !action.name.toLowerCase().includes('readme'))
+                                      .map((action) => {
+                                        const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress';
+                                        const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
+                                        const currentPath = actionMetadata[action.path]?.currentPath || action.path;
+
+                                        return (
+                                          <div
+                                            key={action.path}
+                                            className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs"
+                                          >
+                                            <div
+                                              className="flex items-center gap-1 flex-1 cursor-pointer"
+                                              role="button"
+                                              tabIndex={0}
+                                              onClick={() => {
+                                                console.log('Sidebar: action click ->', currentPath);
+                                                onFileSelect({ ...action, path: currentPath });
+                                              }}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                  e.preventDefault();
+                                                  console.log('Sidebar: action key activate ->', currentPath);
+                                                  onFileSelect({ ...action, path: currentPath });
+                                                }
+                                              }}
+                                            >
+                                              <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(currentStatus)}`} />
+                                              <span className="truncate flex-1">{currentTitle}</span>
+                                              {actionMetadata[action.path]?.due_date && actionMetadata[action.path].due_date.trim() !== '' && (() => {
+                                                const date = new Date(actionMetadata[action.path].due_date);
+                                                return !isNaN(date.getTime()) ? (
+                                                  <span className="flex items-center flex-shrink-0 ml-1 text-muted-foreground">
+                                                    <Calendar className="h-2 w-2 mr-0.5" />
+                                                    <span className="text-[10px]">{date.toLocaleDateString()}</span>
+                                                  </span>
+                                                ) : null;
+                                              })()}
+                                            </div>
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                >
+                                                  <MoreHorizontal className="h-2.5 w-2.5" />
+                                                </Button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end" className="w-40">
+                                                <DropdownMenuItem
+                                                  onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    try {
+                                                      await invoke('open_file_location', { file_path: currentPath });
+                                                    } catch (error) {
+                                                      console.error('Failed to open file location:', error);
+                                                    }
+                                                  }}
+                                                >
+                                                  <Folder className="h-3 w-3 mr-2" />
+                                                  Open File Location
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    console.log('[Sidebar] Setting delete item for action:', currentPath, currentTitle);
+                                                    setDeleteItem({
+                                                      type: 'action',
+                                                      path: currentPath,
+                                                      name: currentTitle
+                                                    });
+                                                  }}
+                                                  className="text-destructive focus:text-destructive"
+                                                >
+                                                  <Trash2 className="h-3 w-3 mr-2" />
+                                                  Delete
+                                                </DropdownMenuItem>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </div>
+                                        );
+                                      })
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            }
+            
+            // Regular sections (Horizons, Habits, Someday Maybe, Cabinet)
             return (
               <Collapsible
                 key={`${section.id}-${sectionRefreshKey}`}
@@ -1369,7 +1396,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                       )}
                     </div>
                   </CollapsibleTrigger>
-                  {(section.id === 'someday' || section.id === 'cabinet' || section.id === 'habits') && (
+                  {(section.id === 'someday' || section.id === 'cabinet' || section.id === 'habits' || section.id === 'horizons') && (
                     <Button
                       onClick={(e) => {
                         e.stopPropagation();

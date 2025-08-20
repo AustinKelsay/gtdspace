@@ -12,6 +12,7 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 ### GTD-First Design
 
 - **Getting Things Done at the Core** - Not just an editor with GTD features, but a GTD system with editing capabilities
+- **Complete Horizons of Focus** - All 6 GTD levels from runway actions to 50,000 ft purpose
 - **Automatic GTD Space Detection** - Recognizes and adapts to GTD workspace structure
 - **Project & Action Management** - Full GTD workflow with projects, actions, and organization
 - **Smart Navigation** - Click projects to view README, expand to see all actions
@@ -92,6 +93,11 @@ GTD Space is designed from the ground up around David Allen's Getting Things Don
 
 ### GTD Structure
 
+- **Horizons of Focus** - Higher-level perspectives for life planning (NEW!)
+  - **Areas of Focus** (20,000 ft) - Ongoing responsibilities and roles you maintain
+  - **Goals** (30,000 ft) - 1-2 year objectives that guide your projects
+  - **Vision** (40,000 ft) - 3-5 year aspirational picture of where you're heading
+  - **Purpose & Principles** (50,000 ft) - Core values and life mission that drive everything
 - **Projects** - Outcome-focused goals with multiple actions
   - Each project is a folder with README.md for metadata
   - Actions are individual markdown files within project folders

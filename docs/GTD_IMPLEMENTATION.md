@@ -14,12 +14,47 @@ When you initialize a GTD space, the following directory structure is created:
 
 ```
 Your GTD Space/
+├── Horizons/          # Higher-level GTD perspectives
+│   ├── Areas of Focus.md        # 20,000 ft - Ongoing responsibilities
+│   ├── Goals (1-2 Years).md     # 30,000 ft - Medium-term objectives
+│   ├── Vision (3-5 Years).md    # 40,000 ft - Long-term aspirations
+│   └── Purpose & Principles.md  # 50,000 ft - Core values and mission
 ├── Projects/           # Active projects with actions
 ├── Habits/            # Recurring habits and routines
 ├── Someday Maybe/     # Ideas for future consideration
 ├── Cabinet/           # Reference materials
 └── Welcome to GTD Space.md
 ```
+
+## Horizons of Focus
+
+The Horizons of Focus provide higher-level perspectives that guide your projects and actions:
+
+### Areas of Focus (20,000 ft)
+Ongoing responsibilities and roles you maintain in life. These never "complete" but require continuous attention:
+- Personal areas (health, family, finances)
+- Professional areas (role responsibilities, team leadership)
+- Life management (home, admin, community)
+
+### Goals (30,000 ft)
+Specific achievements to accomplish within 1-2 years. These provide direction for your projects:
+- Personal goals (health targets, learning objectives)
+- Professional goals (career advancement, skill development)
+- Relationship goals (family experiences, social connections)
+
+### Vision (40,000 ft)
+A vivid picture of where you want to be in 3-5 years. This guides your goal-setting:
+- Life snapshot (where you're living, what you're doing)
+- Key themes (patterns and values expressed)
+- Success factors (capabilities and resources needed)
+
+### Purpose & Principles (50,000 ft)
+Your core values and life mission that drive everything else:
+- Life mission statement (why you exist, what you contribute)
+- Core values (top 5-7 principles)
+- Decision filters (questions to align choices)
+
+Each horizon file includes comprehensive templates to guide your planning and reflection.
 
 ## Projects
 

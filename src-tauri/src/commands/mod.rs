@@ -24,7 +24,7 @@
 //! - `load_settings()` - Load user settings from persistent storage
 //! - `save_settings()` - Save user settings to persistent storage
 
-use chrono::{Datelike, Timelike};
+use chrono::Timelike;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::path::PathBuf;
@@ -39,6 +39,10 @@ use notify::RecursiveMode;
 use notify_debouncer_mini::{new_debouncer, DebouncedEventKind};
 use regex::Regex;
 use once_cell::sync::Lazy;
+
+// Import seed data module
+mod seed_data;
+use seed_data::*;
 
 // ===== REGEX PATTERNS FOR HABIT PARSING =====
 // Define regex patterns as static constants to avoid duplication and ensure consistency
@@ -1915,6 +1919,7 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
     
     // GTD directories to create
     let directories = [
+        "Horizons",
         "Projects",
         "Habits",
         "Someday Maybe",
@@ -1947,32 +1952,51 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
         
         // Create example files immediately after creating directories
         match *dir_name {
+            "Horizons" => {
+                // Create Areas of Focus file
+                let areas_file = dir_path.join("Areas of Focus.md");
+                if !areas_file.exists() {
+                    if let Err(e) = fs::write(&areas_file, AREAS_OF_FOCUS_TEMPLATE) {
+                        log::warn!("Failed to create Areas of Focus page: {}", e);
+                    } else {
+                        log::info!("Created Areas of Focus page");
+                    }
+                }
+
+                // Create Goals file
+                let goals_file = dir_path.join("Goals (1-2 Years).md");
+                if !goals_file.exists() {
+                    if let Err(e) = fs::write(&goals_file, GOALS_TEMPLATE) {
+                        log::warn!("Failed to create Goals page: {}", e);
+                    } else {
+                        log::info!("Created Goals page");
+                    }
+                }
+
+                // Create Vision file
+                let vision_file = dir_path.join("Vision (3-5 Years).md");
+                if !vision_file.exists() {
+                    if let Err(e) = fs::write(&vision_file, VISION_TEMPLATE) {
+                        log::warn!("Failed to create Vision page: {}", e);
+                    } else {
+                        log::info!("Created Vision page");
+                    }
+                }
+
+                // Create Purpose & Principles file
+                let purpose_file = dir_path.join("Purpose & Principles.md");
+                if !purpose_file.exists() {
+                    if let Err(e) = fs::write(&purpose_file, PURPOSE_PRINCIPLES_TEMPLATE) {
+                        log::warn!("Failed to create Purpose & Principles page: {}", e);
+                    } else {
+                        log::info!("Created Purpose & Principles page");
+                    }
+                }
+            },
             "Someday Maybe" => {
                 let example_file = dir_path.join("Learn a New Language.md");
                 if !example_file.exists() {
-                    let content = r#"# Learn a New Language
-
-## Idea
-
-I've always wanted to learn Spanish to connect better with Spanish-speaking communities and travel more confidently in Latin America and Spain.
-
-## Why it matters
-
-- Opens up communication with 500+ million Spanish speakers worldwide
-- Enhances travel experiences in 20+ countries
-- Cognitive benefits of bilingualism
-- Career advancement opportunities
-- Cultural enrichment and understanding
-
-## Next steps when ready
-
-- [ ] Research language learning methods (apps, classes, tutors)
-- [ ] Set a realistic timeline and daily practice goal
-- [ ] Find a conversation partner or language exchange
-- [ ] Plan an immersion trip as a goal/reward
-- [ ] Start with basic conversational phrases
-"#;
-                    if let Err(e) = fs::write(&example_file, content) {
+                    if let Err(e) = fs::write(&example_file, SOMEDAY_LEARN_LANGUAGE_TEMPLATE) {
                         log::warn!("Failed to create example Someday Maybe page: {}", e);
                     } else {
                         log::info!("Created example Someday Maybe page: Learn a New Language.md");
@@ -1982,46 +2006,7 @@ I've always wanted to learn Spanish to connect better with Spanish-speaking comm
             "Cabinet" => {
                 let example_file = dir_path.join("GTD Principles Reference.md");
                 if !example_file.exists() {
-                    let content = r#"# GTD Principles Reference
-
-## Reference
-
-The Getting Things Done (GTD) methodology by David Allen - Core principles and practices.
-
-## Key Points
-
-- **Capture**: Collect what has your attention in trusted external systems
-- **Clarify**: Process what it means and what to do about it
-- **Organize**: Put it where it belongs based on what it is
-- **Reflect**: Review frequently to stay current and aligned
-- **Engage**: Use your trusted system to take action with confidence
-
-## Notes
-
-### The Five Steps of Mastering Workflow
-
-1. **Capture** everything that has your attention
-2. **Clarify** what each item means and what to do about it
-3. **Organize** the results into trusted external systems
-4. **Reflect** on your system regularly to keep it current
-5. **Engage** with confidence in your moment-to-moment choices
-
-### The Two-Minute Rule
-If something takes less than two minutes to complete, do it now rather than adding it to your list.
-
-### Weekly Review
-- Get clear: Collect loose papers and materials, empty your head
-- Get current: Review action lists, calendar, waiting-for lists
-- Get creative: Review someday/maybe lists, trigger new ideas
-
-### Natural Planning Model
-1. Define purpose and principles
-2. Envision the outcome
-3. Brainstorm ideas
-4. Organize into structure
-5. Identify next actions
-"#;
-                    if let Err(e) = fs::write(&example_file, content) {
+                    if let Err(e) = fs::write(&example_file, CABINET_GTD_PRINCIPLES_TEMPLATE) {
                         log::warn!("Failed to create example Cabinet page: {}", e);
                     } else {
                         log::info!("Created example Cabinet page: GTD Principles Reference.md");
@@ -2035,39 +2020,7 @@ If something takes less than two minutes to complete, do it now rather than addi
     // Create a welcome file in the root directory
     let welcome_path = root_path.join("Welcome to GTD Space.md");
     if !welcome_path.exists() {
-        let welcome_content = r#"# Welcome to Your GTD Space
-
-This is your personal Getting Things Done (GTD) space. The directory structure has been set up to help you organize your life:
-
-## 📁 Projects
-Contains all your active projects. Each project is a folder with:
-- A README.md file containing project details
-- Individual action files (markdown) for tasks
-
-### Project Structure:
-```
-Projects/
-├── Project Name/
-│   ├── README.md (Description, Due Date, Status)
-│   ├── action-1.md (Status, Due Date, Effort)
-│   └── action-2.md
-```
-
-## 📁 Habits
-Track your recurring habits and routines.
-
-## 📁 Someday Maybe
-Ideas and projects for future consideration.
-
-## 📁 Cabinet
-Reference materials and documents that don't require action.
-
----
-
-Start by creating your first project in the Projects folder!
-"#;
-        
-        if let Err(e) = fs::write(&welcome_path, welcome_content) {
+        if let Err(e) = fs::write(&welcome_path, WELCOME_TEMPLATE) {
             log::warn!("Failed to create welcome file: {}", e);
         } else {
             log::info!("Created welcome file");
@@ -2317,107 +2270,21 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         // Morning Review habit (daily with focus time)
         let morning_review = habits_dir.join("Morning Review.md");
         if !morning_review.exists() {
-            let morning_time = chrono::Local::now()
-                .with_hour(9)
-                .unwrap()
-                .with_minute(0)
-                .unwrap()
-                .with_second(0)
-                .unwrap();
-            let content = format!(r#"# Morning Review
-
-## Frequency
-[!singleselect:habit-frequency:daily]
-
-## Status
-[!checkbox:habit-status:false]
-
-## Focus Time
-[!datetime:focus_date_time:{}]
-
-## Notes
-Review today's actions and priorities. Check calendar, update task statuses, and set focus for the day.
-
----
-Created: {}"#, 
-                morning_time.to_rfc3339(),
-                chrono::Local::now().format("%Y-%m-%d")
-            );
+            let content = generate_morning_review_habit();
             let _ = fs::write(&morning_review, content);
         }
 
         // Evening Journal habit (daily with evening focus time)
         let evening_journal = habits_dir.join("Evening Journal.md");
         if !evening_journal.exists() {
-            let evening_time = chrono::Local::now()
-                .with_hour(20)
-                .unwrap()
-                .with_minute(0)
-                .unwrap()
-                .with_second(0)
-                .unwrap();
-            let content = format!(r#"# Evening Journal
-
-## Frequency
-[!singleselect:habit-frequency:daily]
-
-## Status
-[!checkbox:habit-status:false]
-
-## Focus Time
-[!datetime:focus_date_time:{}]
-
-## Notes
-Reflect on the day's accomplishments and lessons learned. Write down three things you're grateful for.
-
----
-Created: {}"#,
-                evening_time.to_rfc3339(),
-                chrono::Local::now().format("%Y-%m-%d")
-            );
+            let content = generate_evening_journal_habit();
             let _ = fs::write(&evening_journal, content);
         }
 
         // Weekly Review habit (weekly with Sunday afternoon focus)
         let weekly_review = habits_dir.join("Weekly Review.md");
         if !weekly_review.exists() {
-            // Find next Sunday at 2 PM
-            let mut next_sunday = chrono::Local::now();
-            while next_sunday.weekday() != chrono::Weekday::Sun {
-                next_sunday += chrono::Duration::days(1);
-            }
-            next_sunday = next_sunday
-                .with_hour(14)
-                .unwrap()
-                .with_minute(0)
-                .unwrap()
-                .with_second(0)
-                .unwrap();
-            
-            let content = format!(r#"# Weekly Review
-
-## Frequency
-[!singleselect:habit-frequency:weekly]
-
-## Status
-[!checkbox:habit-status:false]
-
-## Focus Time
-[!datetime:focus_date_time:{}]
-
-## Notes
-Complete weekly GTD review:
-- Process all inboxes to zero
-- Review project lists
-- Update action lists
-- Review Someday/Maybe items
-- Clean up and organize
-
----
-Created: {}"#,
-                next_sunday.to_rfc3339(),
-                chrono::Local::now().format("%Y-%m-%d")
-            );
+            let content = generate_weekly_review_habit();
             let _ = fs::write(&weekly_review, content);
         }
     }
@@ -2613,6 +2480,34 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
         }
     }
 
+    // Create Horizons pages
+    let horizons_dir = Path::new(&space_path).join("Horizons");
+    if horizons_dir.exists() {
+        // Create Areas of Focus file
+        let areas_file = horizons_dir.join("Areas of Focus.md");
+        if !areas_file.exists() {
+            let _ = fs::write(&areas_file, AREAS_OF_FOCUS_TEMPLATE);
+        }
+
+        // Create Goals file
+        let goals_file = horizons_dir.join("Goals (1-2 Years).md");
+        if !goals_file.exists() {
+            let _ = fs::write(&goals_file, GOALS_TEMPLATE);
+        }
+
+        // Create Vision file
+        let vision_file = horizons_dir.join("Vision (3-5 Years).md");
+        if !vision_file.exists() {
+            let _ = fs::write(&vision_file, VISION_TEMPLATE);
+        }
+
+        // Create Purpose & Principles file
+        let purpose_file = horizons_dir.join("Purpose & Principles.md");
+        if !purpose_file.exists() {
+            let _ = fs::write(&purpose_file, PURPOSE_PRINCIPLES_TEMPLATE);
+        }
+    }
+
     // Create example Habits
     let habits_dir = Path::new(&space_path).join("Habits");
     if habits_dir.exists() {
@@ -2621,135 +2516,35 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
         // Habit 1: Morning Exercise
         let habit1 = habits_dir.join("Morning Exercise.md");
         if !habit1.exists() {
-            let now = chrono::Local::now();
-            let content = format!(r#"# Morning Exercise
-
-## Status
-[!checkbox:habit-status:false]
-
-## Frequency
-[!singleselect:habit-frequency:daily]
-
-## Focus Time
-[!datetime:focus_date_time:{}T07:00:00]
-
-## Created
-[!datetime:created_date:{}]
-
-## History
-| Date | Time | Status | Action | Notes |
-|------|------|--------|--------|-------|
-| {} | {} | To Do | Created | Initial habit creation |
-
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%-I:%M %p"));
+            let content = generate_habit_template("Morning Exercise", "daily");
             let _ = fs::write(&habit1, content);
         }
 
         // Habit 2: Weekly Review
         let habit2 = habits_dir.join("Weekly GTD Review.md");
         if !habit2.exists() {
-            let now = chrono::Local::now();
-            let content = format!(r#"# Weekly GTD Review
-
-## Status
-[!checkbox:habit-status:false]
-
-## Frequency
-[!singleselect:habit-frequency:weekly]
-
-## Focus Time
-[!datetime:focus_date_time:{}T16:00:00]
-
-## Created
-[!datetime:created_date:{}]
-
-## History
-| Date | Time | Status | Action | Notes |
-|------|------|--------|--------|-------|
-| {} | {} | To Do | Created | Initial habit creation |
-
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%-I:%M %p"));
+            let content = generate_habit_template("Weekly GTD Review", "weekly");
             let _ = fs::write(&habit2, content);
         }
 
         // Habit 3: Reading
         let habit3 = habits_dir.join("Reading Practice.md");
         if !habit3.exists() {
-            let now = chrono::Local::now();
-            let content = format!(r#"# Reading Practice
-
-## Status
-[!checkbox:habit-status:false]
-
-## Frequency
-[!singleselect:habit-frequency:daily]
-
-## Focus Time
-[!datetime:focus_date_time:{}T20:30:00]
-
-## Created
-[!datetime:created_date:{}]
-
-## History
-| Date | Time | Status | Action | Notes |
-|------|------|--------|--------|-------|
-| {} | {} | To Do | Created | Initial habit creation |
-
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%-I:%M %p"));
+            let content = generate_habit_template("Reading Practice", "daily");
             let _ = fs::write(&habit3, content);
         }
 
         // Habit 4: Meditation
         let habit4 = habits_dir.join("Mindfulness Meditation.md");
         if !habit4.exists() {
-            let now = chrono::Local::now();
-            let content = format!(r#"# Mindfulness Meditation
-
-## Status
-[!checkbox:habit-status:false]
-
-## Frequency
-[!singleselect:habit-frequency:twice-weekly]
-
-## Focus Time
-[!datetime:focus_date_time:{}T12:00:00]
-
-## Created
-[!datetime:created_date:{}]
-
-## History
-| Date | Time | Status | Action | Notes |
-|------|------|--------|--------|-------|
-| {} | {} | To Do | Created | Initial habit creation |
-
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%-I:%M %p"));
+            let content = generate_habit_template("Mindfulness Meditation", "twice-weekly");
             let _ = fs::write(&habit4, content);
         }
 
         // Habit 5: Journaling
         let habit5 = habits_dir.join("Evening Journal.md");
         if !habit5.exists() {
-            let now = chrono::Local::now();
-            let content = format!(r#"# Evening Journal
-
-## Status
-[!checkbox:habit-status:false]
-
-## Frequency
-[!singleselect:habit-frequency:daily]
-
-## Focus Time
-[!datetime:focus_date_time:{}T21:00:00]
-
-## Created
-[!datetime:created_date:{}]
-
-## History
-| Date | Time | Status | Action | Notes |
-|------|------|--------|--------|-------|
-| {} | {} | To Do | Created | Initial habit creation |
-
-"#, now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%Y-%m-%d"), now.format("%-I:%M %p"));
+            let content = generate_habit_template("Evening Journal", "daily");
             let _ = fs::write(&habit5, content);
         }
     }
@@ -2760,7 +2555,7 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
         chrono::Local::now().to_rfc3339()
     ));
 
-    Ok("Seeded example projects, actions, habits, and reference materials".to_string())
+    Ok("Seeded example projects, actions, horizons, habits, and reference materials".to_string())
 }
 
 /// Initialize default GTD space and optionally seed example content in one call
@@ -2903,37 +2698,7 @@ pub async fn create_gtd_project(
     // Create README.md with project template
     let readme_path = project_path.join("README.md");
     let project_status = status.unwrap_or_else(|| "in-progress".to_string());
-    let readme_content = format!(
-        r#"# {}
-
-## Description
-{}
-
-## Due Date
-[!datetime:due_date:{}]
-
-## Status
-[!singleselect:project-status:{}]
-
-## Actions
-Actions for this project are stored as individual markdown files in this directory.
-
-### Action Template
-Each action file contains:
-- **Status**: Single select field for tracking progress
-- **Focus Date**: DateTime field for when to work on this action
-- **Due Date**: Date field for optional deadline
-- **Effort**: Single select field for time estimate
-
----
-[!datetime:created_date:{}]
-"#,
-        project_name,
-        description,
-        due_date.as_deref().unwrap_or(""),
-        project_status,
-        chrono::Local::now().format("%Y-%m-%d")
-    );
+    let readme_content = generate_project_readme(&project_name, &description, due_date, &project_status);
     
     if let Err(e) = fs::write(&readme_path, readme_content) {
         // Clean up project directory if README creation fails
@@ -3016,33 +2781,12 @@ pub async fn create_gtd_action(
     };
     
     // Create action file with template using single select and datetime fields
-    let action_content = format!(
-        r#"# {}
-
-## Status
-[!singleselect:status:{}]
-
-## Focus Date
-[!datetime:focus_date_time:{}]
-
-## Due Date
-[!datetime:due_date:{}]
-
-## Effort
-[!singleselect:effort:{}]
-
-## Notes
-<!-- Add any additional notes or details about this action here -->
-
----
-[!datetime:created_date_time:{}]
-"#,
-        action_name,
+    let action_content = generate_action_template(
+        &action_name,
         status_value,
-        focus_date.as_deref().unwrap_or(""),
-        due_date.as_deref().unwrap_or(""),
-        effort_value,
-        chrono::Local::now().to_rfc3339()
+        focus_date,
+        due_date,
+        effort_value
     );
     
     match fs::write(&action_path, action_content) {

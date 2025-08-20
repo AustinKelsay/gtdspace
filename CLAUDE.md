@@ -85,6 +85,7 @@ Each hook in `src/hooks/` encapsulates specific domain logic:
 ### Directory Structure
 ```
 gtd-space/
+├── Horizons/         # Higher-level GTD perspectives (Areas, Goals, Vision, Purpose)
 ├── Projects/          # Active projects (folders with README.md + actions)
 ├── Habits/           # Recurring routines with automatic tracking
 ├── Someday Maybe/    # Future ideas
@@ -204,6 +205,7 @@ interface HabitRecord {
 - TypeScript rules with `_` prefix for unused args
 - React hooks exhaustive deps as warning
 - Console statements allowed (no-console: off)
+- Max warnings: 0 (strict mode for CI/CD)
 
 ### Vite Configuration
 - Dev port: 1420 (strict)
@@ -226,13 +228,13 @@ interface HabitRecord {
 ## Tauri Backend Commands
 
 **File Operations:**
-`read_file`, `save_file`, `create_file`, `delete_file`, `rename_file`, `copy_file`, `move_file`, `list_markdown_files`
+`read_file`, `save_file`, `create_file`, `delete_file`, `delete_folder`, `rename_file`, `copy_file`, `move_file`, `list_markdown_files`
 
 **GTD Operations:**
 `initialize_gtd_space`, `create_gtd_project`, `create_gtd_action`, `create_gtd_habit`, `update_habit_status`, `check_and_reset_habits`, `list_gtd_projects`, `seed_example_gtd_content`, `rename_gtd_project`, `rename_gtd_action`, `list_project_actions`
 
 **System:**
-`select_folder`, `check_permissions`, `get_app_version`, `get_default_gtd_space_path`, `open_folder_in_explorer`, `check_directory_exists`, `create_directory`, `initialize_default_gtd_space`
+`select_folder`, `check_permissions`, `get_app_version`, `get_default_gtd_space_path`, `open_folder_in_explorer`, `open_file_location`, `check_directory_exists`, `create_directory`, `initialize_default_gtd_space`
 
 **File Watching:**
 `start_file_watcher`, `stop_file_watcher`
@@ -247,10 +249,17 @@ interface HabitRecord {
 
 ### Core GTD Features
 - **GTD-First**: GTD is the default mode, not optional
+- **Complete Horizons**: All 6 GTD levels implemented (runway to 50,000 ft)
 - **Single Select**: Status/Effort fields use single select for cleaner UX
 - **Focus vs Due Dates**: Actions support both work timing and deadlines
 - **Smart Detection**: Subdirectory detection prevents re-initialization
 - **Bidirectional Title Sync**: Document titles auto-rename files/folders when saved
+
+### Horizons of Focus Implementation
+- **Four Horizon Levels**: Areas of Focus, Goals (1-2 years), Vision (3-5 years), Purpose & Principles
+- **Template-Based**: Each horizon file includes comprehensive templates and prompts
+- **Sidebar Integration**: Horizons folder appears above Projects with collapsible structure
+- **Auto-Seeding**: Horizon files created with example content on initialization
 
 ### Habit System
 - **Habit Tracking System**: Habits have 'todo'/'complete' status that auto-resets based on frequency
@@ -273,6 +282,8 @@ interface HabitRecord {
 - **Toast Deduplication**: Prevents double notifications in React StrictMode
 - **Visual Animations**: Subtle green highlight when habit file updates
 - **Optimistic Updates**: UI updates immediately, then syncs with disk
+- **Sidebar Highlighting**: Active files highlighted in sidebar for better navigation
+- **Options Menu**: Three-dot menu in sidebar for delete and other file operations
 
 ### Technical Improvements
 - **IPC Fix**: Rust commands are synchronous for Tauri 2.0 compatibility
@@ -320,3 +331,10 @@ interface HabitRecord {
 ## Testing Status
 
 **No test suite exists.** Manual testing required for all changes. Test component available at `src/components/test/TestMultiSelect.tsx` for UI experimentation.
+
+## VSCode Configuration
+
+- **Format on Save**: Enabled with Prettier as default formatter
+- **ESLint Auto-fix**: Enabled on save
+- **Rust Analyzer**: Uses clippy for linting
+- **Import Preferences**: Relative paths for TypeScript imports

@@ -14,10 +14,12 @@ import { MultiSelectBlock } from './blocks/MultiSelectBlock';
 import { SingleSelectBlock } from './blocks/SingleSelectBlock';
 import { CheckboxBlock } from './blocks/CheckboxBlock';
 import { DateTimeSelectBlock } from './blocks/DateTimeSelectBlock';
+import { ReferencesBlock } from './blocks/ReferencesBlock';
 import { postProcessBlockNoteBlocks } from '@/utils/blocknote-preprocessing';
 import { useMultiSelectInsertion } from '@/hooks/useMultiSelectInsertion';
 import { useSingleSelectInsertion } from '@/hooks/useSingleSelectInsertion';
 import { useDateTimeInsertion } from '@/hooks/useDateTimeInsertion';
+import { useReferencesInsertion } from '@/hooks/useReferencesInsertion';
 import './blocknote-theme.css';
 
 export interface BlockNoteEditorProps {
@@ -55,7 +57,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   className = '',
   filePath,
 }) => {
-  // Create custom schema with multiselect, singleselect, checkbox, and datetime blocks
+  // Create custom schema with multiselect, singleselect, checkbox, datetime, and references blocks
   const schema = BlockNoteSchema.create({
     blockSpecs: {
       ...defaultBlockSpecs,
@@ -63,6 +65,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       singleselect: SingleSelectBlock,
       checkbox: CheckboxBlock,
       datetime: DateTimeSelectBlock,
+      references: ReferencesBlock,
     },
   });
 
@@ -80,6 +83,9 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
 
   // Add datetime insertion capabilities
   useDateTimeInsertion(editor);
+
+  // Add references insertion capabilities
+  useReferencesInsertion(editor);
 
   // Track if initial content has been loaded
   const initialContentLoaded = useRef(false);
@@ -194,7 +200,69 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       }
 
       try {
-        const markdown = await editor.blocksToMarkdownLossy(editor.document);
+        // Custom handling for our custom blocks
+        const blocks = editor.document;
+        let markdown = '';
+        
+        // Convert blocks to markdown with custom handling
+        for (const block of blocks) {
+          const blockType = block.type;
+          const props = (block as any).props;
+          
+          // Handle custom blocks that might be inside paragraphs
+          if (blockType === 'paragraph' && (block as any).content) {
+            // Check if this paragraph contains our custom syntax
+            const textContent = (block as any).content?.[0]?.text || '';
+            if (textContent.match(/^\[!references:/)) {
+              markdown += textContent + '\n\n';
+            } else if (textContent.match(/^\[!singleselect:/)) {
+              markdown += textContent + '\n\n';
+            } else if (textContent.match(/^\[!datetime:/)) {
+              markdown += textContent + '\n\n';
+            } else if (textContent.match(/^\[!checkbox:/)) {
+              markdown += textContent + '\n\n';
+            } else if (textContent.match(/^\[!multiselect:/)) {
+              markdown += textContent + '\n\n';
+            } else {
+              // Regular paragraph - use default conversion
+              try {
+                const blockMarkdown = await editor.blocksToMarkdownLossy([block]);
+                markdown += blockMarkdown;
+              } catch (blockError) {
+                console.warn('Error converting paragraph:', blockError);
+              }
+            }
+          } else if (blockType === 'references') {
+            const references = props?.references || '';
+            markdown += `[!references:${references}]\n\n`;
+          } else if (blockType === 'singleselect') {
+            const type = props?.type || '';
+            const value = props?.value || '';
+            markdown += `[!singleselect:${type}:${value}]\n\n`;
+          } else if (blockType === 'datetime') {
+            const type = props?.type || '';
+            const value = props?.value || '';
+            markdown += `[!datetime:${type}:${value}]\n\n`;
+          } else if (blockType === 'checkbox') {
+            const type = props?.type || '';
+            const checked = props?.checked || false;
+            markdown += `[!checkbox:${type}:${checked}]\n\n`;
+          } else if (blockType === 'multiselect') {
+            const type = props?.type || '';
+            const value = props?.value || '';
+            markdown += `[!multiselect:${type}:${value}]\n\n`;
+          } else {
+            // Use default markdown conversion for standard blocks
+            try {
+              const blockMarkdown = await editor.blocksToMarkdownLossy([block]);
+              markdown += blockMarkdown;
+            } catch (blockError) {
+              console.warn('Error converting block:', blockType, blockError);
+              // Skip blocks that fail to convert
+            }
+          }
+        }
+        
         onChange(markdown);
       } catch (error) {
         console.error('Error converting to markdown:', error);

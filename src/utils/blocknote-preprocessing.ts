@@ -63,13 +63,21 @@ interface DatetimeBlock {
   };
 }
 
+interface ReferencesBlock {
+  type: 'references';
+  props: {
+    references: string; // comma-separated file paths
+  };
+}
+
 type ProcessedBlock =
   | UnknownBlock
   | ParagraphBlock
   | MultiselectBlock
   | SingleselectBlock
   | CheckboxBlock
-  | DatetimeBlock;
+  | DatetimeBlock
+  | ReferencesBlock;
 
 function isParagraphBlock(block: UnknownBlock): block is ParagraphBlock {
   return block.type === 'paragraph';
@@ -162,11 +170,17 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   // Pattern to match HTML datetime blocks
   const dateTimeHTMLPattern = /<div\s+data-datetime='([^']+)'\s+class="datetime-block">([^<]+)<\/div>/g;
   
+  // Pattern to match references markers in markdown (e.g., [!references:path1.md,path2.md])
+  const referencesMarkerPattern = /\[!references:([^\]]*)\]/g;
+  // Pattern to match HTML references blocks
+  const referencesHTMLPattern = /<div\s+data-references='([^']+)'\s+class="references-block">([^<]+)<\/div>/g;
+  
   // Find all multiselect blocks in the original markdown
   const multiSelectBlocks: Array<{ text: string; type: string; value: string[]; label?: string }> = [];
   const singleSelectBlocks: Array<{ text: string; type: string; value: string; label?: string }> = [];
   const checkboxBlocks: Array<{ text: string; type: string; checked: boolean; label?: string }> = [];
   const dateTimeBlocks: Array<{ text: string; type: string; value: string; includeTime?: boolean; label?: string }> = [];
+  const referencesBlocks: Array<{ text: string; references: string }> = [];
   let match;
   
   // First check for new marker syntax
@@ -287,12 +301,36 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
     }
   }
   
+  // Check for references marker syntax
+  while ((match = referencesMarkerPattern.exec(markdown)) !== null) {
+    const references = match[1];
+    referencesBlocks.push({ text: match[0], references });
+  }
+  
+  // Check for references HTML syntax
+  while ((match = referencesHTMLPattern.exec(markdown)) !== null) {
+    try {
+      let jsonStr = match[1];
+      if (jsonStr.includes('\\"')) {
+        jsonStr = jsonStr.replace(/\\"/g, '"');
+      }
+      const data = JSON.parse(jsonStr);
+      referencesBlocks.push({
+        text: match[0],
+        references: data.references || ''
+      });
+    } catch (e) {
+      console.error('Error parsing references data:', e, 'JSON string:', match[1]);
+    }
+  }
+  
   console.log('Found multiselect blocks in markdown:', multiSelectBlocks.length);
   console.log('Found singleselect blocks in markdown:', singleSelectBlocks.length);
   console.log('Found checkbox blocks in markdown:', checkboxBlocks.length);
   console.log('Found datetime blocks in markdown:', dateTimeBlocks.length);
+  console.log('Found references blocks in markdown:', referencesBlocks.length);
   
-  if (multiSelectBlocks.length === 0 && singleSelectBlocks.length === 0 && checkboxBlocks.length === 0 && dateTimeBlocks.length === 0) {
+  if (multiSelectBlocks.length === 0 && singleSelectBlocks.length === 0 && checkboxBlocks.length === 0 && dateTimeBlocks.length === 0 && referencesBlocks.length === 0) {
     console.log('No custom blocks found, returning original blocks');
     return blocks;
   }
@@ -412,6 +450,26 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
             });
             blockReplaced = true;
             console.log('Replaced paragraph with datetime block:', dtBlock);
+            break; // Exit the inner loop once we've replaced the block
+          }
+        }
+      }
+      
+      // Check if this paragraph contains our references markers or HTML
+      if (!blockReplaced) {
+        for (const refBlock of referencesBlocks) {
+          if (blockText.includes(refBlock.text) || 
+              blockText.includes(`[!references:`) ||
+              blockText.includes('References')) {
+            // Replace this paragraph with a references block
+            processedBlocks.push({
+              type: 'references',
+              props: {
+                references: refBlock.references || '',
+              },
+            });
+            blockReplaced = true;
+            console.log('Replaced paragraph with references block:', refBlock);
             break; // Exit the inner loop once we've replaced the block
           }
         }

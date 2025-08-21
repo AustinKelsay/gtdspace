@@ -51,74 +51,84 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
     console.log('Creating page:', pageName, 'in directory:', directory);
     setIsCreating(true);
 
-    const result = await withErrorHandling(
-      async () => {
-        // First check if the directory exists and create if needed
-        try {
-          const directoryExistsBefore = await invoke<boolean>('check_directory_exists', { path: directory });
-          if (!directoryExistsBefore) {
-            let createResponse: unknown;
-            try {
-              createResponse = await invoke<string>('create_directory', { path: directory });
-            } catch (err) {
-              const detail = err instanceof Error ? err.message : String(err);
-              throw new Error(`Failed to create directory at '${directory}': ${detail}`);
-            }
+    try {
+      const result = await withErrorHandling(
+        async () => {
+          console.log('Starting file creation process for:', pageName, 'in:', directory);
+          // First check if the directory exists and create if needed
+          try {
+            console.log('Checking if directory exists:', directory);
+            const directoryExistsBefore = await invoke<boolean>('check_directory_exists', { path: directory });
+            console.log('Directory exists before:', directoryExistsBefore);
+            if (!directoryExistsBefore) {
+              let createResponse: unknown;
+              try {
+                createResponse = await invoke<string>('create_directory', { path: directory });
+              } catch (err) {
+                const detail = err instanceof Error ? err.message : String(err);
+                throw new Error(`Failed to create directory at '${directory}': ${detail}`);
+              }
 
-            const directoryExistsAfter = await invoke<boolean>('check_directory_exists', { path: directory });
-            if (!directoryExistsAfter) {
-              throw new Error(`Directory '${directory}' does not exist after creation attempt. Response: ${String(createResponse)}`);
+              const directoryExistsAfter = await invoke<boolean>('check_directory_exists', { path: directory });
+              if (!directoryExistsAfter) {
+                throw new Error(`Directory '${directory}' does not exist after creation attempt. Response: ${String(createResponse)}`);
+              }
             }
+          } catch (err) {
+            console.error('Error checking/creating directory:', err);
+            const detail = err instanceof Error ? err.message : String(err);
+            throw new Error(`Unable to ensure directory exists at '${directory}': ${detail}`);
           }
-        } catch (err) {
-          const detail = err instanceof Error ? err.message : String(err);
-          throw new Error(`Unable to ensure directory exists at '${directory}': ${detail}`);
-        }
 
-        // Ensure the name ends with .md
-        const fileName = pageName.trim().endsWith('.md') ? pageName.trim() : `${pageName.trim()}.md`;
+          // Ensure the name ends with .md
+          const fileName = pageName.trim().endsWith('.md') ? pageName.trim() : `${pageName.trim()}.md`;
+          console.log('Creating file with name:', fileName);
 
-        // Create the file - using FileOperationResult type
-        const createResult = await invoke<{ success: boolean; path?: string; message?: string }>('create_file', {
-          directory,
-          name: fileName,
-        });
+          // Create the file - using FileOperationResult type
+          const createResult = await invoke<{ success: boolean; path?: string; message?: string }>('create_file', {
+            directory,
+            name: fileName,
+          });
 
-        if (!createResult.success) {
-          throw new Error(createResult.message || 'Failed to create file');
-        }
+          if (!createResult.success) {
+            throw new Error(createResult.message || 'Failed to create file');
+          }
 
-        // Get the full path for the created file
-        const filePath = `${directory}/${fileName}`;
+          // Get the full path for the created file
+          const filePath = `${directory}/${fileName}`;
 
-        // Write initial content based on directory type
-        const title = fileName.replace('.md', '');
-        let initialContent = `# ${title}\n\n`;
+          // Write initial content based on directory type
+          const title = fileName.replace('.md', '');
+          let initialContent = `# ${title}\n\n`;
 
-        if (directoryName === 'Someday Maybe') {
-          initialContent += `## Idea\n\n[Describe your idea here]\n\n## Why it matters\n\n[Why is this worth considering?]\n\n## Next steps when ready\n\n- [ ] First step\n- [ ] Second step\n`;
-        } else if (directoryName === 'Cabinet') {
-          initialContent += `## Reference\n\n[Add your reference material here]\n\n## Key Points\n\n- \n\n## Notes\n\n`;
-        }
+          if (directoryName === 'Someday Maybe') {
+            initialContent += `## Idea\n\n[Describe your idea here]\n\n## Why it matters\n\n[Why is this worth considering?]\n\n## Next steps when ready\n\n- [ ] First step\n- [ ] Second step\n`;
+          } else if (directoryName === 'Cabinet') {
+            initialContent += `## Reference\n\n[Add your reference material here]\n\n## Key Points\n\n- \n\n## Notes\n\n`;
+          }
 
-        await invoke('save_file', {
-          path: filePath,
-          content: initialContent,
-        });
+          await invoke('save_file', {
+            path: filePath,
+            content: initialContent,
+          });
 
-        return filePath;
-      },
-      `Failed to create page in ${directoryName}`,
-      'file'
-    );
+          return filePath;
+        },
+        `Failed to create page in ${directoryName}`,
+        'file'
+      );
 
-    // Always reset isCreating regardless of success/failure
-    setIsCreating(false);
-
-    if (result) {
-      showSuccess(`Page "${pageName}" created in ${directoryName}`);
-      onSuccess?.(result);
-      handleClose();
+      if (result) {
+        showSuccess(`Page "${pageName}" created in ${directoryName}`);
+        onSuccess?.(result);
+        handleClose();
+      }
+    } catch (unexpectedError) {
+      // Catch any unexpected errors that weren't handled by withErrorHandling
+      console.error('Unexpected error in CreatePageDialog:', unexpectedError);
+    } finally {
+      // Always reset isCreating, even if there's an error
+      setIsCreating(false);
     }
   };
 
@@ -151,6 +161,7 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
                 placeholder={directoryName === 'Someday Maybe' ? 'Learn new language' : 'Important contacts'}
                 required
                 autoFocus
+                disabled={isCreating}
               />
               <p className="text-xs text-muted-foreground">
                 {directoryName === 'Someday Maybe'

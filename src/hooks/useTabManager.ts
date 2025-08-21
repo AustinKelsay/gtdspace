@@ -881,6 +881,45 @@ export const useTabManager = () => {
     };
   }, []);
 
+  /**
+   * Handle open-reference-file events from ReferencesBlock
+   */
+  useEffect(() => {
+    const handleOpenReference = async (event: CustomEvent) => {
+      const { path } = event.detail;
+      
+      if (!path) {
+        console.error('No path provided for reference file');
+        return;
+      }
+      
+      try {
+        // Create a MarkdownFile object from the path
+        const fileName = path.split('/').pop() || 'Unknown';
+        const referenceFile: MarkdownFile = {
+          id: path,
+          name: fileName,
+          path: path,
+          size: 0, // Size doesn't matter for opening
+          last_modified: Date.now(),
+          extension: 'md'
+        };
+        
+        // Open the reference file in a new tab
+        await openTab(referenceFile);
+        console.log(`Opened reference file: ${path}`);
+      } catch (error) {
+        console.error('Failed to open reference file:', error);
+      }
+    };
+    
+    window.addEventListener('open-reference-file', handleOpenReference as EventListener);
+    
+    return () => {
+      window.removeEventListener('open-reference-file', handleOpenReference as EventListener);
+    };
+  }, [openTab]);
+
   // === RETURN STATE AND OPERATIONS ===
 
   return {

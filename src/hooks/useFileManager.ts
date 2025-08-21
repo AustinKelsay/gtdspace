@@ -90,6 +90,9 @@ export const useFileManager = () => {
         hasUnsavedChanges: false,
       }));
       
+      // Store the current folder path for references component
+      localStorage.setItem('gtdspace-current-path', folderPath);
+      
       // Save folder to settings for persistence
       await setLastFolder(folderPath);
       

@@ -105,6 +105,9 @@ export function useGTDSpace() {
             // Continue anyway - the user can refresh manually if needed
           }
           
+          // Store the GTD space path for references component
+          localStorage.setItem('gtdspace-current-path', spacePath);
+          
           // Update state with initialized space
           setGTDSpace({
             root_path: spacePath,
@@ -251,6 +254,9 @@ export function useGTDSpace() {
                 return false;
               }
             }
+            // Store the GTD space path for references component
+            localStorage.setItem('gtdspace-current-path', path);
+            
             // Preserve existing projects/action counts to avoid flicker
             setGTDSpace(prev => ({
               root_path: path,

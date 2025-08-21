@@ -176,14 +176,17 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
   const loadSectionFiles = React.useCallback(async (sectionPath: string) => {
     try {
-      let files = await invoke<MarkdownFile[]>('list_markdown_files', {
+      console.log('Loading files for section:', sectionPath);
+      const files = await invoke<MarkdownFile[]>('list_markdown_files', {
         path: sectionPath
       });
+      console.log(`Found ${files.length} files in ${sectionPath}:`, files.map(f => f.name));
 
-      // Sort Horizons files by altitude level
+      // Sort Horizons files by altitude level (highest to lowest)
+      let sortedFiles = files;
       if (sectionPath.includes('Horizons')) {
-        const horizonOrder = ['Areas of Focus', 'Goals', 'Vision', 'Purpose'];
-        files = files.sort((a, b) => {
+        const horizonOrder = ['Purpose & Principles', 'Vision (3-5 Years)', 'Goals (1-2 Years)', 'Areas of Focus'];
+        sortedFiles = files.sort((a, b) => {
           const aName = a.name.replace('.md', '');
           const bName = b.name.replace('.md', '');
           const aIndex = horizonOrder.findIndex(h => aName.includes(h));
@@ -198,11 +201,13 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       flushSync(() => {
         setSectionFiles(prev => ({
           ...prev,
-          [sectionPath]: files
+          [sectionPath]: sortedFiles
         }));
+        // Force a re-render by updating the refresh key
+        setSectionRefreshKey(prev => prev + 1);
       });
 
-      return files;
+      return sortedFiles;
     } catch (error) {
       console.error('Failed to load section files:', sectionPath, error);
       return [];
@@ -1027,7 +1032,24 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
               <Folder className="h-3.5 w-3.5" />
             </Button>
             <Button
-              onClick={onRefresh}
+              onClick={async () => {
+                // Call the original refresh
+                if (onRefresh) {
+                  onRefresh();
+                }
+                
+                // Also refresh all section files
+                console.log('Refreshing all sections...');
+                const rootPath = gtdSpace?.root_path || currentFolder;
+                if (rootPath) {
+                  const promises = GTD_SECTIONS.filter(s => s.id !== 'calendar').map(section => {
+                    const sectionPath = `${rootPath}/${section.path}`;
+                    return loadSectionFiles(sectionPath);
+                  });
+                  await Promise.all(promises);
+                  console.log('All sections refreshed');
+                }
+              }}
               variant="ghost"
               size="icon"
               className="h-7 w-7"
@@ -1545,18 +1567,53 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           directory={pageDialogDirectory.path}
           directoryName={pageDialogDirectory.name}
           onSuccess={async (filePath) => {
-            // Reload the section files
-            await loadSectionFiles(pageDialogDirectory.path);
-            // Open the newly created file
+            console.log('Page created successfully:', filePath);
+            
+            // Create the new file object immediately
             const newFile: MarkdownFile = {
               id: filePath,
               name: filePath.split('/').pop() || '',
               path: filePath,
               size: 0,
-              last_modified: Date.now(),
+              last_modified: Date.now() / 1000, // Convert to seconds
               extension: 'md'
             };
+            
+            // Immediately add the file to the section files state
+            flushSync(() => {
+              setSectionFiles(prev => {
+                const currentFiles = prev[pageDialogDirectory.path] || [];
+                const updatedFiles = [...currentFiles, newFile].sort((a, b) => 
+                  a.name.localeCompare(b.name)
+                );
+                return {
+                  ...prev,
+                  [pageDialogDirectory.path]: updatedFiles
+                };
+              });
+              
+              // Force a re-render
+              setSectionRefreshKey(prev => prev + 1);
+            });
+            
+            // Ensure the section is expanded (Cabinet -> cabinet, Someday Maybe -> someday-maybe)
+            const sectionId = pageDialogDirectory.name.toLowerCase().replace(/\s+/g, '-');
+            console.log('Expanding section:', sectionId);
+            setExpandedSections(prev => {
+              if (!prev.includes(sectionId)) {
+                console.log('Adding section to expanded:', sectionId);
+                return [...prev, sectionId];
+              }
+              return prev;
+            });
+            
+            // Open the newly created file
             onFileSelect(newFile);
+            
+            // Also reload from disk to ensure consistency (but don't wait for it)
+            loadSectionFiles(pageDialogDirectory.path).then(files => {
+              console.log('Section files reloaded from disk:', files?.length || 0);
+            });
           }}
         />
       )}

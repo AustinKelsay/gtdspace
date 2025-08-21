@@ -31,6 +31,7 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 - **Beautiful Date & Time Pickers** - Visual calendar and time selection for due dates, focus dates, and scheduling
 - **Bidirectional Title Sync** - Document titles automatically rename files/folders and vice versa
 - **Content Event System** - Real-time metadata updates across the UI
+- **GTD References System** - Link Cabinet and Someday Maybe pages to any project or action for context
 
 ### Technical Features
 
@@ -107,6 +108,7 @@ GTD Space is designed from the ground up around David Allen's Getting Things Don
   - Interactive Status tracking (In Progress, Waiting, Complete) via single-select dropdowns
   - Interactive Effort estimates (Small <30min, Medium 30-90min, Large >90min, Extra Large >3hr) via single-select dropdowns
   - Optional focus dates (when to work on) and due dates (deadlines)
+  - References to Cabinet and Someday Maybe pages for context and supporting materials
 - **Habits** - Recurring routines with automatic tracking
   - Interactive checkbox for status (To Do / Complete) with real-time updates
   - Smart frequency options (Daily, Every Other Day, Twice Weekly, Weekly, Weekdays, Biweekly, Monthly)
@@ -147,6 +149,7 @@ See [GTD Implementation](docs/GTD_IMPLEMENTATION.md) for detailed usage.
 | Insert Due Date       | `Ctrl/Cmd+Alt+D`   |
 | Insert Focus DateTime | `Ctrl/Cmd+Alt+T`   |
 | Insert Created Date   | `Ctrl/Cmd+Alt+C`   |
+| Insert References     | `Ctrl/Cmd+Alt+R`   |
 | Next Tab              | `Ctrl/Cmd+Tab`     |
 | Previous Tab          | `Ctrl/Cmd+Shift+Tab`|
 | Tab by Number         | `Ctrl/Cmd+1-9`     |

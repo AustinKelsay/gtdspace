@@ -70,6 +70,7 @@ Each hook in `src/hooks/` encapsulates specific domain logic:
 - **`useErrorHandler`** - Centralized error handling with toasts
 - **`useKeyboardShortcuts`** - Platform-aware keyboard shortcuts
 - **`useSingleSelectInsertion`** / **`useMultiSelectInsertion`** - GTD field insertion
+- **`useReferencesInsertion`** - References block insertion for Cabinet/Someday links
 - **`useHabitTracking`** - Habit-specific operations and state management
 - **`useCalendarData`** - Aggregates all dated items across workspace
 
@@ -158,6 +159,11 @@ interface HabitRecord {
 [!datetime:created_date_time:2025-01-17T10:00:00Z]  # ISO 8601 with timezone
 ```
 
+**References Block** (Cabinet & Someday Maybe links):
+```markdown
+[!references:path1.md,path2.md]  # Links to Cabinet/Someday pages
+```
+
 ### Content Processing Pipeline
 1. **Load**: Markdown → `preprocessMarkdownForBlockNote()` → `postProcessBlockNoteBlocks()` → Interactive blocks
 2. **Save**: BlockNote blocks → `toExternalHTML()` → Markdown with field markers
@@ -168,6 +174,7 @@ interface HabitRecord {
 ### Keyboard Shortcuts
 - **Single Select**: `Cmd/Ctrl+Alt+S` (Status), `+E` (Effort), `+P` (Project Status), `+F` (Habit Frequency), `+H` (Habit Status)
 - **DateTime**: `Cmd/Ctrl+Alt+D` (Due Date), `+T` (Focus DateTime), `+C` (Created Date)
+- **References**: `Cmd/Ctrl+Alt+R` (Insert References block)
 - **Multi Select**: `Cmd/Ctrl+Shift+S/E/P` (legacy)
 
 ## Critical Patterns & Constraints
@@ -284,6 +291,7 @@ interface HabitRecord {
 - **Optimistic Updates**: UI updates immediately, then syncs with disk
 - **Sidebar Highlighting**: Active files highlighted in sidebar for better navigation
 - **Options Menu**: Three-dot menu in sidebar for delete and other file operations
+- **References System**: Interactive UI for linking Cabinet and Someday Maybe pages to actions/projects
 
 ### Technical Improvements
 - **IPC Fix**: Rust commands are synchronous for Tauri 2.0 compatibility
@@ -327,6 +335,7 @@ interface HabitRecord {
 - **GTDWorkspaceSidebar** requires useGTDSpace and content event subscriptions
 - **BlockNote Editor** integrates with custom blocks and preprocessing utilities
 - **Calendar View** aggregates data from all GTD sections in parallel
+- **ReferencesBlock** provides Cabinet/Someday linking with dialog-based selection
 
 ## Testing Status
 

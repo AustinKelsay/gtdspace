@@ -623,7 +623,7 @@ fn scan_directory_recursive(dir_path: &Path, files: &mut Vec<MarkdownFile>) -> R
 /// console.log(`Found ${files.length} markdown files`);
 /// ```
 #[tauri::command]
-pub async fn list_markdown_files(path: String) -> Result<Vec<MarkdownFile>, String> {
+pub fn list_markdown_files(path: String) -> Result<Vec<MarkdownFile>, String> {
     log::info!("Listing markdown files recursively in: {}", path);
     
     let dir_path = Path::new(&path);
@@ -651,7 +651,7 @@ pub async fn list_markdown_files(path: String) -> Result<Vec<MarkdownFile>, Stri
 /// List only project action files (markdown) in a project directory
 /// Skips the project's README.md
 #[tauri::command]
-pub async fn list_project_actions(project_path: String) -> Result<Vec<MarkdownFile>, String> {
+pub fn list_project_actions(project_path: String) -> Result<Vec<MarkdownFile>, String> {
     log::info!("Listing project actions in: {}", project_path);
 
     let dir_path = Path::new(&project_path);
@@ -843,7 +843,7 @@ pub fn save_file(path: String, content: String) -> Result<String, String> {
 /// }
 /// ```
 #[tauri::command]
-pub async fn create_file(directory: String, name: String) -> Result<FileOperationResult, String> {
+pub fn create_file(directory: String, name: String) -> Result<FileOperationResult, String> {
     log::info!("Creating file: {} in directory: {}", name, directory);
     
     let dir_path = Path::new(&directory);
@@ -2602,9 +2602,12 @@ pub async fn initialize_default_gtd_space(app: AppHandle) -> Result<String, Stri
 /// });
 /// ```
 #[tauri::command]
-pub async fn check_directory_exists(path: String) -> Result<bool, String> {
+pub fn check_directory_exists(path: String) -> Result<bool, String> {
+    log::info!("Checking if directory exists: {}", path);
     let dir_path = Path::new(&path);
-    Ok(dir_path.exists() && dir_path.is_dir())
+    let exists = dir_path.exists() && dir_path.is_dir();
+    log::info!("Directory {} exists: {}", path, exists);
+    Ok(exists)
 }
 
 /// Create a directory
@@ -2621,7 +2624,8 @@ pub async fn check_directory_exists(path: String) -> Result<bool, String> {
 /// });
 /// ```
 #[tauri::command]
-pub async fn create_directory(path: String) -> Result<String, String> {
+pub fn create_directory(path: String) -> Result<String, String> {
+    log::info!("Creating directory: {}", path);
     let dir_path = Path::new(&path);
     
     // Validate path doesn't contain dangerous patterns

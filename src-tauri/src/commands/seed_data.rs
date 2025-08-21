@@ -409,6 +409,9 @@ pub fn generate_project_readme(name: &str, description: &str, due_date: Option<S
 ## Created
 [!datetime:created_date:{}]
 
+## References
+[!references:]
+
 ## Notes
 <!-- Add any additional notes, context, or resources for this project here -->
 
@@ -439,6 +442,9 @@ pub fn generate_action_template(name: &str, status: &str, focus_date: Option<Str
 
 ## Effort
 [!singleselect:effort:{}]
+
+## References
+[!references:]
 
 ## Notes
 <!-- Add any additional notes or details about this action here -->

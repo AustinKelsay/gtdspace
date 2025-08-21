@@ -86,11 +86,14 @@ Each hook in `src/hooks/` encapsulates specific domain logic:
 ### Directory Structure
 ```
 gtd-space/
-├── Horizons/         # Higher-level GTD perspectives (Areas, Goals, Vision, Purpose)
-├── Projects/          # Active projects (folders with README.md + actions)
-├── Habits/           # Recurring routines with automatic tracking
-├── Someday Maybe/    # Future ideas
-└── Cabinet/          # Reference materials
+├── Purpose & Principles/  # Core values and life mission (50,000 ft)
+├── Vision/               # 3-5 year aspirations (40,000 ft)
+├── Goals/                # 1-2 year objectives (30,000 ft)
+├── Areas of Focus/       # Ongoing responsibilities (20,000 ft)
+├── Projects/             # Active projects (folders with README.md + actions)
+├── Habits/               # Recurring routines with automatic tracking
+├── Someday Maybe/        # Future ideas
+└── Cabinet/              # Reference materials
 ```
 
 ### Data Models
@@ -256,17 +259,21 @@ interface HabitRecord {
 
 ### Core GTD Features
 - **GTD-First**: GTD is the default mode, not optional
-- **Complete Horizons**: All 6 GTD levels implemented (runway to 50,000 ft)
+- **Complete Horizons**: All GTD levels as dedicated folders (runway to 50,000 ft)
 - **Single Select**: Status/Effort fields use single select for cleaner UX
 - **Focus vs Due Dates**: Actions support both work timing and deadlines
 - **Smart Detection**: Subdirectory detection prevents re-initialization
 - **Bidirectional Title Sync**: Document titles auto-rename files/folders when saved
 
 ### Horizons of Focus Implementation
-- **Four Horizon Levels**: Areas of Focus, Goals (1-2 years), Vision (3-5 years), Purpose & Principles
-- **Template-Based**: Each horizon file includes comprehensive templates and prompts
-- **Sidebar Integration**: Horizons folder appears above Projects with collapsible structure
-- **Auto-Seeding**: Horizon files created with example content on initialization
+- **Four Horizon Levels as Folders**: Each horizon is a top-level folder containing individual pages
+  - **Purpose & Principles** (50,000 ft) - Life Mission and Core Values documents
+  - **Vision** (40,000 ft) - 3-5 Year Vision document
+  - **Goals** (30,000 ft) - Individual goal pages with milestones and success criteria
+  - **Areas of Focus** (20,000 ft) - Individual area pages with projects and metrics
+- **Template-Based**: Each folder has a README overview and example pages
+- **Sidebar Integration**: Horizon folders appear in altitude order (highest to lowest) above Projects
+- **Auto-Seeding**: Horizon folders created with example content on initialization
 
 ### Habit System
 - **Habit Tracking System**: Habits have 'todo'/'complete' status that auto-resets based on frequency

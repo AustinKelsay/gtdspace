@@ -76,20 +76,44 @@ interface GTDSection {
 
 const GTD_SECTIONS: GTDSection[] = [
   {
+    id: 'purpose',
+    name: 'Purpose & Principles',
+    icon: Target,
+    path: 'Purpose & Principles',
+    description: 'Core values and life mission (50,000 ft)',
+    color: 'text-purple-600'
+  },
+  {
+    id: 'vision',
+    name: 'Vision',
+    icon: Target,
+    path: 'Vision',
+    description: '3-5 year aspirations (40,000 ft)',
+    color: 'text-indigo-600'
+  },
+  {
+    id: 'goals',
+    name: 'Goals',
+    icon: Target,
+    path: 'Goals',
+    description: '1-2 year objectives (30,000 ft)',
+    color: 'text-violet-600'
+  },
+  {
+    id: 'areas',
+    name: 'Areas of Focus',
+    icon: Target,
+    path: 'Areas of Focus',
+    description: 'Ongoing responsibilities (20,000 ft)',
+    color: 'text-blue-700'
+  },
+  {
     id: 'calendar',
     name: 'Calendar',
     icon: Calendar,
     path: '::calendar::', // Special virtual path
     description: 'View all dated items',
     color: 'text-orange-600'
-  },
-  {
-    id: 'horizons',
-    name: 'Horizons',
-    icon: Target,
-    path: 'Horizons',
-    description: 'Higher-level perspectives and life direction',
-    color: 'text-indigo-600'
   },
   {
     id: 'projects',
@@ -182,20 +206,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       });
       console.log(`Found ${files.length} files in ${sectionPath}:`, files.map(f => f.name));
 
-      // Sort Horizons files by altitude level (highest to lowest)
-      let sortedFiles = files;
-      if (sectionPath.includes('Horizons')) {
-        const horizonOrder = ['Purpose & Principles', 'Vision (3-5 Years)', 'Goals (1-2 Years)', 'Areas of Focus'];
-        sortedFiles = files.sort((a, b) => {
-          const aName = a.name.replace('.md', '');
-          const bName = b.name.replace('.md', '');
-          const aIndex = horizonOrder.findIndex(h => aName.includes(h));
-          const bIndex = horizonOrder.findIndex(h => bName.includes(h));
-          if (aIndex === -1) return 1;
-          if (bIndex === -1) return -1;
-          return aIndex - bIndex;
-        });
-      }
+      // Sort files alphabetically by default
+      const sortedFiles = files.sort((a, b) => {
+        const aName = a.name.replace('.md', '');
+        const bName = b.name.replace('.md', '');
+        return aName.localeCompare(bName);
+      });
 
       // Use flushSync to force immediate state update
       flushSync(() => {
@@ -328,14 +344,20 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           const somedayPath = `${pathToCheck}/Someday Maybe`;
           const cabinetPath = `${pathToCheck}/Cabinet`;
           const habitsPath = `${pathToCheck}/Habits`;
-          const horizonsPath = `${pathToCheck}/Horizons`;
+          const areasPath = `${pathToCheck}/Areas of Focus`;
+          const goalsPath = `${pathToCheck}/Goals`;
+          const visionPath = `${pathToCheck}/Vision`;
+          const purposePath = `${pathToCheck}/Purpose & Principles`;
 
           // Load files for these sections to show counts immediately
           await Promise.all([
             loadSectionFiles(somedayPath),
             loadSectionFiles(cabinetPath),
             loadSectionFiles(habitsPath),
-            loadSectionFiles(horizonsPath)
+            loadSectionFiles(areasPath),
+            loadSectionFiles(goalsPath),
+            loadSectionFiles(visionPath),
+            loadSectionFiles(purposePath)
           ]);
         }
       }
@@ -416,8 +438,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         // Title changes are handled in the content:saved event when file is renamed
       }
 
-      // Check if this is a file in Someday Maybe, Cabinet, Habits, or Horizons
-      const sectionPaths = ['/Someday Maybe/', '/Cabinet/', '/Habits/', '/Horizons/'];
+      // Check if this is a file in Someday Maybe, Cabinet, Habits, or horizon folders
+      const sectionPaths = ['/Someday Maybe/', '/Cabinet/', '/Habits/', '/Areas of Focus/', '/Goals/', '/Vision/', '/Purpose & Principles/'];
       for (const sectionPath of sectionPaths) {
         if (filePath.includes(sectionPath)) {
           // Reload the section files to get updated titles
@@ -628,8 +650,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         }
       }
 
-      // Check if this is a file in Someday Maybe, Cabinet, Habits, or Horizons that was saved
-      const sectionPaths = ['/Someday Maybe/', '/Cabinet/', '/Habits/', '/Horizons/'];
+      // Check if this is a file in Someday Maybe, Cabinet, Habits, or horizon folders that was saved
+      const sectionPaths = ['/Someday Maybe/', '/Cabinet/', '/Habits/', '/Areas of Focus/', '/Goals/', '/Vision/', '/Purpose & Principles/'];
       for (const sectionPath of sectionPaths) {
         if (filePath.includes(sectionPath) && filePath.endsWith('.md')) {
           const newTitle = metadata.title;
@@ -1103,32 +1125,38 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       <ScrollArea className="flex-1">
         <div className="p-2">
           {/* Calendar Section - Special non-collapsible section */}
-          <div
-            className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors cursor-pointer"
-            onClick={() => {
-              // Open calendar as a special tab
-              const calendarFile: MarkdownFile = {
-                id: '::calendar::',
-                name: 'Calendar',
-                path: '::calendar::',
-                size: 0,
-                last_modified: Date.now(),
-                extension: 'calendar'
-              };
-              onFileSelect(calendarFile);
-            }}
-          >
-            <div className="flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-orange-600 flex-shrink-0" />
-              <span className="font-medium text-sm">Calendar</span>
-            </div>
-          </div>
-
-          {/* GTD Sections in correct order: Calendar, Horizons, Projects, etc. */}
-          {GTD_SECTIONS.filter(s => s.id !== 'calendar').map((section) => {
+          {/* GTD Sections in correct order: Horizon folders (highest to lowest), Calendar, Projects, etc. */}
+          {GTD_SECTIONS.map((section) => {
             const isExpanded = expandedSections.includes(section.id);
             const sectionPath = `${gtdSpace?.root_path || currentFolder}/${section.path}`;
             const files = sectionFiles[sectionPath] || [];
+
+            // Handle Calendar section specially
+            if (section.id === 'calendar') {
+              return (
+                <div
+                  key={section.id}
+                  className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors cursor-pointer"
+                  onClick={() => {
+                    // Open calendar as a special tab
+                    const calendarFile: MarkdownFile = {
+                      id: '::calendar::',
+                      name: 'Calendar',
+                      path: '::calendar::',
+                      size: 0,
+                      last_modified: Date.now(),
+                      extension: 'calendar'
+                    };
+                    onFileSelect(calendarFile);
+                  }}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-orange-600 flex-shrink-0" />
+                    <span className="font-medium text-sm">Calendar</span>
+                  </div>
+                </div>
+              );
+            }
 
             // Handle Projects section specially
             if (section.id === 'projects') {
@@ -1393,7 +1421,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
               );
             }
             
-            // Regular sections (Horizons, Habits, Someday Maybe, Cabinet)
+            // Regular sections (Horizon folders, Habits, Someday Maybe, Cabinet)
             return (
               <Collapsible
                 key={`${section.id}-${sectionRefreshKey}`}
@@ -1406,7 +1434,24 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                 }}
               >
                 <div className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors">
-                  <CollapsibleTrigger className="flex-1 min-w-0">
+                  <CollapsibleTrigger 
+                    className="flex-1 min-w-0"
+                    onClick={(e) => {
+                      // For horizon folders, also open the README when clicking the header
+                      if (section.id === 'areas' || section.id === 'goals' || section.id === 'vision' || section.id === 'purpose') {
+                        // Open the README.md file
+                        const readmeFile: MarkdownFile = {
+                          id: `${sectionPath}/README.md`,
+                          name: 'README.md',
+                          path: `${sectionPath}/README.md`,
+                          size: 0,
+                          last_modified: Date.now(),
+                          extension: 'md'
+                        };
+                        onFileSelect(readmeFile);
+                      }
+                    }}
+                  >
                     <div className="flex items-center gap-1.5">
                       <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                       <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
@@ -1418,7 +1463,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                       )}
                     </div>
                   </CollapsibleTrigger>
-                  {(section.id === 'someday' || section.id === 'cabinet' || section.id === 'habits' || section.id === 'horizons') && (
+                  {(section.id === 'someday' || section.id === 'cabinet' || section.id === 'habits' || section.id === 'areas' || section.id === 'goals' || section.id === 'vision' || section.id === 'purpose') && (
                     <Button
                       onClick={(e) => {
                         e.stopPropagation();

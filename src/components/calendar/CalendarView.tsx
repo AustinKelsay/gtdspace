@@ -8,16 +8,18 @@ import React, { useState, useMemo, useEffect } from 'react';
 // import { Card } from '@/components/ui/card';  // Removed: unused
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  Calendar as CalendarIcon, 
+import {
+  Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, 
-         isSameDay, parseISO, isValid, startOfWeek, endOfWeek,
-         isSameMonth, isToday, addDays, addWeeks, addMonths,
-         isMonday, isTuesday, isWednesday,
-         isThursday, isFriday, setHours } from 'date-fns';
+import {
+  format, startOfMonth, endOfMonth, eachDayOfInterval,
+  isSameDay, parseISO, isValid, startOfWeek, endOfWeek,
+  isSameMonth, isToday, addDays, addWeeks, addMonths,
+  isMonday, isTuesday, isWednesday,
+  isThursday, isFriday, setHours
+} from 'date-fns';
 import { useCalendarData } from '@/hooks/useCalendarData';
 import type { MarkdownFile, GTDSpace } from '@/types';
 import { cn } from '@/lib/utils';
@@ -70,73 +72,73 @@ const getEventColorClass = (type: 'project' | 'action' | 'habit', eventType: 'du
  * @returns Array of dates when the habit should appear in the current view
  */
 const generateHabitDates = (
-  createdDate: string, 
-  frequency: string, 
+  createdDate: string,
+  frequency: string,
   viewStart: Date,
   viewEnd: Date
 ): Date[] => {
   const dates: Date[] = [];
   const created = parseISO(createdDate);
   if (!isValid(created)) return dates;
-  
+
   // Add a small buffer to handle edge cases at view boundaries
   const bufferDays = 1;
   const bufferedStart = addDays(viewStart, -bufferDays);
   const bufferedEnd = addDays(viewEnd, bufferDays);
-  
+
   // Calculate the first occurrence within or after the view start
   let currentDate = created;
-  
+
   // Fast-forward to the view window based on frequency
   if (created < bufferedStart) {
     const daysDiff = Math.floor((viewStart.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     switch (frequency) {
       case 'daily':
         currentDate = addDays(created, daysDiff);
         break;
-        
+
       case 'weekdays':
         // Approximate - will be adjusted in the loop
         currentDate = addDays(created, daysDiff);
         break;
-        
+
       case 'every-other-day': {
         const cycles = Math.floor(daysDiff / 2);
         currentDate = addDays(created, cycles * 2);
         break;
       }
-        
+
       case 'twice-weekly': {
         const twiceWeeklyCycles = Math.floor(daysDiff / 3);
         currentDate = addDays(created, twiceWeeklyCycles * 3);
         break;
       }
-        
+
       case 'weekly': {
         const weeks = Math.floor(daysDiff / 7);
         currentDate = addWeeks(created, weeks);
         break;
       }
-        
+
       case 'biweekly': {
         const biweeks = Math.floor(daysDiff / 14);
         currentDate = addWeeks(created, biweeks * 2);
         break;
       }
-        
+
       case 'monthly': {
         const monthsDiff = Math.floor(daysDiff / 30);
         currentDate = addMonths(created, monthsDiff);
         break;
       }
-        
+
       default:
         currentDate = addDays(created, daysDiff);
         break;
     }
   }
-  
+
   // Generate dates only within the view window (with buffer)
   while (currentDate <= bufferedEnd) {
     // Only include dates that are actually within the view (not in buffer)
@@ -145,16 +147,16 @@ const generateHabitDates = (
         case 'daily':
           dates.push(new Date(currentDate));
           break;
-          
+
         case 'weekdays':
           // Only Monday through Friday
-          if (isMonday(currentDate) || isTuesday(currentDate) || 
-              isWednesday(currentDate) || isThursday(currentDate) || 
-              isFriday(currentDate)) {
+          if (isMonday(currentDate) || isTuesday(currentDate) ||
+            isWednesday(currentDate) || isThursday(currentDate) ||
+            isFriday(currentDate)) {
             dates.push(new Date(currentDate));
           }
           break;
-          
+
         case 'every-other-day':
         case 'twice-weekly':
         case 'weekly':
@@ -165,66 +167,66 @@ const generateHabitDates = (
           break;
       }
     }
-    
+
     // Move to next occurrence
     switch (frequency) {
       case 'daily':
       case 'weekdays':
         currentDate = addDays(currentDate, 1);
         break;
-        
+
       case 'every-other-day':
         currentDate = addDays(currentDate, 2);
         break;
-        
+
       case 'twice-weekly':
         currentDate = addDays(currentDate, 3);
         break;
-        
+
       case 'weekly':
         currentDate = addWeeks(currentDate, 1);
         break;
-        
+
       case 'biweekly':
         currentDate = addWeeks(currentDate, 2);
         break;
-        
+
       case 'monthly':
         currentDate = addMonths(currentDate, 1);
         break;
-        
+
       default:
         currentDate = addDays(currentDate, 1);
         break;
     }
   }
-  
+
   return dates;
 };
 
 type ViewMode = 'month' | 'week';
 
-export const CalendarView: React.FC<CalendarViewProps> = ({ 
-  onFileSelect, 
-  spacePath, 
-  gtdSpace, 
-  files 
+export const CalendarView: React.FC<CalendarViewProps> = ({
+  onFileSelect,
+  spacePath,
+  gtdSpace,
+  files
 }) => {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [currentTime, setCurrentTime] = useState(new Date());
-  
+
   // Get all dated items from the hook
   const { items, refresh } = useCalendarData(spacePath, gtdSpace, files);
-  
+
   // Update current time every minute for the time indicator
   useEffect(() => {
     const updateTime = () => setCurrentTime(new Date());
     const interval = setInterval(updateTime, 60000); // Update every minute
     return () => clearInterval(interval);
   }, []);
-  
+
   // Auto-scroll to 7am when week view loads
   useEffect(() => {
     if (viewMode === 'week') {
@@ -235,7 +237,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         const weekGrid = document.getElementById('week-time-grid');
         if (weekGrid) {
           const scrollViewport = weekGrid.querySelector('[data-radix-scroll-area-viewport]');
-          
+
           if (scrollViewport && scrollViewport instanceof HTMLElement) {
             // Each hour row is 80px (h-20), scroll to 7am
             const targetHour = 7;
@@ -244,7 +246,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           }
         }
       };
-      
+
       // Use requestAnimationFrame to ensure DOM is painted
       requestAnimationFrame(() => {
         // Additional delay for ScrollArea to fully initialize
@@ -252,25 +254,25 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       });
     }
   }, [viewMode, currentMonth]); // Re-scroll when changing weeks or switching to week view
-  
+
   // Process items into calendar events
   const calendarEvents = useMemo(() => {
     const events: CalendarEvent[] = [];
-    
+
     // Calculate view range for habit generation based on view mode
-    const viewStart = viewMode === 'week' 
+    const viewStart = viewMode === 'week'
       ? startOfWeek(currentMonth)
       : startOfWeek(startOfMonth(currentMonth));
     const viewEnd = viewMode === 'week'
       ? endOfWeek(currentMonth)
       : endOfWeek(endOfMonth(currentMonth));
-    
+
     items.forEach(item => {
       // Handle habits separately - generate recurring events
       if (item.type === 'habit' && item.frequency && item.createdDate) {
         // Generate dates only for the current view window
         const habitDates = generateHabitDates(item.createdDate, item.frequency, viewStart, viewEnd);
-        
+
         // Extract time from focus_date if available
         let timeString: string | undefined;
         let formattedTime: string | undefined;
@@ -285,7 +287,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
           }
         }
-        
+
         // Process the generated dates (already filtered to view window)
         habitDates
           .forEach((date, _index) => {
@@ -296,7 +298,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               eventDate = new Date(date);
               eventDate.setHours(hours, minutes, 0, 0);
             }
-            
+
             events.push({
               id: `${item.path}-habit-${_index}-${date.getTime()}`,
               title: item.name,
@@ -336,7 +338,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             });
           }
         }
-        
+
         if (item.focus_date) {
           const focusDate = typeof item.focus_date === 'string' ? parseISO(item.focus_date) : item.focus_date;
           if (isValid(focusDate)) {
@@ -364,10 +366,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         }
       }
     });
-    
+
     return events;
   }, [items, currentMonth, viewMode]);
-  
+
   // Get calendar days for current view
   const calendarDays = useMemo(() => {
     if (viewMode === 'week') {
@@ -380,7 +382,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       return eachDayOfInterval({ start, end });
     }
   }, [currentMonth, viewMode]);
-  
+
   // Get hours for weekly view
   const weekHours = useMemo(() => {
     const hours = [];
@@ -389,18 +391,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     }
     return hours;
   }, []);
-  
+
   // Group events by date
   const eventsByDate = useMemo(() => {
     const grouped = new Map<string, CalendarEvent[]>();
-    
+
     calendarEvents.forEach(event => {
       const dateKey = format(event.date, 'yyyy-MM-dd');
       const existing = grouped.get(dateKey) || [];
       existing.push(event);
       grouped.set(dateKey, existing);
     });
-    
+
     // Sort events within each day
     grouped.forEach((events) => {
       events.sort((a, b) => {
@@ -413,10 +415,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         return typeOrder[a.type] - typeOrder[b.type];
       });
     });
-    
+
     return grouped;
   }, [calendarEvents]);
-  
+
   const handleEventClick = (event: CalendarEvent) => {
     const file: MarkdownFile = {
       id: event.path,
@@ -428,7 +430,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     };
     onFileSelect(file);
   };
-  
+
   const navigate = (direction: 'prev' | 'next') => {
     setCurrentMonth(prev => {
       const newDate = new Date(prev);
@@ -450,12 +452,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       }
     });
   };
-  
+
   const goToToday = () => {
     setCurrentMonth(new Date());
     setSelectedDate(new Date());
   };
-  
+
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Calendar Header */}
@@ -465,7 +467,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             <CalendarIcon className="h-5 w-5 text-muted-foreground" />
             <h1 className="text-xl font-semibold">GTD Calendar</h1>
           </div>
-          
+
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
@@ -475,13 +477,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            
+
             <h2 className="text-lg font-medium w-48 text-center">
-              {viewMode === 'week' 
+              {viewMode === 'week'
                 ? `Week of ${format(startOfWeek(currentMonth), 'MMM d, yyyy')}`
                 : format(currentMonth, 'MMMM yyyy')}
             </h2>
-            
+
             <Button
               variant="ghost"
               size="icon"
@@ -492,7 +494,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             </Button>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border bg-muted p-1">
             <Button
@@ -512,7 +514,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               Week
             </Button>
           </div>
-          
+
           <Button
             variant="outline"
             size="sm"
@@ -529,7 +531,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </Button>
         </div>
       </div>
-      
+
       {/* Calendar Grid */}
       <div className="flex-1 p-4 overflow-hidden">
         {viewMode === 'month' ? (
@@ -546,7 +548,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 </div>
               ))}
             </div>
-            
+
             {/* Calendar Days Grid */}
             <div className="grid grid-cols-7 h-[calc(100%-2.5rem)]">
               {calendarDays.map((day) => {
@@ -555,7 +557,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 const isCurrentMonth = isSameMonth(day, currentMonth);
                 const isSelectedDay = selectedDate && isSameDay(day, selectedDate);
                 const isTodayDate = isToday(day);
-                
+
                 return (
                   <div
                     key={day.toISOString()}
@@ -576,7 +578,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     )}>
                       {format(day, 'd')}
                     </div>
-                    
+
                     {/* Events */}
                     <ScrollArea className="h-[calc(100%-1.5rem)]">
                       <div className="space-y-1 px-1">
@@ -604,7 +606,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             </div>
                           </div>
                         ))}
-                        
+
                         {dayEvents.length > 4 && (
                           <div className="text-xs text-muted-foreground px-1">
                             +{dayEvents.length - 4} more
@@ -645,7 +647,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 </div>
               ))}
             </div>
-            
+
             {/* No time events row */}
             <div className="grid grid-cols-8 border-b min-h-[3rem] bg-muted/30">
               <div className="p-2 text-xs text-muted-foreground border-r">
@@ -655,7 +657,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 const dateKey = format(day, 'yyyy-MM-dd');
                 const dayEvents = eventsByDate.get(dateKey) || [];
                 const allDayEvents = dayEvents.filter(event => !event.time);
-                
+
                 return (
                   <div
                     key={`${day.toISOString()}-allday`}
@@ -686,7 +688,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 );
               })}
             </div>
-            
+
             {/* Time Grid */}
             <ScrollArea className="flex-1" id="week-time-grid">
               <div className="relative">
@@ -698,13 +700,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   // Each hour is 80px (h-20), calculate position
                   const topPosition = (currentHour * 80) + (currentMinutes / 60 * 80);
                   const todayIndex = calendarDays.findIndex(day => isToday(day));
-                  
+
                   // Only show the indicator if today is in the current week view
                   if (todayIndex >= 0 && currentHour >= 0 && currentHour < 24) {
                     // Calculate the exact left position for today's column
                     // First column is time (12.5%), then each day is 12.5%
                     const leftPosition = (todayIndex + 1) * 12.5; // +1 to skip time column
-                    
+
                     return (
                       <>
                         {/* Time label positioned close to the bar */}
@@ -720,7 +722,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             {format(now, 'h:mm a')}
                           </span>
                         </div>
-                        
+
                         {/* Line across today's column only */}
                         <div
                           className="absolute z-20 pointer-events-none"
@@ -750,13 +752,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       const dateKey = format(day, 'yyyy-MM-dd');
                       const dayEvents = eventsByDate.get(dateKey) || [];
                       const hourEvents = dayEvents.filter(event => {
-                        if (event.time) {
-                          const eventHour = parseInt(event.time.split(':')[0]);
-                          return eventHour === hour;
-                        }
-                        return false; // All-day events handled separately
+                        if (!event.time) return false; // All-day events handled separately
+                        return event.date.getHours() === hour; // use actual date hour (24h)
                       });
-                      
+
                       return (
                         <div
                           key={`${day.toISOString()}-${hour}`}
@@ -766,36 +765,61 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             isToday(day) && "bg-blue-50/30 dark:bg-blue-950/10"
                           )}
                         >
-                          <div className="space-y-1">
-                            {hourEvents.map((event) => (
-                              <div
-                                key={event.id}
-                                onClick={() => handleEventClick(event)}
-                                className={cn(
-                                  "px-2 py-1 rounded text-xs cursor-pointer",
-                                  "border transition-all hover:shadow-md hover:scale-105 hover:z-10",
-                                  getEventColorClass(event.type, event.eventType)
-                                )}
-                                title={`${event.time || ''} ${event.title}${event.projectName ? ` (${event.projectName})` : ''}`}
-                              >
-                                <div className="flex items-center gap-1">
-                                  {event.time && (
-                                    <span className="font-medium shrink-0 text-[10px]">
-                                      {event.time}
-                                    </span>
-                                  )}
-                                  <span className="truncate font-medium">
-                                    {event.title}
-                                  </span>
-                                </div>
-                                {event.projectName && (
-                                  <div className="text-[10px] opacity-75 truncate">
-                                    {event.projectName}
-                                  </div>
-                                )}
+                          {(() => {
+                            // Group events by minute within this hour for side-by-side layout
+                            const groupsByMinute = new Map<number, typeof hourEvents>();
+                            for (const ev of hourEvents) {
+                              const minute = ev.date.getMinutes();
+                              const arr = groupsByMinute.get(minute) || [];
+                              arr.push(ev);
+                              groupsByMinute.set(minute, arr);
+                            }
+                            const minuteKeys = Array.from(groupsByMinute.keys()).sort((a, b) => a - b);
+
+                            return (
+                              <div className="flex flex-col gap-1">
+                                {minuteKeys.map((min) => {
+                                  const group = groupsByMinute.get(min)!;
+                                  return (
+                                    <div
+                                      key={`${day.toISOString()}-${hour}-${min}`}
+                                      className="grid"
+                                      style={{ gridTemplateColumns: `repeat(${group.length}, minmax(0, 1fr))`, gap: '4px' }}
+                                    >
+                                      {group.map((event) => (
+                                        <div
+                                          key={event.id}
+                                          onClick={() => handleEventClick(event)}
+                                          className={cn(
+                                            "px-2 py-1 rounded text-xs cursor-pointer truncate",
+                                            "border transition-all hover:shadow-md hover:scale-105 hover:z-10",
+                                            getEventColorClass(event.type, event.eventType)
+                                          )}
+                                          title={`${event.time || ''} ${event.title}${event.projectName ? ` (${event.projectName})` : ''}`}
+                                        >
+                                          <div className="flex items-center gap-1 min-w-0">
+                                            {event.time && (
+                                              <span className="font-medium shrink-0 text-[10px]">
+                                                {event.time}
+                                              </span>
+                                            )}
+                                            <span className="truncate font-medium">
+                                              {event.title}
+                                            </span>
+                                          </div>
+                                          {event.projectName && (
+                                            <div className="text-[10px] opacity-75 truncate">
+                                              {event.projectName}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  );
+                                })}
                               </div>
-                            ))}
-                          </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}
@@ -806,7 +830,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </div>
         )}
       </div>
-      
+
       {/* Legend */}
       <div className="px-6 py-3 border-t bg-card">
         <div className="flex items-center justify-between">
@@ -824,7 +848,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               <span className="text-muted-foreground">Habit</span>
             </div>
           </div>
-          
+
           <div className="text-sm text-muted-foreground">
             {calendarEvents.length} total events
           </div>

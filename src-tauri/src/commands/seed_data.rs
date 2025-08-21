@@ -5,31 +5,12 @@
 
 use chrono::{Datelike, Local, Timelike, Weekday};
 
-/// Template content for the Horizons/Areas of Focus file
-pub const AREAS_OF_FOCUS_TEMPLATE: &str = r#"# Areas of Focus (20,000 ft)
+/// Template for Areas of Focus overview page
+pub const AREAS_OF_FOCUS_OVERVIEW_TEMPLATE: &str = r#"# Areas of Focus (20,000 ft)
 
 ## What are Areas of Focus?
 
 Areas of Focus are the ongoing roles and responsibilities you need to maintain in your life. Unlike projects which have specific outcomes and endpoints, these are areas that require continuous attention and balance.
-
-## My Areas of Focus
-
-### 🏠 Personal
-- **Health & Fitness** - Physical wellbeing, exercise, nutrition, sleep
-- **Family & Relationships** - Quality time with loved ones, maintaining connections
-- **Personal Development** - Learning, skills growth, self-improvement
-- **Finances** - Budget management, savings, investments
-
-### 💼 Professional
-- **Current Role Responsibilities** - Core job functions and deliverables
-- **Team Leadership** - Supporting and developing team members
-- **Professional Development** - Career growth, networking, skills advancement
-- **Strategic Initiatives** - Long-term improvements and innovations
-
-### 🌟 Life Management
-- **Home & Environment** - Household maintenance, organization, comfort
-- **Admin & Legal** - Documentation, compliance, administrative tasks
-- **Community & Service** - Volunteer work, community involvement
 
 ## Review Questions
 - Which areas are thriving? Which need more attention?
@@ -38,34 +19,36 @@ Areas of Focus are the ongoing roles and responsibilities you need to maintain i
 - Are there areas I should add or remove?
 
 ## Notes
-Update this list during your weekly review to ensure you're maintaining balance across all important areas of your life.
+Each area of focus has its own page in this folder. Review them during your weekly review to ensure you're maintaining balance across all important areas of your life.
 "#;
 
-/// Template content for the Horizons/Goals file
-pub const GOALS_TEMPLATE: &str = r#"# Goals (30,000 ft)
+/// Template for individual Area of Focus pages
+pub fn generate_area_of_focus_template(name: &str, description: &str) -> String {
+    format!(r#"# {}
+
+## Description
+{}
+
+## Current Projects
+<!-- List projects that support this area -->
+
+## Key Metrics
+<!-- How do I measure success in this area? -->
+
+## Review Notes
+<!-- Weekly review observations about this area -->
+
+## Resources
+<!-- Important resources, contacts, or references for this area -->
+"#, name, description)
+}
+
+/// Template for Goals overview page
+pub const GOALS_OVERVIEW_TEMPLATE: &str = r#"# Goals (30,000 ft)
 
 ## What are Goals?
 
 Goals are specific achievements you want to accomplish within the next 1-2 years. They provide direction for your projects and help you make decisions about what to focus on.
-
-## My 1-2 Year Goals
-
-### Personal Goals
-- [ ] **Health**: Reach and maintain target weight of ___
-- [ ] **Fitness**: Complete a half-marathon
-- [ ] **Learning**: Become conversationally fluent in [language]
-- [ ] **Financial**: Build emergency fund of 6 months expenses
-
-### Professional Goals
-- [ ] **Career**: Achieve promotion to [position]
-- [ ] **Skills**: Earn certification in [technology/skill]
-- [ ] **Impact**: Lead successful implementation of [major initiative]
-- [ ] **Network**: Build relationships with 20+ industry leaders
-
-### Relationship Goals
-- [ ] **Family**: Take family on international vacation
-- [ ] **Community**: Establish regular volunteer commitment
-- [ ] **Social**: Host monthly gatherings with friends
 
 ## Success Metrics
 - How will I know when I've achieved each goal?
@@ -73,45 +56,83 @@ Goals are specific achievements you want to accomplish within the next 1-2 years
 - Which goals are most important if I can't achieve all?
 
 ## Review Schedule
-Review quarterly to assess progress and adjust as needed.
+Review quarterly to assess progress and adjust as needed. Each goal has its own page in this folder for detailed tracking.
 "#;
 
-/// Template content for the Horizons/Vision file
-pub const VISION_TEMPLATE: &str = r#"# Vision (40,000 ft)
+/// Template for individual Goal pages
+pub fn generate_goal_template(name: &str, target_date: &str, category: &str) -> String {
+    format!(r#"# {}
+
+## Category
+{}
+
+## Target Date
+[!datetime:due_date:{}]
+
+## Description
+<!-- What does achieving this goal look like? -->
+
+## Why This Matters
+<!-- Personal motivation and impact -->
+
+## Success Criteria
+- [ ] <!-- Specific measurable outcome -->
+- [ ] <!-- Another success indicator -->
+
+## Milestones
+- [ ] <!-- First milestone -->
+- [ ] <!-- Second milestone -->
+- [ ] <!-- Final milestone -->
+
+## Related Projects
+<!-- Active projects supporting this goal -->
+
+## Progress Notes
+<!-- Regular updates on progress -->
+"#, name, category, target_date)
+}
+
+/// Template for Vision folder
+pub const VISION_OVERVIEW_TEMPLATE: &str = r#"# Vision (40,000 ft)
 
 ## What is Vision?
 
 Your 3-5 year vision is a vivid picture of where you want to be. It's aspirational yet achievable, providing long-term direction for your goals and decisions.
 
-## My 3-5 Year Vision
+## Review
+Review annually and adjust based on life changes and evolved perspectives.
+"#;
 
-### Life Snapshot
+/// Template for main Vision document
+pub const VISION_DOCUMENT_TEMPLATE: &str = r#"# My 3-5 Year Vision
+
+## Life Snapshot
 *Imagine it's 3-5 years from now. You're living your ideal life. Describe what you see...*
 
-**Where I'm Living:**
+### Where I'm Living
 - Location, type of home, environment
 
-**What I'm Doing Professionally:**
+### What I'm Doing Professionally
 - Role, responsibilities, impact, achievements
 
-**My Relationships:**
+### My Relationships
 - Family dynamics, friendships, community connections
 
-**My Health & Wellbeing:**
+### My Health & Wellbeing
 - Physical fitness, mental health, daily routines
 
-**My Finances:**
+### My Finances
 - Income level, assets, financial security
 
-**My Personal Growth:**
+### My Personal Growth
 - Skills mastered, experiences gained, wisdom earned
 
-### Key Themes
+## Key Themes
 - What patterns emerge from this vision?
 - What values are being expressed?
 - What changes from today are most significant?
 
-### Success Factors
+## Success Factors
 - What capabilities do I need to develop?
 - What resources will I need?
 - What obstacles might I face?
@@ -119,41 +140,73 @@ Your 3-5 year vision is a vivid picture of where you want to be. It's aspiration
 ## Affirmation
 Write a present-tense statement as if this vision is already true:
 *"I am..."*
-
-## Review
-Review annually and adjust based on life changes and evolved perspectives.
 "#;
 
-/// Template content for the Horizons/Purpose & Principles file
-pub const PURPOSE_PRINCIPLES_TEMPLATE: &str = r#"# Purpose & Principles (50,000 ft)
+/// Template for Purpose & Principles folder
+pub const PURPOSE_PRINCIPLES_OVERVIEW_TEMPLATE: &str = r#"# Purpose & Principles (50,000 ft)
 
 ## What are Purpose & Principles?
 
 Your purpose is your "why" - the ultimate reason behind everything you do. Your principles are the core values that guide your decisions and actions. Together, they form the foundation of your life's direction.
 
-## My Purpose
+## Reflection
+This is the deepest level of GTD thinking. Review annually or when facing major life decisions.
+"#;
 
-### Life Mission Statement
-*Why do I exist? What am I here to contribute?*
+/// Template for Life Mission document
+pub const LIFE_MISSION_TEMPLATE: &str = r#"# Life Mission Statement
+
+## Why I Exist
+*What am I here to contribute?*
 
 [Write your personal mission statement here]
 
-### Core Purpose Elements
-- **To Create**: What do I want to bring into existence?
-- **To Connect**: How do I want to relate to others?
-- **To Contribute**: What legacy do I want to leave?
-- **To Experience**: What do I want to learn and explore?
+## Core Purpose Elements
 
-## My Principles & Values
+### To Create
+What do I want to bring into existence?
 
-### Core Values (Top 5-7)
-1. **[Value]** - [What this means to me]
-2. **[Value]** - [What this means to me]
-3. **[Value]** - [What this means to me]
-4. **[Value]** - [What this means to me]
-5. **[Value]** - [What this means to me]
+### To Connect
+How do I want to relate to others?
 
-### Guiding Principles
+### To Contribute
+What legacy do I want to leave?
+
+### To Experience
+What do I want to learn and explore?
+
+## Integration
+- How do my current projects reflect my purpose?
+- What changes would bring more alignment?
+"#;
+
+/// Template for Core Values document
+pub const CORE_VALUES_TEMPLATE: &str = r#"# Core Values & Principles
+
+## My Core Values (Top 5-7)
+
+### 1. [Value Name]
+**What this means to me:**
+[Description]
+
+**How I express this:**
+[Examples]
+
+### 2. [Value Name]
+**What this means to me:**
+[Description]
+
+**How I express this:**
+[Examples]
+
+### 3. [Value Name]
+**What this means to me:**
+[Description]
+
+**How I express this:**
+[Examples]
+
+## Guiding Principles
 *The non-negotiable standards by which I live:*
 
 - I always...
@@ -161,33 +214,36 @@ Your purpose is your "why" - the ultimate reason behind everything you do. Your 
 - I believe...
 - I stand for...
 
-### Decision Filters
+## Decision Filters
 When facing difficult decisions, I ask:
 - Does this align with my purpose?
 - Does this honor my values?
 - Will I be proud of this choice in 10 years?
 - Does this move me toward or away from who I want to be?
 
-## Integration
-- How do my current projects reflect my purpose?
-- Where am I compromising my principles?
-- What changes would bring more alignment?
-
-## Reflection
-This is the deepest level of GTD thinking. Review annually or when facing major life decisions.
+## Where I'm Compromising
+- [Area where values aren't fully honored]
+- [Another area needing attention]
 "#;
 
 /// Template content for the Welcome to GTD Space file
 pub const WELCOME_TEMPLATE: &str = r#"# Welcome to Your GTD Space
 
-This is your personal Getting Things Done (GTD) space. The directory structure has been set up to help you organize your life:
+This is your personal Getting Things Done (GTD) space. The directory structure has been set up to help you organize your life across all horizons of focus:
 
-## 🎯 Horizons
-Your higher-level perspectives and life direction:
-- **Areas of Focus** (20,000 ft) - Ongoing responsibilities and roles
-- **Goals** (30,000 ft) - 1-2 year objectives  
-- **Vision** (40,000 ft) - 3-5 year aspirations
-- **Purpose & Principles** (50,000 ft) - Core values and life mission
+## 🎯 Horizons of Focus
+
+### 📋 Areas of Focus (20,000 ft)
+Ongoing responsibilities and roles you maintain. Each area has its own page for tracking projects and metrics.
+
+### 🎯 Goals (30,000 ft)  
+1-2 year objectives that guide your projects. Each goal has its own page with milestones and success criteria.
+
+### 🔮 Vision (40,000 ft)
+Your 3-5 year aspirational picture of where you're heading.
+
+### ⭐ Purpose & Principles (50,000 ft)
+Core values and life mission that drive everything.
 
 ## 📁 Projects
 Contains all your active projects. Each project is a folder with:

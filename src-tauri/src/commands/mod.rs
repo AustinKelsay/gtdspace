@@ -24,7 +24,7 @@
 //! - `load_settings()` - Load user settings from persistent storage
 //! - `save_settings()` - Save user settings to persistent storage
 
-use chrono::Timelike;
+use chrono::{Datelike, Timelike};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::path::PathBuf;
@@ -1919,7 +1919,10 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
     
     // GTD directories to create
     let directories = [
-        "Horizons",
+        "Areas of Focus",
+        "Goals",
+        "Vision",
+        "Purpose & Principles",
         "Projects",
         "Habits",
         "Someday Maybe",
@@ -1952,44 +1955,113 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
         
         // Create example files immediately after creating directories
         match *dir_name {
-            "Horizons" => {
-                // Create Areas of Focus file
-                let areas_file = dir_path.join("Areas of Focus.md");
-                if !areas_file.exists() {
-                    if let Err(e) = fs::write(&areas_file, AREAS_OF_FOCUS_TEMPLATE) {
-                        log::warn!("Failed to create Areas of Focus page: {}", e);
+            "Areas of Focus" => {
+                // Create overview page
+                let overview_file = dir_path.join("README.md");
+                if !overview_file.exists() {
+                    if let Err(e) = fs::write(&overview_file, AREAS_OF_FOCUS_OVERVIEW_TEMPLATE) {
+                        log::warn!("Failed to create Areas of Focus overview: {}", e);
                     } else {
-                        log::info!("Created Areas of Focus page");
+                        log::info!("Created Areas of Focus overview");
                     }
                 }
-
-                // Create Goals file
-                let goals_file = dir_path.join("Goals (1-2 Years).md");
-                if !goals_file.exists() {
-                    if let Err(e) = fs::write(&goals_file, GOALS_TEMPLATE) {
-                        log::warn!("Failed to create Goals page: {}", e);
-                    } else {
-                        log::info!("Created Goals page");
+                
+                // Create example area pages
+                let examples = [
+                    ("Health & Fitness", "Physical wellbeing, exercise, nutrition, sleep patterns, and overall vitality"),
+                    ("Family & Relationships", "Quality time with loved ones, maintaining meaningful connections, and nurturing relationships"),
+                    ("Career & Professional", "Core job responsibilities, professional development, and workplace relationships"),
+                    ("Financial", "Budget management, savings goals, investments, and financial security"),
+                ];
+                
+                for (name, description) in examples {
+                    let file_path = dir_path.join(format!("{}.md", name));
+                    if !file_path.exists() {
+                        let content = generate_area_of_focus_template(name, description);
+                        if let Err(e) = fs::write(&file_path, content) {
+                            log::warn!("Failed to create area '{}': {}", name, e);
+                        }
                     }
                 }
-
-                // Create Vision file
-                let vision_file = dir_path.join("Vision (3-5 Years).md");
+            },
+            "Goals" => {
+                // Create overview page
+                let overview_file = dir_path.join("README.md");
+                if !overview_file.exists() {
+                    if let Err(e) = fs::write(&overview_file, GOALS_OVERVIEW_TEMPLATE) {
+                        log::warn!("Failed to create Goals overview: {}", e);
+                    } else {
+                        log::info!("Created Goals overview");
+                    }
+                }
+                
+                // Create example goals
+                let next_year = chrono::Local::now().year() + 1;
+                let examples = [
+                    ("Complete Half Marathon", &format!("{}-10-15", next_year), "Health & Fitness"),
+                    ("Build Emergency Fund", &format!("{}-12-31", next_year), "Financial"),
+                    ("Learn Spanish", &format!("{}-06-30", next_year), "Personal Development"),
+                ];
+                
+                for (name, date, category) in examples {
+                    let file_path = dir_path.join(format!("{}.md", name));
+                    if !file_path.exists() {
+                        let content = generate_goal_template(name, date, category);
+                        if let Err(e) = fs::write(&file_path, content) {
+                            log::warn!("Failed to create goal '{}': {}", name, e);
+                        }
+                    }
+                }
+            },
+            "Vision" => {
+                // Create overview page
+                let overview_file = dir_path.join("README.md");
+                if !overview_file.exists() {
+                    if let Err(e) = fs::write(&overview_file, VISION_OVERVIEW_TEMPLATE) {
+                        log::warn!("Failed to create Vision overview: {}", e);
+                    } else {
+                        log::info!("Created Vision overview");
+                    }
+                }
+                
+                // Create main vision document
+                let vision_file = dir_path.join("My 3-5 Year Vision.md");
                 if !vision_file.exists() {
-                    if let Err(e) = fs::write(&vision_file, VISION_TEMPLATE) {
-                        log::warn!("Failed to create Vision page: {}", e);
+                    if let Err(e) = fs::write(&vision_file, VISION_DOCUMENT_TEMPLATE) {
+                        log::warn!("Failed to create vision document: {}", e);
                     } else {
-                        log::info!("Created Vision page");
+                        log::info!("Created vision document");
                     }
                 }
-
-                // Create Purpose & Principles file
-                let purpose_file = dir_path.join("Purpose & Principles.md");
-                if !purpose_file.exists() {
-                    if let Err(e) = fs::write(&purpose_file, PURPOSE_PRINCIPLES_TEMPLATE) {
-                        log::warn!("Failed to create Purpose & Principles page: {}", e);
+            },
+            "Purpose & Principles" => {
+                // Create overview page
+                let overview_file = dir_path.join("README.md");
+                if !overview_file.exists() {
+                    if let Err(e) = fs::write(&overview_file, PURPOSE_PRINCIPLES_OVERVIEW_TEMPLATE) {
+                        log::warn!("Failed to create Purpose & Principles overview: {}", e);
                     } else {
-                        log::info!("Created Purpose & Principles page");
+                        log::info!("Created Purpose & Principles overview");
+                    }
+                }
+                
+                // Create Life Mission document
+                let mission_file = dir_path.join("Life Mission.md");
+                if !mission_file.exists() {
+                    if let Err(e) = fs::write(&mission_file, LIFE_MISSION_TEMPLATE) {
+                        log::warn!("Failed to create life mission document: {}", e);
+                    } else {
+                        log::info!("Created life mission document");
+                    }
+                }
+                
+                // Create Core Values document
+                let values_file = dir_path.join("Core Values.md");
+                if !values_file.exists() {
+                    if let Err(e) = fs::write(&values_file, CORE_VALUES_TEMPLATE) {
+                        log::warn!("Failed to create core values document: {}", e);
+                    } else {
+                        log::info!("Created core values document");
                     }
                 }
             },
@@ -2480,33 +2552,8 @@ Adapt these templates to your specific needs. The structure helps ensure all imp
         }
     }
 
-    // Create Horizons pages
-    let horizons_dir = Path::new(&space_path).join("Horizons");
-    if horizons_dir.exists() {
-        // Create Areas of Focus file
-        let areas_file = horizons_dir.join("Areas of Focus.md");
-        if !areas_file.exists() {
-            let _ = fs::write(&areas_file, AREAS_OF_FOCUS_TEMPLATE);
-        }
-
-        // Create Goals file
-        let goals_file = horizons_dir.join("Goals (1-2 Years).md");
-        if !goals_file.exists() {
-            let _ = fs::write(&goals_file, GOALS_TEMPLATE);
-        }
-
-        // Create Vision file
-        let vision_file = horizons_dir.join("Vision (3-5 Years).md");
-        if !vision_file.exists() {
-            let _ = fs::write(&vision_file, VISION_TEMPLATE);
-        }
-
-        // Create Purpose & Principles file
-        let purpose_file = horizons_dir.join("Purpose & Principles.md");
-        if !purpose_file.exists() {
-            let _ = fs::write(&purpose_file, PURPOSE_PRINCIPLES_TEMPLATE);
-        }
-    }
+    // Note: Horizons are now created as top-level folders during initialization
+    // No need to recreate them here
 
     // Create example Habits
     let habits_dir = Path::new(&space_path).join("Habits");

@@ -32,6 +32,7 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 - **Bidirectional Title Sync** - Document titles automatically rename files/folders and vice versa
 - **Content Event System** - Real-time metadata updates across the UI
 - **GTD References System** - Link Cabinet and Someday Maybe pages to any project or action for context
+- **Hierarchical Horizon References** - Link projects to Areas/Goals, Areas to Goals/Vision/Purpose with proper GTD hierarchy
 
 ### Technical Features
 
@@ -150,6 +151,10 @@ See [GTD Implementation](docs/GTD_IMPLEMENTATION.md) for detailed usage.
 | Insert Focus DateTime | `Ctrl/Cmd+Alt+T`   |
 | Insert Created Date   | `Ctrl/Cmd+Alt+C`   |
 | Insert References     | `Ctrl/Cmd+Alt+R`   |
+| Insert Areas Ref      | `Ctrl/Cmd+Alt+A`   |
+| Insert Goals Ref      | `Ctrl/Cmd+Alt+G`   |
+| Insert Vision Ref     | `Ctrl/Cmd+Alt+V`   |
+| Insert Purpose Ref    | `Ctrl/Cmd+Alt+U`   |
 | Next Tab              | `Ctrl/Cmd+Tab`     |
 | Previous Tab          | `Ctrl/Cmd+Shift+Tab`|
 | Tab by Number         | `Ctrl/Cmd+1-9`     |

@@ -64,7 +64,7 @@ interface DatetimeBlock {
 }
 
 interface ReferencesBlock {
-  type: 'references';
+  type: 'references' | 'areas-references' | 'goals-references' | 'vision-references' | 'purpose-references';
   props: {
     references: string; // comma-separated file paths
   };
@@ -172,6 +172,11 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   
   // Pattern to match references markers in markdown (e.g., [!references:path1.md,path2.md])
   const referencesMarkerPattern = /\[!references:([^\]]*)\]/g;
+  // Pattern to match horizon references markers
+  const areasReferencesPattern = /\[!areas-references:([^\]]*)\]/g;
+  const goalsReferencesPattern = /\[!goals-references:([^\]]*)\]/g;
+  const visionReferencesPattern = /\[!vision-references:([^\]]*)\]/g;
+  const purposeReferencesPattern = /\[!purpose-references:([^\]]*)\]/g;
   // Pattern to match HTML references blocks
   const referencesHTMLPattern = /<div\s+data-references='([^']+)'\s+class="references-block">([^<]+)<\/div>/g;
   
@@ -180,7 +185,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   const singleSelectBlocks: Array<{ text: string; type: string; value: string; label?: string }> = [];
   const checkboxBlocks: Array<{ text: string; type: string; checked: boolean; label?: string }> = [];
   const dateTimeBlocks: Array<{ text: string; type: string; value: string; includeTime?: boolean; label?: string }> = [];
-  const referencesBlocks: Array<{ text: string; references: string }> = [];
+  const referencesBlocks: Array<{ text: string; references: string; blockType?: string }> = [];
   let match;
   
   // First check for new marker syntax
@@ -304,7 +309,28 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   // Check for references marker syntax
   while ((match = referencesMarkerPattern.exec(markdown)) !== null) {
     const references = match[1];
-    referencesBlocks.push({ text: match[0], references });
+    referencesBlocks.push({ text: match[0], references, blockType: 'references' });
+  }
+  
+  // Check for horizon references markers
+  while ((match = areasReferencesPattern.exec(markdown)) !== null) {
+    const references = match[1];
+    referencesBlocks.push({ text: match[0], references, blockType: 'areas-references' });
+  }
+  
+  while ((match = goalsReferencesPattern.exec(markdown)) !== null) {
+    const references = match[1];
+    referencesBlocks.push({ text: match[0], references, blockType: 'goals-references' });
+  }
+  
+  while ((match = visionReferencesPattern.exec(markdown)) !== null) {
+    const references = match[1];
+    referencesBlocks.push({ text: match[0], references, blockType: 'vision-references' });
+  }
+  
+  while ((match = purposeReferencesPattern.exec(markdown)) !== null) {
+    const references = match[1];
+    referencesBlocks.push({ text: match[0], references, blockType: 'purpose-references' });
   }
   
   // Check for references HTML syntax
@@ -459,17 +485,21 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       if (!blockReplaced) {
         for (const refBlock of referencesBlocks) {
           if (blockText.includes(refBlock.text) || 
-              blockText.includes(`[!references:`) ||
-              blockText.includes('References')) {
+              blockText.includes(`[!${refBlock.blockType || 'references'}:`) ||
+              (refBlock.blockType === 'references' && blockText.includes('References')) ||
+              (refBlock.blockType === 'areas-references' && blockText.includes('Areas')) ||
+              (refBlock.blockType === 'goals-references' && blockText.includes('Goals')) ||
+              (refBlock.blockType === 'vision-references' && blockText.includes('Vision')) ||
+              (refBlock.blockType === 'purpose-references' && blockText.includes('Purpose'))) {
             // Replace this paragraph with a references block
             processedBlocks.push({
-              type: 'references',
+              type: (refBlock.blockType || 'references') as ReferencesBlock['type'],
               props: {
                 references: refBlock.references || '',
               },
             });
             blockReplaced = true;
-            console.log('Replaced paragraph with references block:', refBlock);
+            console.log(`Replaced paragraph with ${refBlock.blockType || 'references'} block:`, refBlock);
             break; // Exit the inner loop once we've replaced the block
           }
         }

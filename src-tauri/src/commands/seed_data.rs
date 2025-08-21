@@ -29,6 +29,11 @@ pub fn generate_area_of_focus_template(name: &str, description: &str) -> String 
 ## Description
 {}
 
+## Horizon References
+[!goals-references:]
+[!vision-references:]
+[!purpose-references:]
+
 ## Current Projects
 <!-- List projects that support this area -->
 
@@ -69,6 +74,10 @@ pub fn generate_goal_template(name: &str, target_date: &str, category: &str) -> 
 ## Target Date
 [!datetime:due_date:{}]
 
+## Horizon References
+[!vision-references:]
+[!purpose-references:]
+
 ## Description
 <!-- What does achieving this goal look like? -->
 
@@ -105,6 +114,9 @@ Review annually and adjust based on life changes and evolved perspectives.
 
 /// Template for main Vision document
 pub const VISION_DOCUMENT_TEMPLATE: &str = r#"# My 3-5 Year Vision
+
+## Horizon References
+[!purpose-references:]
 
 ## Life Snapshot
 *Imagine it's 3-5 years from now. You're living your ideal life. Describe what you see...*
@@ -464,6 +476,10 @@ pub fn generate_project_readme(name: &str, description: &str, due_date: Option<S
 
 ## Created
 [!datetime:created_date:{}]
+
+## Horizon References
+[!areas-references:]
+[!goals-references:]
 
 ## References
 [!references:]

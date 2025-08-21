@@ -1436,7 +1436,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                 <div className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors">
                   <CollapsibleTrigger 
                     className="flex-1 min-w-0"
-                    onClick={(e) => {
+                    onClick={() => {
                       // For horizon folders, also open the README when clicking the header
                       if (section.id === 'areas' || section.id === 'goals' || section.id === 'vision' || section.id === 'purpose') {
                         // Open the README.md file

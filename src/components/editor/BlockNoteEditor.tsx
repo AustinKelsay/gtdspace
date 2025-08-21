@@ -15,11 +15,18 @@ import { SingleSelectBlock } from './blocks/SingleSelectBlock';
 import { CheckboxBlock } from './blocks/CheckboxBlock';
 import { DateTimeSelectBlock } from './blocks/DateTimeSelectBlock';
 import { ReferencesBlock } from './blocks/ReferencesBlock';
+import { 
+  AreasReferencesBlock,
+  GoalsReferencesBlock,
+  VisionReferencesBlock,
+  PurposeReferencesBlock
+} from './blocks/HorizonReferencesBlock';
 import { postProcessBlockNoteBlocks } from '@/utils/blocknote-preprocessing';
 import { useMultiSelectInsertion } from '@/hooks/useMultiSelectInsertion';
 import { useSingleSelectInsertion } from '@/hooks/useSingleSelectInsertion';
 import { useDateTimeInsertion } from '@/hooks/useDateTimeInsertion';
 import { useReferencesInsertion } from '@/hooks/useReferencesInsertion';
+import { useHorizonReferencesInsertion } from '@/hooks/useHorizonReferencesInsertion';
 import './blocknote-theme.css';
 
 export interface BlockNoteEditorProps {
@@ -66,6 +73,10 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       checkbox: CheckboxBlock,
       datetime: DateTimeSelectBlock,
       references: ReferencesBlock,
+      'areas-references': AreasReferencesBlock,
+      'goals-references': GoalsReferencesBlock,
+      'vision-references': VisionReferencesBlock,
+      'purpose-references': PurposeReferencesBlock,
     },
   });
 
@@ -86,6 +97,9 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
 
   // Add references insertion capabilities
   useReferencesInsertion(editor);
+  
+  // Add horizon references insertion capabilities
+  useHorizonReferencesInsertion(editor);
 
   // Track if initial content has been loaded
   const initialContentLoaded = useRef(false);

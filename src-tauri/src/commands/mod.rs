@@ -1799,6 +1799,227 @@ async fn handle_file_event(app: &AppHandle, path: &std::path::Path, _kind: &Debo
     }
 }
 
+/// Find files that reference a target file (reverse relationships)
+///
+/// Searches through GTD horizon files to find which ones reference the target file.
+/// This is used to build downward-looking lists in the GTD hierarchy.
+///
+/// # Arguments
+///
+/// * `target_path` - Path to the file to find references to
+/// * `space_path` - Root path of the GTD space
+/// * `filter_type` - Type of files to return ("projects", "areas", "goals", "visions")
+///
+/// # Returns
+///
+/// List of files that reference the target file
+#[tauri::command]
+pub fn find_reverse_relationships(
+    target_path: String,
+    space_path: String,
+    filter_type: String
+) -> Result<Vec<ReverseRelationship>, String> {
+    log::info!("=== find_reverse_relationships START ===");
+    log::info!("Target path: {}", target_path);
+    log::info!("Space path: {}", space_path);
+    log::info!("Filter type: {}", filter_type);
+    
+    let mut relationships = Vec::new();
+    let space_root = Path::new(&space_path);
+    let target = Path::new(&target_path);
+    
+    // Normalize the target path for comparison - handle both absolute and relative paths
+    let target_normalized = target_path.replace('\\', "/");
+    log::info!("Target normalized: {}", target_normalized);
+    
+    // Determine which directories to search based on filter type
+    let search_dirs = match filter_type.as_str() {
+        "projects" => vec!["Projects"],
+        "areas" => vec!["Areas of Focus"],
+        "goals" => vec!["Goals"],
+        "visions" => vec!["Vision"],
+        _ => vec!["Projects", "Areas of Focus", "Goals", "Vision"],
+    };
+    
+    // Search through each directory
+    for dir_name in search_dirs {
+        let dir_path = space_root.join(dir_name);
+        if !dir_path.exists() {
+            continue;
+        }
+        
+        // For Projects directory, we need to look inside each project folder for README.md
+        let mut files_to_check = Vec::new();
+        
+        if dir_name == "Projects" {
+            log::info!("Searching in Projects directory: {}", dir_path.display());
+            // Look for README.md files inside project folders
+            if let Ok(entries) = fs::read_dir(&dir_path) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        // This is a project folder, look for README.md inside
+                        let readme_path = path.join("README.md");
+                        if readme_path.exists() {
+                            log::info!("Found project README: {}", readme_path.display());
+                            files_to_check.push(readme_path);
+                        }
+                    } else if path.extension().and_then(|s| s.to_str()) == Some("md") {
+                        // Also check standalone .md files in Projects
+                        log::info!("Found standalone project file: {}", path.display());
+                        files_to_check.push(path);
+                    }
+                }
+            } else {
+                log::warn!("Could not read Projects directory");
+            }
+        } else {
+            // For other directories, just look for .md files at the root level
+            if let Ok(entries) = fs::read_dir(&dir_path) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|s| s.to_str()) == Some("md") {
+                        files_to_check.push(path);
+                    }
+                }
+            }
+        }
+        
+        // Now check each file for references
+        for path in files_to_check {
+            // Skip the target file itself
+            if path == target {
+                continue;
+            }
+            
+            // Read file content
+            if let Ok(content) = fs::read_to_string(&path) {
+                    // Normalize content paths for comparison
+                    let content_normalized = content.replace('\\', "/");
+                    
+                    // Log what we're checking
+                    log::info!("Checking file: {}", path.display());
+                    
+                    // Log any horizon references found
+                    for ref_type in &["areas-references", "goals-references", "vision-references", "purpose-references"] {
+                        let marker = format!("[!{}:", ref_type);
+                        if content.contains(&marker) {
+                            log::info!("File contains {} block", ref_type);
+                            // Extract the reference to see what it contains
+                            if let Some(start) = content.find(&marker) {
+                                let after_start = &content[start + marker.len()..];
+                                if let Some(end) = after_start.find(']') {
+                                    let refs = &after_start[..end];
+                                    log::info!("  {} content: {}", ref_type, refs);
+                                    log::info!("  Comparing with target: {}", target_normalized);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Check for references in various formats
+                    // Determine what type of reference to look for based on the target path
+                    let has_reference = if filter_type == "projects" && dir_name == "Projects" {
+                        // Projects can reference areas, goals, vision, or purpose
+                        // Check all possible reference types
+                        let found = 
+                            content_normalized.contains(&format!("[!areas-references:{}", target_normalized)) ||
+                            content_normalized.contains(&format!("[!goals-references:{}", target_normalized)) ||
+                            content_normalized.contains(&format!("[!vision-references:{}", target_normalized)) ||
+                            content_normalized.contains(&format!("[!purpose-references:{}", target_normalized));
+                        
+                        if found {
+                            log::info!("Found horizon reference match in project!");
+                        }
+                        found
+                    } else {
+                        // For other types, check all reference patterns
+                        content_normalized.contains(&format!("[!areas-references:{}", target_normalized)) ||
+                        content_normalized.contains(&format!("[!goals-references:{}", target_normalized)) ||
+                        content_normalized.contains(&format!("[!vision-references:{}", target_normalized)) ||
+                        content_normalized.contains(&format!("[!purpose-references:{}", target_normalized)) ||
+                        content_normalized.contains(&format!("[!references:{}", target_normalized))
+                    };
+                    
+                    if has_reference {
+                        log::info!("Found reference in file: {}", path.display());
+                        
+                        // Extract all references from this file
+                        let mut references = Vec::new();
+                        
+                        // Extract references using regex
+                        let reference_patterns = [
+                            r"\[!areas-references:([^\]]*)\]",
+                            r"\[!goals-references:([^\]]*)\]",
+                            r"\[!vision-references:([^\]]*)\]",
+                            r"\[!purpose-references:([^\]]*)\]",
+                            r"\[!references:([^\]]*)\]",
+                        ];
+                        
+                        for pattern in &reference_patterns {
+                            if let Ok(re) = Regex::new(pattern) {
+                                for cap in re.captures_iter(&content) {
+                                    if let Some(refs) = cap.get(1) {
+                                        for ref_path in refs.as_str().split(',') {
+                                            let trimmed = ref_path.trim().replace('\\', "/");
+                                            if !trimmed.is_empty() && trimmed == target_normalized {
+                                                references.push(trimmed);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        let file_type = match dir_name {
+                            "Projects" => "project",
+                            "Areas of Focus" => "area",
+                            "Goals" => "goal",
+                            "Vision" => "vision",
+                            _ => "unknown",
+                        };
+                        
+                        // For projects, use the parent folder name instead of "README.md"
+                        let display_name = if dir_name == "Projects" && path.file_name().and_then(|n| n.to_str()) == Some("README.md") {
+                            path.parent()
+                                .and_then(|p| p.file_name())
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("Unknown")
+                                .to_string()
+                        } else {
+                            path.file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("Unknown")
+                                .to_string()
+                        };
+                        
+                        relationships.push(ReverseRelationship {
+                            file_path: path.to_string_lossy().to_string(),
+                            file_name: display_name,
+                            file_type: file_type.to_string(),
+                            references,
+                        });
+                    }
+            }
+        }
+    }
+    
+    log::info!("=== find_reverse_relationships END ===");
+    log::info!("Found {} files referencing the target", relationships.len());
+    for rel in &relationships {
+        log::info!("  - {} ({})", rel.file_name, rel.file_type);
+    }
+    Ok(relationships)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReverseRelationship {
+    pub file_path: String,
+    pub file_name: String,
+    pub file_type: String,
+    pub references: Vec<String>,
+}
+
 /// Replace text in a file with new content
 ///
 /// Replaces all occurrences of a search term with a replacement term in the specified file.

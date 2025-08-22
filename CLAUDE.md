@@ -175,6 +175,17 @@ interface HabitRecord {
 [!purpose-references:path1.md,path2.md]  # Links to Purpose & Principles
 ```
 
+**Horizon List Blocks** (Dynamic downward-looking lists):
+```markdown
+[!projects-list]  # Lists all projects that reference this page
+[!areas-list]  # Lists all areas that reference this page
+[!goals-list]  # Lists all goals that reference this page
+[!visions-list]  # Lists all visions that reference this page
+[!projects-areas-list]  # Combined list of projects and areas
+[!goals-areas-list]  # Combined list of goals and areas
+[!visions-goals-list]  # Combined list of visions and goals
+```
+
 ### Content Processing Pipeline
 1. **Load**: Markdown → `preprocessMarkdownForBlockNote()` → `postProcessBlockNoteBlocks()` → Interactive blocks
 2. **Save**: BlockNote blocks → `toExternalHTML()` → Markdown with field markers
@@ -188,6 +199,7 @@ interface HabitRecord {
 - **References**: `Cmd/Ctrl+Alt+R` (Insert References block)
 - **Horizon References**: `Cmd/Ctrl+Alt+A` (Areas), `+G` (Goals), `+V` (Vision), `+U` (Purpose)
 - **Multi Select**: `Cmd/Ctrl+Shift+S/E/P` (legacy)
+- **Lists**: Available via slash commands in the editor (e.g., `/projects-list`)
 
 ## Critical Patterns & Constraints
 
@@ -250,7 +262,7 @@ interface HabitRecord {
 `read_file`, `save_file`, `create_file`, `delete_file`, `delete_folder`, `rename_file`, `copy_file`, `move_file`, `list_markdown_files`
 
 **GTD Operations:**
-`initialize_gtd_space`, `create_gtd_project`, `create_gtd_action`, `create_gtd_habit`, `update_habit_status`, `check_and_reset_habits`, `list_gtd_projects`, `seed_example_gtd_content`, `rename_gtd_project`, `rename_gtd_action`, `list_project_actions`
+`initialize_gtd_space`, `create_gtd_project`, `create_gtd_action`, `create_gtd_habit`, `update_habit_status`, `check_and_reset_habits`, `list_gtd_projects`, `seed_example_gtd_content`, `rename_gtd_project`, `rename_gtd_action`, `list_project_actions`, `find_reverse_relationships`
 
 **System:**
 `select_folder`, `check_permissions`, `get_app_version`, `get_default_gtd_space_path`, `open_folder_in_explorer`, `open_file_location`, `check_directory_exists`, `create_directory`, `initialize_default_gtd_space`
@@ -309,6 +321,7 @@ interface HabitRecord {
 - **Options Menu**: Three-dot menu in sidebar for delete and other file operations
 - **References System**: Interactive UI for linking Cabinet and Someday Maybe pages to actions/projects
 - **Horizon References**: Hierarchical reference system linking projects to areas/goals, areas to goals/vision/purpose, etc.
+- **Horizon Lists**: Dynamic lists showing items from lower horizons that reference the current page (e.g., projects in an Area of Focus)
 
 ### Technical Improvements
 - **IPC Fix**: Rust commands are synchronous for Tauri 2.0 compatibility
@@ -354,6 +367,7 @@ interface HabitRecord {
 - **Calendar View** aggregates data from all GTD sections in parallel
 - **ReferencesBlock** provides Cabinet/Someday linking with dialog-based selection
 - **HorizonReferencesBlock** provides hierarchical GTD horizon linking (areas, goals, vision, purpose)
+- **HorizonListBlock** provides dynamic lists of items that reference the current page
 
 ## Testing Status
 

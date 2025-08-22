@@ -56,7 +56,8 @@
   font-family: inherit;
   height: 100%;
   overflow-y: auto !important;
-  overflow-x: hidden !important;
+  /* Allow side menu/hover effects to overflow horizontally */
+  overflow-x: visible !important;
 }
 
 .bn-container {
@@ -69,7 +70,8 @@
 /* Ensure the BlockNote editor wrapper allows scrolling */
 .bn-editor-wrapper {
   height: 100%;
-  overflow: hidden;
+  /* Do not clip BlockNote floating UI on the left gutter */
+  overflow: visible;
 }
 
 /* Make sure the content area is scrollable */
@@ -185,7 +187,8 @@
   padding: 0;
   font-size: 0.875rem;
   color: rgb(var(--foreground));
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
+    "Courier New", monospace;
 }
 
 .dark .bn-block-content pre {
@@ -199,7 +202,8 @@
   border-radius: 0.25rem;
   font-size: 0.875em;
   color: rgb(var(--foreground));
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
+    "Courier New", monospace;
   border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
@@ -323,7 +327,7 @@
   .bn-block-content table {
     font-size: 0.875rem;
   }
-  
+
   .bn-block-content th,
   .bn-block-content td {
     padding: 0.5rem;
@@ -446,6 +450,40 @@
   outline: none;
 }
 
+/*
+Fix: selection/hover glow clipping on the left side
+
+Context: BlockNote node views (e.g., custom React renderers) get an outline when
+selected via ProseMirror's `ProseMirror-selectednode` class. Outlines render
+outside the element's box and can be clipped by parents that set
+`overflow: hidden` (e.g., Radix ScrollArea wrappers). We pull the outline
+inward with a negative outline-offset so it renders inside the element and is
+no longer clipped. Additionally, ensure node wrappers don't hide child effects.
+*/
+.bn-container .ProseMirror-selectednode {
+  /* Pull outline further inside so it doesn't sit under the left side menu */
+  outline-offset: -6px;
+}
+
+/* Raise selected custom node views above the side menu so the left border isn't obscured */
+.bn-react-node-view-renderer.ProseMirror-selectednode {
+  position: relative;
+  z-index: 5;
+}
+
+/* Ensure BlockNote blocks and node views don't clip child shadows/outlines */
+.bn-block-outer,
+.bn-block,
+.bn-block-content,
+.bn-react-node-view-renderer {
+  overflow: visible;
+}
+
+/* Provide a tiny inset so inner content doesn't touch the left gutter */
+.bn-react-node-view-renderer .bn-block-content {
+  padding-left: 0.25rem;
+}
+
 /* Remove any default shadows */
 .bn-container * {
   box-shadow: none !important;
@@ -528,7 +566,8 @@
 .bn-code-block code {
   background: transparent !important;
   color: rgb(var(--foreground));
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
+    "Courier New", monospace;
   font-size: 0.875rem;
   line-height: 1.5;
   white-space: pre;

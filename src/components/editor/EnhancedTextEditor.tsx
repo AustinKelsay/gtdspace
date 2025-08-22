@@ -28,11 +28,11 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
   filePath,
 }) => {
   // === LOCAL STATE ===
-  
+
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   // === EFFECTS ===
-  
+
   /**
    * Detect system theme
    */
@@ -58,11 +58,11 @@ export const EnhancedTextEditor: React.FC<TextEditorProps> = ({
   }, []);
 
   // === MAIN LAYOUT ===
-  
+
   return (
     <Card className={`flex flex-col h-full ${className}`}>
       {/* BlockNote Editor */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="flex-1 overflow-y-auto overflow-x-visible">
         <BlockNoteEditor
           content={content}
           onChange={onChange}

@@ -70,6 +70,15 @@ interface ReferencesBlock {
   };
 }
 
+interface ListBlock {
+  type: 'projects-list' | 'areas-list' | 'goals-list' | 'visions-list' | 
+        'projects-areas-list' | 'goals-areas-list' | 'visions-goals-list';
+  props: {
+    listType: string;
+    currentPath?: string;
+  };
+}
+
 type ProcessedBlock =
   | UnknownBlock
   | ParagraphBlock
@@ -77,7 +86,8 @@ type ProcessedBlock =
   | SingleselectBlock
   | CheckboxBlock
   | DatetimeBlock
-  | ReferencesBlock;
+  | ReferencesBlock
+  | ListBlock;
 
 function isParagraphBlock(block: UnknownBlock): block is ParagraphBlock {
   return block.type === 'paragraph';
@@ -177,6 +187,14 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   const goalsReferencesPattern = /\[!goals-references:([^\]]*)\]/g;
   const visionReferencesPattern = /\[!vision-references:([^\]]*)\]/g;
   const purposeReferencesPattern = /\[!purpose-references:([^\]]*)\]/g;
+  // Pattern to match list markers in markdown (e.g., [!projects-list])
+  const projectsListPattern = /\[!projects-list\]/g;
+  const areasListPattern = /\[!areas-list\]/g;
+  const goalsListPattern = /\[!goals-list\]/g;
+  const visionsListPattern = /\[!visions-list\]/g;
+  const projectsAreasListPattern = /\[!projects-areas-list\]/g;
+  const goalsAreasListPattern = /\[!goals-areas-list\]/g;
+  const visionsGoalsListPattern = /\[!visions-goals-list\]/g;
   // Pattern to match HTML references blocks
   const referencesHTMLPattern = /<div\s+data-references='([^']+)'\s+class="references-block">([^<]+)<\/div>/g;
   
@@ -331,6 +349,37 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   while ((match = purposeReferencesPattern.exec(markdown)) !== null) {
     const references = match[1];
     referencesBlocks.push({ text: match[0], references, blockType: 'purpose-references' });
+  }
+  
+  // Check for list markers
+  const listBlocks: Array<{ text: string; listType: string; blockType: string }> = [];
+  
+  while ((match = projectsListPattern.exec(markdown)) !== null) {
+    listBlocks.push({ text: match[0], listType: 'projects', blockType: 'projects-list' });
+  }
+  
+  while ((match = areasListPattern.exec(markdown)) !== null) {
+    listBlocks.push({ text: match[0], listType: 'areas', blockType: 'areas-list' });
+  }
+  
+  while ((match = goalsListPattern.exec(markdown)) !== null) {
+    listBlocks.push({ text: match[0], listType: 'goals', blockType: 'goals-list' });
+  }
+  
+  while ((match = visionsListPattern.exec(markdown)) !== null) {
+    listBlocks.push({ text: match[0], listType: 'visions', blockType: 'visions-list' });
+  }
+  
+  while ((match = projectsAreasListPattern.exec(markdown)) !== null) {
+    listBlocks.push({ text: match[0], listType: 'projects', blockType: 'projects-areas-list' });
+  }
+  
+  while ((match = goalsAreasListPattern.exec(markdown)) !== null) {
+    listBlocks.push({ text: match[0], listType: 'goals', blockType: 'goals-areas-list' });
+  }
+  
+  while ((match = visionsGoalsListPattern.exec(markdown)) !== null) {
+    listBlocks.push({ text: match[0], listType: 'visions', blockType: 'visions-goals-list' });
   }
   
   // Check for references HTML syntax
@@ -500,6 +549,29 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
             });
             blockReplaced = true;
             console.log(`Replaced paragraph with ${refBlock.blockType || 'references'} block:`, refBlock);
+            break; // Exit the inner loop once we've replaced the block
+          }
+        }
+      }
+      
+      // Check if this paragraph contains our list markers
+      if (!blockReplaced) {
+        for (const listBlock of listBlocks) {
+          if (blockText.includes(listBlock.text) || 
+              blockText.includes(`[!${listBlock.blockType}]`) ||
+              (listBlock.blockType === 'projects-list' && blockText.includes('Active Projects')) ||
+              (listBlock.blockType === 'areas-list' && blockText.includes('Related Areas')) ||
+              (listBlock.blockType === 'goals-list' && blockText.includes('Related Goals')) ||
+              (listBlock.blockType === 'visions-list' && blockText.includes('Related Visions'))) {
+            // Replace this paragraph with a list block
+            processedBlocks.push({
+              type: listBlock.blockType as ListBlock['type'],
+              props: {
+                listType: listBlock.listType,
+              },
+            });
+            blockReplaced = true;
+            console.log(`Replaced paragraph with ${listBlock.blockType} block:`, listBlock);
             break; // Exit the inner loop once we've replaced the block
           }
         }

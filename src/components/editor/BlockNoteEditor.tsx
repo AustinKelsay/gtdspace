@@ -21,12 +21,22 @@ import {
   VisionReferencesBlock,
   PurposeReferencesBlock
 } from './blocks/HorizonReferencesBlock';
+import {
+  ProjectsListBlock,
+  AreasListBlock,
+  GoalsListBlock,
+  VisionsListBlock,
+  ProjectsAndAreasListBlock,
+  GoalsAndAreasListBlock,
+  VisionsAndGoalsListBlock
+} from './blocks/HorizonListBlock';
 import { postProcessBlockNoteBlocks } from '@/utils/blocknote-preprocessing';
 import { useMultiSelectInsertion } from '@/hooks/useMultiSelectInsertion';
 import { useSingleSelectInsertion } from '@/hooks/useSingleSelectInsertion';
 import { useDateTimeInsertion } from '@/hooks/useDateTimeInsertion';
 import { useReferencesInsertion } from '@/hooks/useReferencesInsertion';
 import { useHorizonReferencesInsertion } from '@/hooks/useHorizonReferencesInsertion';
+import { useHorizonListInsertion } from '@/hooks/useHorizonListInsertion';
 import './blocknote-theme.css';
 
 export interface BlockNoteEditorProps {
@@ -64,7 +74,13 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   className = '',
   filePath,
 }) => {
-  // Create custom schema with multiselect, singleselect, checkbox, datetime, and references blocks
+  // Store the current file path in a way that list blocks can access it
+  React.useEffect(() => {
+    if (filePath) {
+      window.localStorage.setItem('blocknote-current-file', filePath);
+    }
+  }, [filePath]);
+  // Create custom schema with multiselect, singleselect, checkbox, datetime, references, and list blocks
   const schema = BlockNoteSchema.create({
     blockSpecs: {
       ...defaultBlockSpecs,
@@ -77,6 +93,13 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       'goals-references': GoalsReferencesBlock,
       'vision-references': VisionReferencesBlock,
       'purpose-references': PurposeReferencesBlock,
+      'projects-list': ProjectsListBlock,
+      'areas-list': AreasListBlock,
+      'goals-list': GoalsListBlock,
+      'visions-list': VisionsListBlock,
+      'projects-areas-list': ProjectsAndAreasListBlock,
+      'goals-areas-list': GoalsAndAreasListBlock,
+      'visions-goals-list': VisionsAndGoalsListBlock,
     },
   });
 
@@ -100,6 +123,10 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   
   // Add horizon references insertion capabilities
   useHorizonReferencesInsertion(editor);
+  
+  // Add horizon list insertion capabilities
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  useHorizonListInsertion(editor as any);
 
   // Track if initial content has been loaded
   const initialContentLoaded = useRef(false);

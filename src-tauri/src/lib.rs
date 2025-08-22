@@ -50,6 +50,7 @@ pub fn run() {
             commands::copy_file,
             commands::move_file,
             commands::replace_in_file,
+            commands::find_reverse_relationships,
             commands::initialize_gtd_space,
             commands::seed_example_gtd_content,
             commands::create_gtd_project,

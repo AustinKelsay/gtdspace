@@ -43,7 +43,7 @@ pub fn generate_area_of_focus_template_with_refs(
 [!purpose-references:{}]
 
 ## Active Projects
-<!-- Projects that maintain or improve this area -->
+[!projects-list]
 
 ## References
 [!references:]
@@ -85,8 +85,8 @@ pub fn generate_goal_template_with_refs(
 
 [!purpose-references:{}]
 
-## Current Projects
-<!-- Projects actively moving this forward -->
+## Related Items
+[!projects-areas-list]
 
 ## References
 [!references:]
@@ -130,6 +130,9 @@ I have [financial state] allowing me to [possibilities]. My income comes from [s
 ### Growth & Learning
 I've mastered [skills/knowledge]. I'm exploring [new areas]. I contribute by [teaching/sharing].
 
+## Supporting Elements
+[!goals-areas-list]
+
 ## References
 [!references:]
 "#, purpose_refs)
@@ -171,6 +174,9 @@ pub const LIFE_MISSION_TEMPLATE: &str = r#"# Life Mission
 - In community, I...
 - For myself, I...
 
+## Supported By
+[!visions-goals-list]
+
 ## References
 [!references:]
 "#;
@@ -195,6 +201,9 @@ pub const CORE_VALUES_TEMPLATE: &str = r#"# Core Values & Principles
 ✓ **I believe**: Everyone has something valuable to teach
 
 ✓ **I stand for**: Making a positive difference
+
+## Expressed Through
+[!visions-goals-list]
 
 ## Decision Filter
 

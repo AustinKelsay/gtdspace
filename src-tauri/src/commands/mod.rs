@@ -1966,23 +1966,9 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                     }
                 }
                 
-                // Create example area pages
-                let examples = [
-                    ("Health & Fitness", "Physical wellbeing, exercise, nutrition, sleep patterns, and overall vitality"),
-                    ("Family & Relationships", "Quality time with loved ones, maintaining meaningful connections, and nurturing relationships"),
-                    ("Career & Professional", "Core job responsibilities, professional development, and workplace relationships"),
-                    ("Financial", "Budget management, savings goals, investments, and financial security"),
-                ];
-                
-                for (name, description) in examples {
-                    let file_path = dir_path.join(format!("{}.md", name));
-                    if !file_path.exists() {
-                        let content = generate_area_of_focus_template(name, description);
-                        if let Err(e) = fs::write(&file_path, content) {
-                            log::warn!("Failed to create area '{}': {}", name, e);
-                        }
-                    }
-                }
+                // Create area AFTER we know Goals will exist
+                // We'll create the actual area content later after Goals are created
+                // For now, just note that this directory exists
             },
             "Goals" => {
                 // Create overview page
@@ -1995,21 +1981,31 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                     }
                 }
                 
-                // Create example goals
+                // Create MINIMAL goal with MAXIMUM relationships
                 let next_year = chrono::Local::now().year() + 1;
-                let examples = [
-                    ("Complete Half Marathon", &format!("{}-10-15", next_year), "Health & Fitness"),
-                    ("Build Emergency Fund", &format!("{}-12-31", next_year), "Financial"),
-                    ("Learn Spanish", &format!("{}-06-30", next_year), "Personal Development"),
-                ];
+                let space_path_str = root_path.to_string_lossy();
+                let vision_base = format!("{}/Vision", space_path_str);
+                let purpose_base = format!("{}/Purpose & Principles", space_path_str);
                 
-                for (name, date, category) in examples {
-                    let file_path = dir_path.join(format!("{}.md", name));
-                    if !file_path.exists() {
-                        let content = generate_goal_template(name, date, category);
-                        if let Err(e) = fs::write(&file_path, content) {
-                            log::warn!("Failed to create goal '{}': {}", name, e);
-                        }
+                // Goals reference → Vision AND both Purpose docs
+                let vision_ref = format!("{}/My 3-5 Year Vision.md", vision_base);
+                let life_mission_ref = format!("{}/Life Mission.md", purpose_base);
+                let core_values_ref = format!("{}/Core Values.md", purpose_base);
+                let purpose_refs = format!("{},{}", life_mission_ref, core_values_ref);
+                
+                // Just ONE goal with ALL possible references
+                let goal_name = "Build Financial Freedom";
+                let file_path = dir_path.join(format!("{}.md", goal_name));
+                if !file_path.exists() {
+                    let content = generate_goal_template_with_refs(
+                        goal_name,
+                        &format!("{}-12-31", next_year),
+                        "Generate $10K/month passive income through multiple revenue streams",
+                        &vision_ref,     // References Vision
+                        &purpose_refs    // References BOTH Purpose documents
+                    );
+                    if let Err(e) = fs::write(&file_path, content) {
+                        log::warn!("Failed to create goal '{}': {}", goal_name, e);
                     }
                 }
             },
@@ -2024,13 +2020,20 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                     }
                 }
                 
-                // Create main vision document
+                // Create vision document with references to Purpose
                 let vision_file = dir_path.join("My 3-5 Year Vision.md");
                 if !vision_file.exists() {
-                    if let Err(e) = fs::write(&vision_file, VISION_DOCUMENT_TEMPLATE) {
+                    let space_path_str = root_path.to_string_lossy();
+                    let purpose_base = format!("{}/Purpose & Principles", space_path_str);
+                    let life_mission_ref = format!("{}/Life Mission.md", purpose_base);
+                    let core_values_ref = format!("{}/Core Values.md", purpose_base);
+                    let purpose_refs = format!("{},{}", life_mission_ref, core_values_ref);
+                    
+                    let content = generate_vision_document_template_with_refs(&purpose_refs);
+                    if let Err(e) = fs::write(&vision_file, content) {
                         log::warn!("Failed to create vision document: {}", e);
                     } else {
-                        log::info!("Created vision document");
+                        log::info!("Created vision document with Purpose references");
                     }
                 }
             },
@@ -2089,6 +2092,42 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
         }
     }
 
+    // NOW create the Area of Focus with all references (after Goals, Vision, Purpose exist)
+    let areas_dir = root_path.join("Areas of Focus");
+    if areas_dir.exists() {
+        let goals_base = root_path.join("Goals");
+        let vision_base = root_path.join("Vision");
+        let purpose_base = root_path.join("Purpose & Principles");
+        
+        // Build all reference paths
+        let goal_ref = format!("{}/Build Financial Freedom.md", goals_base.to_string_lossy());
+        let vision_ref = format!("{}/My 3-5 Year Vision.md", vision_base.to_string_lossy());
+        let life_mission_ref = format!("{}/Life Mission.md", purpose_base.to_string_lossy());
+        let core_values_ref = format!("{}/Core Values.md", purpose_base.to_string_lossy());
+        
+        // Combine Purpose references
+        let purpose_refs = format!("{},{}", life_mission_ref, core_values_ref);
+        
+        // Create ONE area with ALL references
+        let area_name = "Professional Excellence";
+        let area_file = areas_dir.join(format!("{}.md", area_name));
+        if !area_file.exists() {
+            let content = generate_area_of_focus_template_with_refs(
+                area_name,
+                "Delivering exceptional value through my work",
+                "- Meet all commitments\n- Continuous improvement\n- Build strong relationships",
+                &goal_ref,      // References Goal
+                &vision_ref,    // References Vision  
+                &purpose_refs   // References BOTH Purpose docs
+            );
+            if let Err(e) = fs::write(&area_file, content) {
+                log::warn!("Failed to create area '{}': {}", area_name, e);
+            } else {
+                log::info!("Created area with full references: {}", area_name);
+            }
+        }
+    }
+    
     // Create a welcome file in the root directory
     let welcome_path = root_path.join("Welcome to GTD Space.md");
     if !welcome_path.exists() {
@@ -2178,423 +2217,108 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         }
     }
 
-    // Project 1: Getting Started (with due date 3 days from now at 5 PM)
-    let three_days_deadline = (chrono::Local::now() + chrono::Duration::days(3))
-        .with_hour(17)
-        .unwrap()
-        .with_minute(0)
-        .unwrap()
-        .with_second(0)
-        .unwrap();
+    // MINIMAL Project with MAXIMUM references (Project → Area + Goal)
+    let next_week = (chrono::Local::now() + chrono::Duration::days(7))
+        .with_hour(17).unwrap().with_minute(0).unwrap().with_second(0).unwrap();
+    
+    let project_name = "Launch Side Business";
     let project1_path = ensure_project(
         &space_path,
-        "Getting Started",
-        "A quick tour of how GTD Space works.",
-        Some(three_days_deadline.to_rfc3339()),  // Use RFC3339 to include time
+        project_name,
+        "Create and launch consulting business for passive income generation",
+        Some(next_week.to_rfc3339()),
         Some("in-progress".to_string()),
     )
     .await?;
+    
+    // Update with references to BOTH Area and Goal
+    let areas_ref = format!("{}/Areas of Focus/Professional Excellence.md", &space_path);
+    let goals_ref = format!("{}/Goals/Build Financial Freedom.md", &space_path);
+    let cabinet_ref = format!("{}/Cabinet/GTD Quick Reference.md", &space_path);
+    
+    let readme_path = Path::new(&project1_path).join("README.md");
+    let readme_content = generate_project_readme_with_refs(
+        project_name,
+        "Create and launch consulting business for passive income generation",
+        Some(next_week.to_rfc3339()),
+        "in-progress",
+        &areas_ref,  // References Area
+        &goals_ref,  // References Goal
+        &cabinet_ref  // References Cabinet
+    );
+    let _ = fs::write(&readme_path, readme_content);
 
-    // Actions for Project 1 with various dates and times
-    let tomorrow_morning = (chrono::Local::now() + chrono::Duration::days(1))
-        .with_hour(10)
-        .unwrap()
-        .with_minute(30)
-        .unwrap()
-        .with_second(0)
-        .unwrap();
+    // Just 2 simple actions
     let _ = create_gtd_action(
         project1_path.clone(),
-        "Read the welcome file".to_string(),
+        "Define service offerings".to_string(),
         "in-progress".to_string(),
-        Some(tomorrow_morning.to_rfc3339()),  // Due tomorrow at 10:30 AM
-        Some(chrono::Local::now().to_rfc3339()),  // Focus today
-        "small".to_string(),
-    )
-    .await;
-
-    let two_days_afternoon = (chrono::Local::now() + chrono::Duration::days(2))
-        .with_hour(14)
-        .unwrap()
-        .with_minute(0)
-        .unwrap()
-        .with_second(0)
-        .unwrap();
-    let three_days_evening = (chrono::Local::now() + chrono::Duration::days(3))
-        .with_hour(17)
-        .unwrap()
-        .with_minute(0)
-        .unwrap()
-        .with_second(0)
-        .unwrap();
-    let _ = create_gtd_action(
-        project1_path.clone(),
-        "Create your first project".to_string(),
-        "waiting".to_string(),
-        Some(three_days_evening.to_rfc3339()),  // Due in 3 days at 5:00 PM
-        Some(two_days_afternoon.to_rfc3339()),  // Focus in 2 days at 2:00 PM
+        None,
+        Some(chrono::Local::now().to_rfc3339()),
         "medium".to_string(),
     )
     .await;
 
     let _ = create_gtd_action(
         project1_path.clone(),
-        "Mark a task complete".to_string(),
-        "complete".to_string(),
+        "Create landing page".to_string(),
+        "waiting".to_string(),
+        Some(next_week.to_rfc3339()),
         None,
-        None,
-        "small".to_string(),
-    )
-    .await;
-
-    // Project 2: Demo Project - Website with deadline time
-    let seven_days_noon = (chrono::Local::now() + chrono::Duration::days(7))
-        .with_hour(12)
-        .unwrap()
-        .with_minute(0)
-        .unwrap()
-        .with_second(0)
-        .unwrap();
-
-    let project2_path = ensure_project(
-        &space_path,
-        "Demo Project - Website",
-        "Build a simple marketing website.",
-        Some(seven_days_noon.to_rfc3339()),  // Due in 7 days at noon
-        Some("in-progress".to_string()),
-    )
-    .await?;
-
-    let tomorrow_afternoon = (chrono::Local::now() + chrono::Duration::days(1))
-        .with_hour(15)
-        .unwrap()
-        .with_minute(0)
-        .unwrap()
-        .with_second(0)
-        .unwrap();
-    let _ = create_gtd_action(
-        project2_path.clone(),
-        "Design homepage".to_string(),
-        "in-progress".to_string(),
-        Some(seven_days_noon.to_rfc3339()),  // Due in 7 days at noon (same as project)
-        Some(tomorrow_afternoon.to_rfc3339()),  // Focus tomorrow at 3:00 PM
         "large".to_string(),
     )
     .await;
 
-    let _ = create_gtd_action(
-        project2_path.clone(),
-        "Set up repository".to_string(),
-        "complete".to_string(),
-        None,
-        None,
-        "small".to_string(),
-    )
-    .await;
+    // That's it - just ONE project with maximum connections!
 
-    let five_days_morning = (chrono::Local::now() + chrono::Duration::days(5))
-        .with_hour(9)
-        .unwrap()
-        .with_minute(30)
-        .unwrap()
-        .with_second(0)
-        .unwrap();
-    let six_days_afternoon = (chrono::Local::now() + chrono::Duration::days(6))
-        .with_hour(16)
-        .unwrap()
-        .with_minute(0)
-        .unwrap()
-        .with_second(0)
-        .unwrap();
-    let _ = create_gtd_action(
-        project2_path.clone(),
-        "Plan content".to_string(),
-        "waiting".to_string(),
-        Some(six_days_afternoon.to_rfc3339()),  // Due in 6 days at 4:00 PM
-        Some(five_days_morning.to_rfc3339()),  // Focus in 5 days at 9:30 AM
-        "medium".to_string(),
-    )
-    .await;
-
-    // Project 3: Completed Example
-    let project3_path = ensure_project(
-        &space_path,
-        "Completed Example",
-        "An example of a finished project.",
-        None,
-        Some("completed".to_string()),
-    )
-    .await?;
-
-    let _ = create_gtd_action(
-        project3_path,
-        "Wrap up and archive".to_string(),
-        "Complete".to_string(),
-        None,
-        None,
-        "Small".to_string(),
-    )
-    .await;
-
-    // Create example Habits with dates
+    // Create just ONE example habit
     let habits_dir = Path::new(&space_path).join("Habits");
     if habits_dir.exists() {
-        // Morning Review habit (daily with focus time)
-        let morning_review = habits_dir.join("Morning Review.md");
-        if !morning_review.exists() {
-            let content = generate_morning_review_habit();
-            let _ = fs::write(&morning_review, content);
-        }
-
-        // Evening Journal habit (daily with evening focus time)
-        let evening_journal = habits_dir.join("Evening Journal.md");
-        if !evening_journal.exists() {
-            let content = generate_evening_journal_habit();
-            let _ = fs::write(&evening_journal, content);
-        }
-
-        // Weekly Review habit (weekly with Sunday afternoon focus)
-        let weekly_review = habits_dir.join("Weekly Review.md");
+        let weekly_review = habits_dir.join("Weekly GTD Review.md");
         if !weekly_review.exists() {
             let content = generate_weekly_review_habit();
             let _ = fs::write(&weekly_review, content);
         }
     }
 
-    // Create example Someday Maybe pages
+    // Create just ONE Someday Maybe example
     let someday_dir = Path::new(&space_path).join("Someday Maybe");
     if someday_dir.exists() {
-        let someday_example1 = someday_dir.join("Start a Blog.md");
-        if !someday_example1.exists() {
-            let content = r#"# Start a Blog
+        let someday_example = someday_dir.join("Write a Book.md");
+        if !someday_example.exists() {
+            let content = r#"# Write a Book
 
-## Idea
+**Topic**: Practical guide to building sustainable business systems
 
-Share my experiences and insights about productivity, coding, and personal development through a regular blog.
+## When I'm ready:
+- [ ] Outline key chapters
+- [ ] Research publishers vs self-publishing
+- [ ] Build audience platform first
+- [ ] Dedicate 2 hours daily to writing
 
-## Why it matters
-
-- Build a personal brand and online presence
-- Help others learn from my experiences
-- Improve writing and communication skills
-- Create a portfolio of thoughts and ideas
-- Potential passive income through affiliates/sponsorships
-
-## Next steps when ready
-
-- [ ] Choose a blogging platform (Ghost, WordPress, Medium, Substack)
-- [ ] Define the blog's niche and target audience
-- [ ] Create an editorial calendar with 10 post ideas
-- [ ] Write the first three posts before launching
-- [ ] Set up analytics and SEO basics
-- [ ] Establish a consistent publishing schedule
+*Will support my Financial Freedom goal when activated*
 "#;
-            let _ = fs::write(&someday_example1, content);
-        }
-
-        let someday_example2 = someday_dir.join("Home Automation Project.md");
-        if !someday_example2.exists() {
-            let content = r#"# Home Automation Project
-
-## Idea
-
-Create a smart home system to automate lighting, temperature, and security for better comfort and energy efficiency.
-
-## Why it matters
-
-- Reduce energy consumption and utility bills
-- Increase home security and peace of mind
-- Learn IoT and home automation technologies
-- Improve daily convenience and comfort
-- Fun technical project to work on
-
-## Next steps when ready
-
-- [ ] Research home automation platforms (Home Assistant, SmartThings, Hubitat)
-- [ ] List current devices and compatibility requirements
-- [ ] Create a budget for smart devices
-- [ ] Start with one room as a pilot project
-- [ ] Document the setup for future reference
-"#;
-            let _ = fs::write(&someday_example2, content);
+            let _ = fs::write(&someday_example, content);
         }
     }
 
-    // Create example Cabinet pages
+    // Create just ONE Cabinet reference (that the project references)
     let cabinet_dir = Path::new(&space_path).join("Cabinet");
     if cabinet_dir.exists() {
-        let cabinet_example1 = cabinet_dir.join("Keyboard Shortcuts.md");
-        if !cabinet_example1.exists() {
-            let content = r#"# Keyboard Shortcuts
-
-## Reference
-
-Common keyboard shortcuts for productivity tools and GTD Space.
-
-## Key Points
-
-### GTD Space Shortcuts
-- **Cmd/Ctrl + Alt + S**: Insert Status field
-- **Cmd/Ctrl + Alt + E**: Insert Effort field
-- **Cmd/Ctrl + Alt + P**: Insert Project Status field
-- **Cmd/Ctrl + Alt + D**: Insert Due Date (date only)
-- **Cmd/Ctrl + Alt + Shift + D**: Insert Due Date with time
-- **Cmd/Ctrl + Alt + T**: Insert Focus Date with time
-- **Cmd/Ctrl + Alt + C**: Insert Created Date
-- **Cmd/Ctrl + Alt + F**: Insert Habit Frequency
-- **Cmd/Ctrl + Alt + H**: Insert Habit Status checkbox
-- **Cmd/Ctrl + S**: Save current file
-- **Cmd/Ctrl + O**: Open folder
-
-### VS Code / Editor Shortcuts
-- **Cmd/Ctrl + P**: Quick file open
-- **Cmd/Ctrl + Shift + P**: Command palette
-- **Cmd/Ctrl + /**: Toggle comment
-- **Alt + Up/Down**: Move line up/down
-- **Cmd/Ctrl + D**: Select next occurrence
-
-### Mac System Shortcuts
-- **Cmd + Space**: Spotlight search
-- **Cmd + Tab**: Switch applications
-- **Cmd + ~**: Switch windows in same app
-- **Cmd + ,**: Open preferences
-- **Cmd + Q**: Quit application
-
-## Notes
-
-Keep this reference handy while learning the shortcuts. Muscle memory develops with consistent use.
-"#;
-            let _ = fs::write(&cabinet_example1, content);
-        }
-
-        let cabinet_example2 = cabinet_dir.join("Meeting Templates.md");
-        if !cabinet_example2.exists() {
-            let content = r#"# Meeting Templates
-
-## Reference
-
-Templates for different types of meetings to ensure productive discussions.
-
-## Key Points
-
-### One-on-One Template
-```
-Date: [Date]
-Attendees: [Names]
-
-Agenda:
-1. Check-in (5 min)
-2. Updates and progress (10 min)
-3. Challenges and blockers (10 min)
-4. Goals and priorities (10 min)
-5. Action items (5 min)
-
-Notes:
-- 
-
-Action Items:
-- [ ] 
-
-Next Meeting: [Date]
-```
-
-### Project Kickoff Template
-```
-Project: [Name]
-Date: [Date]
-Attendees: [Names]
-
-Purpose:
-- Define project goals and success criteria
-
-Agenda:
-1. Project overview and objectives
-2. Roles and responsibilities
-3. Timeline and milestones
-4. Resources and budget
-5. Communication plan
-6. Risk assessment
-7. Next steps
-
-Decisions Made:
-- 
-
-Action Items:
-- [ ] 
-
-Follow-up Date: [Date]
-```
-
-### Retrospective Template
-```
-Sprint/Period: [Timeframe]
-Date: [Date]
-Team: [Names]
-
-What went well:
-- 
-
-What didn't go well:
-- 
-
-What we learned:
-- 
-
-Action items for improvement:
-- [ ] 
-```
-
-## Notes
-
-Adapt these templates to your specific needs. The structure helps ensure all important topics are covered.
-"#;
-            let _ = fs::write(&cabinet_example2, content);
+        // Only create the GTD Quick Reference that our project references
+        let gtd_ref = cabinet_dir.join("GTD Quick Reference.md");
+        if !gtd_ref.exists() {
+            // Using the existing CABINET_GTD_PRINCIPLES_TEMPLATE
+            if let Err(e) = fs::write(&gtd_ref, CABINET_GTD_PRINCIPLES_TEMPLATE) {
+                log::warn!("Failed to create GTD Quick Reference: {}", e);
+            }
         }
     }
 
     // Note: Horizons are now created as top-level folders during initialization
     // No need to recreate them here
 
-    // Create example Habits
-    let habits_dir = Path::new(&space_path).join("Habits");
-    if habits_dir.exists() {
-        let _today = chrono::Local::now().format("%Y-%m-%d");
-        
-        // Habit 1: Morning Exercise
-        let habit1 = habits_dir.join("Morning Exercise.md");
-        if !habit1.exists() {
-            let content = generate_habit_template("Morning Exercise", "daily");
-            let _ = fs::write(&habit1, content);
-        }
-
-        // Habit 2: Weekly Review
-        let habit2 = habits_dir.join("Weekly GTD Review.md");
-        if !habit2.exists() {
-            let content = generate_habit_template("Weekly GTD Review", "weekly");
-            let _ = fs::write(&habit2, content);
-        }
-
-        // Habit 3: Reading
-        let habit3 = habits_dir.join("Reading Practice.md");
-        if !habit3.exists() {
-            let content = generate_habit_template("Reading Practice", "daily");
-            let _ = fs::write(&habit3, content);
-        }
-
-        // Habit 4: Meditation
-        let habit4 = habits_dir.join("Mindfulness Meditation.md");
-        if !habit4.exists() {
-            let content = generate_habit_template("Mindfulness Meditation", "twice-weekly");
-            let _ = fs::write(&habit4, content);
-        }
-
-        // Habit 5: Journaling
-        let habit5 = habits_dir.join("Evening Journal.md");
-        if !habit5.exists() {
-            let content = generate_habit_template("Evening Journal", "daily");
-            let _ = fs::write(&habit5, content);
-        }
-    }
+    // Habits already created above - removed duplicates
 
     // Write seed marker
     let _ = fs::write(&seed_marker, format!(

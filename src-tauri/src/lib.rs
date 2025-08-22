@@ -2,10 +2,11 @@
 //!
 //! Core library exports for the Tauri markdown editor application.
 
-use tauri::Manager;
-
 // Import command modules  
 mod commands;
+
+#[cfg(debug_assertions)]
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -16,10 +17,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .setup(|app| {
+        .setup(|_app| {
             #[cfg(debug_assertions)]
             {
-                let window = app.get_webview_window("main").unwrap();
+                let window = _app.get_webview_window("main").unwrap();
                 window.open_devtools();
             }
             Ok(())

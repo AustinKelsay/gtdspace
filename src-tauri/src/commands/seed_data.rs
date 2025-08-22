@@ -8,420 +8,322 @@ use chrono::{Datelike, Local, Timelike, Weekday};
 /// Template for Areas of Focus overview page
 pub const AREAS_OF_FOCUS_OVERVIEW_TEMPLATE: &str = r#"# Areas of Focus (20,000 ft)
 
-## What are Areas of Focus?
+**Important spheres of work and life to maintain at standards**
 
-Areas of Focus are the ongoing roles and responsibilities you need to maintain in your life. Unlike projects which have specific outcomes and endpoints, these are areas that require continuous attention and balance.
+These are your ongoing responsibilities—the roles you play and standards you maintain. Unlike projects (which complete), these require continuous attention.
 
-## Review Questions
-- Which areas are thriving? Which need more attention?
-- Are all my projects aligned with these areas?
-- What areas am I neglecting that need focus?
-- Are there areas I should add or remove?
+## Weekly Review Questions
+- What areas need attention this week?
+- Are my current projects supporting the right areas?
+- What's falling through the cracks?
 
-## Notes
-Each area of focus has its own page in this folder. Review them during your weekly review to ensure you're maintaining balance across all important areas of your life.
+*Each area has its own page. Click to view projects and standards.*
 "#;
 
-/// Template for individual Area of Focus pages
-pub fn generate_area_of_focus_template(name: &str, description: &str) -> String {
+/// Template for individual Area of Focus pages with references
+pub fn generate_area_of_focus_template_with_refs(
+    name: &str, 
+    description: &str, 
+    standards: &str,
+    goals_refs: &str,
+    vision_refs: &str,
+    purpose_refs: &str
+) -> String {
     format!(r#"# {}
 
-## Description
 {}
 
-## Horizon References
-[!goals-references:]
-[!vision-references:]
-[!purpose-references:]
+{}
 
-## Current Projects
-<!-- List projects that support this area -->
+## Horizon Alignment
+[!goals-references:{}]
 
-## Key Metrics
-<!-- How do I measure success in this area? -->
+[!vision-references:{}]
 
-## Review Notes
-<!-- Weekly review observations about this area -->
+[!purpose-references:{}]
 
-## Resources
-<!-- Important resources, contacts, or references for this area -->
-"#, name, description)
+## Active Projects
+<!-- Projects that maintain or improve this area -->
+
+## References
+[!references:]
+"#, name, description, standards, goals_refs, vision_refs, purpose_refs)
 }
 
 /// Template for Goals overview page
 pub const GOALS_OVERVIEW_TEMPLATE: &str = r#"# Goals (30,000 ft)
 
-## What are Goals?
+**What you want to achieve in the next 1-2 years**
 
-Goals are specific achievements you want to accomplish within the next 1-2 years. They provide direction for your projects and help you make decisions about what to focus on.
+These accomplishments will require multiple projects to complete. They provide focus and direction for your efforts.
 
-## Success Metrics
-- How will I know when I've achieved each goal?
-- What milestones can I set along the way?
-- Which goals are most important if I can't achieve all?
+## Quarterly Review
+- What progress have I made?
+- What needs to shift?
+- Are these still the right goals?
 
-## Review Schedule
-Review quarterly to assess progress and adjust as needed. Each goal has its own page in this folder for detailed tracking.
+*Each goal has its own page with milestones and projects.*
 "#;
 
-/// Template for individual Goal pages
-pub fn generate_goal_template(name: &str, target_date: &str, category: &str) -> String {
+/// Template for individual Goal pages with references
+pub fn generate_goal_template_with_refs(
+    name: &str, 
+    target_date: &str, 
+    outcome: &str,
+    vision_refs: &str,
+    purpose_refs: &str
+) -> String {
     format!(r#"# {}
 
-## Category
+**Target:** [!datetime:due_date:{}]
+
+## Successful Outcome
 {}
 
-## Target Date
-[!datetime:due_date:{}]
+## Aligned With
+[!vision-references:{}]
 
-## Horizon References
-[!vision-references:]
-[!purpose-references:]
+[!purpose-references:{}]
 
-## Description
-<!-- What does achieving this goal look like? -->
+## Current Projects
+<!-- Projects actively moving this forward -->
 
-## Why This Matters
-<!-- Personal motivation and impact -->
-
-## Success Criteria
-- [ ] <!-- Specific measurable outcome -->
-- [ ] <!-- Another success indicator -->
-
-## Milestones
-- [ ] <!-- First milestone -->
-- [ ] <!-- Second milestone -->
-- [ ] <!-- Final milestone -->
-
-## Related Projects
-<!-- Active projects supporting this goal -->
-
-## Progress Notes
-<!-- Regular updates on progress -->
-"#, name, category, target_date)
+## References
+[!references:]
+"#, name, target_date, outcome, vision_refs, purpose_refs)
 }
 
 /// Template for Vision folder
 pub const VISION_OVERVIEW_TEMPLATE: &str = r#"# Vision (40,000 ft)
 
-## What is Vision?
+**What wild success looks like in 3-5 years**
 
-Your 3-5 year vision is a vivid picture of where you want to be. It's aspirational yet achievable, providing long-term direction for your goals and decisions.
+This is your ideal scenario—vivid, inspiring, and achievable. It guides your goals and major decisions.
 
-## Review
-Review annually and adjust based on life changes and evolved perspectives.
+## Annual Review
+Revisit each year to recalibrate based on progress and life changes.
 "#;
 
-/// Template for main Vision document
-pub const VISION_DOCUMENT_TEMPLATE: &str = r#"# My 3-5 Year Vision
+/// Template for main Vision document with references
+pub fn generate_vision_document_template_with_refs(purpose_refs: &str) -> String {
+    format!(r#"# 3-5 Year Vision
 
-## Horizon References
-[!purpose-references:]
+**Living My Purpose**
+[!purpose-references:{}]
 
-## Life Snapshot
-*Imagine it's 3-5 years from now. You're living your ideal life. Describe what you see...*
+## The Picture of Success
 
-### Where I'm Living
-- Location, type of home, environment
+*It's 3-5 years from now. I wake up and...*
 
-### What I'm Doing Professionally
-- Role, responsibilities, impact, achievements
+### Professional Life
+I'm [role/position] making impact by [key contribution]. My work involves [core activities] and I'm recognized for [unique value].
 
-### My Relationships
-- Family dynamics, friendships, community connections
+### Personal Life
+I live in [location/environment]. My days include [key activities]. I spend quality time [relationships/activities].
 
-### My Health & Wellbeing
-- Physical fitness, mental health, daily routines
+### Health & Energy
+I maintain [fitness level] through [practices]. My energy is [description] because I [habits/routines].
 
-### My Finances
-- Income level, assets, financial security
+### Financial Freedom
+I have [financial state] allowing me to [possibilities]. My income comes from [sources].
 
-### My Personal Growth
-- Skills mastered, experiences gained, wisdom earned
+### Growth & Learning
+I've mastered [skills/knowledge]. I'm exploring [new areas]. I contribute by [teaching/sharing].
 
-## Key Themes
-- What patterns emerge from this vision?
-- What values are being expressed?
-- What changes from today are most significant?
-
-## Success Factors
-- What capabilities do I need to develop?
-- What resources will I need?
-- What obstacles might I face?
-
-## Affirmation
-Write a present-tense statement as if this vision is already true:
-*"I am..."*
-"#;
+## References
+[!references:]
+"#, purpose_refs)
+}
 
 /// Template for Purpose & Principles folder
 pub const PURPOSE_PRINCIPLES_OVERVIEW_TEMPLATE: &str = r#"# Purpose & Principles (50,000 ft)
 
-## What are Purpose & Principles?
+**Why you exist and what you stand for**
 
-Your purpose is your "why" - the ultimate reason behind everything you do. Your principles are the core values that guide your decisions and actions. Together, they form the foundation of your life's direction.
+Your ultimate intention and core standards. These drive everything else.
 
-## Reflection
-This is the deepest level of GTD thinking. Review annually or when facing major life decisions.
+## When to Review
+- Major life decisions
+- Annual deep reflection
+- When feeling lost or unmotivated
 "#;
 
 /// Template for Life Mission document
-pub const LIFE_MISSION_TEMPLATE: &str = r#"# Life Mission Statement
+pub const LIFE_MISSION_TEMPLATE: &str = r#"# Life Mission
 
-## Why I Exist
-*What am I here to contribute?*
+## My Purpose Statement
 
-[Write your personal mission statement here]
+*I exist to [core purpose] by [primary means] so that [ultimate impact].*
 
-## Core Purpose Elements
+## This Means I:
 
-### To Create
-What do I want to bring into existence?
+**Create**: [What I bring into existence]
 
-### To Connect
-How do I want to relate to others?
+**Serve**: [Who I help and how]
 
-### To Contribute
-What legacy do I want to leave?
+**Learn**: [What I explore and master]
 
-### To Experience
-What do I want to learn and explore?
+**Share**: [What I teach and give]
 
-## Integration
-- How do my current projects reflect my purpose?
-- What changes would bring more alignment?
+## Living This Purpose
+- In my work, I...
+- In relationships, I...
+- In community, I...
+- For myself, I...
+
+## References
+[!references:]
 "#;
 
 /// Template for Core Values document
 pub const CORE_VALUES_TEMPLATE: &str = r#"# Core Values & Principles
 
-## My Core Values (Top 5-7)
+## My Top 5 Values
 
-### 1. [Value Name]
-**What this means to me:**
-[Description]
+1. **Integrity** - Being true to my word and values
+2. **Growth** - Continuously learning and improving
+3. **Connection** - Building meaningful relationships
+4. **Excellence** - Doing my best work
+5. **[Your Value]** - [What it means]
 
-**How I express this:**
-[Examples]
+## Operating Principles
 
-### 2. [Value Name]
-**What this means to me:**
-[Description]
+✓ **I always**: Take responsibility for my commitments
 
-**How I express this:**
-[Examples]
+✓ **I never**: Compromise my integrity for short-term gain
 
-### 3. [Value Name]
-**What this means to me:**
-[Description]
+✓ **I believe**: Everyone has something valuable to teach
 
-**How I express this:**
-[Examples]
+✓ **I stand for**: Making a positive difference
 
-## Guiding Principles
-*The non-negotiable standards by which I live:*
+## Decision Filter
 
-- I always...
-- I never...
-- I believe...
-- I stand for...
+Before major decisions, I ask:
+1. Does this align with my values?
+2. Will I be proud of this choice?  
+3. Does this move me toward my vision?
 
-## Decision Filters
-When facing difficult decisions, I ask:
-- Does this align with my purpose?
-- Does this honor my values?
-- Will I be proud of this choice in 10 years?
-- Does this move me toward or away from who I want to be?
-
-## Where I'm Compromising
-- [Area where values aren't fully honored]
-- [Another area needing attention]
+## References
+[!references:]
 "#;
 
 /// Template content for the Welcome to GTD Space file
 pub const WELCOME_TEMPLATE: &str = r#"# Welcome to Your GTD Space
 
-This is your personal Getting Things Done (GTD) space. The directory structure has been set up to help you organize your life across all horizons of focus:
+Your complete Getting Things Done system is ready. Everything is organized by horizons of focus:
 
-## 🎯 Horizons of Focus
+## Quick Start
 
-### 📋 Areas of Focus (20,000 ft)
-Ongoing responsibilities and roles you maintain. Each area has its own page for tracking projects and metrics.
+1. **Review** the example projects and horizons to see how GTD works
+2. **Create** your first real project with a clear outcome
+3. **Add** concrete next actions (they appear instantly in the sidebar)
+4. **Set** focus dates for when you'll work on things
+5. **Track** progress with interactive status fields
 
-### 🎯 Goals (30,000 ft)  
-1-2 year objectives that guide your projects. Each goal has its own page with milestones and success criteria.
+## Your GTD Structure
 
-### 🔮 Vision (40,000 ft)
-Your 3-5 year aspirational picture of where you're heading.
+**Horizons** (50,000 ft → Ground level)
+- **Purpose & Principles** - Your core values and life mission
+- **Vision** - 3-5 year aspirational outcomes
+- **Goals** - 1-2 year objectives with milestones
+- **Areas of Focus** - Ongoing responsibilities to maintain
 
-### ⭐ Purpose & Principles (50,000 ft)
-Core values and life mission that drive everything.
+**Execution**
+- **Projects** - Multi-step outcomes (folders with actions inside)
+- **Actions** - Concrete next steps with status, effort, and dates
+- **Habits** - Recurring routines that auto-reset
+- **Calendar** - All your dated items in one view
 
-## 📁 Projects
-Contains all your active projects. Each project is a folder with:
-- A README.md file containing project details
-- Individual action files (markdown) for tasks
+**Support**
+- **Someday Maybe** - Ideas for future consideration
+- **Cabinet** - Reference materials (no action required)
 
-### Project Structure:
-```
-Projects/
-├── Project Name/
-│   ├── README.md           # Project overview and metadata
-│   ├── Action 1.md        # Individual action file
-│   ├── Action 2.md        # Another action
-│   └── ...
-```
+## Keyboard Shortcuts
 
-## 🔄 Habits
-Your recurring habits and routines. Each habit is a markdown file with:
-- Frequency (daily, weekly, etc.)
-- Status tracking
-- History log
+- `Cmd/Ctrl+Alt+S` - Insert Status field
+- `Cmd/Ctrl+Alt+D` - Insert Due Date
+- `Cmd/Ctrl+Alt+T` - Insert Focus Date/Time
+- `Cmd/Ctrl+Alt+R` - Insert References
 
-## 💭 Someday Maybe
-Ideas and projects you might want to do in the future but aren't committed to yet.
+## Weekly Review
 
-## 🗄️ Cabinet
-Reference materials you want to keep but don't require action. This could include:
-- Important documents
-- Reference notes
-- Templates
-- Resources
+Every week, process everything:
+1. Collect loose items
+2. Review all projects
+3. Update action statuses
+4. Check calendar and horizons
+5. Identify next actions
 
-## Getting Started
-
-1. **Capture** - Use the Quick Add feature to capture thoughts and tasks
-2. **Clarify** - Process items into projects and actions
-3. **Organize** - Keep everything in its proper place
-4. **Reflect** - Review regularly to stay on track
-5. **Engage** - Trust your system and take action
-
-## Tips
-
-- Use the sidebar to quickly navigate between sections
-- Click on a project to see all its actions
-- Add due dates and focus dates to actions for better planning
-- Review your GTD space weekly to keep it current
-
-Happy organizing! 🎯
+Start exploring your seeded examples to see GTD in action!
 "#;
 
 /// Template for Someday Maybe - Learn a New Language
-pub const SOMEDAY_LEARN_LANGUAGE_TEMPLATE: &str = r#"# Learn a New Language
+pub const SOMEDAY_LEARN_LANGUAGE_TEMPLATE: &str = r#"# Learn Spanish
 
-## Idea
+**Why**: Connect with 500M+ speakers, enhance travel, cognitive benefits
 
-I've always wanted to learn Spanish to connect better with Spanish-speaking communities and travel more confidently in Latin America and Spain.
+**Success looks like**: Conversational fluency within 1 year
 
-## Why it matters
+## When I'm ready:
+- [ ] Choose learning method (app/tutor/class)
+- [ ] Commit to 30 min daily practice
+- [ ] Find conversation partner
+- [ ] Plan immersion trip to Spain/Latin America
+- [ ] Join local Spanish conversation group
 
-- Opens up communication with 500+ million Spanish speakers worldwide
-- Enhances travel experiences in 20+ countries
-- Cognitive benefits of bilingualism
-- Career advancement opportunities
-- Cultural enrichment and understanding
+## Resources to explore:
+- Language learning apps comparison
+- Local community college courses
+- Online tutoring platforms
+- Spanish media for immersion
 
-## Next steps when ready
-
-- [ ] Research language learning methods (apps, classes, tutors)
-- [ ] Set a realistic timeline and daily practice goal
-- [ ] Find a conversation partner or language exchange
-- [ ] Plan an immersion trip as a goal/reward
-- [ ] Start with basic conversational phrases
+*Move to Projects when ready to commit*
 "#;
 
 /// Template for Cabinet - GTD Principles Reference
-pub const CABINET_GTD_PRINCIPLES_TEMPLATE: &str = r#"# GTD Principles Reference
+pub const CABINET_GTD_PRINCIPLES_TEMPLATE: &str = r#"# GTD Quick Reference
 
-## Reference
+## The Five Steps
+1. **Capture** - Get it out of your head
+2. **Clarify** - Decide what it means and what to do
+3. **Organize** - Put it where it belongs
+4. **Reflect** - Review to stay current
+5. **Engage** - Trust your system and do
 
-The Getting Things Done (GTD) methodology by David Allen - Core principles and practices.
+## Processing Questions
+- What is it?
+- Is it actionable?
+- What's the next action?
+- Will it take less than 2 minutes? → Do it now
+- Am I the right person? → Delegate it
+- Is there a deadline? → Calendar it
+- Multiple steps? → Make it a project
 
-## Key Points
+## Weekly Review Checklist
+□ Process all inboxes to zero
+□ Review project list
+□ Review next actions
+□ Review waiting-for list
+□ Review calendar (past & future)
+□ Review Someday/Maybe
+□ Get creative - any new projects?
 
-- **Capture**: Collect what has your attention in trusted external systems
-- **Clarify**: Process what it means and what to do about it
-- **Organize**: Put it where it belongs based on what it is
-- **Reflect**: Review frequently to stay current and aligned
-- **Engage**: Use your trusted system to take action with confidence
+## Horizons of Focus
+- **50,000 ft**: Purpose & Principles
+- **40,000 ft**: Vision (3-5 years)
+- **30,000 ft**: Goals (1-2 years)
+- **20,000 ft**: Areas of Focus
+- **10,000 ft**: Projects
+- **Runway**: Next Actions
 
-## Notes
-
-### The Five Steps of Mastering Workflow
-
-1. **Capture** everything that has your attention
-2. **Clarify** what each item means and what to do about it
-3. **Organize** the results into trusted external systems
-4. **Reflect** on your system regularly to keep it current
-5. **Engage** with confidence in your moment-to-moment choices
-
-### The Two-Minute Rule
-If something takes less than two minutes to complete, do it now rather than adding it to your list.
-
-### Weekly Review
-- Get clear: Collect loose papers and materials, empty your head
-- Get current: Review action lists, calendar, waiting-for lists
-- Get creative: Review someday/maybe lists, trigger new ideas
-
-### Natural Planning Model
-1. Define purpose and principles
-2. Envision the outcome
-3. Brainstorm ideas
-4. Organize into structure
-5. Identify next actions
+## Natural Planning
+1. Why? (Purpose)
+2. What would success look like? (Vision)
+3. How might we do this? (Brainstorm)
+4. What's the plan? (Organize)
+5. What's the next action? (Next step)
 "#;
 
-/// Generate a Morning Review habit template with current time
-pub fn generate_morning_review_habit() -> String {
-    let morning_time = Local::now()
-        .with_hour(9)
-        .unwrap()
-        .with_minute(0)
-        .unwrap()
-        .with_second(0)
-        .unwrap();
-    
-    format!(r#"# Morning Review
-## Frequency
-[!singleselect:habit-frequency:daily]
-## Status
-[!checkbox:habit-status:false]
-## Focus Time
-[!datetime:focus_date_time:{}]
-## Notes
-Review today's actions and priorities. Check calendar, update task statuses, and set focus for the day.
----
-Created: {}"#, 
-        morning_time.to_rfc3339(),
-        Local::now().format("%Y-%m-%d")
-    )
-}
-
-/// Generate an Evening Journal habit template with current time
-pub fn generate_evening_journal_habit() -> String {
-    let evening_time = Local::now()
-        .with_hour(20)
-        .unwrap()
-        .with_minute(0)
-        .unwrap()
-        .with_second(0)
-        .unwrap();
-    
-    format!(r#"# Evening Journal
-## Frequency
-[!singleselect:habit-frequency:daily]
-## Status
-[!checkbox:habit-status:false]
-## Focus Time
-[!datetime:focus_date_time:{}]
-## Notes
-Reflect on the day's accomplishments and lessons learned. Write down three things you're grateful for.
----
-Created: {}"#,
-        evening_time.to_rfc3339(),
-        Local::now().format("%Y-%m-%d")
-    )
-}
 
 /// Generate a Weekly Review habit template with next Sunday
 pub fn generate_weekly_review_habit() -> String {
@@ -461,11 +363,24 @@ Created: {}"#,
 
 /// Template for project README.md file
 pub fn generate_project_readme(name: &str, description: &str, due_date: Option<String>, status: &str) -> String {
+    generate_project_readme_with_refs(name, description, due_date, status, "", "", "")
+}
+
+/// Template for project README.md file with references
+pub fn generate_project_readme_with_refs(
+    name: &str, 
+    description: &str, 
+    due_date: Option<String>, 
+    status: &str,
+    areas_refs: &str,
+    goals_refs: &str,
+    general_refs: &str
+) -> String {
     let due_date_str = due_date.as_deref().unwrap_or("Not set");
     format!(
         r#"# {}
 
-## Description
+## Desired Outcome
 {}
 
 ## Status
@@ -478,23 +393,27 @@ pub fn generate_project_readme(name: &str, description: &str, due_date: Option<S
 [!datetime:created_date:{}]
 
 ## Horizon References
-[!areas-references:]
-[!goals-references:]
+[!areas-references:{}]
 
-## References
-[!references:]
+[!goals-references:{}]
+
+## Actions
+Actions for this project are stored as individual markdown files in this directory.
 
 ## Notes
 <!-- Add any additional notes, context, or resources for this project here -->
 
-## Actions
-Actions for this project are stored as individual markdown files in this directory.
+## References
+[!references:{}]
 "#,
         name,
         description,
         status,
         if due_date_str != "Not set" { due_date_str } else { "" },
-        Local::now().format("%Y-%m-%d")
+        Local::now().format("%Y-%m-%d"),
+        areas_refs,
+        goals_refs,
+        general_refs
     )
 }
 
@@ -533,35 +452,3 @@ pub fn generate_action_template(name: &str, status: &str, focus_date: Option<Str
     )
 }
 
-/// Template for a new habit file
-pub fn generate_habit_template(name: &str, frequency: &str) -> String {
-    let now = Local::now();
-    format!(
-        r#"# {}
-
-## Status
-[!checkbox:habit-status:false]
-
-## Frequency
-[!singleselect:habit-frequency:{}]
-
-## Focus Time
-[!datetime:focus_date_time:{}T09:00:00]
-
-## Created
-[!datetime:created_date:{}]
-
-## History
-| Date | Time | Status | Action | Notes |
-|------|------|--------|--------|-------|
-| {} | {} | To Do | Created | Initial habit creation |
-
-"#,
-        name,
-        frequency,
-        now.format("%Y-%m-%d"),
-        now.format("%Y-%m-%d"),
-        now.format("%Y-%m-%d"),
-        now.format("%-I:%M %p")
-    )
-}

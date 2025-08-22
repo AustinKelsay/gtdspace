@@ -221,13 +221,24 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         // Convert blocks to markdown with custom handling
         for (const block of blocks) {
           const blockType = block.type;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const props = (block as any).props;
           
           // Handle custom blocks that might be inside paragraphs
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           if (blockType === 'paragraph' && (block as any).content) {
             // Check if this paragraph contains our custom syntax
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const textContent = (block as any).content?.[0]?.text || '';
             if (textContent.match(/^\[!references:/)) {
+              markdown += textContent + '\n\n';
+            } else if (textContent.match(/^\[!areas-references:/)) {
+              markdown += textContent + '\n\n';
+            } else if (textContent.match(/^\[!goals-references:/)) {
+              markdown += textContent + '\n\n';
+            } else if (textContent.match(/^\[!vision-references:/)) {
+              markdown += textContent + '\n\n';
+            } else if (textContent.match(/^\[!purpose-references:/)) {
               markdown += textContent + '\n\n';
             } else if (textContent.match(/^\[!singleselect:/)) {
               markdown += textContent + '\n\n';
@@ -249,6 +260,18 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
           } else if (blockType === 'references') {
             const references = props?.references || '';
             markdown += `[!references:${references}]\n\n`;
+          } else if (blockType === 'areas-references') {
+            const references = props?.references || '';
+            markdown += `[!areas-references:${references}]\n\n`;
+          } else if (blockType === 'goals-references') {
+            const references = props?.references || '';
+            markdown += `[!goals-references:${references}]\n\n`;
+          } else if (blockType === 'vision-references') {
+            const references = props?.references || '';
+            markdown += `[!vision-references:${references}]\n\n`;
+          } else if (blockType === 'purpose-references') {
+            const references = props?.references || '';
+            markdown += `[!purpose-references:${references}]\n\n`;
           } else if (blockType === 'singleselect') {
             const type = props?.type || '';
             const value = props?.value || '';

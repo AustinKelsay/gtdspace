@@ -44,47 +44,69 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
   const { createProject } = useGTDSpace();
 
   const handleCreate = async () => {
-    if (!projectName.trim() || !description.trim()) return;
+    console.log('[GTDProjectDialog] handleCreate called with:', {
+      projectName: projectName.trim(),
+      description: description.trim(),
+      dueDate,
+      dueTime,
+      status,
+      spacePath
+    });
+    
+    if (!projectName.trim() || !description.trim()) {
+      console.log('[GTDProjectDialog] Validation failed - missing name or description');
+      return;
+    }
 
+    console.log('[GTDProjectDialog] Setting isCreating to true');
     setIsCreating(true);
     
-    // Combine due date and time into ISO datetime string
-    let dueDateTime: string | null = null;
-    if (dueDate) {
-      if (dueTime) {
-        // Combine date and time
-        dueDateTime = `${dueDate}T${dueTime}:00`;
-      } else {
-        // Default to 5 PM if no time specified (typical end of workday)
-        dueDateTime = `${dueDate}T17:00:00`;
-      }
-    }
-    
-    const projectData: GTDProjectCreate = {
-      space_path: spacePath,
-      project_name: projectName.trim(),
-      description: description.trim(),
-      due_date: dueDateTime,
-      status: status,
-    };
-
-    const result = await createProject(projectData);
-    setIsCreating(false);
-
-    if (result) {
-      // Reset form
-      setProjectName('');
-      setDescription('');
-      setDueDate('');
-      setDueTime('');
-      setStatus('in-progress');
-      
-      // Call success callback if provided
-      if (onSuccess) {
-        onSuccess();
+    try {
+      // Combine due date and time into ISO datetime string
+      let dueDateTime: string | null = null;
+      if (dueDate) {
+        if (dueTime) {
+          // Combine date and time
+          dueDateTime = `${dueDate}T${dueTime}:00`;
+        } else {
+          // Default to 5 PM if no time specified (typical end of workday)
+          dueDateTime = `${dueDate}T17:00:00`;
+        }
       }
       
-      onClose();
+      const projectData: GTDProjectCreate = {
+        space_path: spacePath,
+        project_name: projectName.trim(),
+        description: description.trim(),
+        due_date: dueDateTime,
+        status: status,
+      };
+
+      console.log('[GTDProjectDialog] Calling createProject with:', projectData);
+      const result = await createProject(projectData);
+      console.log('[GTDProjectDialog] createProject result:', result);
+
+      if (result) {
+        // Reset form
+        setProjectName('');
+        setDescription('');
+        setDueDate('');
+        setDueTime('');
+        setStatus('in-progress');
+        
+        // Call success callback if provided
+        if (onSuccess) {
+          console.log('[GTDProjectDialog] Calling onSuccess callback');
+          onSuccess();
+        }
+        
+        onClose();
+      }
+    } catch (error) {
+      console.error('[GTDProjectDialog] Error creating project:', error);
+    } finally {
+      console.log('[GTDProjectDialog] Setting isCreating to false');
+      setIsCreating(false);
     }
   };
 
@@ -182,7 +204,10 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
             Cancel
           </Button>
           <Button
-            onClick={handleCreate}
+            onClick={() => {
+              console.log('[GTDProjectDialog] Create button clicked');
+              handleCreate();
+            }}
             disabled={!projectName.trim() || !description.trim() || isCreating}
           >
             {isCreating ? 'Creating...' : 'Create Project'}

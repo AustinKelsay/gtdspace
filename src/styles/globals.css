@@ -827,3 +827,57 @@ button[aria-haspopup="dialog"]:focus-visible {
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3),
     0 4px 6px -2px rgba(0, 0, 0, 0.2);
 }
+
+/* ===== MODAL STYLING IMPROVEMENTS ===== */
+
+/* Enhanced modal shadows for better depth */
+[data-radix-dialog-content] {
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+.dark [data-radix-dialog-content] {
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Enhanced overlay backdrop */
+[data-radix-dialog-overlay] {
+  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.6) !important;
+}
+
+.dark [data-radix-dialog-overlay] {
+  background: rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Ensure modal content respects rounded corners */
+[data-radix-dialog-content] > :first-child {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+
+[data-radix-dialog-content] > :last-child {
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
+
+/* Smooth modal animations */
+[data-radix-dialog-content] {
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Better close button styling */
+[data-radix-dialog-content] button[aria-label="Close"] {
+  background-color: rgb(var(--muted) / 0.5);
+  border-radius: 6px;
+  transition: all 200ms ease;
+}
+
+[data-radix-dialog-content] button[aria-label="Close"]:hover {
+  background-color: rgb(var(--muted) / 0.8);
+  transform: scale(1.05);
+}

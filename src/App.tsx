@@ -6,8 +6,9 @@
 
 import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Menu, FolderOpen, Folder, Target } from 'lucide-react';
+import { PanelLeftClose, PanelLeft, FolderOpen, Folder, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AppHeader } from '@/components/app/AppHeader';
 import { GTDWorkspaceSidebar, GTDDashboard, GTDQuickActions, GTDInitDialog } from '@/components/gtd';
 import { FileChangeManager } from '@/components/file-browser/FileChangeManager';
@@ -97,6 +98,7 @@ export const App: React.FC = () => {
   // === SETTINGS MANAGEMENT ===
 
   const { settings, setTheme } = useSettings();
+  const [themeKey, setThemeKey] = React.useState(0); // Force re-render on theme change
 
   // === MODAL MANAGEMENT ===
 
@@ -121,28 +123,40 @@ export const App: React.FC = () => {
 
   // === THEME MANAGEMENT ===
 
-  const applyTheme = (theme: Theme) => {
+  const applyTheme = React.useCallback((theme: Theme) => {
     const root = document.documentElement;
+
+    // Remove any existing theme classes first
+    root.classList.remove('dark', 'light');
 
     if (theme === 'dark') {
       root.classList.add('dark');
+      root.style.colorScheme = 'dark';
     } else if (theme === 'light') {
-      root.classList.remove('dark');
+      root.classList.add('light');
+      root.style.colorScheme = 'light';
     } else {
       // Auto theme - detect system preference
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       if (prefersDark) {
         root.classList.add('dark');
+        root.style.colorScheme = 'dark';
       } else {
-        root.classList.remove('dark');
+        root.classList.add('light');
+        root.style.colorScheme = 'light';
       }
     }
-  };
+
+    // Force a re-render of affected components
+    window.dispatchEvent(new Event('theme-changed'));
+    setThemeKey(prev => prev + 1); // Force React re-render
+  }, []);
 
   const toggleTheme = async () => {
     const newTheme: Theme = settings.theme === 'dark' ? 'light' : 'dark';
+    console.log('[App] Toggling theme from', settings.theme, 'to', newTheme);
     await setTheme(newTheme);
-    applyTheme(newTheme);
+    // Theme will be applied automatically by the useEffect watching settings.theme
   };
 
   // === INTEGRATED FILE OPERATIONS ===
@@ -246,12 +260,12 @@ export const App: React.FC = () => {
       }
     } : undefined,
     onSaveAll: async () => {
-      const hadProjectFiles = tabState.openTabs.some(tab => 
+      const hadProjectFiles = tabState.openTabs.some(tab =>
         tab.hasUnsavedChanges && shouldReloadProjects(tab.file.path)
       );
-      
+
       await saveAllTabs();
-      
+
       // Reload projects if any project files were saved
       if (hadProjectFiles && gtdSpace?.root_path) {
         await loadProjects(gtdSpace.root_path);
@@ -287,7 +301,7 @@ export const App: React.FC = () => {
 
   // === GTD STATE ===
 
-  const { gtdSpace, checkGTDSpace, loadProjects, initializeDefaultSpaceIfNeeded, refreshSpace: refreshGTDSpace } = useGTDSpace();
+  const { gtdSpace, isLoading, checkGTDSpace, loadProjects, initializeDefaultSpaceIfNeeded, refreshSpace: refreshGTDSpace } = useGTDSpace();
   const [currentProject, setCurrentProject] = React.useState<GTDProject | null>(null);
   const [showGTDInit, setShowGTDInit] = React.useState(false);
 
@@ -298,9 +312,9 @@ export const App: React.FC = () => {
   // This is used by useTabManager to notify when files are saved
   React.useEffect(() => {
     if (!gtdSpace?.root_path) return;
-    
+
     const projectsPath = `${gtdSpace.root_path}/Projects/`;
-    
+
     window.onTabFileSaved = async (filePath: string) => {
       // Only reload if the file is in the Projects directory
       if (filePath.startsWith(projectsPath) && filePath.endsWith('.md')) {
@@ -327,9 +341,9 @@ export const App: React.FC = () => {
     if (saved) {
       const parsedWidth = parseInt(saved, 10);
       // Validate the parsed value
-      if (!isNaN(parsedWidth) && 
-          parsedWidth >= MIN_SIDEBAR_WIDTH && 
-          parsedWidth <= MAX_SIDEBAR_WIDTH) {
+      if (!isNaN(parsedWidth) &&
+        parsedWidth >= MIN_SIDEBAR_WIDTH &&
+        parsedWidth <= MAX_SIDEBAR_WIDTH) {
         return parsedWidth;
       }
     }
@@ -381,6 +395,15 @@ export const App: React.FC = () => {
     checkSpace();
   }, [fileState.currentFolder, checkGTDSpace, gtdSpace?.projects, gtdSpace?.root_path, tabState.openTabs, closeTab]);
 
+  // === THEME WATCHER ===
+
+  // Apply theme whenever settings change
+  React.useEffect(() => {
+    console.log('[App] Theme changed to:', settings.theme);
+    applyTheme(settings.theme);
+    console.log('[App] Theme applied, document classes:', document.documentElement.classList.toString());
+  }, [settings.theme, applyTheme]);
+
   // === INITIALIZE ===
 
   React.useEffect(() => {
@@ -416,7 +439,7 @@ export const App: React.FC = () => {
     };
 
     init();
-  }, [settings.theme, fileState.currentFolder, initializeDefaultSpaceIfNeeded, checkGTDSpace, loadProjects, handleFolderLoad]);
+  }, [settings.theme, fileState.currentFolder, initializeDefaultSpaceIfNeeded, checkGTDSpace, loadProjects, handleFolderLoad, applyTheme]);
 
   // === RENDER ===
 
@@ -437,7 +460,7 @@ export const App: React.FC = () => {
     };
 
     checkTauri();
-  }, []);
+  }, [applyTheme]);
 
   // Listen for habit status updates to refresh the editor
   React.useEffect(() => {
@@ -453,17 +476,17 @@ export const App: React.FC = () => {
             console.error('Failed to refresh habit after status update:', error);
           });
       }
-      
+
       // Also refresh the sidebar to show updated status
       if (event.detail.habitPath.toLowerCase().includes('/habits/')) {
         refreshGTDSpace();
       }
     };
-    
+
     // Handle real-time content changes for habits
     const handleHabitContentChanged = (event: CustomEvent<{ filePath: string }>) => {
       const { filePath } = event.detail;
-      
+
       // If the changed file is the currently active tab, reload its content
       if (activeTab?.filePath === filePath) {
         invoke<string>('read_file', { path: filePath })
@@ -478,13 +501,13 @@ export const App: React.FC = () => {
 
     window.addEventListener('habit-status-updated', handleHabitStatusUpdate as EventListener);
     window.addEventListener('habit-content-changed', handleHabitContentChanged as EventListener);
-    
+
     return () => {
       window.removeEventListener('habit-status-updated', handleHabitStatusUpdate as EventListener);
       window.removeEventListener('habit-content-changed', handleHabitContentChanged as EventListener);
     };
   }, [activeTab?.filePath, activeTab?.id, updateTabContent, refreshGTDSpace]);
-  
+
   // === HABIT RESET SCHEDULER ===
   React.useEffect(() => {
     if (!gtdSpace?.root_path) {
@@ -502,11 +525,11 @@ export const App: React.FC = () => {
           console.error('[App] Failed to check_and_reset_habits:', error);
           return [];
         });
-        
+
         if (resetHabits.length > 0) {
           // Refresh the sidebar to show updated statuses
           refreshGTDSpace();
-          
+
           // Also refresh the current tab if it's a habit
           if (activeTab?.filePath?.toLowerCase().includes('/habits/')) {
             // Reload the file content from disk
@@ -529,7 +552,7 @@ export const App: React.FC = () => {
         const resetHabits = await invoke<string[]>('check_and_reset_habits', {
           spacePath: gtdSpace.root_path,
         });
-        
+
         if (resetHabits.length > 0) {
           // Refresh the sidebar to show updated statuses
           refreshGTDSpace();
@@ -547,7 +570,7 @@ export const App: React.FC = () => {
     const interval = setInterval(() => {
       checkHabits();
     }, 60000); // 1 minute interval
-    
+
     return () => {
       clearInterval(interval);
     };
@@ -557,7 +580,7 @@ export const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
-      <div className="flex flex-col h-screen bg-background text-foreground">
+      <div key={themeKey} className="flex flex-col h-screen bg-background text-foreground">
         <Toaster />
 
         {/* Header */}
@@ -578,15 +601,33 @@ export const App: React.FC = () => {
           }}
           onOpenSettings={() => openModal('settings')}
           onToggleTheme={toggleTheme}
+          onOpenCalendar={isGTDSpace ? () => {
+            // Open calendar in a new tab
+            openTab({
+              id: 'calendar',
+              name: 'Calendar',
+              path: '::calendar::',
+              size: 0,
+              last_modified: Date.now(),
+              extension: '',
+            });
+          } : undefined}
+          onOpenDashboard={isGTDSpace ? () => {
+            // Close all tabs to show dashboard
+            if (tabState.openTabs.length > 0) {
+              // Close all tabs which will automatically show the dashboard
+              tabState.openTabs.forEach(tab => closeTab(tab.id));
+            }
+          } : undefined}
+          onOpenKeyboardShortcuts={() => openModal('keyboardShortcuts')}
         />
 
         {/* Main content area */}
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar */}
           <div
-            className={`relative flex-shrink-0 transition-all duration-300 ${
-              sidebarCollapsed ? 'w-0' : ''
-            } overflow-hidden`}
+            className={`relative flex-shrink-0 transition-all duration-300 ${sidebarCollapsed ? 'w-0' : ''
+              } overflow-hidden`}
             style={{
               width: sidebarCollapsed ? 0 : `${sidebarWidth}px`,
               minWidth: sidebarCollapsed ? 0 : `${MIN_SIDEBAR_WIDTH}px`,
@@ -594,6 +635,7 @@ export const App: React.FC = () => {
             }}
           >
             <GTDWorkspaceSidebar
+              key={`sidebar-${gtdSpace?.projects?.length || 0}`}
               currentFolder={fileState.currentFolder}
               onFolderSelect={handleFolderLoad}
               onFileSelect={handleFileSelect}
@@ -603,20 +645,19 @@ export const App: React.FC = () => {
               checkGTDSpace={checkGTDSpace}
               loadProjects={loadProjects}
             />
-            
+
             {/* Resize Handle */}
             {!sidebarCollapsed && (
               <div
-                className={`absolute top-0 right-0 w-1 h-full cursor-col-resize transition-colors ${
-                  isResizing ? 'bg-primary/40' : 'bg-transparent hover:bg-primary/20'
-                }`}
+                className={`absolute top-0 right-0 w-1 h-full cursor-col-resize transition-colors ${isResizing ? 'bg-primary/40' : 'bg-transparent hover:bg-primary/20'
+                  }`}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   setIsResizing(true);
-                  
+
                   const startX = e.clientX;
                   const startWidth = sidebarWidth;
-                  
+
                   const handleMouseMove = (e: MouseEvent) => {
                     const delta = e.clientX - startX;
                     const newWidth = Math.min(
@@ -625,7 +666,7 @@ export const App: React.FC = () => {
                     );
                     setSidebarWidth(newWidth);
                   };
-                  
+
                   const handleMouseUp = () => {
                     setIsResizing(false);
                     document.removeEventListener('mousemove', handleMouseMove);
@@ -633,7 +674,7 @@ export const App: React.FC = () => {
                     // Save the width preference
                     localStorage.setItem('gtdspace-sidebar-width', String(sidebarWidth));
                   };
-                  
+
                   document.addEventListener('mousemove', handleMouseMove);
                   document.addEventListener('mouseup', handleMouseUp);
                 }}
@@ -643,22 +684,43 @@ export const App: React.FC = () => {
 
           {/* Sidebar toggle button */}
           <div className="flex items-start pt-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="ml-1"
-            >
-              <Menu className="h-4 w-4" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                    className="ml-1 gap-1.5"
+                    aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+                  >
+                    {sidebarCollapsed ? (
+                      <>
+                        <PanelLeft className="h-4 w-4" />
+                      </>
+                    ) : (
+                      <>
+                        <PanelLeftClose className="h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>{sidebarCollapsed ? 'Show sidebar (⌘B)' : 'Hide sidebar (⌘B)'}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           {/* Main Content Area */}
           <div className="flex-1 flex flex-col min-w-0">
-            {fileState.currentFolder && isGTDSpace && !fileState.currentFolder?.includes('/Projects/') && tabState.openTabs.length === 0 ? (
-              // GTD Dashboard View - Show only when in GTD root with no open tabs
+            {gtdSpace && isGTDSpace && tabState.openTabs.length === 0 ? (
+              // GTD Dashboard View - Show when in GTD space with no open tabs
               <GTDDashboard
-                currentFolder={fileState.currentFolder}
+                currentFolder={gtdSpace.root_path}
+                gtdSpace={gtdSpace}
+                isLoading={isLoading}
+                loadProjects={loadProjects}
                 onSelectProject={handleFolderLoad}
                 onSelectFile={handleFileSelect}
                 className="flex-1"

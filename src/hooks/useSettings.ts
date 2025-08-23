@@ -97,7 +97,21 @@ export const useSettings = () => {
    */
   const updateSettings = useCallback(async (updates: Partial<UserSettings>) => {
     const newSettings = { ...settings, ...updates };
-    await saveSettings(newSettings);
+    
+    // Update local state immediately for responsive UI
+    setSettings(newSettings);
+    
+    // Emit event before save for immediate UI updates
+    window.dispatchEvent(new CustomEvent('settings-updated', { 
+      detail: newSettings 
+    }));
+    
+    // Save to backend (don't await to avoid blocking UI)
+    saveSettings(newSettings).catch(error => {
+      console.error('Failed to persist settings:', error);
+      // Revert on error
+      setSettings(settings);
+    });
   }, [settings, saveSettings]);
 
   /**
@@ -150,6 +164,25 @@ export const useSettings = () => {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  /**
+   * Listen for settings updates from other components
+   */
+  useEffect(() => {
+    const handleSettingsUpdate = (event: CustomEvent<UserSettings>) => {
+      // Only update if the settings are different to avoid infinite loops
+      if (JSON.stringify(event.detail) !== JSON.stringify(settings)) {
+        console.log('[useSettings] Received settings update:', event.detail);
+        setSettings(event.detail);
+      }
+    };
+
+    window.addEventListener('settings-updated', handleSettingsUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('settings-updated', handleSettingsUpdate as EventListener);
+    };
+  }, [settings]);
 
   // === RETURN STATE AND OPERATIONS ===
   

@@ -31,7 +31,7 @@ cd src-tauri && cargo check   # Fast compilation check
 cd src-tauri && cargo build   # Full compilation
 
 # Frontend-only (limited - no file operations)
-npm run dev
+npm run dev            # Port 1420, no backend
 
 # Production preview
 npm run preview        # Preview production build
@@ -71,8 +71,11 @@ Each hook in `src/hooks/` encapsulates specific domain logic:
 - **`useKeyboardShortcuts`** - Platform-aware keyboard shortcuts
 - **`useSingleSelectInsertion`** / **`useMultiSelectInsertion`** - GTD field insertion
 - **`useReferencesInsertion`** - References block insertion for Cabinet/Someday links
+- **`useHorizonReferencesInsertion`** - Hierarchical GTD horizon references
+- **`useHorizonListInsertion`** - Dynamic horizon list blocks
+- **`useDateTimeInsertion`** - DateTime field insertion with calendar UI
 - **`useHabitTracking`** - Habit-specific operations and state management
-- **`useCalendarData`** - Aggregates all dated items across workspace
+- **`useCalendarData`** - Aggregates all dated items across workspace with performance optimization
 
 ## Architecture: GTD Implementation
 
@@ -216,15 +219,27 @@ interface HabitRecord {
   - `gtdspace-tabs` - Tab persistence
   - `gtdspace-search-history` - Search history
   - `gtdspace-saved-searches` - Saved queries
+  - `gtdspace-current-path` - Active workspace
+  - `blocknote-current-file` - Editor context
 - **Tauri Store**: User settings and preferences
 
 ### Event-Driven Architecture
 - **File Change Events**: Rust backend emits, frontend receives via Tauri
 - **Content Event Bus** (`src/utils/content-event-bus.ts`): Centralized metadata updates
-- **Custom Window Events**: Cross-component communication for habit updates, renames
+- **Custom Window Events**: Cross-component communication
+  - `gtd-project-created` - Dispatched when project created (useGTDSpace.ts:182)
+  - `gtd-action-created` - Dispatched when action created
+  - `gtd-habit-updated` - Dispatched when habit status changes
+  - `file-renamed` - Dispatched when file/folder renamed
 - **Tab Conflicts**: External changes trigger user prompts for resolution
 - **Recursive Prevention**: `isEmitting` flag prevents infinite loops
 - **Real-Time Sync**: Live UI updates as content changes in editor
+
+### Calendar System Performance
+- **View-Window Optimization**: Only generates dates within current view
+- **Pre-compiled Regex**: Cached patterns for metadata extraction
+- **Parallel File Reading**: Concurrent operations for data aggregation
+- **Smart Habit Scheduling**: Generates recurring dates on-demand
 
 ### TypeScript Configuration
 - **Strict mode disabled** - careful with null checks
@@ -276,6 +291,26 @@ interface HabitRecord {
 **Settings:**
 `load_settings`, `save_settings`
 
+## Known Issues & Troubleshooting
+
+### Sidebar Not Updating After Project Creation
+**Problem**: When creating a new project, the sidebar doesn't immediately show the new project.
+
+**Root Cause**: The project creation flow relies on custom events:
+1. `useGTDSpace.createProject()` dispatches `gtd-project-created` event (line 182)
+2. `GTDWorkspaceSidebar` listens for this event (line 770) and calls `loadProjects()`
+3. Issue may be timing/race condition or event listener not properly attached
+
+**Debug Steps**:
+1. Check browser console for:
+   - `[GTDProjectDialog] Calling onSuccess callback` 
+   - `[Sidebar] Project created event received`
+   - `[Sidebar] Reloading projects from event`
+2. Verify `gtdSpace.root_path` is set when event fires
+3. Check if manual `loadProjects()` call works in console
+
+**Workaround**: Manually refresh the sidebar by collapsing and expanding the Projects section.
+
 ## Recent Architecture Decisions (Jan 2025)
 
 ### Core GTD Features
@@ -295,6 +330,8 @@ interface HabitRecord {
 - **Template-Based**: Each folder has a README overview and example pages
 - **Sidebar Integration**: Horizon folders appear in altitude order (highest to lowest) above Projects
 - **Auto-Seeding**: Horizon folders created with example content on initialization
+- **Bidirectional References**: Projects can reference Areas/Goals, Areas can reference Goals/Vision/Purpose
+- **Dynamic Lists**: Pages show items from lower horizons that reference them
 
 ### Habit System
 - **Habit Tracking System**: Habits have 'todo'/'complete' status that auto-resets based on frequency
@@ -309,6 +346,9 @@ interface HabitRecord {
 - **Calendar Integration**: Full calendar view aggregating all dated items
 - **Performance Optimized**: Pre-compiled regex patterns and parallel file reading
 - **Multi-Source Data**: Combines project due dates, action focus dates, and habit schedules
+- **View-Window Generation**: Only generates dates within current view for performance
+- **Week View**: Time-based scheduling with current time indicator
+- **Month View**: Date-based overview with item counts
 
 ### UI/UX Improvements
 - **DateTime Fields**: Beautiful calendar/time picker components using shadcn/ui
@@ -321,7 +361,8 @@ interface HabitRecord {
 - **Options Menu**: Three-dot menu in sidebar for delete and other file operations
 - **References System**: Interactive UI for linking Cabinet and Someday Maybe pages to actions/projects
 - **Horizon References**: Hierarchical reference system linking projects to areas/goals, areas to goals/vision/purpose, etc.
-- **Horizon Lists**: Dynamic lists showing items from lower horizons that reference the current page (e.g., projects in an Area of Focus)
+- **Horizon Lists**: Dynamic lists showing items from lower horizons that reference the current page
+- **Settings Organization**: Modular settings panels (GTD, Appearance, Advanced, About)
 
 ### Technical Improvements
 - **IPC Fix**: Rust commands are synchronous for Tauri 2.0 compatibility
@@ -330,6 +371,7 @@ interface HabitRecord {
 - **Tab Path Updates**: Tabs automatically update paths when files/folders are renamed
 - **Recursive Scanning**: `list_markdown_files` scans project subdirectories
 - **ISO 8601 Support**: Full datetime storage with timezone support
+- **Reverse Relationship Queries**: Efficient backend support for hierarchy traversal
 
 ## Key Dependencies
 
@@ -340,8 +382,8 @@ interface HabitRecord {
 - **Syntax Highlighting**: Both `shiki` and `highlight.js` for code blocks
 - **react-hotkeys-hook**: Keyboard shortcut management
 - **lodash.debounce**: Performance optimization
-- **react-day-picker**: Calendar component for date selection
-- **date-fns**: Date manipulation and formatting
+- **react-day-picker v9.8**: Calendar component for date selection
+- **date-fns v4.1**: Date manipulation and formatting
 - **lucide-react**: Modern icon library
 
 ### Backend (Rust)
@@ -358,6 +400,12 @@ interface HabitRecord {
 2. **File Operations**: UI → Tauri commands → File system → File watcher → UI updates  
 3. **GTD Operations**: Forms → useGTDSpace → Rust backend → State refresh
 4. **Habit Updates**: Checkbox → useHabitTracking → update_habit_status → File content
+5. **Calendar Data**: useCalendarData → Parallel file reads → Aggregated view
+6. **Project Creation Flow**:
+   - GTDProjectDialog → useGTDSpace.createProject()
+   - createProject() → invoke('create_gtd_project') → Updates local state
+   - createProject() → dispatch('gtd-project-created') event
+   - GTDWorkspaceSidebar listens → loadProjects() → UI updates
 
 ### Critical File Dependencies
 - **App.tsx** orchestrates all major hooks and components
@@ -366,8 +414,9 @@ interface HabitRecord {
 - **BlockNote Editor** integrates with custom blocks and preprocessing utilities
 - **Calendar View** aggregates data from all GTD sections in parallel
 - **ReferencesBlock** provides Cabinet/Someday linking with dialog-based selection
-- **HorizonReferencesBlock** provides hierarchical GTD horizon linking (areas, goals, vision, purpose)
+- **HorizonReferencesBlock** provides hierarchical GTD horizon linking
 - **HorizonListBlock** provides dynamic lists of items that reference the current page
+- **Settings Components** modular panels for different configuration areas
 
 ## Testing Status
 

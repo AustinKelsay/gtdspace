@@ -55,61 +55,68 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
 
     setIsCreating(true);
     
-    // Combine focus date and time into ISO datetime string
-    let focusDateTime: string | null = null;
-    if (focusDate) {
-      if (focusTime) {
-        // Combine date and time
-        focusDateTime = `${focusDate}T${focusTime}:00`;
-      } else {
-        // Default to start of day if no time specified
-        focusDateTime = `${focusDate}T09:00:00`;
-      }
-    }
-    
-    // Combine due date and time into ISO datetime string
-    let dueDateTime: string | null = null;
-    if (dueDate) {
-      if (dueTime) {
-        // Combine date and time
-        dueDateTime = `${dueDate}T${dueTime}:00`;
-      } else {
-        // Default to 5 PM if no time specified (typical deadline)
-        dueDateTime = `${dueDate}T17:00:00`;
-      }
-    }
-    
-    const actionData: GTDActionCreate = {
-      project_path: projectPath,
-      action_name: actionName.trim(),
-      status,
-      focus_date: focusDateTime,
-      due_date: dueDateTime,
-      effort,
-      contexts: contexts.length > 0 ? contexts : undefined,
-    };
-
-    const result = await createAction(actionData);
-    setIsCreating(false);
-
-    if (result) {
-      // Reset form
-      setActionName('');
-      setStatus('in-progress');
-      setFocusDate('');
-      setFocusTime('');
-      setDueDate('');
-      setDueTime('');
-      setEffort('medium');
-      setNotes('');
-      setContexts([]);
-      
-      // Call onSuccess with the action path if provided
-      if (onSuccess && typeof result === 'string') {
-        onSuccess(result);
+    try {
+      // Combine focus date and time into ISO datetime string
+      let focusDateTime: string | null = null;
+      if (focusDate) {
+        if (focusTime) {
+          // Combine date and time
+          focusDateTime = `${focusDate}T${focusTime}:00`;
+        } else {
+          // Default to start of day if no time specified
+          focusDateTime = `${focusDate}T09:00:00`;
+        }
       }
       
-      onClose();
+      // Combine due date and time into ISO datetime string
+      let dueDateTime: string | null = null;
+      if (dueDate) {
+        if (dueTime) {
+          // Combine date and time
+          dueDateTime = `${dueDate}T${dueTime}:00`;
+        } else {
+          // Default to 5 PM if no time specified (typical deadline)
+          dueDateTime = `${dueDate}T17:00:00`;
+        }
+      }
+      
+      const actionData: GTDActionCreate = {
+        project_path: projectPath,
+        action_name: actionName.trim(),
+        status,
+        focus_date: focusDateTime,
+        due_date: dueDateTime,
+        effort,
+        contexts: contexts.length > 0 ? contexts : undefined,
+      };
+
+      console.log('[GTDActionDialog] Calling createAction with:', actionData);
+      const result = await createAction(actionData);
+      console.log('[GTDActionDialog] createAction result:', result);
+
+      if (result) {
+        // Reset form
+        setActionName('');
+        setStatus('in-progress');
+        setFocusDate('');
+        setFocusTime('');
+        setDueDate('');
+        setDueTime('');
+        setEffort('medium');
+        setNotes('');
+        setContexts([]);
+        
+        // Call onSuccess with the action path if provided
+        if (onSuccess && typeof result === 'string') {
+          onSuccess(result);
+        }
+        
+        onClose();
+      }
+    } catch (error) {
+      console.error('[GTDActionDialog] Error creating action:', error);
+    } finally {
+      setIsCreating(false);
     }
   };
 

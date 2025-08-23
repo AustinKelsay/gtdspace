@@ -174,7 +174,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const [showProjectDialog, setShowProjectDialog] = React.useState(false);
   const [showActionDialog, setShowActionDialog] = React.useState(false);
   const [selectedProject, setSelectedProject] = React.useState<GTDProject | null>(null);
-  const [expandedSections, setExpandedSections] = React.useState<string[]>(['projects']);
+  const [expandedSections, setExpandedSections] = React.useState<string[]>(['areas', 'projects', 'habits']);
   const [expandedProjects, setExpandedProjects] = React.useState<string[]>([]);
   const [projectActions, setProjectActions] = React.useState<{ [projectPath: string]: MarkdownFile[] }>({});
   const [actionStatuses, setActionStatuses] = React.useState<{ [actionPath: string]: string }>({});
@@ -185,6 +185,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const [showHabitDialog, setShowHabitDialog] = React.useState(false);
   const [sectionFiles, setSectionFiles] = React.useState<{ [sectionPath: string]: MarkdownFile[] }>({});
   const [sectionRefreshKey, setSectionRefreshKey] = React.useState(0);
+  // Track preloading and in-flight loads to avoid janky duplicate fetches
+  const lastRootRef = React.useRef<string | null>(null);
+  const preloadedRef = React.useRef<boolean>(false);
+  const loadingSectionsRef = React.useRef<Set<string>>(new Set());
 
   // Delete dialog state
   const [deleteItem, setDeleteItem] = React.useState<{ type: 'project' | 'action' | 'file'; path: string; name: string } | null>(null);
@@ -197,9 +201,20 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
   // Local state for section file metadata that can be updated dynamically
   const [sectionFileMetadata, setSectionFileMetadata] = React.useState<{ [filePath: string]: { title?: string; currentPath?: string } }>({});
+  // Optimistic list of projects added before backend reload confirms them
+  const [pendingProjects, setPendingProjects] = React.useState<GTDProject[]>([]);
 
-  const loadSectionFiles = React.useCallback(async (sectionPath: string) => {
+  const loadSectionFiles = React.useCallback(async (sectionPath: string, force: boolean = false) => {
     try {
+      // Skip if already loaded and not forcing
+      if (!force && sectionFiles[sectionPath] && sectionFiles[sectionPath].length >= 0) {
+        return sectionFiles[sectionPath];
+      }
+      // Prevent duplicate concurrent loads
+      if (loadingSectionsRef.current.has(sectionPath)) {
+        return sectionFiles[sectionPath] || [];
+      }
+      loadingSectionsRef.current.add(sectionPath);
       console.log('Loading files for section:', sectionPath);
       const files = await invoke<MarkdownFile[]>('list_markdown_files', {
         path: sectionPath
@@ -213,22 +228,21 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         return aName.localeCompare(bName);
       });
 
-      // Use flushSync to force immediate state update
-      flushSync(() => {
-        setSectionFiles(prev => ({
-          ...prev,
-          [sectionPath]: sortedFiles
-        }));
-        // Force a re-render by updating the refresh key
-        setSectionRefreshKey(prev => prev + 1);
-      });
+      setSectionFiles(prev => ({
+        ...prev,
+        [sectionPath]: sortedFiles
+      }));
+      // Force a re-render by updating the refresh key (kept lightweight)
+      setSectionRefreshKey(prev => prev + 1);
 
       return sortedFiles;
     } catch (error) {
       console.error('Failed to load section files:', sectionPath, error);
       return [];
+    } finally {
+      loadingSectionsRef.current.delete(sectionPath);
     }
-  }, []);
+  }, [sectionFiles]);
 
   // Parse YYYY-MM-DD as a local date to avoid timezone off-by-one issues
   function parseLocalDateString(dateStr: string): Date | null {
@@ -335,35 +349,45 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         : currentFolder;
 
       if (pathToCheck) {
+        // Avoid duplicate preloads for same root
+        if (lastRootRef.current !== pathToCheck) {
+          preloadedRef.current = false;
+          lastRootRef.current = pathToCheck;
+        }
+
         const isGTD = await checkGTDSpace(pathToCheck);
         if (isGTD) {
-          await loadProjects(pathToCheck);
-          // console.log('Sidebar: loaded projects count =', projects?.length ?? 0);
+          // Load projects only if not present yet or root changed
+          if (!gtdSpace?.projects || gtdSpace.root_path !== pathToCheck) {
+            await loadProjects(pathToCheck);
+          }
 
-          // Preload files for all non-project sections
-          const somedayPath = `${pathToCheck}/Someday Maybe`;
-          const cabinetPath = `${pathToCheck}/Cabinet`;
-          const habitsPath = `${pathToCheck}/Habits`;
-          const areasPath = `${pathToCheck}/Areas of Focus`;
-          const goalsPath = `${pathToCheck}/Goals`;
-          const visionPath = `${pathToCheck}/Vision`;
-          const purposePath = `${pathToCheck}/Purpose & Principles`;
+          if (!preloadedRef.current) {
+            // Preload files for all non-project sections once
+            const somedayPath = `${pathToCheck}/Someday Maybe`;
+            const cabinetPath = `${pathToCheck}/Cabinet`;
+            const habitsPath = `${pathToCheck}/Habits`;
+            const areasPath = `${pathToCheck}/Areas of Focus`;
+            const goalsPath = `${pathToCheck}/Goals`;
+            const visionPath = `${pathToCheck}/Vision`;
+            const purposePath = `${pathToCheck}/Purpose & Principles`;
 
-          // Load files for these sections to show counts immediately
-          await Promise.all([
-            loadSectionFiles(somedayPath),
-            loadSectionFiles(cabinetPath),
-            loadSectionFiles(habitsPath),
-            loadSectionFiles(areasPath),
-            loadSectionFiles(goalsPath),
-            loadSectionFiles(visionPath),
-            loadSectionFiles(purposePath)
-          ]);
+            await Promise.all([
+              loadSectionFiles(somedayPath),
+              loadSectionFiles(cabinetPath),
+              loadSectionFiles(habitsPath),
+              loadSectionFiles(areasPath),
+              loadSectionFiles(goalsPath),
+              loadSectionFiles(visionPath),
+              loadSectionFiles(purposePath)
+            ]);
+            preloadedRef.current = true;
+          }
         }
       }
     };
     checkSpace();
-  }, [currentFolder, gtdSpace?.root_path, checkGTDSpace, loadProjects, loadSectionFiles]);
+  }, [currentFolder, gtdSpace?.root_path, gtdSpace?.projects, checkGTDSpace, loadProjects, loadSectionFiles]);
 
   // Listen for content changes to update sidebar dynamically
   React.useEffect(() => {
@@ -721,10 +745,57 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       }
     });
 
+    // Listen for GTD project/action creation events
+    const handleProjectCreated = async (event: CustomEvent) => {
+      // Project created event received
+      const { projectPath, projectName } = event.detail as { projectPath?: string; projectName?: string };
+
+      // Optimistically show the new project immediately
+      if (projectPath && projectName) {
+        const optimistic: GTDProject = {
+          name: projectName,
+          description: '',
+          due_date: undefined,
+          status: ['in-progress'],
+          path: projectPath,
+          created_date: new Date().toISOString().split('T')[0],
+          action_count: 0,
+        };
+        setPendingProjects(prev => (prev.some(p => p.path === optimistic.path) ? prev : [...prev, optimistic]));
+      }
+
+      if (gtdSpace?.root_path) {
+        // Reload projects from event
+        const projects = await loadProjects(gtdSpace.root_path);
+        // Projects reloaded
+        // Remove any pending projects that are now present
+        setPendingProjects(prev => prev.filter(p => !projects.some(lp => lp.path === p.path)));
+      } else {
+        // No GTD space root path in event handler
+      }
+    };
+
+    const handleActionCreated = async (event: CustomEvent) => {
+      console.log('[Sidebar] Action created event received:', event.detail);
+      const { projectPath } = event.detail;
+      if (projectPath) {
+        await loadProjectActions(projectPath);
+        // Also reload projects to update action counts
+        if (gtdSpace?.root_path) {
+          await loadProjects(gtdSpace.root_path);
+        }
+      }
+    };
+
+    window.addEventListener('gtd-project-created', handleProjectCreated as EventListener);
+    window.addEventListener('gtd-action-created', handleActionCreated as EventListener);
+
     return () => {
       unsubscribeMetadata();
       unsubscribeChanged();
       unsubscribeSaved();
+      window.removeEventListener('gtd-project-created', handleProjectCreated as EventListener);
+      window.removeEventListener('gtd-action-created', handleActionCreated as EventListener);
     };
   }, [gtdSpace, loadProjects, loadProjectActions, loadSectionFiles, projectActions]);
 
@@ -824,6 +895,16 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     }
   };
 
+  const getActionStatusIcon = (status: string) => {
+    const normalizedStatus = status || 'in-progress';
+    switch (normalizedStatus) {
+      case 'complete': return CheckCircle2;
+      case 'waiting': return CircleDot;
+      case 'in-progress': return Circle;
+      default: return Circle;
+    }
+  };
+
   const getActionStatusColor = (status: string) => {
     const normalizedStatus = status || 'in-progress';
     switch (normalizedStatus) {
@@ -834,26 +915,75 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     }
   };
 
-  const filteredProjects = React.useMemo(() => {
-    // console.log('Sidebar: computing filteredProjects from', gtdSpace?.projects?.length ?? 0, 'projects, query=', searchQuery);
-
-    // Debug: Log project statuses
-    // if (gtdSpace?.projects) {
-    //   gtdSpace.projects.forEach(p => {
-    //     console.log(`Project: ${p.name}, Status:`, p.status);
-    //   });
-    // }
-
-    if (!gtdSpace?.projects || !searchQuery) {
-      return gtdSpace?.projects || [];
+  // Generic search results across all sections
+  const searchResults = React.useMemo(() => {
+    if (!searchQuery) {
+      return null;
     }
 
     const query = searchQuery.toLowerCase();
-    return gtdSpace.projects.filter(project =>
-      project.name.toLowerCase().includes(query) ||
-      project.description.toLowerCase().includes(query)
-    );
-  }, [gtdSpace?.projects, searchQuery]);
+    const results: {
+      projects: GTDProject[];
+      actions: { project: string; actions: MarkdownFile[] }[];
+      sections: { section: GTDSection; files: MarkdownFile[] }[];
+    } = {
+      projects: [],
+      actions: [],
+      sections: []
+    };
+
+    // Search projects
+    if (gtdSpace?.projects) {
+      results.projects = gtdSpace.projects.filter(project =>
+        project.name.toLowerCase().includes(query) ||
+        project.description.toLowerCase().includes(query)
+      );
+    }
+
+    // Search project actions
+    Object.entries(projectActions).forEach(([projectPath, actions]) => {
+      const matchingActions = actions.filter(action => {
+        const name = action.name.replace('.md', '');
+        return name.toLowerCase().includes(query);
+      });
+      if (matchingActions.length > 0) {
+        const projectName = projectPath.split('/').pop() || projectPath;
+        results.actions.push({ project: projectName, actions: matchingActions });
+      }
+    });
+
+    // Search all sections
+    GTD_SECTIONS.forEach(section => {
+      if (section.id === 'calendar' || section.id === 'projects') return; // Skip special sections
+
+      const sectionPath = `${gtdSpace?.root_path || currentFolder}/${section.path}`;
+      const files = sectionFiles[sectionPath] || [];
+      const matchingFiles = files.filter(file => {
+        const name = file.name.replace('.md', '');
+        return name.toLowerCase().includes(query);
+      });
+
+      if (matchingFiles.length > 0) {
+        results.sections.push({ section, files: matchingFiles });
+      }
+    });
+
+    return results;
+  }, [searchQuery, gtdSpace?.projects, projectActions, sectionFiles, currentFolder, gtdSpace?.root_path]);
+
+  const filteredProjects = React.useMemo(() => {
+    // Merge confirmed projects with any optimistic pending ones
+    const base = gtdSpace?.projects || [];
+    const merged = [...base];
+    for (const p of pendingProjects) if (!merged.some(m => m.path === p.path)) merged.push(p);
+
+    if (searchQuery) return merged.filter(project => {
+      const q = searchQuery.toLowerCase();
+      return project.name.toLowerCase().includes(q) || (project.description || '').toLowerCase().includes(q);
+    });
+
+    return merged;
+  }, [gtdSpace?.projects, pendingProjects, searchQuery]);
 
   const handleSelectFolder = async () => {
     try {
@@ -1059,14 +1189,18 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                 if (onRefresh) {
                   onRefresh();
                 }
-                
-                // Also refresh all section files
-                console.log('Refreshing all sections...');
+
+                // Refresh projects list
                 const rootPath = gtdSpace?.root_path || currentFolder;
                 if (rootPath) {
+                  console.log('Refreshing projects...');
+                  await loadProjects(rootPath);
+
+                  // Also refresh all section files
+                  console.log('Refreshing all sections...');
                   const promises = GTD_SECTIONS.filter(s => s.id !== 'calendar').map(section => {
                     const sectionPath = `${rootPath}/${section.path}`;
-                    return loadSectionFiles(sectionPath);
+                    return loadSectionFiles(sectionPath, true);
                   });
                   await Promise.all(promises);
                   console.log('All sections refreshed');
@@ -1106,7 +1240,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           className="w-full justify-start"
         >
           <Search className="h-3.5 w-3.5 mr-1.5 flex-shrink-0" />
-          <span className="truncate">Search Projects</span>
+          <span className="truncate">Search</span>
         </Button>
       </div>
 
@@ -1124,448 +1258,562 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       {/* GTD Sections */}
       <ScrollArea className="flex-1">
         <div className="p-2">
-          {/* Calendar Section - Special non-collapsible section */}
-          {/* GTD Sections in correct order: Horizon folders (highest to lowest), Calendar, Projects, etc. */}
-          {GTD_SECTIONS.map((section) => {
-            const isExpanded = expandedSections.includes(section.id);
-            const sectionPath = `${gtdSpace?.root_path || currentFolder}/${section.path}`;
-            const files = sectionFiles[sectionPath] || [];
+          {/* Show search results when searching */}
+          {searchQuery && searchResults ? (
+            <div className="space-y-4">
+              {/* Projects Results */}
+              {searchResults.projects.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2 px-2">
+                    <Briefcase className="h-3.5 w-3.5 text-blue-600" />
+                    <span className="text-sm font-medium">Projects</span>
+                    <Badge variant="secondary" className="text-xs px-1 py-0 h-4">
+                      {searchResults.projects.length}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1 pl-2">
+                    {searchResults.projects.map((project) => {
+                      const currentStatus = projectMetadata[project.path]?.status || project.status || 'in-progress';
+                      const currentTitle = projectMetadata[project.path]?.title || project.name;
+                      const StatusIcon = getProjectStatusIcon(currentStatus);
 
-            // Handle Calendar section specially
-            if (section.id === 'calendar') {
-              return (
-                <div
-                  key={section.id}
-                  className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors cursor-pointer"
-                  onClick={() => {
-                    // Open calendar as a special tab
-                    const calendarFile: MarkdownFile = {
-                      id: '::calendar::',
-                      name: 'Calendar',
-                      path: '::calendar::',
-                      size: 0,
-                      last_modified: Date.now(),
-                      extension: 'calendar'
-                    };
-                    onFileSelect(calendarFile);
-                  }}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-orange-600 flex-shrink-0" />
-                    <span className="font-medium text-sm">Calendar</span>
+                      return (
+                        <div
+                          key={project.path}
+                          className="group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer"
+                          onClick={() => handleProjectClick(project)}
+                        >
+                          <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(currentStatus)}`} />
+                          <span className="text-sm truncate">{currentTitle}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              );
-            }
+              )}
 
-            // Handle Projects section specially
-            if (section.id === 'projects') {
-              return (
-                <Collapsible
-                  key={`${section.id}-${sectionRefreshKey}`}
-                  open={isExpanded}
-                  onOpenChange={() => toggleSection('projects')}
-                >
-                  <div className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors">
-                    <CollapsibleTrigger className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                        <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
-                        <span className="font-medium text-sm truncate">{section.name}</span>
-                        <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
-                          {filteredProjects.length}
-                        </Badge>
-                      </div>
-                    </CollapsibleTrigger>
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowProjectDialog(true);
-                      }}
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Add Project"
-                    >
-                      <Plus className="h-3 w-3" />
-                    </Button>
+              {/* Actions Results */}
+              {searchResults.actions.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2 px-2">
+                    <FileText className="h-3.5 w-3.5 text-green-600" />
+                    <span className="text-sm font-medium">Actions</span>
+                    <Badge variant="secondary" className="text-xs px-1 py-0 h-4">
+                      {searchResults.actions.reduce((sum, p) => sum + p.actions.length, 0)}
+                    </Badge>
                   </div>
-
-                  <CollapsibleContent>
-                    <div className="pl-6 pr-2 py-1 space-y-1">
-                      {isLoading ? (
-                        <div className="text-sm text-muted-foreground py-2">Loading projects...</div>
-                      ) : filteredProjects.length === 0 ? (
-                        <div className="text-sm text-muted-foreground py-2">
-                          {searchQuery ? 'No projects match your search' : 'No projects yet'}
-                        </div>
-                      ) : (
-                        filteredProjects.map((project) => {
-                          const isProjectExpanded = expandedProjects.includes(project.path);
-                          const actions = projectActions[project.path] || [];
-                          const currentStatus = projectMetadata[project.path]?.status || project.status || 'in-progress';
-                          const currentTitle = projectMetadata[project.path]?.title || project.name;
-                          const StatusIcon = getProjectStatusIcon(currentStatus);
+                  <div className="space-y-2 pl-2">
+                    {searchResults.actions.map(({ project, actions }) => (
+                      <div key={project}>
+                        <div className="text-xs text-muted-foreground mb-1">{project}</div>
+                        {actions.map((action) => {
+                          const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress';
+                          const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
+                          const StatusIcon = getActionStatusIcon(currentStatus);
 
                           return (
-                            <div key={project.path}>
-                              <div className="group flex items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors">
+                            <div
+                              key={action.path}
+                              className="group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer"
+                              onClick={() => onFileSelect(action)}
+                            >
+                              <StatusIcon className={`h-3 w-3 flex-shrink-0 ${getActionStatusColor(currentStatus)}`} />
+                              <span className="text-sm truncate">{currentTitle}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Other Sections Results */}
+              {searchResults.sections.map(({ section, files }) => (
+                <div key={section.id}>
+                  <div className="flex items-center gap-2 mb-2 px-2">
+                    <section.icon className={`h-3.5 w-3.5 ${section.color}`} />
+                    <span className="text-sm font-medium">{section.name}</span>
+                    <Badge variant="secondary" className="text-xs px-1 py-0 h-4">
+                      {files.length}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1 pl-2">
+                    {files.map((file) => {
+                      const metadata = sectionFileMetadata[file.path];
+                      const displayName = metadata?.title || file.name.replace('.md', '');
+
+                      return (
+                        <div
+                          key={file.path}
+                          className="group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer"
+                          onClick={() => onFileSelect(file)}
+                        >
+                          <FileText className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                          <span className="text-sm truncate">{displayName}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              {/* No results message */}
+              {searchResults.projects.length === 0 &&
+                searchResults.actions.length === 0 &&
+                searchResults.sections.length === 0 && (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No results found for "{searchQuery}"
+                  </div>
+                )}
+            </div>
+          ) : (
+            /* Normal sections view when not searching */
+            <>
+              {/* Calendar Section - Special non-collapsible section */}
+              {/* GTD Sections in correct order: Horizon folders (highest to lowest), Calendar, Projects, etc. */}
+              {GTD_SECTIONS.map((section) => {
+                const isExpanded = expandedSections.includes(section.id);
+                const sectionPath = `${gtdSpace?.root_path || currentFolder}/${section.path}`;
+                const files = sectionFiles[sectionPath] || [];
+
+                // Handle Calendar section specially
+                if (section.id === 'calendar') {
+                  return (
+                    <div
+                      key={section.id}
+                      className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors cursor-pointer"
+                      onClick={() => {
+                        // Open calendar as a special tab
+                        const calendarFile: MarkdownFile = {
+                          id: '::calendar::',
+                          name: 'Calendar',
+                          path: '::calendar::',
+                          size: 0,
+                          last_modified: Date.now(),
+                          extension: 'calendar'
+                        };
+                        onFileSelect(calendarFile);
+                      }}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5 text-orange-600 flex-shrink-0" />
+                        <span className="font-medium text-sm">Calendar</span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Handle Projects section specially
+                if (section.id === 'projects') {
+                  return (
+                    <Collapsible
+                      key={`${section.id}-${sectionRefreshKey}`}
+                      open={isExpanded}
+                      onOpenChange={() => toggleSection('projects')}
+                    >
+                      <div className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors">
+                        <CollapsibleTrigger className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                            <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
+                            <span className="font-medium text-sm truncate">{section.name}</span>
+                            <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
+                              {filteredProjects.length}
+                            </Badge>
+                          </div>
+                        </CollapsibleTrigger>
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowProjectDialog(true);
+                          }}
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Add Project"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+
+                      <CollapsibleContent>
+                        <div className="pl-6 pr-2 py-1 space-y-1">
+                          {isLoading ? (
+                            <div className="text-sm text-muted-foreground py-2">Loading projects...</div>
+                          ) : filteredProjects.length === 0 ? (
+                            <div className="text-sm text-muted-foreground py-2">
+                              {searchQuery ? 'No projects match your search' : 'No projects yet'}
+                            </div>
+                          ) : (
+                            filteredProjects.map((project) => {
+                              const isProjectExpanded = expandedProjects.includes(project.path);
+                              const actions = projectActions[project.path] || [];
+                              const currentStatus = projectMetadata[project.path]?.status || project.status || 'in-progress';
+                              const currentTitle = projectMetadata[project.path]?.title || project.name;
+                              const StatusIcon = getProjectStatusIcon(currentStatus);
+
+                              return (
+                                <div key={project.path}>
+                                  <div className="group flex items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors">
+                                    <div
+                                      className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer"
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={() => {
+                                        console.log('Sidebar: project click ->', project.path);
+                                        handleProjectClick(project)
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                          e.preventDefault();
+                                          console.log('Sidebar: project key activate ->', project.path);
+                                          handleProjectClick(project);
+                                        }
+                                      }}
+                                    >
+                                      <Button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleProjectExpand(project);
+                                        }}
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-5 w-5 p-0 flex-shrink-0"
+                                      >
+                                        <ChevronRight className={`h-3 w-3 transition-transform ${isProjectExpanded ? 'rotate-90' : ''}`} />
+                                      </Button>
+                                      <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(currentStatus)}`} />
+                                      <div className="flex-1 min-w-0 ml-1">
+                                        <div className="font-medium text-sm truncate">{currentTitle}</div>
+                                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                          <span className="truncate">{project.action_count || 0} actions</span>
+                                          {(() => {
+                                            const dueStr = projectMetadata[project.path]?.due_date ?? project.due_date ?? '';
+                                            if (!dueStr || dueStr.trim() === '') return null;
+                                            const date = parseLocalDateString(dueStr);
+                                            return date ? (
+                                              <span className="flex items-center flex-shrink-0">
+                                                <Calendar className="h-2.5 w-2.5 mr-0.5" />
+                                                <span className="truncate">{date.toLocaleDateString()}</span>
+                                              </span>
+                                            ) : null;
+                                          })()}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-0.5 flex-shrink-0">
+                                      <Button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedProject(project);
+                                          setShowActionDialog(true);
+                                        }}
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Add Action"
+                                      >
+                                        <Plus className="h-3 w-3" />
+                                      </Button>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <MoreHorizontal className="h-3 w-3" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-40">
+                                          <DropdownMenuItem
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              try {
+                                                await invoke('open_file_location', { file_path: project.path });
+                                              } catch (error) {
+                                                console.error('Failed to open project location:', error);
+                                              }
+                                            }}
+                                          >
+                                            <Folder className="h-3 w-3 mr-2" />
+                                            Open Project Folder
+                                          </DropdownMenuItem>
+                                          <DropdownMenuSeparator />
+                                          <DropdownMenuItem
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              console.log('[Sidebar] Setting delete item for project:', project.path, project.name);
+                                              setDeleteItem({
+                                                type: 'project',
+                                                path: project.path,
+                                                name: project.name
+                                              });
+                                            }}
+                                            className="text-destructive focus:text-destructive"
+                                          >
+                                            <Trash2 className="h-3 w-3 mr-2" />
+                                            Delete Project
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+                                  </div>
+
+                                  {/* Actions */}
+                                  {isProjectExpanded && (
+                                    <div className="pl-8 py-0.5">
+                                      {actions.length === 0 ? (
+                                        <div className="text-xs text-muted-foreground py-1 px-1">No actions yet</div>
+                                      ) : (
+                                        actions
+                                          .filter(action => !action.name.toLowerCase().includes('readme'))
+                                          .map((action) => {
+                                            const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress';
+                                            const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
+                                            const currentPath = actionMetadata[action.path]?.currentPath || action.path;
+
+                                            return (
+                                              <div
+                                                key={action.path}
+                                                className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs"
+                                              >
+                                                <div
+                                                  className="flex items-center gap-1 flex-1 cursor-pointer"
+                                                  role="button"
+                                                  tabIndex={0}
+                                                  onClick={() => {
+                                                    console.log('Sidebar: action click ->', currentPath);
+                                                    onFileSelect({ ...action, path: currentPath });
+                                                  }}
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                      e.preventDefault();
+                                                      console.log('Sidebar: action key activate ->', currentPath);
+                                                      onFileSelect({ ...action, path: currentPath });
+                                                    }
+                                                  }}
+                                                >
+                                                  <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(currentStatus)}`} />
+                                                  <span className="truncate flex-1">{currentTitle}</span>
+                                                  {actionMetadata[action.path]?.due_date && actionMetadata[action.path].due_date.trim() !== '' && (() => {
+                                                    const date = new Date(actionMetadata[action.path].due_date);
+                                                    return !isNaN(date.getTime()) ? (
+                                                      <span className="flex items-center flex-shrink-0 ml-1 text-muted-foreground">
+                                                        <Calendar className="h-2 w-2 mr-0.5" />
+                                                        <span className="text-[10px]">{date.toLocaleDateString()}</span>
+                                                      </span>
+                                                    ) : null;
+                                                  })()}
+                                                </div>
+                                                <DropdownMenu>
+                                                  <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="icon"
+                                                      className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                      onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                      <MoreHorizontal className="h-2.5 w-2.5" />
+                                                    </Button>
+                                                  </DropdownMenuTrigger>
+                                                  <DropdownMenuContent align="end" className="w-40">
+                                                    <DropdownMenuItem
+                                                      onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        try {
+                                                          await invoke('open_file_location', { file_path: currentPath });
+                                                        } catch (error) {
+                                                          console.error('Failed to open file location:', error);
+                                                        }
+                                                      }}
+                                                    >
+                                                      <Folder className="h-3 w-3 mr-2" />
+                                                      Open File Location
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        console.log('[Sidebar] Setting delete item for action:', currentPath, currentTitle);
+                                                        setDeleteItem({
+                                                          type: 'action',
+                                                          path: currentPath,
+                                                          name: currentTitle
+                                                        });
+                                                      }}
+                                                      className="text-destructive focus:text-destructive"
+                                                    >
+                                                      <Trash2 className="h-3 w-3 mr-2" />
+                                                      Delete
+                                                    </DropdownMenuItem>
+                                                  </DropdownMenuContent>
+                                                </DropdownMenu>
+                                              </div>
+                                            );
+                                          })
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                }
+
+                // Regular sections (Horizon folders, Habits, Someday Maybe, Cabinet)
+                return (
+                  <Collapsible
+                    key={`${section.id}-${sectionRefreshKey}`}
+                    open={isExpanded}
+                    onOpenChange={() => {
+                      toggleSection(section.id);
+                      if (!isExpanded && !sectionFiles[sectionPath]) {
+                        loadSectionFiles(sectionPath);
+                      }
+                    }}
+                  >
+                    <div className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors">
+                      <CollapsibleTrigger
+                        className="flex-1 min-w-0"
+                        onClick={() => {
+                          // For horizon folders, also open the README when clicking the header
+                          if (section.id === 'areas' || section.id === 'goals' || section.id === 'vision' || section.id === 'purpose') {
+                            // Open the README.md file
+                            const readmeFile: MarkdownFile = {
+                              id: `${sectionPath}/README.md`,
+                              name: 'README.md',
+                              path: `${sectionPath}/README.md`,
+                              size: 0,
+                              last_modified: Date.now(),
+                              extension: 'md'
+                            };
+                            onFileSelect(readmeFile);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                          <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
+                          <span className="font-medium text-sm truncate">{section.name}</span>
+                          {files.length > 0 && (
+                            <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
+                              {files.length}
+                            </Badge>
+                          )}
+                        </div>
+                      </CollapsibleTrigger>
+                      {(section.id === 'someday' || section.id === 'cabinet' || section.id === 'habits' || section.id === 'areas' || section.id === 'goals' || section.id === 'vision' || section.id === 'purpose') && (
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCreatePage(section);
+                          }}
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title={`Add ${section.name} Page`}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+
+                    <CollapsibleContent>
+                      <div className="pl-6 pr-2 py-1 space-y-1">
+                        {files.length === 0 ? (
+                          <div className="text-sm text-muted-foreground py-2">No pages yet</div>
+                        ) : (
+                          files.map((file) => {
+                            // Use metadata for title if available
+                            const currentTitle = sectionFileMetadata[file.path]?.title || file.name.replace('.md', '');
+                            const currentPath = sectionFileMetadata[file.path]?.currentPath || file.path;
+
+                            return (
+                              <div
+                                key={file.path}
+                                className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs"
+                              >
                                 <div
-                                  className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer"
+                                  className="flex items-center gap-1 flex-1 cursor-pointer"
                                   role="button"
                                   tabIndex={0}
                                   onClick={() => {
-                                    console.log('Sidebar: project click ->', project.path);
-                                    handleProjectClick(project)
+                                    console.log('Sidebar: file click ->', currentPath);
+                                    // Create a modified file object with the current path
+                                    onFileSelect({ ...file, path: currentPath });
                                   }}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter' || e.key === ' ') {
                                       e.preventDefault();
-                                      console.log('Sidebar: project key activate ->', project.path);
-                                      handleProjectClick(project);
+                                      console.log('Sidebar: file key activate ->', currentPath);
+                                      onFileSelect({ ...file, path: currentPath });
                                     }
                                   }}
                                 >
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleProjectExpand(project);
-                                    }}
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-5 w-5 p-0 flex-shrink-0"
-                                  >
-                                    <ChevronRight className={`h-3 w-3 transition-transform ${isProjectExpanded ? 'rotate-90' : ''}`} />
-                                  </Button>
-                                  <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(currentStatus)}`} />
-                                  <div className="flex-1 min-w-0 ml-1">
-                                    <div className="font-medium text-sm truncate">{currentTitle}</div>
-                                    <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                      <span className="truncate">{project.action_count || 0} actions</span>
-                                      {(() => {
-                                        const dueStr = projectMetadata[project.path]?.due_date ?? project.due_date ?? '';
-                                        if (!dueStr || dueStr.trim() === '') return null;
-                                        const date = parseLocalDateString(dueStr);
-                                        return date ? (
-                                          <span className="flex items-center flex-shrink-0">
-                                            <Calendar className="h-2.5 w-2.5 mr-0.5" />
-                                            <span className="truncate">{date.toLocaleDateString()}</span>
-                                          </span>
-                                        ) : null;
-                                      })()}
-                                    </div>
-                                  </div>
+                                  <FileText className="h-2.5 w-2.5 flex-shrink-0 text-muted-foreground" />
+                                  <span className="truncate">{currentTitle}</span>
                                 </div>
-                                <div className="flex items-center gap-0.5 flex-shrink-0">
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedProject(project);
-                                      setShowActionDialog(true);
-                                    }}
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Add Action"
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                  </Button>
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <MoreHorizontal className="h-3 w-3" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-40">
-                                      <DropdownMenuItem
-                                        onClick={async (e) => {
-                                          e.stopPropagation();
-                                          try {
-                                            await invoke('open_file_location', { file_path: project.path });
-                                          } catch (error) {
-                                            console.error('Failed to open project location:', error);
-                                          }
-                                        }}
-                                      >
-                                        <Folder className="h-3 w-3 mr-2" />
-                                        Open Project Folder
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          console.log('[Sidebar] Setting delete item for project:', project.path, project.name);
-                                          setDeleteItem({
-                                            type: 'project',
-                                            path: project.path,
-                                            name: project.name
-                                          });
-                                        }}
-                                        className="text-destructive focus:text-destructive"
-                                      >
-                                        <Trash2 className="h-3 w-3 mr-2" />
-                                        Delete Project
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </div>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <MoreHorizontal className="h-2.5 w-2.5" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-40">
+                                    <DropdownMenuItem
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          await invoke('open_file_location', { file_path: currentPath });
+                                        } catch (error) {
+                                          console.error('Failed to open file location:', error);
+                                        }
+                                      }}
+                                    >
+                                      <Folder className="h-3 w-3 mr-2" />
+                                      Open File Location
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        console.log('[Sidebar] Setting delete item for file:', currentPath, currentTitle);
+                                        setDeleteItem({
+                                          type: 'file',
+                                          path: currentPath,  // Use currentPath instead of file.path
+                                          name: currentTitle
+                                        });
+                                      }}
+                                      className="text-destructive focus:text-destructive"
+                                    >
+                                      <Trash2 className="h-3 w-3 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </div>
-
-                              {/* Actions */}
-                              {isProjectExpanded && (
-                                <div className="pl-8 py-0.5">
-                                  {actions.length === 0 ? (
-                                    <div className="text-xs text-muted-foreground py-1 px-1">No actions yet</div>
-                                  ) : (
-                                    actions
-                                      .filter(action => !action.name.toLowerCase().includes('readme'))
-                                      .map((action) => {
-                                        const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress';
-                                        const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
-                                        const currentPath = actionMetadata[action.path]?.currentPath || action.path;
-
-                                        return (
-                                          <div
-                                            key={action.path}
-                                            className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs"
-                                          >
-                                            <div
-                                              className="flex items-center gap-1 flex-1 cursor-pointer"
-                                              role="button"
-                                              tabIndex={0}
-                                              onClick={() => {
-                                                console.log('Sidebar: action click ->', currentPath);
-                                                onFileSelect({ ...action, path: currentPath });
-                                              }}
-                                              onKeyDown={(e) => {
-                                                if (e.key === 'Enter' || e.key === ' ') {
-                                                  e.preventDefault();
-                                                  console.log('Sidebar: action key activate ->', currentPath);
-                                                  onFileSelect({ ...action, path: currentPath });
-                                                }
-                                              }}
-                                            >
-                                              <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(currentStatus)}`} />
-                                              <span className="truncate flex-1">{currentTitle}</span>
-                                              {actionMetadata[action.path]?.due_date && actionMetadata[action.path].due_date.trim() !== '' && (() => {
-                                                const date = new Date(actionMetadata[action.path].due_date);
-                                                return !isNaN(date.getTime()) ? (
-                                                  <span className="flex items-center flex-shrink-0 ml-1 text-muted-foreground">
-                                                    <Calendar className="h-2 w-2 mr-0.5" />
-                                                    <span className="text-[10px]">{date.toLocaleDateString()}</span>
-                                                  </span>
-                                                ) : null;
-                                              })()}
-                                            </div>
-                                            <DropdownMenu>
-                                              <DropdownMenuTrigger asChild>
-                                                <Button
-                                                  variant="ghost"
-                                                  size="icon"
-                                                  className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                  onClick={(e) => e.stopPropagation()}
-                                                >
-                                                  <MoreHorizontal className="h-2.5 w-2.5" />
-                                                </Button>
-                                              </DropdownMenuTrigger>
-                                              <DropdownMenuContent align="end" className="w-40">
-                                                <DropdownMenuItem
-                                                  onClick={async (e) => {
-                                                    e.stopPropagation();
-                                                    try {
-                                                      await invoke('open_file_location', { file_path: currentPath });
-                                                    } catch (error) {
-                                                      console.error('Failed to open file location:', error);
-                                                    }
-                                                  }}
-                                                >
-                                                  <Folder className="h-3 w-3 mr-2" />
-                                                  Open File Location
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    console.log('[Sidebar] Setting delete item for action:', currentPath, currentTitle);
-                                                    setDeleteItem({
-                                                      type: 'action',
-                                                      path: currentPath,
-                                                      name: currentTitle
-                                                    });
-                                                  }}
-                                                  className="text-destructive focus:text-destructive"
-                                                >
-                                                  <Trash2 className="h-3 w-3 mr-2" />
-                                                  Delete
-                                                </DropdownMenuItem>
-                                              </DropdownMenuContent>
-                                            </DropdownMenu>
-                                          </div>
-                                        );
-                                      })
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              );
-            }
-            
-            // Regular sections (Horizon folders, Habits, Someday Maybe, Cabinet)
-            return (
-              <Collapsible
-                key={`${section.id}-${sectionRefreshKey}`}
-                open={isExpanded}
-                onOpenChange={() => {
-                  toggleSection(section.id);
-                  if (!isExpanded && !sectionFiles[sectionPath]) {
-                    loadSectionFiles(sectionPath);
-                  }
-                }}
-              >
-                <div className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors">
-                  <CollapsibleTrigger 
-                    className="flex-1 min-w-0"
-                    onClick={() => {
-                      // For horizon folders, also open the README when clicking the header
-                      if (section.id === 'areas' || section.id === 'goals' || section.id === 'vision' || section.id === 'purpose') {
-                        // Open the README.md file
-                        const readmeFile: MarkdownFile = {
-                          id: `${sectionPath}/README.md`,
-                          name: 'README.md',
-                          path: `${sectionPath}/README.md`,
-                          size: 0,
-                          last_modified: Date.now(),
-                          extension: 'md'
-                        };
-                        onFileSelect(readmeFile);
-                      }
-                    }}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                      <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
-                      <span className="font-medium text-sm truncate">{section.name}</span>
-                      {files.length > 0 && (
-                        <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
-                          {files.length}
-                        </Badge>
-                      )}
-                    </div>
-                  </CollapsibleTrigger>
-                  {(section.id === 'someday' || section.id === 'cabinet' || section.id === 'habits' || section.id === 'areas' || section.id === 'goals' || section.id === 'vision' || section.id === 'purpose') && (
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCreatePage(section);
-                      }}
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      title={`Add ${section.name} Page`}
-                    >
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-
-                <CollapsibleContent>
-                  <div className="pl-6 pr-2 py-1 space-y-1">
-                    {files.length === 0 ? (
-                      <div className="text-sm text-muted-foreground py-2">No pages yet</div>
-                    ) : (
-                      files.map((file) => {
-                        // Use metadata for title if available
-                        const currentTitle = sectionFileMetadata[file.path]?.title || file.name.replace('.md', '');
-                        const currentPath = sectionFileMetadata[file.path]?.currentPath || file.path;
-
-                        return (
-                          <div
-                            key={file.path}
-                            className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs"
-                          >
-                            <div
-                              className="flex items-center gap-1 flex-1 cursor-pointer"
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => {
-                                console.log('Sidebar: file click ->', currentPath);
-                                // Create a modified file object with the current path
-                                onFileSelect({ ...file, path: currentPath });
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  console.log('Sidebar: file key activate ->', currentPath);
-                                  onFileSelect({ ...file, path: currentPath });
-                                }
-                              }}
-                            >
-                              <FileText className="h-2.5 w-2.5 flex-shrink-0 text-muted-foreground" />
-                              <span className="truncate">{currentTitle}</span>
-                            </div>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <MoreHorizontal className="h-2.5 w-2.5" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-40">
-                                <DropdownMenuItem
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    try {
-                                      await invoke('open_file_location', { file_path: currentPath });
-                                    } catch (error) {
-                                      console.error('Failed to open file location:', error);
-                                    }
-                                  }}
-                                >
-                                  <Folder className="h-3 w-3 mr-2" />
-                                  Open File Location
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    console.log('[Sidebar] Setting delete item for file:', currentPath, currentTitle);
-                                    setDeleteItem({
-                                      type: 'file',
-                                      path: currentPath,  // Use currentPath instead of file.path
-                                      name: currentTitle
-                                    });
-                                  }}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  <Trash2 className="h-3 w-3 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            );
-          })}
+                            );
+                          })
+                        )}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                );
+              })}
+            </>
+          )}
         </div>
       </ScrollArea>
 
@@ -1574,12 +1822,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         isOpen={showProjectDialog}
         onClose={() => setShowProjectDialog(false)}
         spacePath={gtdSpace?.root_path || currentFolder || ''}
-        onSuccess={async () => {
-          // Reload projects after successful creation
-          if (gtdSpace?.root_path) {
-            await loadProjects(gtdSpace.root_path);
-          }
-        }}
+        onSuccess={() => { /* rely on event-driven refresh */ }}
       />
 
       {selectedProject && (
@@ -1613,7 +1856,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           directoryName={pageDialogDirectory.name}
           onSuccess={async (filePath) => {
             console.log('Page created successfully:', filePath);
-            
+
             // Create the new file object immediately
             const newFile: MarkdownFile = {
               id: filePath,
@@ -1623,12 +1866,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
               last_modified: Date.now() / 1000, // Convert to seconds
               extension: 'md'
             };
-            
+
             // Immediately add the file to the section files state
             flushSync(() => {
               setSectionFiles(prev => {
                 const currentFiles = prev[pageDialogDirectory.path] || [];
-                const updatedFiles = [...currentFiles, newFile].sort((a, b) => 
+                const updatedFiles = [...currentFiles, newFile].sort((a, b) =>
                   a.name.localeCompare(b.name)
                 );
                 return {
@@ -1636,11 +1879,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                   [pageDialogDirectory.path]: updatedFiles
                 };
               });
-              
+
               // Force a re-render
               setSectionRefreshKey(prev => prev + 1);
             });
-            
+
             // Ensure the section is expanded (Cabinet -> cabinet, Someday Maybe -> someday-maybe)
             const sectionId = pageDialogDirectory.name.toLowerCase().replace(/\s+/g, '-');
             console.log('Expanding section:', sectionId);
@@ -1651,10 +1894,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
               }
               return prev;
             });
-            
+
             // Open the newly created file
             onFileSelect(newFile);
-            
+
             // Also reload from disk to ensure consistency (but don't wait for it)
             loadSectionFiles(pageDialogDirectory.path).then(files => {
               console.log('Section files reloaded from disk:', files?.length || 0);

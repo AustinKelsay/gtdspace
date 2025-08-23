@@ -535,3 +535,36 @@ export interface GTDActionCreate {
   /** GTD contexts where this action can be performed */
   contexts?: string[];
 }
+
+/**
+ * GTD Habit frequency options
+ */
+export type GTDHabitFrequency = 
+  | 'daily' 
+  | 'every-other-day' 
+  | 'twice-weekly' 
+  | 'weekly' 
+  | 'weekdays' 
+  | 'biweekly' 
+  | 'monthly';
+
+/**
+ * GTD Habit status
+ */
+export type GTDHabitStatus = 'todo' | 'complete';
+
+/**
+ * GTD Habit structure
+ */
+export interface GTDHabit {
+  /** Habit name */
+  name: string;
+  /** How often the habit should be done */
+  frequency: GTDHabitFrequency;
+  /** Current status */
+  status: GTDHabitStatus;
+  /** Path to habit file */
+  path?: string;
+  /** Last update time */
+  last_updated?: string;
+}

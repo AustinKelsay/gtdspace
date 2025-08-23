@@ -209,8 +209,8 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={`max-w-4xl max-h-[80vh] p-0 ${className}`} {...props}>
-        <DialogHeader className="px-6 py-4 border-b">
+      <DialogContent className={`max-w-4xl max-h-[80vh] p-0 overflow-hidden ${className}`} {...props}>
+        <DialogHeader className="px-6 py-4 border-b bg-card rounded-t-lg">
           <DialogTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
             Global Search
@@ -225,7 +225,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
           </Button>
         </DialogHeader>
 
-        <div className="flex flex-col h-[600px]">
+        <div className="flex flex-col h-[600px] rounded-b-lg overflow-hidden">
           {/* Tab Bar */}
           <div className="border-b">
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'search' | 'replace')} className="w-full">

@@ -177,6 +177,11 @@ export function useGTDSpace() {
 
       if (result) {
         showSuccess(`Project "${params.project_name}" created successfully`);
+        
+        // Emit custom event to trigger sidebar refresh
+        window.dispatchEvent(new CustomEvent('gtd-project-created', {
+          detail: { projectPath: result, projectName: params.project_name }
+        }));
       }
       
       setIsLoading(false);
@@ -230,6 +235,11 @@ export function useGTDSpace() {
             total_actions: (gtdSpace.total_actions || 0) + 1,
           });
         }
+        
+        // Emit custom event to trigger sidebar refresh
+        window.dispatchEvent(new CustomEvent('gtd-action-created', {
+          detail: { actionPath: result, actionName: params.action_name, projectPath: params.project_path }
+        }));
       }
       
       setIsLoading(false);
@@ -283,6 +293,7 @@ export function useGTDSpace() {
    */
   const loadProjects = useCallback(
     async (spacePath: string) => {
+      // Debug: project load
       setIsLoading(true);
       
       const result = await withErrorHandling(
@@ -290,6 +301,8 @@ export function useGTDSpace() {
           const projects = await invoke<GTDProject[]>('list_gtd_projects', {
             spacePath: spacePath,
           });
+          
+          // Loaded projects count
           
           // Calculate total actions
           const totalActions = projects.reduce((sum, project) => sum + (project.action_count || 0), 0);
@@ -303,6 +316,8 @@ export function useGTDSpace() {
             total_actions: totalActions,
           });
           
+          // State updated
+          
           return projects;
         },
         'Failed to load projects',
@@ -310,6 +325,7 @@ export function useGTDSpace() {
       );
       
       setIsLoading(false);
+      // Completed project load
       return result || [];
     },
     [withErrorHandling]

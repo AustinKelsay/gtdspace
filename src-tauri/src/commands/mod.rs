@@ -2406,7 +2406,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     }
 
     // Helper to safely create a project and ignore "already exists" errors
-    async fn ensure_project(
+    fn ensure_project(
         space_path: &str,
         name: &str,
         description: &str,
@@ -2420,7 +2420,6 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
             due_date,
             status,
         )
-        .await
         {
             Ok(path) => Ok(path),
             Err(e) => {
@@ -2449,8 +2448,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         "Create and launch consulting business for passive income generation",
         Some(next_week.to_rfc3339()),
         Some("in-progress".to_string()),
-    )
-    .await?;
+    )?;
     
     // Update with references to BOTH Area and Goal
     let areas_ref = format!("{}/Areas of Focus/Professional Excellence.md", &space_path);
@@ -2477,8 +2475,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         None,
         Some(chrono::Local::now().to_rfc3339()),
         "medium".to_string(),
-    )
-    .await;
+    );
 
     let _ = create_gtd_action(
         project1_path.clone(),
@@ -2487,8 +2484,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         Some(next_week.to_rfc3339()),
         None,
         "large".to_string(),
-    )
-    .await;
+    );
 
     // That's it - just ONE project with maximum connections!
 
@@ -2664,7 +2660,7 @@ pub fn create_directory(path: String) -> Result<String, String> {
 /// });
 /// ```
 #[tauri::command]
-pub async fn create_gtd_project(
+pub fn create_gtd_project(
     space_path: String,
     project_name: String,
     description: String,
@@ -2737,7 +2733,7 @@ pub async fn create_gtd_project(
 /// });
 /// ```
 #[tauri::command]
-pub async fn create_gtd_action(
+pub fn create_gtd_action(
     project_path: String,
     action_name: String,
     status: String,

@@ -6,7 +6,16 @@
  */
 
 import React from 'react';
-import { Save, Settings, Target } from 'lucide-react';
+import { 
+    Save, 
+    Settings, 
+    Target, 
+    Sun, 
+    Moon, 
+    Calendar, 
+    LayoutDashboard,
+    Keyboard
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Theme } from '@/types';
@@ -35,6 +44,12 @@ export interface AppHeaderProps {
     onOpenSettings: () => void;
     /** Callback to toggle theme */
     onToggleTheme: () => Promise<void>;
+    /** Callback to open calendar view (optional) */
+    onOpenCalendar?: () => void;
+    /** Callback to open GTD dashboard (optional) */
+    onOpenDashboard?: () => void;
+    /** Callback to open keyboard shortcuts (optional) */
+    onOpenKeyboardShortcuts?: () => void;
 }
 
 /**
@@ -57,6 +72,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     onSaveAllFiles,
     onOpenSettings,
     onToggleTheme,
+    onOpenCalendar,
+    onOpenDashboard,
+    onOpenKeyboardShortcuts,
 }) => {
     /**
      * Get save status text
@@ -106,86 +124,165 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
             <div className="flex items-center space-x-2">
                 {/* Save Status */}
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground mr-2">
                     {getSaveStatus()}
                 </span>
 
-                {/* Save Button */}
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={onSaveActiveFile}
-                                disabled={!hasCurrentFileUnsavedChanges}
-                            >
-                                <Save className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>Save File (Ctrl+S)</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-
-                {/* Save All Button */}
-                {hasAnyUnsavedChanges && (
+                <div className="flex items-center space-x-1 border-r border-border pr-2">
+                    {/* Save Button */}
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={onSaveAllFiles}
-                                    className="text-xs"
+                                    onClick={onSaveActiveFile}
+                                    disabled={!hasCurrentFileUnsavedChanges}
+                                    className="h-8 w-8 p-0"
                                 >
-                                    Save All
+                                    <Save className="h-4 w-4" />
                                 </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                                <p>Save All Files (Ctrl+Shift+S)</p>
+                                <p>Save File (⌘S)</p>
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
+
+                    {/* Save All Button */}
+                    {hasAnyUnsavedChanges && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={onSaveAllFiles}
+                                        className="text-xs px-2"
+                                    >
+                                        Save All
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Save All Files (⌘⇧S)</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+                </div>
+
+                {/* GTD Actions Group */}
+                {isGTDSpace && (
+                    <div className="flex items-center space-x-1 border-r border-border pr-2">
+                        {/* Dashboard Button */}
+                        {onOpenDashboard && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={onOpenDashboard}
+                                            className="h-8 w-8 p-0"
+                                        >
+                                            <LayoutDashboard className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>GTD Dashboard</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
+
+                        {/* Calendar Button */}
+                        {onOpenCalendar && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={onOpenCalendar}
+                                            className="h-8 w-8 p-0"
+                                        >
+                                            <Calendar className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>Calendar View</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
+                    </div>
                 )}
 
+                <div className="flex items-center space-x-1">
+                    {/* Keyboard Shortcuts Button */}
+                    {onOpenKeyboardShortcuts && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={onOpenKeyboardShortcuts}
+                                        className="h-8 w-8 p-0"
+                                    >
+                                        <Keyboard className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Keyboard Shortcuts (⌘K)</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
 
-                {/* Settings Button */}
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={onOpenSettings}
-                            >
-                                <Settings className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>Settings (Ctrl+,)</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
+                    {/* Settings Button */}
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={onOpenSettings}
+                                    className="h-8 w-8 p-0"
+                                >
+                                    <Settings className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Settings (⌘,)</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
 
-                {/* Theme Toggle */}
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={onToggleTheme}
-                            >
-                                {theme === 'dark' ? '☀️' : '🌙'}
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>Toggle Theme</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
+                    {/* Theme Toggle */}
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={onToggleTheme}
+                                    className="h-8 w-8 p-0"
+                                    aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+                                >
+                                    {theme === 'dark' ? (
+                                        <Sun className="h-4 w-4" />
+                                    ) : (
+                                        <Moon className="h-4 w-4" />
+                                    )}
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Toggle Theme ({theme === 'dark' ? 'Light' : 'Dark'} Mode)</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                </div>
             </div>
         </header>
     );

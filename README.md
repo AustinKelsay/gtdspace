@@ -53,15 +53,26 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 - **Global Search** - Find text across all markdown files
 - **Native File Operations** - Create, rename, delete with OS dialogs
 
+## Download
+
+### Pre-built Releases
+
+Download the latest version for your platform from the [Releases page](https://github.com/austinkelsay/gtdspace/releases):
+
+- **Windows**: `.msi` installer
+- **macOS Intel**: `.dmg` for Intel-based Macs
+- **macOS Apple Silicon**: `.dmg` for M1/M2/M3 Macs
+- **Linux**: `.AppImage` (universal) or `.deb` (Debian/Ubuntu)
+
 ## Quick Start
 
-### Prerequisites
+### Prerequisites for Building from Source
 
 - [Node.js](https://nodejs.org/) v18+
 - [Rust](https://www.rust-lang.org/) (latest stable)
 - Platform-specific requirements in [docs/installation.md](docs/installation.md)
 
-### Installation
+### Installation from Source
 
 ```bash
 # Clone the repository
@@ -165,30 +176,30 @@ See [GTD Implementation](docs/GTD_IMPLEMENTATION.md) for detailed usage.
 
 ## Keyboard Shortcuts
 
-| Action                | Shortcut           |
-| --------------------- | ------------------ |
-| Save                  | `Ctrl/Cmd+S`       |
-| New File              | `Ctrl/Cmd+N`       |
-| Open Folder           | `Ctrl/Cmd+O`       |
-| Close Tab             | `Ctrl/Cmd+W`       |
-| Search                | `Ctrl/Cmd+F`       |
-| Settings              | `Ctrl/Cmd+,`       |
-| Insert Status Field   | `Ctrl/Cmd+Alt+S`   |
-| Insert Effort Field   | `Ctrl/Cmd+Alt+E`   |
-| Insert Project Status | `Ctrl/Cmd+Alt+P`   |
-| Insert Habit Frequency| `Ctrl/Cmd+Alt+F`   |
-| Insert Habit Status   | `Ctrl/Cmd+Alt+H`   |
-| Insert Due Date       | `Ctrl/Cmd+Alt+D`   |
-| Insert Focus DateTime | `Ctrl/Cmd+Alt+T`   |
-| Insert Created Date   | `Ctrl/Cmd+Alt+C`   |
-| Insert References     | `Ctrl/Cmd+Alt+R`   |
-| Insert Areas Ref      | `Ctrl/Cmd+Alt+A`   |
-| Insert Goals Ref      | `Ctrl/Cmd+Alt+G`   |
-| Insert Vision Ref     | `Ctrl/Cmd+Alt+V`   |
-| Insert Purpose Ref    | `Ctrl/Cmd+Alt+U`   |
-| Next Tab              | `Ctrl/Cmd+Tab`     |
-| Previous Tab          | `Ctrl/Cmd+Shift+Tab`|
-| Tab by Number         | `Ctrl/Cmd+1-9`     |
+| Action                 | Shortcut             |
+| ---------------------- | -------------------- |
+| Save                   | `Ctrl/Cmd+S`         |
+| New File               | `Ctrl/Cmd+N`         |
+| Open Folder            | `Ctrl/Cmd+O`         |
+| Close Tab              | `Ctrl/Cmd+W`         |
+| Search                 | `Ctrl/Cmd+F`         |
+| Settings               | `Ctrl/Cmd+,`         |
+| Insert Status Field    | `Ctrl/Cmd+Alt+S`     |
+| Insert Effort Field    | `Ctrl/Cmd+Alt+E`     |
+| Insert Project Status  | `Ctrl/Cmd+Alt+P`     |
+| Insert Habit Frequency | `Ctrl/Cmd+Alt+F`     |
+| Insert Habit Status    | `Ctrl/Cmd+Alt+H`     |
+| Insert Due Date        | `Ctrl/Cmd+Alt+D`     |
+| Insert Focus DateTime  | `Ctrl/Cmd+Alt+T`     |
+| Insert Created Date    | `Ctrl/Cmd+Alt+C`     |
+| Insert References      | `Ctrl/Cmd+Alt+R`     |
+| Insert Areas Ref       | `Ctrl/Cmd+Alt+A`     |
+| Insert Goals Ref       | `Ctrl/Cmd+Alt+G`     |
+| Insert Vision Ref      | `Ctrl/Cmd+Alt+V`     |
+| Insert Purpose Ref     | `Ctrl/Cmd+Alt+U`     |
+| Next Tab               | `Ctrl/Cmd+Tab`       |
+| Previous Tab           | `Ctrl/Cmd+Shift+Tab` |
+| Tab by Number          | `Ctrl/Cmd+1-9`       |
 
 ## Contributing
 

@@ -1,7 +1,7 @@
 [package]
 name = "gtdspace"
 version = "0.1.0"
-description = "A cross-platform markdown editor built with Tauri"
+description = "GTD-first productivity system with integrated markdown editing"
 authors = ["you"]
 edition = "2021"
 

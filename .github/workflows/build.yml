@@ -1,0 +1,356 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g., v0.1.0)"
+        required: false
+        type: string
+
+jobs:
+  create-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create-release.outputs.id }}
+      release_upload_url: ${{ steps.create-release.outputs.upload_url }}
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: get-version
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="v0.1.0-dev"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Create release
+        id: create-release
+        if: github.event_name == 'push' || github.event.inputs.version != ''
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get-version.outputs.version }}
+          release_name: GTD Space ${{ steps.get-version.outputs.version }}
+          draft: true
+          prerelease: false
+          body: |
+            # GTD Space ${{ steps.get-version.outputs.version }}
+
+            ## What's New
+            - 
+
+            ## Installation
+
+            Download the appropriate installer for your platform below:
+            - **Windows**: `.msi` installer
+            - **macOS Intel**: `.dmg` for Intel Macs
+            - **macOS Apple Silicon**: `.dmg` for M1/M2/M3 Macs
+            - **Linux**: `.AppImage` (universal) or `.deb` (Debian/Ubuntu)
+
+            ## Notes
+            - First-time users: The app will automatically create your GTD Space at `~/GTD Space`
+            - Google Calendar integration requires setting up OAuth credentials
+
+  build-tauri:
+    needs: create-release
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest" # ARM (M1/M2/M3)
+            rust-targets: "aarch64-apple-darwin"
+            args: "--target aarch64-apple-darwin"
+            artifact-name: "macos-aarch64"
+            artifact-ext: ".dmg"
+
+          - platform: "macos-latest" # Intel
+            rust-targets: "x86_64-apple-darwin"
+            args: "--target x86_64-apple-darwin"
+            artifact-name: "macos-x64"
+            artifact-ext: ".dmg"
+
+          - platform: "ubuntu-22.04"
+            rust-targets: "x86_64-unknown-linux-gnu"
+            args: ""
+            artifact-name: "linux-x64"
+            artifact-ext: ".AppImage"
+
+          - platform: "windows-latest"
+            rust-targets: "x86_64-pc-windows-msvc"
+            args: ""
+            artifact-name: "windows-x64"
+            artifact-ext: ".msi"
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Generate Icons
+        shell: bash
+        run: |
+          cd src-tauri/icons
+
+          # Skip if icon.png doesn't exist
+          if [ ! -f "icon.png" ]; then
+            echo "⚠ Warning: icon.png not found, skipping icon generation"
+            exit 0
+          fi
+
+          # Install Python dependencies (try different methods for compatibility)
+          python3 -m pip install --user Pillow 2>/dev/null || pip3 install --user Pillow 2>/dev/null || pip install --user Pillow 2>/dev/null || true
+
+          # Generate PNG and ICO files using Python
+          python3 << 'PYTHON_SCRIPT'
+          import sys
+          try:
+              from PIL import Image
+              
+              img = Image.open("icon.png").convert('RGBA')
+              
+              # Generate required PNG sizes
+              sizes = [
+                  ("32x32.png", 32),
+                  ("128x128.png", 128),
+                  ("128x128@2x.png", 256),
+              ]
+              
+              for filename, size in sizes:
+                  resized = img.resize((size, size), Image.Resampling.LANCZOS)
+                  resized.save(filename, 'PNG')
+                  print(f"✓ Generated {filename}")
+              
+              # Generate Windows ICO
+              img.resize((256, 256), Image.Resampling.LANCZOS).save("icon.ico", format='ICO')
+              print("✓ Generated icon.ico")
+              
+          except ImportError:
+              print("⚠ Pillow not available, skipping Python-based icon generation")
+              sys.exit(0)
+          except Exception as e:
+              print(f"⚠ Icon generation error: {e}")
+              sys.exit(0)
+          PYTHON_SCRIPT
+
+          # Generate proper ICNS on macOS using Tauri CLI
+          if [[ "$RUNNER_OS" == "macOS" ]] || [[ "$(uname)" == "Darwin" ]]; then
+            echo "Generating macOS ICNS file..."
+            npx --yes @tauri-apps/cli@latest icon ./icon.png 2>/dev/null || {
+              echo "⚠ Could not generate ICNS with Tauri CLI, will use fallback"
+            }
+          fi
+
+          echo "✅ Icon generation complete"
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          args: ${{ matrix.args }}
+
+      - name: List built artifacts
+        shell: bash
+        run: |
+          echo "Contents of src-tauri/target:"
+          if [ "${{ matrix.platform }}" == "windows-latest" ]; then
+            ls -la src-tauri/target/release/bundle/
+            ls -la src-tauri/target/release/bundle/msi/ || true
+            ls -la src-tauri/target/release/bundle/nsis/ || true
+          elif [ "${{ matrix.platform }}" == "ubuntu-22.04" ]; then
+            ls -la src-tauri/target/release/bundle/
+            ls -la src-tauri/target/release/bundle/appimage/ || true
+            ls -la src-tauri/target/release/bundle/deb/ || true
+          else
+            ls -la src-tauri/target/*/release/bundle/ || true
+            ls -la src-tauri/target/*/release/bundle/dmg/ || true
+          fi
+
+      - name: Find and prepare artifacts (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          # Find the MSI installer
+          MSI_FILE=$(find src-tauri/target/release/bundle -name "*.msi" | head -n 1)
+          if [ -z "$MSI_FILE" ]; then
+            echo "No MSI file found!"
+            exit 1
+          fi
+          echo "Found MSI: $MSI_FILE"
+
+          # Create artifacts directory
+          mkdir -p artifacts
+
+          # Copy and rename with version
+          VERSION="${{ needs.create-release.outputs.version }}"
+          cp "$MSI_FILE" "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${{ matrix.artifact-ext }}"
+
+          echo "Artifact prepared:"
+          ls -la artifacts/
+
+      - name: Find and prepare artifacts (macOS)
+        if: startsWith(matrix.platform, 'macos')
+        shell: bash
+        run: |
+          # Find the DMG file based on target architecture
+          if [[ "${{ matrix.rust-targets }}" == "aarch64-apple-darwin" ]]; then
+            DMG_FILE=$(find src-tauri/target/aarch64-apple-darwin/release/bundle -name "*.dmg" | head -n 1)
+          else
+            DMG_FILE=$(find src-tauri/target/x86_64-apple-darwin/release/bundle -name "*.dmg" | head -n 1)
+          fi
+
+          if [ -z "$DMG_FILE" ]; then
+            echo "No DMG file found!"
+            exit 1
+          fi
+          echo "Found DMG: $DMG_FILE"
+
+          # Create artifacts directory
+          mkdir -p artifacts
+
+          # Copy and rename with version
+          VERSION="${{ needs.create-release.outputs.version }}"
+          cp "$DMG_FILE" "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${{ matrix.artifact-ext }}"
+
+          echo "Artifact prepared:"
+          ls -la artifacts/
+
+      - name: Find and prepare artifacts (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          # Find AppImage and Deb files
+          APPIMAGE_FILE=$(find src-tauri/target/release/bundle -name "*.AppImage" | head -n 1)
+          DEB_FILE=$(find src-tauri/target/release/bundle -name "*.deb" | head -n 1)
+
+          # Create artifacts directory
+          mkdir -p artifacts
+
+          VERSION="${{ needs.create-release.outputs.version }}"
+
+          # Copy AppImage if found
+          if [ ! -z "$APPIMAGE_FILE" ]; then
+            echo "Found AppImage: $APPIMAGE_FILE"
+            cp "$APPIMAGE_FILE" "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}.AppImage"
+          fi
+
+          # Copy Deb if found
+          if [ ! -z "$DEB_FILE" ]; then
+            echo "Found Deb: $DEB_FILE"
+            cp "$DEB_FILE" "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}.deb"
+          fi
+
+          echo "Artifacts prepared:"
+          ls -la artifacts/
+
+      - name: Upload artifacts to release
+        if: needs.create-release.outputs.release_upload_url != ''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs').promises;
+            const path = require('path');
+
+            const artifactsDir = 'artifacts';
+            const files = await fs.readdir(artifactsDir);
+
+            for (const file of files) {
+              const filePath = path.join(artifactsDir, file);
+              const stats = await fs.stat(filePath);
+              
+              if (stats.isFile()) {
+                console.log(`Uploading ${file}...`);
+                const data = await fs.readFile(filePath);
+                
+                try {
+                  await github.rest.repos.uploadReleaseAsset({
+                    url: '${{ needs.create-release.outputs.release_upload_url }}',
+                    headers: {
+                      'content-type': 'application/octet-stream',
+                      'content-length': stats.size
+                    },
+                    name: file,
+                    data: data
+                  });
+                  console.log(`✓ Uploaded ${file}`);
+                } catch (error) {
+                  console.error(`Failed to upload ${file}:`, error.message);
+                }
+              }
+            }
+
+      - name: Upload artifacts to workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtdspace-${{ matrix.artifact-name }}
+          path: artifacts/*
+          retention-days: 7
+
+  finalize-release:
+    needs: [create-release, build-tauri]
+    if: needs.create-release.outputs.release_id != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: '${{ needs.create-release.outputs.release_id }}',
+              draft: false
+            });
+            console.log('Release published successfully!');

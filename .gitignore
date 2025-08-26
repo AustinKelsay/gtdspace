@@ -27,6 +27,14 @@ dist-ssr
 src-tauri/target
 src-tauri/Cargo.lock
 
+# Generated icons (keep icon.png and scripts)
+src-tauri/icons/32x32.png
+src-tauri/icons/128x128.png
+src-tauri/icons/128x128@2x.png
+src-tauri/icons/icon.ico
+src-tauri/icons/icon.icns
+src-tauri/icons/icon.iconset/
+
 # Environment variables
 .env
 .env.local

@@ -26,7 +26,7 @@ export const AppLoadingScreen: React.FC<AppLoadingScreenProps> = ({
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-background">
+    <div className="flex flex-col items-center justify-center h-screen bg-background" aria-busy="true">
       <div className="flex flex-col items-center space-y-6">
         {/* Logo/Icon */}
         <div className="relative">
@@ -34,7 +34,7 @@ export const AppLoadingScreen: React.FC<AppLoadingScreenProps> = ({
         </div>
         
         {/* Loading message */}
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-2" role="status" aria-live="polite">
           <h2 className="text-2xl font-semibold">GTD Space</h2>
           <p className="text-muted-foreground">
             {message}
@@ -48,7 +48,7 @@ export const AppLoadingScreen: React.FC<AppLoadingScreenProps> = ({
         {/* Progress bar (optional) */}
         {progress !== undefined && (
           <div className="w-64">
-            <Progress value={progress} className="h-2" />
+            <Progress value={Math.max(0, Math.min(100, progress))} className="h-2" />
           </div>
         )}
       </div>

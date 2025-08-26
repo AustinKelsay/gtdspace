@@ -353,6 +353,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       if (lastRootRef.current !== pathToCheck) {
         preloadedRef.current = false;
         lastRootRef.current = pathToCheck;
+        // Reset loaded sections when workspace changes
+        setLoadedSections(new Set());
       }
 
       const isGTD = await checkGTDSpace(pathToCheck);
@@ -380,15 +382,14 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             loadSectionFiles(goalsPath)
           ]);
           
-          // Load remaining sections after a small delay to reduce UI jank
-          setTimeout(() => {
-            Promise.allSettled([
-              loadSectionFiles(somedayPath),
-              loadSectionFiles(cabinetPath),
-              loadSectionFiles(visionPath),
-              loadSectionFiles(purposePath)
-            ]);
-          }, 150);
+          // Load remaining sections after a small delay to reduce UI jank (no dangling timer)
+          await new Promise((r) => setTimeout(r, 150));
+          await Promise.allSettled([
+            loadSectionFiles(somedayPath),
+            loadSectionFiles(cabinetPath),
+            loadSectionFiles(visionPath),
+            loadSectionFiles(purposePath)
+          ]);
         }
       }
     };

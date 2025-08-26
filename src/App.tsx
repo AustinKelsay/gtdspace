@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { PanelLeftClose, PanelLeft, FolderOpen, Folder, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { AppHeader } from '@/components/app/AppHeader';
+import { AppHeader, AppLoadingScreen } from '@/components/app';
 import { GTDWorkspaceSidebar, GTDDashboard, GTDQuickActions, GTDInitDialog } from '@/components/gtd';
 import { FileChangeManager } from '@/components/file-browser/FileChangeManager';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
@@ -297,6 +297,7 @@ export const App: React.FC = () => {
   const { gtdSpace, isLoading, checkGTDSpace, loadProjects, initializeGTDSpace, initializeDefaultSpaceIfNeeded, refreshSpace: refreshGTDSpace } = useGTDSpace();
   const [currentProject, setCurrentProject] = React.useState<GTDProject | null>(null);
   const [showGTDInit, setShowGTDInit] = React.useState(false);
+  const [isAppInitializing, setIsAppInitializing] = React.useState(true); // App-level loading state
 
   // Derived state for GTD space
   const isGTDSpace = gtdSpace?.isGTDSpace || false;
@@ -431,6 +432,7 @@ export const App: React.FC = () => {
       
       // Only initialize once
       if (hasInitializedWorkspace.current || gtdSpace?.root_path) {
+        setIsAppInitializing(false); // App is initialized if we already have a workspace
         return;
       }
       
@@ -456,6 +458,8 @@ export const App: React.FC = () => {
         }
       } catch (e) {
         console.warn('Workspace initialization failed:', e);
+      } finally {
+        setIsAppInitializing(false); // Always stop showing loading state
       }
     };
     
@@ -615,6 +619,15 @@ export const App: React.FC = () => {
   }, [gtdSpace?.root_path, activeTab?.filePath, activeTab?.id, updateTabContent]);
 
 
+
+  // Show loading screen while app is initializing
+  if (isAppInitializing) {
+    return (
+      <ErrorBoundary>
+        <AppLoadingScreen />
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary>

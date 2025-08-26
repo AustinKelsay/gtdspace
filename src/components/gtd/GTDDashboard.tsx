@@ -537,8 +537,17 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     </div>
                     <TrendingUp className="h-4 w-4 text-blue-500" />
                   </div>
-                  <p className="text-3xl font-bold">{stats.active}</p>
-                  <p className="text-sm text-muted-foreground">Active Projects</p>
+                  {isLoading ? (
+                    <div className="space-y-2">
+                      <div className="h-8 w-12 bg-muted rounded animate-pulse" />
+                      <div className="h-3 w-20 bg-muted rounded animate-pulse" />
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-bold">{stats.active}</p>
+                      <p className="text-sm text-muted-foreground">Active Projects</p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 
@@ -550,8 +559,17 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     </div>
                     <Heart className="h-4 w-4 text-green-500" />
                   </div>
-                  <p className="text-3xl font-bold">{stats.completed}</p>
-                  <p className="text-sm text-muted-foreground">Completed</p>
+                  {isLoading ? (
+                    <div className="space-y-2">
+                      <div className="h-8 w-12 bg-muted rounded animate-pulse" />
+                      <div className="h-3 w-20 bg-muted rounded animate-pulse" />
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-bold">{stats.completed}</p>
+                      <p className="text-sm text-muted-foreground">Completed</p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 
@@ -563,22 +581,31 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     </div>
                     <BarChart3 className="h-4 w-4 text-purple-500" />
                   </div>
-                  <p className="text-3xl font-bold">{actionSummary.total}</p>
-                  <p className="text-sm text-muted-foreground">Total Actions</p>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-                    <div>
-                      <div className="font-semibold">{actionSummary.inProgress}</div>
-                      <div>In Progress</div>
+                  {isLoading ? (
+                    <div className="space-y-2">
+                      <div className="h-8 w-12 bg-muted rounded animate-pulse" />
+                      <div className="h-3 w-20 bg-muted rounded animate-pulse" />
                     </div>
-                    <div>
-                      <div className="font-semibold">{actionSummary.waiting}</div>
-                      <div>Waiting</div>
-                    </div>
-                    <div>
-                      <div className="font-semibold">{actionSummary.complete}</div>
-                      <div>Complete</div>
-                    </div>
-                  </div>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-bold">{actionSummary.total}</p>
+                      <p className="text-sm text-muted-foreground">Total Actions</p>
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                        <div>
+                          <div className="font-semibold">{actionSummary.inProgress}</div>
+                          <div>In Progress</div>
+                        </div>
+                        <div>
+                          <div className="font-semibold">{actionSummary.waiting}</div>
+                          <div>Waiting</div>
+                        </div>
+                        <div>
+                          <div className="font-semibold">{actionSummary.complete}</div>
+                          <div>Complete</div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </div>

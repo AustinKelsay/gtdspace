@@ -189,6 +189,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const lastRootRef = React.useRef<string | null>(null);
   const preloadedRef = React.useRef<boolean>(false);
   const loadingSectionsRef = React.useRef<Set<string>>(new Set());
+  // Track which sections have been loaded at least once
+  const [loadedSections, setLoadedSections] = React.useState<Set<string>>(new Set());
 
   // Delete dialog state
   const [deleteItem, setDeleteItem] = React.useState<{ type: 'project' | 'action' | 'file'; path: string; name: string } | null>(null);
@@ -230,6 +232,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         ...prev,
         [sectionPath]: sortedFiles
       }));
+      // Mark this section as loaded
+      setLoadedSections(prev => new Set(prev).add(sectionPath));
       // Force a re-render by updating the refresh key (kept lightweight)
       setSectionRefreshKey(prev => prev + 1);
 
@@ -349,6 +353,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       if (lastRootRef.current !== pathToCheck) {
         preloadedRef.current = false;
         lastRootRef.current = pathToCheck;
+        // Reset loaded sections when workspace changes
+        setLoadedSections(new Set());
       }
 
       const isGTD = await checkGTDSpace(pathToCheck);
@@ -359,25 +365,31 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         }
 
         if (!preloadedRef.current) {
-          // Preload files for all non-project sections once
-          const somedayPath = `${pathToCheck}/Someday Maybe`;
-          const cabinetPath = `${pathToCheck}/Cabinet`;
+          preloadedRef.current = true;
+          // Preload files for all non-project sections with staggered timing
           const habitsPath = `${pathToCheck}/Habits`;
           const areasPath = `${pathToCheck}/Areas of Focus`;
           const goalsPath = `${pathToCheck}/Goals`;
+          const somedayPath = `${pathToCheck}/Someday Maybe`;
+          const cabinetPath = `${pathToCheck}/Cabinet`;
           const visionPath = `${pathToCheck}/Vision`;
           const purposePath = `${pathToCheck}/Purpose & Principles`;
 
-          await Promise.all([
-            loadSectionFiles(somedayPath),
-            loadSectionFiles(cabinetPath),
+          // Load high-priority sections first
+          await Promise.allSettled([
             loadSectionFiles(habitsPath),
             loadSectionFiles(areasPath),
-            loadSectionFiles(goalsPath),
+            loadSectionFiles(goalsPath)
+          ]);
+          
+          // Load remaining sections after a small delay to reduce UI jank (no dangling timer)
+          await new Promise((r) => setTimeout(r, 150));
+          await Promise.allSettled([
+            loadSectionFiles(somedayPath),
+            loadSectionFiles(cabinetPath),
             loadSectionFiles(visionPath),
             loadSectionFiles(purposePath)
           ]);
-          preloadedRef.current = true;
         }
       }
     };
@@ -1385,9 +1397,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                             <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                             <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
                             <span className="font-medium text-sm truncate">{section.name}</span>
-                            <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
-                              {filteredProjects.length}
-                            </Badge>
+                            {(!isLoading && filteredProjects.length > 0) && (
+                              <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
+                                {filteredProjects.length}
+                              </Badge>
+                            )}
                           </div>
                         </CollapsibleTrigger>
                         <Button
@@ -1407,7 +1421,14 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                       <CollapsibleContent>
                         <div className="pl-6 pr-2 py-1 space-y-1">
                           {isLoading ? (
-                            <div className="text-sm text-muted-foreground py-2">Loading projects...</div>
+                            <div className="space-y-2 py-2">
+                              {[...Array(3)].map((_, i) => (
+                                <div key={i} className="flex items-center gap-2 animate-pulse">
+                                  <div className="h-3 w-3 bg-muted rounded"></div>
+                                  <div className="h-4 bg-muted rounded flex-1 max-w-[180px]"></div>
+                                </div>
+                              ))}
+                            </div>
                           ) : filteredProjects.length === 0 ? (
                             <div className="text-sm text-muted-foreground py-2">
                               {searchQuery ? 'No projects match your search' : 'No projects yet'}
@@ -1663,7 +1684,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                           <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                           <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
                           <span className="font-medium text-sm truncate">{section.name}</span>
-                          {files.length > 0 && (
+                          {loadedSections.has(sectionPath) && files.length > 0 && (
                             <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
                               {files.length}
                             </Badge>
@@ -1688,7 +1709,16 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
                     <CollapsibleContent>
                       <div className="pl-6 pr-2 py-1 space-y-1">
-                        {files.length === 0 ? (
+                        {!loadedSections.has(sectionPath) && loadingSectionsRef.current.has(sectionPath) ? (
+                          <div className="space-y-2 py-2">
+                            {[...Array(2)].map((_, i) => (
+                              <div key={i} className="flex items-center gap-2 animate-pulse">
+                                <div className="h-2.5 w-2.5 bg-muted rounded"></div>
+                                <div className="h-3.5 bg-muted rounded flex-1 max-w-[160px]"></div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : files.length === 0 ? (
                           <div className="text-sm text-muted-foreground py-2">No pages yet</div>
                         ) : (
                           files.map((file) => {

@@ -49,7 +49,6 @@ export function useGTDSpace() {
                 const result = await invoke<boolean>('check_directory_exists', { path: dirPath });
                 return { dirName, exists: result };
               } catch (error) {
-                console.warn(`Error checking directory ${dirName}:`, error);
                 return { dirName, exists: false };
               }
             })
@@ -58,18 +57,17 @@ export function useGTDSpace() {
           // If all directories exist, we're done
           const allExist = dirChecks.every(check => check.exists);
           if (allExist) {
-            console.log('All GTD directories confirmed to exist');
             return;
           }
           
           // Log which directories are still missing
           const missingDirs = dirChecks.filter(check => !check.exists).map(check => check.dirName);
           if (missingDirs.length > 0) {
-            console.log(`Waiting for directories: ${missingDirs.join(', ')}`);
+            // Some directories are still missing, wait for next check
           }
           
         } catch (error) {
-          console.warn('Error during directory structure check:', error);
+          // Silently handle directory check errors
         }
         
         // Wait before next attempt
@@ -87,7 +85,6 @@ export function useGTDSpace() {
   const initializeSpace = useCallback(
     async (spacePath: string) => {
       if (!spacePath) {
-        console.error('spacePath is empty or undefined');
         return false;
       }
       
@@ -101,7 +98,6 @@ export function useGTDSpace() {
           try {
             await waitForDirectoryStructure(spacePath);
           } catch (error) {
-            console.error('Failed to wait for directory structure:', error);
             // Continue anyway - the user can refresh manually if needed
           }
           
@@ -358,11 +354,34 @@ export function useGTDSpace() {
     }
   }, [gtdSpace?.root_path, checkGTDSpace, loadProjects]);
 
+  /**
+   * Initialize and load a GTD space - used for switching workspaces
+   * Combines checking the space and loading projects
+   */
+  const initializeGTDSpace = useCallback(async (spacePath: string) => {
+    setIsLoading(true);
+    
+    // Check if it's a valid GTD space
+    const isValid = await checkGTDSpace(spacePath);
+    
+    if (isValid) {
+      // Load projects if it's a valid space
+      await loadProjects(spacePath);
+      
+      // Store the current workspace path
+      localStorage.setItem('gtdspace-current-path', spacePath);
+    }
+    
+    setIsLoading(false);
+    return isValid;
+  }, [checkGTDSpace, loadProjects]);
+
   return {
     gtdSpace,
     isLoading,
     isInitializing,
     initializeSpace,
+    initializeGTDSpace,
     createProject,
     createAction,
     checkGTDSpace,

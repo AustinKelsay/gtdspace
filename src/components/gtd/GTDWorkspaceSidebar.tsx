@@ -215,11 +215,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         return sectionFiles[sectionPath] || [];
       }
       loadingSectionsRef.current.add(sectionPath);
-      console.log('Loading files for section:', sectionPath);
       const files = await invoke<MarkdownFile[]>('list_markdown_files', {
         path: sectionPath
       });
-      console.log(`Found ${files.length} files in ${sectionPath}:`, files.map(f => f.name));
 
       // Sort files alphabetically by default
       const sortedFiles = files.sort((a, b) => {
@@ -237,7 +235,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
       return sortedFiles;
     } catch (error) {
-      console.error('Failed to load section files:', sectionPath, error);
       return [];
     } finally {
       loadingSectionsRef.current.delete(sectionPath);
@@ -271,13 +268,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       try {
         files = await invoke<MarkdownFile[]>('list_project_actions', { projectPath });
       } catch (e) {
-        console.warn('list_project_actions not available, falling back to list_markdown_files', e);
         const all = await invoke<MarkdownFile[]>('list_markdown_files', { path: projectPath });
         files = all.filter(f => f.name !== 'README.md');
       }
 
       const actions = files;
-      // console.log(`Loaded ${actions.length} actions for project:`, projectPath, actions.map(a => a.name));
 
       setProjectActions(prev => ({
         ...prev,
@@ -306,7 +301,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             due_date: dueDate
           };
         } catch (error) {
-          console.warn(`Failed to read action status for ${action.path}:`, error);
           return {
             path: action.path,
             status: 'in-progress'
@@ -336,53 +330,54 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         }
       });
     } catch (error) {
-      console.error('Failed to load project actions:', projectPath, error);
+      // Silently handle action status loading errors
     }
   }, []);
 
   // Check if current folder is a GTD space and preload section files
   React.useEffect(() => {
     const checkSpace = async () => {
-      // Prefer the known GTD root path if available to avoid flicker
-      const pathToCheck = (gtdSpace?.root_path && currentFolder?.startsWith(gtdSpace.root_path))
-        ? gtdSpace.root_path
-        : currentFolder;
+      // Only use gtdSpace.root_path when available to prevent loading from wrong workspace
+      const pathToCheck = gtdSpace?.root_path;
+      
+      // Skip if no valid GTD space path or if currentFolder doesn't match
+      if (!pathToCheck || !currentFolder?.startsWith(pathToCheck)) {
+        return;
+      }
 
-      if (pathToCheck) {
-        // Avoid duplicate preloads for same root
-        if (lastRootRef.current !== pathToCheck) {
-          preloadedRef.current = false;
-          lastRootRef.current = pathToCheck;
+      // Avoid duplicate preloads for same root
+      if (lastRootRef.current !== pathToCheck) {
+        preloadedRef.current = false;
+        lastRootRef.current = pathToCheck;
+      }
+
+      const isGTD = await checkGTDSpace(pathToCheck);
+      if (isGTD) {
+        // Load projects only if not present yet or root changed
+        if (!gtdSpace?.projects || gtdSpace.projects.length === 0) {
+          await loadProjects(pathToCheck);
         }
 
-        const isGTD = await checkGTDSpace(pathToCheck);
-        if (isGTD) {
-          // Load projects only if not present yet or root changed
-          if (!gtdSpace?.projects || gtdSpace.root_path !== pathToCheck) {
-            await loadProjects(pathToCheck);
-          }
+        if (!preloadedRef.current) {
+          // Preload files for all non-project sections once
+          const somedayPath = `${pathToCheck}/Someday Maybe`;
+          const cabinetPath = `${pathToCheck}/Cabinet`;
+          const habitsPath = `${pathToCheck}/Habits`;
+          const areasPath = `${pathToCheck}/Areas of Focus`;
+          const goalsPath = `${pathToCheck}/Goals`;
+          const visionPath = `${pathToCheck}/Vision`;
+          const purposePath = `${pathToCheck}/Purpose & Principles`;
 
-          if (!preloadedRef.current) {
-            // Preload files for all non-project sections once
-            const somedayPath = `${pathToCheck}/Someday Maybe`;
-            const cabinetPath = `${pathToCheck}/Cabinet`;
-            const habitsPath = `${pathToCheck}/Habits`;
-            const areasPath = `${pathToCheck}/Areas of Focus`;
-            const goalsPath = `${pathToCheck}/Goals`;
-            const visionPath = `${pathToCheck}/Vision`;
-            const purposePath = `${pathToCheck}/Purpose & Principles`;
-
-            await Promise.all([
-              loadSectionFiles(somedayPath),
-              loadSectionFiles(cabinetPath),
-              loadSectionFiles(habitsPath),
-              loadSectionFiles(areasPath),
-              loadSectionFiles(goalsPath),
-              loadSectionFiles(visionPath),
-              loadSectionFiles(purposePath)
-            ]);
-            preloadedRef.current = true;
-          }
+          await Promise.all([
+            loadSectionFiles(somedayPath),
+            loadSectionFiles(cabinetPath),
+            loadSectionFiles(habitsPath),
+            loadSectionFiles(areasPath),
+            loadSectionFiles(goalsPath),
+            loadSectionFiles(visionPath),
+            loadSectionFiles(purposePath)
+          ]);
+          preloadedRef.current = true;
         }
       }
     };
@@ -393,7 +388,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   React.useEffect(() => {
     // Subscribe to metadata changes for live UI updates
     const unsubscribeMetadata = onMetadataChange((event) => {
-      console.log('[Sidebar] Received metadata change event:', event);
       const { filePath, metadata, changedFields } = event;
 
       // Check if this is a project README
@@ -404,7 +398,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         if (changedFields?.status || changedFields?.projectStatus) {
           const newStatus = metadata.projectStatus || metadata.status;
           if (newStatus) {
-            console.log('[Sidebar] Updating project status for', projectPath, 'to', newStatus);
             // Update local state immediately for instant UI update
             setProjectMetadata(prev => ({
               ...prev,
@@ -497,7 +490,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
     // Subscribe to content saved events for folder renaming
     const unsubscribeSaved = onContentSaved(async (event) => {
-      console.log('[Sidebar] Received content saved event:', event);
       const { filePath, metadata } = event;
 
       // Check if this is a project README
@@ -511,8 +503,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
           // Only rename if the title actually differs from folder name
           if (currentProjectName && currentProjectName !== newTitle) {
-            console.log('[Sidebar] Title changed on save - renaming project folder from', currentProjectName, 'to', newTitle);
-            console.log('[Sidebar] Calling rename_gtd_project with:', { oldProjectPath: projectPath, newProjectName: newTitle });
 
             // Call rename synchronously to avoid issues with async event handlers
             invoke<string>('rename_gtd_project', {
@@ -520,7 +510,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
               newProjectName: newTitle
             })
               .then(async (newProjectPath) => {
-                console.log('[Sidebar] Project renamed successfully, new path:', newProjectPath);
 
                 // Only update UI after successful rename
                 // Update local state - keep both old and new paths until projects reload
@@ -585,9 +574,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                   }
                 }));
               })
-              .catch((error) => {
-                console.error('[Sidebar] Failed to rename project folder:', error);
-                console.error('[Sidebar] Error details:', JSON.stringify(error));
+              .catch((_error) => {
+                // Silently handle project rename errors
               });
           }
         }
@@ -618,7 +606,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
           // Only rename if the title actually differs from file name
           if (currentActionName && currentActionName !== newTitle) {
-            console.log('[Sidebar] Action title changed on save - renaming action file from', currentActionName, 'to', newTitle);
 
             // Call rename_gtd_action command
             invoke<string>('rename_gtd_action', {
@@ -626,7 +613,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
               newActionName: newTitle
             })
               .then(async (newActionPath) => {
-                console.log('[Sidebar] Action renamed successfully, new path:', newActionPath);
 
                 // Update local state with new path
                 setActionMetadata(prev => {
@@ -666,9 +652,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                   }
                 }));
               })
-              .catch((error) => {
-                console.error('[Sidebar] Failed to rename action file:', error);
-                console.error('[Sidebar] Error details:', JSON.stringify(error));
+              .catch((_error) => {
+                // Silently handle action rename errors
               });
           }
         }
@@ -686,7 +671,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
             // Only rename if the title actually differs from file name
             if (currentFileName && currentFileName !== newTitle) {
-              console.log('[Sidebar] Section file title changed on save - renaming file from', currentFileName, 'to', newTitle);
 
               // Call rename_gtd_action command (works for any markdown file)
               invoke<string>('rename_gtd_action', {
@@ -694,7 +678,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                 newActionName: newTitle
               })
                 .then(async (newFilePath) => {
-                  console.log('[Sidebar] Section file renamed successfully, new path:', newFilePath);
 
                   // Update local state with new path
                   setSectionFileMetadata(prev => {
@@ -734,9 +717,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                     }
                   }));
                 })
-                .catch((error) => {
-                  console.error('[Sidebar] Failed to rename section file:', error);
-                  console.error('[Sidebar] Error details:', JSON.stringify(error));
+                .catch((_error) => {
+                  // Silently handle file rename errors
                 });
             }
           }
@@ -776,7 +758,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     };
 
     const handleActionCreated = async (event: CustomEvent) => {
-      console.log('[Sidebar] Action created event received:', event.detail);
       const { projectPath } = event.detail;
       if (projectPath) {
         await loadProjectActions(projectPath);
@@ -873,7 +854,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     // Handle both string and array inputs
     const status = Array.isArray(statusInput) ? statusInput[0] : statusInput;
     const normalizedStatus = status || 'in-progress';
-    // console.log('getProjectStatusColor - status:', normalizedStatus, 'from input:', statusInput);
     switch (normalizedStatus) {
       case 'completed': return 'text-green-600 dark:text-green-500';
       case 'waiting': return 'text-purple-600 dark:text-purple-500';
@@ -886,7 +866,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     // Handle both string and array inputs
     const status = Array.isArray(statusInput) ? statusInput[0] : statusInput;
     const normalizedStatus = status || 'in-progress';
-    // console.log('getProjectStatusIcon - status:', normalizedStatus, 'from input:', statusInput);
     switch (normalizedStatus) {
       case 'completed': return CheckCircle2; // Filled circle with checkmark for completed
       case 'waiting': return CircleDot; // Filled circle (dot in center) for waiting
@@ -990,12 +969,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       const folderPath = await invoke<string>('select_folder');
       onFolderSelect(folderPath);
     } catch (error) {
-      console.error('Failed to select folder:', error);
+      // Silently handle folder selection errors (user cancelled)
     }
   };
 
   const handleDelete = async () => {
-    console.log('[Sidebar] handleDelete called with:', deleteItem);
     if (!deleteItem) return;
 
     try {
@@ -1004,12 +982,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         const result = await invoke<{ success: boolean; path?: string | null; message?: string | null }>('delete_folder', { path: deleteItem.path });
 
         if (!result || !result.success) {
-          console.error('Failed to delete project:', result?.message || 'Unknown error');
           alert(`Failed to delete project: ${result?.message || 'Unknown error'}`);
           return;
         }
 
-        console.log('[Sidebar] Project deleted successfully:', deleteItem.path);
 
         // Update local state
         setExpandedProjects(prev => prev.filter(p => p !== deleteItem.path));
@@ -1032,7 +1008,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         }
       } else {
         // For actions and other files, use delete_file
-        console.log('[Sidebar] Attempting to delete file:', deleteItem.path);
 
         try {
           // Add a timeout to the invoke call
@@ -1046,14 +1021,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           // Race between the delete and timeout
           const result = await Promise.race([deletePromise, timeoutPromise]) as { success: boolean; path?: string | null; message?: string | null };
 
-          console.log('[Sidebar] Delete file result:', result);
           if (!result || !result.success) {
-            console.error('Failed to delete file:', result?.message || 'Unknown error');
             alert(`Failed to delete file: ${result?.message || 'Unknown error'}`);
             return;
           }
 
-          console.log('[Sidebar] File deleted successfully:', deleteItem.path);
 
           // Update UI based on type
           if (deleteItem.type === 'action') {
@@ -1090,7 +1062,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             });
 
             const sectionPath = deleteItem.path.substring(0, deleteItem.path.lastIndexOf('/'));
-            console.log('[Sidebar] Reloading section files for:', sectionPath);
 
             // First clear the section files to force UI update
             setSectionFiles(prev => ({
@@ -1111,7 +1082,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           }));
 
         } catch (invokeError) {
-          console.error('[Sidebar] Error invoking delete_file:', invokeError);
           alert(`Error deleting file: ${invokeError}`);
           return;
         }
@@ -1119,7 +1089,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
       setDeleteItem(null);
     } catch (error) {
-      console.error(`Failed to delete ${deleteItem.type}:`, error);
+      // Silently handle deletion errors
     }
   };
 
@@ -1129,7 +1099,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     try {
       await invoke('open_folder_in_explorer', { path: currentFolder });
     } catch (error) {
-      console.error('Failed to open folder in explorer:', error);
+      // Silently handle explorer open errors
     }
   };
 
@@ -1193,17 +1163,14 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                 // Refresh projects list
                 const rootPath = gtdSpace?.root_path || currentFolder;
                 if (rootPath) {
-                  console.log('Refreshing projects...');
                   await loadProjects(rootPath);
 
                   // Also refresh all section files
-                  console.log('Refreshing all sections...');
                   const promises = GTD_SECTIONS.filter(s => s.id !== 'calendar').map(section => {
                     const sectionPath = `${rootPath}/${section.path}`;
                     return loadSectionFiles(sectionPath, true);
                   });
                   await Promise.all(promises);
-                  console.log('All sections refreshed');
                 }
               }}
               variant="ghost"
@@ -1461,13 +1428,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                       role="button"
                                       tabIndex={0}
                                       onClick={() => {
-                                        console.log('Sidebar: project click ->', project.path);
                                         handleProjectClick(project)
                                       }}
                                       onKeyDown={(e) => {
                                         if (e.key === 'Enter' || e.key === ' ') {
                                           e.preventDefault();
-                                          console.log('Sidebar: project key activate ->', project.path);
                                           handleProjectClick(project);
                                         }
                                       }}
@@ -1534,7 +1499,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                               try {
                                                 await invoke('open_file_location', { file_path: project.path });
                                               } catch (error) {
-                                                console.error('Failed to open project location:', error);
+                                                // Silently handle file location open errors
                                               }
                                             }}
                                           >
@@ -1545,7 +1510,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                           <DropdownMenuItem
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              console.log('[Sidebar] Setting delete item for project:', project.path, project.name);
                                               setDeleteItem({
                                                 type: 'project',
                                                 path: project.path,
@@ -1585,13 +1549,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                   role="button"
                                                   tabIndex={0}
                                                   onClick={() => {
-                                                    console.log('Sidebar: action click ->', currentPath);
                                                     onFileSelect({ ...action, path: currentPath });
                                                   }}
                                                   onKeyDown={(e) => {
                                                     if (e.key === 'Enter' || e.key === ' ') {
                                                       e.preventDefault();
-                                                      console.log('Sidebar: action key activate ->', currentPath);
                                                       onFileSelect({ ...action, path: currentPath });
                                                     }
                                                   }}
@@ -1626,7 +1588,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                         try {
                                                           await invoke('open_file_location', { file_path: currentPath });
                                                         } catch (error) {
-                                                          console.error('Failed to open file location:', error);
+                                                          // Silently handle file location open errors
                                                         }
                                                       }}
                                                     >
@@ -1637,7 +1599,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                     <DropdownMenuItem
                                                       onClick={(e) => {
                                                         e.stopPropagation();
-                                                        console.log('[Sidebar] Setting delete item for action:', currentPath, currentTitle);
                                                         setDeleteItem({
                                                           type: 'action',
                                                           path: currentPath,
@@ -1745,14 +1706,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                   role="button"
                                   tabIndex={0}
                                   onClick={() => {
-                                    console.log('Sidebar: file click ->', currentPath);
                                     // Create a modified file object with the current path
                                     onFileSelect({ ...file, path: currentPath });
                                   }}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter' || e.key === ' ') {
                                       e.preventDefault();
-                                      console.log('Sidebar: file key activate ->', currentPath);
                                       onFileSelect({ ...file, path: currentPath });
                                     }
                                   }}
@@ -1778,7 +1737,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                         try {
                                           await invoke('open_file_location', { file_path: currentPath });
                                         } catch (error) {
-                                          console.error('Failed to open file location:', error);
+                                          // Silently handle file location open errors
                                         }
                                       }}
                                     >
@@ -1789,7 +1748,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                     <DropdownMenuItem
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        console.log('[Sidebar] Setting delete item for file:', currentPath, currentTitle);
                                         setDeleteItem({
                                           type: 'file',
                                           path: currentPath,  // Use currentPath instead of file.path
@@ -1855,7 +1813,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           directory={pageDialogDirectory.path}
           directoryName={pageDialogDirectory.name}
           onSuccess={async (filePath) => {
-            console.log('Page created successfully:', filePath);
 
             // Create the new file object immediately
             const newFile: MarkdownFile = {
@@ -1886,10 +1843,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
             // Ensure the section is expanded (Cabinet -> cabinet, Someday Maybe -> someday-maybe)
             const sectionId = pageDialogDirectory.name.toLowerCase().replace(/\s+/g, '-');
-            console.log('Expanding section:', sectionId);
             setExpandedSections(prev => {
               if (!prev.includes(sectionId)) {
-                console.log('Adding section to expanded:', sectionId);
                 return [...prev, sectionId];
               }
               return prev;
@@ -1899,8 +1854,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             onFileSelect(newFile);
 
             // Also reload from disk to ensure consistency (but don't wait for it)
-            loadSectionFiles(pageDialogDirectory.path).then(files => {
-              console.log('Section files reloaded from disk:', files?.length || 0);
+            loadSectionFiles(pageDialogDirectory.path).then(_files => {
+              // Files loaded successfully
             });
           }}
         />
@@ -1952,15 +1907,15 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             // Sync with actual files from disk after a short delay
             setTimeout(async () => {
               try {
-                const files = await invoke<MarkdownFile[]>('list_markdown_files', {
+                const _files = await invoke<MarkdownFile[]>('list_markdown_files', {
                   path: habitsPath
                 });
                 setSectionFiles(prev => ({
                   ...prev,
-                  [habitsPath]: files
+                  [habitsPath]: _files
                 }));
               } catch (error) {
-                console.error('Failed to sync habit files:', error);
+                // Silently handle file list sync errors
               }
             }, 500);
           }
@@ -1969,7 +1924,6 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteItem !== null} onOpenChange={(open) => {
-        console.log('[Sidebar] AlertDialog open state changing to:', open, 'deleteItem:', deleteItem);
         if (!open) setDeleteItem(null);
       }}>
         <AlertDialogContent>

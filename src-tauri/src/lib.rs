@@ -4,12 +4,16 @@
 
 // Import command modules  
 mod commands;
+mod google_calendar;
 
 #[cfg(debug_assertions)]
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Load .env file if it exists
+    dotenv::dotenv().ok();
+    
     // Initialize logging for development
     env_logger::init();
 
@@ -27,6 +31,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::ping,
+            commands::test_select_folder,
             commands::get_app_version,
             commands::check_permissions,
             commands::get_default_gtd_space_path,
@@ -51,6 +56,7 @@ pub fn run() {
             commands::move_file,
             commands::replace_in_file,
             commands::find_reverse_relationships,
+            commands::check_is_gtd_space,
             commands::initialize_gtd_space,
             commands::seed_example_gtd_content,
             commands::create_gtd_project,
@@ -62,7 +68,18 @@ pub fn run() {
             commands::rename_gtd_project,
             commands::rename_gtd_action,
             commands::check_directory_exists,
-            commands::create_directory
+            commands::create_directory,
+            commands::google_calendar_test,
+            commands::google_calendar_test_async,
+            commands::google_calendar_start_auth,
+            commands::google_calendar_is_authenticated,
+            commands::google_calendar_fetch_events,
+            commands::google_calendar_connect,
+            commands::google_calendar_disconnect,
+            commands::google_calendar_disconnect_simple,
+            commands::google_calendar_sync,
+            commands::google_calendar_get_status,
+            commands::google_calendar_get_cached_events
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

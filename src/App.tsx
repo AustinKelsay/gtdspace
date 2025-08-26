@@ -1,9 +1,3 @@
-/**
- * @fileoverview Main App component - Simplified GTD Space
- * @author Development Team
- * @created 2024-01-XX
- */
-
 import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { PanelLeftClose, PanelLeft, FolderOpen, Folder, Target } from 'lucide-react';
@@ -32,6 +26,7 @@ import { ErrorBoundary } from '@/components/error-handling';
 import { Toaster } from '@/components/ui/toaster';
 import type { Theme, MarkdownFile, EditorMode, GTDProject } from '@/types';
 import './styles/globals.css';
+import { waitForTauriReady } from '@/utils/tauri-ready';
 
 /**
  * Main application component - Simplified version
@@ -83,7 +78,6 @@ export const App: React.FC = () => {
   React.useEffect(() => {
     if (!activeTab && tabState.openTabs.length > 0 && !tabState.activeTabId) {
       const lastTab = tabState.openTabs[tabState.openTabs.length - 1];
-      console.log('No active tab, auto-activating last opened tab:', lastTab.id);
       activateTab(lastTab.id);
     }
   }, [activeTab, tabState.openTabs, tabState.activeTabId, activateTab]);
@@ -97,7 +91,7 @@ export const App: React.FC = () => {
 
   // === SETTINGS MANAGEMENT ===
 
-  const { settings, setTheme } = useSettings();
+  const { settings, setTheme, setLastFolder, isLoading: isLoadingSettings } = useSettings();
   const [themeKey, setThemeKey] = React.useState(0); // Force re-render on theme change
 
   // === MODAL MANAGEMENT ===
@@ -154,7 +148,6 @@ export const App: React.FC = () => {
 
   const toggleTheme = async () => {
     const newTheme: Theme = settings.theme === 'dark' ? 'light' : 'dark';
-    console.log('[App] Toggling theme from', settings.theme, 'to', newTheme);
     await setTheme(newTheme);
     // Theme will be applied automatically by the useEffect watching settings.theme
   };
@@ -235,7 +228,7 @@ export const App: React.FC = () => {
         // File modified externally - show notification if tab is open
         const modifiedTab = tabState.openTabs.find(tab => tab.file.path === latestEvent.file_path);
         if (modifiedTab && !modifiedTab.hasUnsavedChanges) {
-          console.log(`File ${latestEvent.file_name} was modified externally`);
+          // File was modified externally
         }
         break;
       }
@@ -287,11 +280,11 @@ export const App: React.FC = () => {
     await withErrorHandling(
       async () => {
         // Open the file in a tab
-        const tabId = await openTab(file);
+        await openTab(file);
 
         // If line number provided, we could scroll to it (future enhancement)
         if (lineNumber !== undefined) {
-          console.log(`Scroll to line ${lineNumber + 1} in tab ${tabId}`);
+          // TODO: Future enhancement to scroll to specific line
         }
       },
       'Failed to open search result',
@@ -301,7 +294,7 @@ export const App: React.FC = () => {
 
   // === GTD STATE ===
 
-  const { gtdSpace, isLoading, checkGTDSpace, loadProjects, initializeDefaultSpaceIfNeeded, refreshSpace: refreshGTDSpace } = useGTDSpace();
+  const { gtdSpace, isLoading, checkGTDSpace, loadProjects, initializeGTDSpace, initializeDefaultSpaceIfNeeded, refreshSpace: refreshGTDSpace } = useGTDSpace();
   const [currentProject, setCurrentProject] = React.useState<GTDProject | null>(null);
   const [showGTDInit, setShowGTDInit] = React.useState(false);
 
@@ -318,7 +311,6 @@ export const App: React.FC = () => {
     window.onTabFileSaved = async (filePath: string) => {
       // Only reload if the file is in the Projects directory
       if (filePath.startsWith(projectsPath) && filePath.endsWith('.md')) {
-        console.log('Project file saved, reloading projects...');
         await loadProjects(gtdSpace.root_path);
       }
     };
@@ -327,6 +319,30 @@ export const App: React.FC = () => {
       delete window.onTabFileSaved;
     };
   }, [gtdSpace?.root_path, loadProjects]);
+
+  // Create a workspace switching function that can be passed to settings
+  const switchWorkspace = React.useCallback(async (path: string) => {
+    // Close all tabs when switching workspaces
+    tabState.openTabs.forEach(tab => {
+      closeTab(tab.id);
+    });
+    
+    // Mark that we're handling a workspace change to prevent loops
+    hasInitializedWorkspace.current = true;
+    
+    // Initialize the new GTD space
+    await initializeGTDSpace(path);
+    
+    // Load the folder without saving to settings to avoid triggering side effects
+    await loadFolder(path, { saveToSettings: false });
+    
+    // Save the workspace path to settings after everything is loaded
+    await setLastFolder(path);
+  }, [tabState.openTabs, closeTab, initializeGTDSpace, loadFolder, setLastFolder]);
+
+  // === VIEW STATE ===
+  
+  const [showSettings, setShowSettings] = React.useState(false);
 
   // === SIDEBAR STATE ===
 
@@ -354,84 +370,46 @@ export const App: React.FC = () => {
   // === GTD SPACE CHECK ===
 
   React.useEffect(() => {
-    const checkSpace = async () => {
-      if (fileState.currentFolder) {
-        // If we already know this is part of a GTD space, don't recheck subdirectories
-        if (gtdSpace?.root_path && fileState.currentFolder.startsWith(gtdSpace.root_path)) {
-          setShowGTDInit(false);
-
-          // Check if we're in a specific project
-          if (fileState.currentFolder.includes('/Projects/') && gtdSpace?.projects) {
-            const projectPath = fileState.currentFolder;
-            const project = gtdSpace.projects.find(p => p.path === projectPath);
-            setCurrentProject(project || null);
-          } else {
-            setCurrentProject(null);
-          }
-        } else {
-          // Check if this is a GTD space root
-          const isGTD = await checkGTDSpace(fileState.currentFolder);
-
-          // If not a GTD space, show initialization prompt
-          if (!isGTD) {
-            setShowGTDInit(true);
-          } else {
-            setShowGTDInit(false);
-          }
-
-          setCurrentProject(null);
-        }
+    // Only update current project when in a GTD space
+    if (gtdSpace?.root_path && fileState.currentFolder?.startsWith(gtdSpace.root_path)) {
+      // Check if we're in a specific project
+      if (fileState.currentFolder.includes('/Projects/') && gtdSpace?.projects) {
+        const projectPath = fileState.currentFolder;
+        const project = gtdSpace.projects.find(p => p.path === projectPath);
+        setCurrentProject(project || null);
       } else {
-        // No folder selected - clear everything
         setCurrentProject(null);
-        setShowGTDInit(false);
-
-        // Clear all tabs when no folder is selected
-        if (tabState.openTabs.length > 0) {
-          tabState.openTabs.forEach(tab => closeTab(tab.id));
-        }
       }
-    };
-    checkSpace();
-  }, [fileState.currentFolder, checkGTDSpace, gtdSpace?.projects, gtdSpace?.root_path, tabState.openTabs, closeTab]);
+    } else {
+      setCurrentProject(null);
+    }
+  }, [fileState.currentFolder, gtdSpace?.projects, gtdSpace?.root_path]);
 
   // === THEME WATCHER ===
 
   // Apply theme whenever settings change
   React.useEffect(() => {
-    console.log('[App] Theme changed to:', settings.theme);
     applyTheme(settings.theme);
-    console.log('[App] Theme applied, document classes:', document.documentElement.classList.toString());
   }, [settings.theme, applyTheme]);
 
   // === INITIALIZE ===
 
+  // Track if we've done initial workspace setup
+  const hasInitializedWorkspace = React.useRef(false);
+
+  // Initialize app on mount only
   React.useEffect(() => {
     const init = async () => {
       try {
-        // Apply initial theme
-        applyTheme(settings.theme);
+        // Ensure Tauri is ready to reduce callback warnings during hot reload
+        await waitForTauriReady();
 
         // Check permissions on app start
-        const status = await invoke<{ status: string }>('check_permissions');
-        console.log('Permission status:', status);
+        await invoke<{ status: string }>('check_permissions');
 
         // Clear tab state if no folder is selected (fresh start)
         if (!fileState.currentFolder) {
           localStorage.removeItem('gtdspace-tabs');
-        }
-
-        // Auto-initialize/load default GTD space via hook
-        try {
-          const spacePath = await initializeDefaultSpaceIfNeeded();
-          if (spacePath) {
-            await handleFolderLoad(spacePath);
-            const isGTDNow = await checkGTDSpace(spacePath);
-            if (isGTDNow) await loadProjects(spacePath);
-            setShowGTDInit(false);
-          }
-        } catch (e) {
-          console.warn('Default GTD space setup skipped (likely non-Tauri env):', e);
         }
       } catch (error) {
         console.error('Failed to initialize app:', error);
@@ -439,7 +417,55 @@ export const App: React.FC = () => {
     };
 
     init();
-  }, [settings.theme, fileState.currentFolder, initializeDefaultSpaceIfNeeded, checkGTDSpace, loadProjects, handleFolderLoad, applyTheme]);
+    // Run only once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  
+  // Separate effect for workspace initialization after settings load
+  React.useEffect(() => {
+    const initWorkspace = async () => {
+      // Wait for settings to load
+      if (isLoadingSettings) {
+        return;
+      }
+      
+      // Only initialize once
+      if (hasInitializedWorkspace.current || gtdSpace?.root_path) {
+        return;
+      }
+      
+      hasInitializedWorkspace.current = true;
+      
+      try {
+        // Check if settings has a last_folder saved
+        if (settings.last_folder && settings.last_folder !== '') {
+          // Use the saved workspace
+          await handleFolderLoad(settings.last_folder);
+          const isGTDNow = await checkGTDSpace(settings.last_folder);
+          if (isGTDNow) await loadProjects(settings.last_folder);
+          setShowGTDInit(false);
+        } else {
+          // No saved workspace, initialize default
+          const spacePath = await initializeDefaultSpaceIfNeeded();
+          if (spacePath) {
+            await handleFolderLoad(spacePath);
+            const isGTDNow = await checkGTDSpace(spacePath);
+            if (isGTDNow) await loadProjects(spacePath);
+            setShowGTDInit(false);
+          }
+        }
+      } catch (e) {
+        console.warn('Workspace initialization failed:', e);
+      }
+    };
+    
+    initWorkspace();
+  }, [isLoadingSettings, settings.last_folder, gtdSpace?.root_path, handleFolderLoad, checkGTDSpace, loadProjects, initializeDefaultSpaceIfNeeded]);
+
+  // Apply theme when it changes  
+  React.useEffect(() => {
+    applyTheme(settings.theme);
+  }, [settings.theme, applyTheme]);
 
   // === RENDER ===
 
@@ -455,7 +481,6 @@ export const App: React.FC = () => {
       } catch (error) {
         // If invoke fails, we're not in Tauri environment
         setIsTauriEnvironment(false);
-        console.log('Not in Tauri environment:', error);
       }
     };
 
@@ -509,8 +534,17 @@ export const App: React.FC = () => {
   }, [activeTab?.filePath, activeTab?.id, updateTabContent, refreshGTDSpace]);
 
   // === HABIT RESET SCHEDULER ===
+  // Store refs to avoid re-running effect when functions change
+  const checkGTDSpaceRef = React.useRef(checkGTDSpace);
+  const loadProjectsRef = React.useRef(loadProjects);
   React.useEffect(() => {
-    if (!gtdSpace?.root_path) {
+    checkGTDSpaceRef.current = checkGTDSpace;
+    loadProjectsRef.current = loadProjects;
+  }, [checkGTDSpace, loadProjects]);
+
+  React.useEffect(() => {
+    const currentSpacePath = gtdSpace?.root_path;
+    if (!currentSpacePath) {
       return;
     }
 
@@ -520,15 +554,17 @@ export const App: React.FC = () => {
         // Always run the check - the backend will determine if any habits need resetting
         // This ensures we catch all frequency intervals properly
         const resetHabits = await invoke<string[]>('check_and_reset_habits', {
-          spacePath: gtdSpace.root_path,
+          spacePath: currentSpacePath,
         }).catch(error => {
           console.error('[App] Failed to check_and_reset_habits:', error);
           return [];
         });
 
         if (resetHabits.length > 0) {
-          // Refresh the sidebar to show updated statuses
-          refreshGTDSpace();
+          // Refresh the workspace to show updated statuses
+          // Use refs to avoid effect re-running when these functions change
+          await checkGTDSpaceRef.current(currentSpacePath);
+          await loadProjectsRef.current(currentSpacePath);
 
           // Also refresh the current tab if it's a habit
           if (activeTab?.filePath?.toLowerCase().includes('/habits/')) {
@@ -550,12 +586,14 @@ export const App: React.FC = () => {
     const checkMissedResets = async () => {
       try {
         const resetHabits = await invoke<string[]>('check_and_reset_habits', {
-          spacePath: gtdSpace.root_path,
+          spacePath: currentSpacePath,
         });
 
         if (resetHabits.length > 0) {
-          // Refresh the sidebar to show updated statuses
-          refreshGTDSpace();
+          // Refresh the workspace to show updated statuses
+          // Use refs to avoid effect re-running when these functions change
+          await checkGTDSpaceRef.current(currentSpacePath);
+          await loadProjectsRef.current(currentSpacePath);
         }
       } catch (error) {
         console.error('Failed to check for missed habit resets:', error);
@@ -574,7 +612,7 @@ export const App: React.FC = () => {
     return () => {
       clearInterval(interval);
     };
-  }, [gtdSpace, refreshGTDSpace, activeTab?.filePath, activeTab?.id, updateTabContent]);
+  }, [gtdSpace?.root_path, activeTab?.filePath, activeTab?.id, updateTabContent]);
 
 
 
@@ -599,7 +637,7 @@ export const App: React.FC = () => {
           onSaveAllFiles={async () => {
             await saveAllTabs();
           }}
-          onOpenSettings={() => openModal('settings')}
+          onOpenSettings={() => setShowSettings(true)}
           onToggleTheme={toggleTheme}
           onOpenCalendar={isGTDSpace ? () => {
             // Open calendar in a new tab
@@ -635,7 +673,7 @@ export const App: React.FC = () => {
             }}
           >
             <GTDWorkspaceSidebar
-              key={`sidebar-${gtdSpace?.projects?.length || 0}`}
+              key={`sidebar-${gtdSpace?.root_path || 'none'}`}
               currentFolder={fileState.currentFolder}
               onFolderSelect={handleFolderLoad}
               onFileSelect={handleFileSelect}
@@ -840,13 +878,20 @@ export const App: React.FC = () => {
         )}
       </div>
 
-      {/* Modals */}
+      {/* Settings View (Full Page) */}
+      {showSettings && (
+        <div className="absolute inset-0 z-50 bg-background">
+          <SettingsManagerLazy
+            onBack={() => setShowSettings(false)}
+            gtdSpace={gtdSpace}
+            switchWorkspace={switchWorkspace}
+            checkGTDSpace={checkGTDSpace}
+            loadProjects={loadProjects}
+          />
+        </div>
+      )}
 
-      {/* Settings Modal */}
-      <SettingsManagerLazy
-        isOpen={isModalOpen('settings')}
-        onClose={closeModal}
-      />
+      {/* Modals */}
 
       {/* Global Search */}
       <GlobalSearchLazy

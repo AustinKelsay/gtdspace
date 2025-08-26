@@ -83,7 +83,7 @@ interface HabitStats {
   habits: GTDHabit[];
 }
 
-export const GTDDashboard: React.FC<GTDDashboardProps> = ({
+const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   currentFolder,
   gtdSpace,
   loadProjects: loadProjectsProp,
@@ -103,7 +103,7 @@ export const GTDDashboard: React.FC<GTDDashboardProps> = ({
   const [activeTab, setActiveTab] = React.useState('overview');
   const [habits, setHabits] = React.useState<GTDHabit[]>([]);
   const [horizonFileCounts, setHorizonFileCounts] = React.useState<Record<string, number>>({});
-  const [localProjects, setLocalProjects] = React.useState<GTDProject[]>([]);
+  const [, setLocalProjects] = React.useState<GTDProject[]>([]);
   const [actionSummary, setActionSummary] = React.useState({
     total: 0,
     inProgress: 0,
@@ -127,131 +127,109 @@ export const GTDDashboard: React.FC<GTDDashboardProps> = ({
     }
   }, [gtdSpace?.root_path, horizonFilesList]);
 
-  // Load projects when dashboard mounts or gtdSpace changes
+  // Batch all initial data loading into one effect to reduce re-renders
   React.useEffect(() => {
-    const loadProjectsData = async () => {
+    const loadAllData = async () => {
       if (!gtdSpace?.root_path) return;
-      // Avoid redundant reloads if projects already present
-      if (Array.isArray(gtdSpace.projects) && gtdSpace.projects.length > 0) return;
 
-      try {
-        console.log('[GTDDashboard] Loading projects from:', gtdSpace.root_path);
-        const projects = await loadProjects(gtdSpace.root_path);
-        console.log('[GTDDashboard] Loaded', projects.length, 'projects');
-        setLocalProjects(projects);
-      } catch (error) {
-        console.error('[GTDDashboard] Failed to load projects:', error);
-        setLocalProjects([]);
-      }
+      // Use Promise.allSettled to load all data in parallel
+      await Promise.allSettled([
+        // Load projects if needed
+        (async () => {
+          // Avoid redundant reloads if projects already present
+          if (Array.isArray(gtdSpace.projects) && gtdSpace.projects.length > 0) return;
+          try {
+            const projects = await loadProjects(gtdSpace.root_path);
+            setLocalProjects(projects);
+          } catch (error) {
+            setLocalProjects([]);
+          }
+        })(),
+
+        // Load habits
+        (async () => {
+          try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            const habitsPath = `${gtdSpace.root_path}/Habits`;
+            const habitFiles = await invoke<MarkdownFile[]>('list_markdown_files', {
+              path: habitsPath
+            });
+
+            const loadedHabits: GTDHabit[] = await Promise.all(
+              habitFiles.map(async (file) => {
+                try {
+                  const content = await invoke<string>('read_file', { path: file.path });
+                  const frequencyMatch = content.match(/\[!singleselect:habit-frequency:([^\]]+)\]/);
+                  const checkboxStatus = content.match(/\[!checkbox:habit-status:(true|false)\]/);
+                  const singleselectStatus = content.match(/\[!singleselect:habit-status:([^\]]+)\]/);
+                  
+                  let createdDate: string | undefined = undefined;
+                  const createdBlock = content.match(/\[!datetime:created_date:([^\]]+)\]/i);
+                  if (createdBlock) {
+                    createdDate = createdBlock[1].split('T')[0];
+                  } else {
+                    const createdSection = content.match(/##\s*Created\n([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
+                    if (createdSection) createdDate = createdSection[1];
+                  }
+
+                  return {
+                    name: file.name.replace('.md', ''),
+                    frequency: (frequencyMatch?.[1] || 'daily') as GTDHabit['frequency'],
+                    status: checkboxStatus
+                      ? (checkboxStatus[1] === 'true' ? 'complete' : 'todo')
+                      : ((singleselectStatus?.[1] || 'todo') as 'todo' | 'complete'),
+                    path: file.path,
+                    last_updated: new Date(file.last_modified).toISOString(),
+                    created_date: createdDate
+                  };
+                } catch (error) {
+                  return null;
+                }
+              })
+            );
+            setHabits(loadedHabits.filter((h): h is GTDHabit => h !== null));
+          } catch (error) {
+            setHabits([]);
+          }
+        })(),
+
+        // Load horizon counts
+        (async () => {
+          try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            const horizons = [
+              'Purpose & Principles',
+              'Vision',
+              'Goals',
+              'Areas of Focus',
+              'Someday Maybe',
+              'Cabinet'
+            ];
+
+            const counts: Record<string, number> = {};
+            await Promise.all(
+              horizons.map(async (horizon) => {
+                try {
+                  const horizonPath = `${gtdSpace.root_path}/${horizon}`;
+                  const files = await invoke<MarkdownFile[]>('list_markdown_files', {
+                    path: horizonPath
+                  });
+                  counts[horizon] = files.length;
+                } catch (error) {
+                  counts[horizon] = 0;
+                }
+              })
+            );
+            setHorizonFileCounts(counts);
+          } catch (error) {
+            // Failed to load horizon counts
+          }
+        })()
+      ]);
     };
 
-    loadProjectsData();
+    loadAllData();
   }, [gtdSpace?.root_path, gtdSpace?.projects, loadProjects]);
-
-  // Load habits from file system
-  React.useEffect(() => {
-    const loadHabits = async () => {
-      if (!gtdSpace?.root_path) return;
-
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const habitsPath = `${gtdSpace.root_path}/Habits`;
-
-        // Get list of habit files
-        const habitFiles = await invoke<MarkdownFile[]>('list_markdown_files', {
-          path: habitsPath
-        });
-
-        // Load each habit file's metadata
-        const loadedHabits: GTDHabit[] = await Promise.all(
-          habitFiles.map(async (file) => {
-            try {
-              // Read the file content to extract metadata
-              const content = await invoke<string>('read_file', { path: file.path });
-
-              // Extract habit metadata from content
-              const frequencyMatch = content.match(/\[!singleselect:habit-frequency:([^\]]+)\]/);
-              const checkboxStatus = content.match(/\[!checkbox:habit-status:(true|false)\]/);
-              const singleselectStatus = content.match(/\[!singleselect:habit-status:([^\]]+)\]/);
-              // Created date block or Created section
-              let createdDate: string | undefined = undefined;
-              const createdBlock = content.match(/\[!datetime:created_date:([^\]]+)\]/i);
-              if (createdBlock) {
-                createdDate = createdBlock[1].split('T')[0];
-              } else {
-                const createdSection = content.match(/##\s*Created\n([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
-                if (createdSection) createdDate = createdSection[1];
-              }
-
-              return {
-                name: file.name.replace('.md', ''),
-                frequency: (frequencyMatch?.[1] || 'daily') as GTDHabit['frequency'],
-                status: checkboxStatus
-                  ? (checkboxStatus[1] === 'true' ? 'complete' : 'todo')
-                  : ((singleselectStatus?.[1] || 'todo') as 'todo' | 'complete'),
-                path: file.path,
-                last_updated: new Date(file.last_modified).toISOString(),
-                created_date: createdDate
-              };
-            } catch (error) {
-              console.error('Failed to load habit:', file.name, error);
-              return null;
-            }
-          })
-        );
-
-        // Filter out any null results from failed loads
-        setHabits(loadedHabits.filter((h): h is GTDHabit => h !== null));
-      } catch (error) {
-        console.error('Failed to load habits:', error);
-        setHabits([]);
-      }
-    };
-
-    loadHabits();
-  }, [gtdSpace?.root_path]);
-
-  // Load horizon file counts
-  React.useEffect(() => {
-    const loadHorizonCounts = async () => {
-      if (!gtdSpace?.root_path) return;
-
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const horizons = [
-          'Purpose & Principles',
-          'Vision',
-          'Goals',
-          'Areas of Focus',
-          'Someday Maybe',
-          'Cabinet'
-        ];
-
-        const counts: Record<string, number> = {};
-
-        await Promise.all(
-          horizons.map(async (horizon) => {
-            try {
-              const horizonPath = `${gtdSpace.root_path}/${horizon}`;
-              const files = await invoke<MarkdownFile[]>('list_markdown_files', {
-                path: horizonPath
-              });
-              counts[horizon] = files.length;
-            } catch (error) {
-              console.error(`Failed to load ${horizon} files:`, error);
-              counts[horizon] = 0;
-            }
-          })
-        );
-
-        setHorizonFileCounts(counts);
-      } catch (error) {
-        console.error('Failed to load horizon counts:', error);
-      }
-    };
-
-    loadHorizonCounts();
-  }, [gtdSpace?.root_path]);
 
   // Load action summary across all projects
   React.useEffect(() => {
@@ -285,9 +263,13 @@ export const GTDDashboard: React.FC<GTDDashboardProps> = ({
                   const d = new Date(dueStr);
                   if (!isNaN(d.getTime()) && d > now) upcomingDue++;
                 }
-              } catch { }
+              } catch {
+                // Ignore parsing errors
+              }
             }));
-          } catch { }
+          } catch {
+            // Ignore project loading errors
+          }
         }));
 
         setActionSummary({ total, inProgress, waiting, complete, upcomingDue });
@@ -1409,5 +1391,18 @@ export const GTDDashboard: React.FC<GTDDashboardProps> = ({
     </div>
   );
 };
+
+// Memoize the component to prevent unnecessary re-renders
+export const GTDDashboard = React.memo(GTDDashboardComponent, (prevProps, nextProps) => {
+  // Custom comparison function - only re-render if these props change
+  return (
+    prevProps.currentFolder === nextProps.currentFolder &&
+    prevProps.gtdSpace?.root_path === nextProps.gtdSpace?.root_path &&
+    prevProps.gtdSpace?.projects?.length === nextProps.gtdSpace?.projects?.length &&
+    prevProps.isLoading === nextProps.isLoading &&
+    prevProps.onSelectProject === nextProps.onSelectProject &&
+    prevProps.onSelectFile === nextProps.onSelectFile
+  );
+});
 
 export default GTDDashboard;

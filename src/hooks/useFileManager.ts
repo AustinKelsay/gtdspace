@@ -68,7 +68,7 @@ export const useFileManager = () => {
   /**
    * Load a folder by path and display its markdown files
    */
-  const loadFolder = useCallback(async (folderPath: string) => {
+  const loadFolder = useCallback(async (folderPath: string, options?: { saveToSettings?: boolean }) => {
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       
@@ -93,8 +93,10 @@ export const useFileManager = () => {
       // Store the current folder path for references component
       localStorage.setItem('gtdspace-current-path', folderPath);
       
-      // Save folder to settings for persistence
-      await setLastFolder(folderPath);
+      // Only save to settings if explicitly requested (default is true for backward compatibility)
+      if (options?.saveToSettings !== false) {
+        await setLastFolder(folderPath);
+      }
       
     } catch (error) {
       console.log('Failed to load folder:', error);

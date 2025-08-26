@@ -57,11 +57,9 @@ export const useSettings = () => {
       setIsLoading(true);
       setError(null);
       
-      console.log('Loading user settings...');
       const loadedSettings = await invoke<UserSettings>('load_settings');
       
       setSettings(loadedSettings);
-      console.log('Settings loaded successfully:', loadedSettings);
       
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -80,11 +78,9 @@ export const useSettings = () => {
     try {
       setError(null);
       
-      console.log('Saving user settings...', newSettings);
       await invoke<string>('save_settings', { settings: newSettings });
       
       setSettings(newSettings);
-      console.log('Settings saved successfully');
       
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -172,7 +168,6 @@ export const useSettings = () => {
     const handleSettingsUpdate = (event: CustomEvent<UserSettings>) => {
       // Only update if the settings are different to avoid infinite loops
       if (JSON.stringify(event.detail) !== JSON.stringify(settings)) {
-        console.log('[useSettings] Received settings update:', event.detail);
         setSettings(event.detail);
       }
     };

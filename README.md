@@ -4,8 +4,9 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
 ![Tech Stack](https://img.shields.io/badge/Stack-Tauri%202.x%20%7C%20React%2018%20%7C%20Rust-orange)
-![Version](https://img.shields.io/badge/Version-0.0.0-green)
+![Version](https://img.shields.io/badge/Version-0.1.0-green)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
+![Features](https://img.shields.io/badge/Features-GTD%20%7C%20Calendar%20%7C%20Google%20Sync-purple)
 
 ## Features
 
@@ -34,6 +35,17 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 - **GTD References System** - Link Cabinet and Someday Maybe pages to any project or action for context
 - **Hierarchical Horizon References** - Link projects to Areas/Goals, Areas to Goals/Vision/Purpose with proper GTD hierarchy
 
+### Calendar & Scheduling
+
+- **Integrated Calendar View** - Visual weekly and monthly views of all your GTD items
+- **Google Calendar Sync** - Two-way sync with Google Calendar (OAuth 2.0 authentication)
+- **Smart Event Duration** - Actions display on calendar with duration based on effort level (Small: 30min, Medium: 1hr, Large: 2hr, Extra-Large: 3hr)
+- **Multiple Event Types** - View due dates, focus dates, habits, and Google events all in one place
+- **Event Filtering** - Toggle visibility of different event types with visual checkboxes
+- **Habit Scheduling** - Automatic recurring events based on habit frequency
+- **Time-Based Week View** - Hour-by-hour scheduling with current time indicator
+- **Event Details Modal** - Click any event for full details and quick navigation to source
+
 ### Technical Features
 
 - **Code Syntax Highlighting** - Supports 100+ languages with Shiki
@@ -59,6 +71,11 @@ cd gtdspace
 # Install dependencies
 npm install
 
+# (Optional) Set up Google Calendar integration
+# Add your Google OAuth credentials to .env file:
+# GOOGLE_CALENDAR_CLIENT_ID=your_client_id_here
+# GOOGLE_CALENDAR_CLIENT_SECRET=your_client_secret_here
+
 # Run development server (auto-creates your GTD Space at ~/GTD Space on first run)
 npm run tauri:dev
 
@@ -66,11 +83,25 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
+#### Google Calendar Setup (Optional)
+
+To enable Google Calendar synchronization:
+
+1. Create a Google Cloud project and enable the Calendar API
+2. Create OAuth 2.0 credentials (Desktop application type)
+3. Add credentials to your environment:
+   ```bash
+   export GOOGLE_CALENDAR_CLIENT_ID="your_client_id"
+   export GOOGLE_CALENDAR_CLIENT_SECRET="your_client_secret"
+   ```
+4. Connect via Settings → Google Calendar in the app
+
 ## Documentation
 
 - [Installation Guide](docs/installation.md) - Detailed setup instructions
 - [Architecture Overview](docs/architecture.md) - System design and patterns
 - [GTD Implementation](docs/GTD_IMPLEMENTATION.md) - Getting Things Done methodology integration
+- [Calendar Integration](docs/calendar.md) - Calendar view and Google Calendar sync
 - [MultiSelect Fields](docs/multiselect-fields.md) - Interactive dropdown fields for Status and Effort
 - [DateTime Fields](docs/datetime-fields.md) - Beautiful date and time pickers for deadlines and planning
 - [Theming & Styles](docs/theming.md) - CSS variables and theme system

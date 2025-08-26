@@ -7,6 +7,7 @@
 
 import React, { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { openDialogWithTimeout } from '@/utils/tauri-ready';
 import { Folder, FolderOpen, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -52,13 +53,13 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
   ...props
 }) => {
   // === LOCAL STATE ===
-  
+
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualPath, setManualPath] = useState('');
   const [pathError, setPathError] = useState<string | null>(null);
-  
+
   // === FOLDER SELECTION HANDLERS ===
-  
+
   /**
    * Handle folder selection button click
    * First tries the native dialog, falls back to manual input
@@ -66,9 +67,18 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
   const handleSelectFolder = async () => {
     try {
       console.log('Opening folder selection dialog...');
-      const folderPath = await invoke<string>('select_folder');
-      console.log('Folder selected:', folderPath);
-      onFolderSelect(folderPath);
+      const folderPath = await openDialogWithTimeout({
+        directory: true,
+        multiple: false,
+        title: 'Select Folder with Markdown Files'
+      });
+
+      if (folderPath) {
+        console.log('Folder selected:', folderPath);
+        onFolderSelect(folderPath);
+      } else {
+        console.log('Folder selection cancelled');
+      }
     } catch (error) {
       console.log('Folder selection failed, opening manual input:', error);
       // Fall back to manual input since dialog API is temporarily unavailable
@@ -77,7 +87,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
       setPathError(null);
     }
   };
-  
+
   /**
    * Handle manual folder path submission
    */
@@ -86,7 +96,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
       setPathError('Please enter a folder path');
       return;
     }
-    
+
     try {
       // Test if we can list files in this directory
       await invoke('list_markdown_files', { path: manualPath.trim() });
@@ -99,7 +109,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
   };
 
   // === CURRENT FOLDER DISPLAY ===
-  
+
   /**
    * Extract folder name from full path for display
    */
@@ -166,7 +176,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button 
+                  <Button
                     onClick={handleSelectFolder}
                     disabled={loading}
                     className="w-full max-w-xs"
@@ -193,7 +203,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
           </div>
         </CardContent>
       </Card>
-      
+
       {/* Manual Path Input Dialog */}
       <Dialog open={showManualInput} onOpenChange={setShowManualInput}>
         <DialogContent className="sm:max-w-lg">
@@ -203,14 +213,14 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
               The folder selection dialog is temporarily unavailable. Please enter the path to your folder containing markdown files manually.
             </DialogDescription>
           </DialogHeader>
-          
+
           {pathError && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{pathError}</AlertDescription>
             </Alert>
           )}
-          
+
           <div className="space-y-2">
             <Label htmlFor="folderPath">Folder Path</Label>
             <Input
@@ -221,13 +231,13 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
               className="w-full"
             />
             <p className="text-xs text-muted-foreground">
-              Examples: <br/>
-              • macOS: /Users/username/Documents/markdown-files<br/>
-              • Windows: C:\\Users\\username\\Documents\\markdown-files<br/>
+              Examples: <br />
+              • macOS: /Users/username/Documents/markdown-files<br />
+              • Windows: C:\\Users\\username\\Documents\\markdown-files<br />
               • Linux: /home/username/Documents/markdown-files
             </p>
           </div>
-          
+
           <DialogFooter className="flex space-x-2">
             <Button
               variant="outline"
@@ -235,7 +245,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleManualSubmit}
               disabled={!manualPath.trim()}
             >

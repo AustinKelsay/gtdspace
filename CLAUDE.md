@@ -58,6 +58,11 @@ const result = await withErrorHandling(
 - Backend: `snake_case` (e.g., `space_path`)
 - Tauri auto-converts during IPC
 
+**Tauri Context Detection:**
+- Use `isTauriContext()` from `@/utils/tauri-ready` to check if running in Tauri
+- Fallback dialog handling for web-only development
+- Prevents runtime errors when testing without backend
+
 ## Architecture: State Management via Custom Hooks
 
 Each hook in `src/hooks/` encapsulates specific domain logic:
@@ -241,6 +246,15 @@ interface HabitRecord {
 - **Parallel File Reading**: Concurrent operations for data aggregation
 - **Smart Habit Scheduling**: Generates recurring dates on-demand
 
+### Google Calendar Integration Details
+- **OAuth2 Authentication**: Secure token-based authentication with refresh support
+- **Local Token Storage**: Tokens stored in Tauri app data directory (`google_calendar_tokens.json`)
+- **Event Caching**: Calendar events cached locally for offline access
+- **Sync Status Tracking**: Real-time sync status with last sync timestamp
+- **Automatic Token Refresh**: Handles expired tokens transparently
+- **Event Filtering**: Only retrieves events within current calendar view window
+- **OAuth Redirect URI**: `http://localhost:9898/callback`
+
 ### TypeScript Configuration
 - **Strict mode disabled** - careful with null checks
 - Path alias `@/` → `src/`
@@ -291,6 +305,9 @@ interface HabitRecord {
 **Settings:**
 `load_settings`, `save_settings`
 
+**Google Calendar:**
+`google_calendar_connect`, `google_calendar_disconnect_simple`, `google_calendar_sync`, `google_calendar_get_status`, `google_calendar_get_cached_events`, `google_calendar_is_authenticated`, `google_calendar_fetch_events`
+
 ## Known Issues & Troubleshooting
 
 ### Sidebar Not Updating After Project Creation
@@ -310,6 +327,17 @@ interface HabitRecord {
 3. Check if manual `loadProjects()` call works in console
 
 **Workaround**: Manually refresh the sidebar by collapsing and expanding the Projects section.
+
+### Google Calendar Authentication Issues
+**Problem**: OAuth flow fails or tokens expire unexpectedly.
+
+**Debug Steps**:
+1. Check `.env` file has valid `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+2. Verify OAuth redirect URI matches Google Console: `http://localhost:9898/callback`
+3. Check Tauri app data directory for `google_calendar_tokens.json`
+4. Look for OAuth server errors in console (port 9898 conflicts)
+
+**Workaround**: Disconnect and reconnect Google Calendar in Settings > Google Calendar.
 
 ## Recent Architecture Decisions (Jan 2025)
 
@@ -345,10 +373,11 @@ interface HabitRecord {
 ### Calendar View
 - **Calendar Integration**: Full calendar view aggregating all dated items
 - **Performance Optimized**: Pre-compiled regex patterns and parallel file reading
-- **Multi-Source Data**: Combines project due dates, action focus dates, and habit schedules
+- **Multi-Source Data**: Combines project due dates, action focus dates, habit schedules, and Google Calendar events
 - **View-Window Generation**: Only generates dates within current view for performance
 - **Week View**: Time-based scheduling with current time indicator
 - **Month View**: Date-based overview with item counts
+- **Google Calendar Sync**: OAuth2-based integration with calendar sync capabilities
 
 ### UI/UX Improvements
 - **DateTime Fields**: Beautiful calendar/time picker components using shadcn/ui
@@ -362,7 +391,7 @@ interface HabitRecord {
 - **References System**: Interactive UI for linking Cabinet and Someday Maybe pages to actions/projects
 - **Horizon References**: Hierarchical reference system linking projects to areas/goals, areas to goals/vision/purpose, etc.
 - **Horizon Lists**: Dynamic lists showing items from lower horizons that reference the current page
-- **Settings Organization**: Modular settings panels (GTD, Appearance, Advanced, About)
+- **Settings Organization**: Modular settings panels (GTD, Appearance, Advanced, About, Google Calendar)
 
 ### Technical Improvements
 - **IPC Fix**: Rust commands are synchronous for Tauri 2.0 compatibility
@@ -392,6 +421,9 @@ interface HabitRecord {
 - **tokio**: Async runtime with full features
 - **thiserror**: Structured error types
 - **regex**: Text processing
+- **google-calendar3**: Google Calendar API client
+- **oauth2**: OAuth authentication flow
+- **hyper + warp**: HTTP server for OAuth callback
 
 ## Important Multi-File Patterns
 
@@ -401,7 +433,8 @@ interface HabitRecord {
 3. **GTD Operations**: Forms → useGTDSpace → Rust backend → State refresh
 4. **Habit Updates**: Checkbox → useHabitTracking → update_habit_status → File content
 5. **Calendar Data**: useCalendarData → Parallel file reads → Aggregated view
-6. **Project Creation Flow**:
+6. **Google Calendar Sync**: Settings UI → OAuth flow → Token storage → API sync
+7. **Project Creation Flow**:
    - GTDProjectDialog → useGTDSpace.createProject()
    - createProject() → invoke('create_gtd_project') → Updates local state
    - createProject() → dispatch('gtd-project-created') event
@@ -412,11 +445,12 @@ interface HabitRecord {
 - **useTabManager** depends on content-event-bus for metadata updates
 - **GTDWorkspaceSidebar** requires useGTDSpace and content event subscriptions
 - **BlockNote Editor** integrates with custom blocks and preprocessing utilities
-- **Calendar View** aggregates data from all GTD sections in parallel
+- **Calendar View** aggregates data from all GTD sections and Google Calendar in parallel
 - **ReferencesBlock** provides Cabinet/Someday linking with dialog-based selection
 - **HorizonReferencesBlock** provides hierarchical GTD horizon linking
 - **HorizonListBlock** provides dynamic lists of items that reference the current page
 - **Settings Components** modular panels for different configuration areas
+- **Google Calendar Integration** OAuth server, token management, and calendar sync
 
 ## Testing Status
 
@@ -428,3 +462,16 @@ interface HabitRecord {
 - **ESLint Auto-fix**: Enabled on save
 - **Rust Analyzer**: Uses clippy for linting
 - **Import Preferences**: Relative paths for TypeScript imports
+
+## Environment Variables
+
+```bash
+# Google Calendar OAuth2 Configuration (.env file in project root)
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+```
+
+- Frontend accesses environment variables via `import.meta.env.VITE_*` pattern
+- Backend loads `.env` file via `dotenv` crate at startup
+- OAuth redirect URI must match Google Console configuration: `http://localhost:9898/callback`
+- Tokens are stored locally, never in version control

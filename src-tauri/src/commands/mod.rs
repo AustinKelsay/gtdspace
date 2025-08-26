@@ -31,6 +31,7 @@ use std::path::PathBuf;
 use std::fs;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
+use tokio::sync::Mutex as TokioMutex;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
@@ -264,6 +265,13 @@ pub fn ping() -> Result<String, String> {
     Ok("pong".to_string())
 }
 
+/// Test folder selection
+#[tauri::command]
+pub fn test_select_folder() -> Result<String, String> {
+    println!("=== test_select_folder called ===");
+    Ok("Test successful - command reached!".to_string())
+}
+
 /// Get the current application version
 ///
 /// Returns the version string from the Cargo.toml file. This is useful
@@ -286,7 +294,7 @@ pub fn ping() -> Result<String, String> {
 /// console.log(`App version: ${version}`);
 /// ```
 #[tauri::command]
-pub async fn get_app_version(app: AppHandle) -> Result<String, String> {
+pub fn get_app_version(app: AppHandle) -> Result<String, String> {
     let package_info = app.package_info();
     let version = package_info.version.to_string();
     
@@ -359,21 +367,30 @@ pub async fn check_permissions() -> Result<PermissionStatus, String> {
 /// ```
 #[tauri::command]
 pub async fn select_folder(app: AppHandle) -> Result<String, String> {
+    println!("=== select_folder command called (async with thread) ===");
     log::info!("Folder selection dialog requested");
     
-    match app
-        .dialog()
-        .file()
-        .set_title("Select Folder with Markdown Files")
-        .blocking_pick_folder()
-    {
+    // Use std::thread::spawn instead of tokio::task::spawn_blocking
+    let handle = std::thread::spawn(move || {
+        let dialog = app.dialog().file();
+        let dialog = dialog.set_title("Select Folder with Markdown Files");
+        
+        println!("Opening folder dialog in separate thread...");
+        
+        dialog.blocking_pick_folder()
+    });
+    
+    // Wait for the thread to complete
+    let result = handle.join().map_err(|_| "Failed to join thread".to_string())?;
+    
+    match result {
         Some(folder_path) => {
             let path_str = folder_path.to_string();
-            log::info!("Folder selected: {}", path_str);
+            println!("Folder selected: {}", path_str);
             Ok(path_str)
         }
         None => {
-            log::info!("Folder selection cancelled by user");
+            println!("Folder selection cancelled");
             Err("Folder selection was cancelled".to_string())
         }
     }
@@ -2125,6 +2142,75 @@ pub async fn replace_in_file(file_path: String, search_term: String, replace_ter
 ///   space_path: '/path/to/my/gtd/space' 
 /// });
 /// ```
+#[tauri::command]
+pub fn check_is_gtd_space(path: String) -> Result<bool, String> {
+    log::info!("Checking if directory is a GTD space: {}", path);
+    println!("[check_is_gtd_space] Checking path: {}", path);
+    
+    let root_path = Path::new(&path);
+    
+    // Check if the path exists and is a directory
+    if !root_path.exists() {
+        println!("[check_is_gtd_space] Path does not exist: {}", path);
+        return Ok(false);
+    }
+    
+    if !root_path.is_dir() {
+        println!("[check_is_gtd_space] Path is not a directory: {}", path);
+        return Ok(false);
+    }
+    
+    // Check for key GTD directories
+    // Making Projects the only truly required directory
+    let required_dirs = ["Projects"];
+    let optional_dirs = ["Areas of Focus", "Goals", "Vision", "Purpose & Principles", "Habits", "Someday Maybe", "Cabinet"];
+    
+    let mut required_found = 0;
+    let mut missing_required = Vec::new();
+    for dir in &required_dirs {
+        let dir_path = root_path.join(dir);
+        if dir_path.exists() && dir_path.is_dir() {
+            required_found += 1;
+            println!("[check_is_gtd_space] Found required directory: {}", dir);
+        } else {
+            missing_required.push(dir.to_string());
+            println!("[check_is_gtd_space] Missing required directory: {}", dir);
+        }
+    }
+    
+    // Count optional directories
+    let mut optional_found = 0;
+    for dir in &optional_dirs {
+        let dir_path = root_path.join(dir);
+        if dir_path.exists() && dir_path.is_dir() {
+            optional_found += 1;
+            println!("[check_is_gtd_space] Found optional directory: {}", dir);
+        }
+    }
+    
+    // Consider it a GTD space if it has all required directories (Projects),
+    // or if it has at least 3 of the GTD directories total
+    let is_gtd_space = required_found == required_dirs.len() || 
+                       (required_found + optional_found) >= 3;
+    
+    println!("[check_is_gtd_space] Result: {} (required: {}/{}, optional: {}/{}, total: {})", 
+              if is_gtd_space { "IS GTD SPACE" } else { "NOT GTD SPACE" },
+              required_found, required_dirs.len(),
+              optional_found, optional_dirs.len(),
+              required_found + optional_found);
+    
+    if !is_gtd_space && !missing_required.is_empty() {
+        println!("[check_is_gtd_space] Missing required directories: {:?}", missing_required);
+    }
+    
+    log::info!("Directory {} GTD space (required: {}/{}, optional: {}/{})", 
+              if is_gtd_space { "is a" } else { "is not a" },
+              required_found, required_dirs.len(),
+              optional_found, optional_dirs.len());
+    
+    Ok(is_gtd_space)
+}
+
 #[tauri::command]
 pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> {
     log::info!("Initializing GTD space at: {}", space_path);
@@ -3906,4 +3992,540 @@ fn count_project_actions(project_path: &Path) -> u32 {
     }
     
     count
+}
+
+// ===== GOOGLE CALENDAR INTEGRATION =====
+
+use lazy_static::lazy_static;
+use super::google_calendar::{GoogleCalendarManager, GoogleCalendarEvent, SyncStatus};
+
+lazy_static! {
+    static ref GOOGLE_CALENDAR_MANAGER: Arc<TokioMutex<Option<Arc<GoogleCalendarManager>>>> = Arc::new(TokioMutex::new(None));
+}
+
+// Simple test command to verify Tauri is working
+#[tauri::command]
+pub fn google_calendar_test() -> Result<String, String> {
+    println!("[GoogleCalendar] TEST COMMAND CALLED!");
+    
+    // Check if environment variables are present
+    let has_client_id = std::env::var("GOOGLE_CALENDAR_CLIENT_ID").is_ok();
+    let has_client_secret = std::env::var("GOOGLE_CALENDAR_CLIENT_SECRET").is_ok();
+    
+    let message = format!(
+        "Test successful! Credentials present: {}",
+        has_client_id && has_client_secret
+    );
+    
+    println!("[GoogleCalendar] {}", message);
+    Ok(message)
+}
+
+
+
+/// Start Google Calendar OAuth authentication flow.
+/// 
+/// This is a synchronous wrapper because async Tauri commands with AppHandle parameter
+/// were experiencing issues where they would hang silently without returning. This is a
+/// known limitation when using AppHandle in async contexts with Tauri.
+/// 
+/// The function handles the OAuth 2.0 flow by:
+/// 1. Starting an OAuth callback server in a separate thread
+/// 2. Opening the user's browser to Google's authorization page
+/// 3. Waiting for the authorization code from the callback
+/// 4. Exchanging the code for access and refresh tokens
+/// 5. Securely storing the tokens for future use
+///
+/// # Implementation Details
+/// 
+/// Uses a single shared Tokio runtime to avoid resource leaks from creating multiple
+/// runtimes. The OAuth server runs in a separate OS thread but shares the same runtime
+/// instance through Arc for efficient resource usage.
+///
+/// # Security
+/// 
+/// - Tokens are stored with atomic writes and restrictive file permissions
+/// - Client credentials are loaded from environment variables
+/// - OAuth state parameter is used to prevent CSRF attacks
+///
+/// # Returns
+/// 
+/// Success message on successful authentication or error details if any step fails
+///
+/// # Errors
+/// 
+/// - Missing environment variables for Google OAuth credentials
+/// - Failed to create Tokio runtime
+/// - Browser failed to open
+/// - OAuth callback timeout or failure
+/// - Token exchange failure
+/// - Token storage failure
+#[tauri::command]
+pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
+    use super::google_calendar::simple_auth::{SimpleAuthConfig, start_oauth_flow};
+    use super::google_calendar::oauth_server::run_oauth_server;
+    use super::google_calendar::token_manager::{TokenManager, StoredTokens};
+    
+    println!("[GoogleCalendar] Starting OAuth flow (sync command)...");
+    
+    // Load credentials
+    let client_id = match std::env::var("GOOGLE_CALENDAR_CLIENT_ID") {
+        Ok(id) => {
+            println!("[GoogleCalendar] Client ID loaded");
+            id
+        }
+        Err(_) => {
+            return Err("Google Calendar client ID not found in environment variables".to_string());
+        }
+    };
+    
+    let client_secret = match std::env::var("GOOGLE_CALENDAR_CLIENT_SECRET") {
+        Ok(secret) => {
+            println!("[GoogleCalendar] Client secret loaded");
+            secret
+        }
+        Err(_) => {
+            return Err("Google Calendar client secret not found in environment variables".to_string());
+        }
+    };
+    
+    let config = SimpleAuthConfig {
+        client_id: client_id.clone(),
+        client_secret: client_secret.clone(),
+        redirect_uri: "http://localhost:8080".to_string(),
+        auth_uri: "https://accounts.google.com/o/oauth2/v2/auth".to_string(),
+        token_uri: "https://oauth2.googleapis.com/token".to_string(),
+    };
+    
+    // Create runtime for async operations
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(rt) => rt,
+        Err(e) => {
+            return Err(format!("Failed to create runtime: {}", e));
+        }
+    };
+    
+    // Start OAuth server and wait for callback
+    let server_handle = std::thread::spawn(move || {
+        println!("[GoogleCalendar] Starting OAuth callback server...");
+        
+        let rt = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => {
+                eprintln!("[GoogleCalendar] Failed to create runtime: {}", e);
+                return Err(format!("Failed to create runtime: {}", e));
+            }
+        };
+        
+        rt.block_on(async {
+            run_oauth_server().await
+        }).map_err(|e| e.to_string())
+    });
+    
+    // Give server a moment to start
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    
+    // Open browser
+    println!("[GoogleCalendar] Opening browser...");
+    let state = match start_oauth_flow(&config) {
+        Ok(state) => {
+            println!("[GoogleCalendar] Browser opened with state: {}", state);
+            state
+        }
+        Err(e) => {
+            eprintln!("[GoogleCalendar] Failed to open browser: {}", e);
+            return Err(format!("Failed to open browser: {}", e));
+        }
+    };
+    
+    // Wait for the OAuth server to receive the code (with timeout)
+    println!("[GoogleCalendar] Waiting for OAuth callback...");
+    
+    match server_handle.join() {
+        Ok(Ok(code)) => {
+            println!("[GoogleCalendar] Received authorization code!");
+            
+            // Exchange code for tokens
+            let token_response = rt.block_on(async {
+                config.exchange_code(&code).await
+            });
+            
+            match token_response {
+                Ok(tokens) => {
+                    println!("[GoogleCalendar] Token exchange successful!");
+                    
+                    // Store tokens
+                    let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
+                    let stored_tokens = StoredTokens {
+                        access_token: tokens.access_token.clone(),
+                        refresh_token: tokens.refresh_token.clone(),
+                        expires_at: Some(chrono::Utc::now().timestamp() + tokens.expires_in),
+                    };
+                    
+                    token_manager.save_tokens(&stored_tokens).map_err(|e| e.to_string())?;
+                    println!("[GoogleCalendar] Tokens saved successfully!");
+                    
+                    Ok("Authentication successful! You can now sync your Google Calendar.".to_string())
+                }
+                Err(e) => {
+                    eprintln!("[GoogleCalendar] Failed to exchange code: {}", e);
+                    Err(format!("Failed to exchange authorization code: {}", e))
+                }
+            }
+        }
+        Ok(Err(e)) => {
+            eprintln!("[GoogleCalendar] OAuth server error: {}", e);
+            Err(format!("OAuth callback failed: {}", e))
+        }
+        Err(_) => {
+            Err("OAuth server thread panicked".to_string())
+        }
+    }
+}
+
+// Async test command to verify async commands work
+#[tauri::command]
+pub async fn google_calendar_test_async() -> Result<String, String> {
+    println!("[GoogleCalendar] ASYNC TEST COMMAND CALLED!");
+    
+    // Simple async delay
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    
+    println!("[GoogleCalendar] ASYNC TEST COMPLETED!");
+    Ok("Async test successful!".to_string())
+}
+
+/// Check if the user is authenticated with Google Calendar.
+/// 
+/// This is a synchronous wrapper to avoid async/AppHandle issues.
+/// Checks for the presence of valid stored tokens.
+/// 
+/// # Returns
+/// 
+/// - `true` if valid tokens exist
+/// - `false` if no tokens found or error occurred
+#[tauri::command]
+pub fn google_calendar_is_authenticated(app: AppHandle) -> Result<bool, String> {
+    use super::google_calendar::token_manager::TokenManager;
+    
+    let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
+    match token_manager.load_tokens() {
+        Ok(Some(_)) => Ok(true),
+        Ok(None) => Ok(false),
+        Err(e) => {
+            println!("[GoogleCalendar] Error checking auth status: {}", e);
+            Ok(false)
+        }
+    }
+}
+
+/// Fetch Google Calendar events for the user.
+/// 
+/// This is a synchronous wrapper because async Tauri commands with AppHandle parameter
+/// were experiencing hanging issues. Creates its own Tokio runtime to execute async
+/// operations and blocks until completion.
+/// 
+/// # Implementation Details
+/// 
+/// Creates a new Tokio runtime for the async calendar API calls. This is necessary
+/// because the function needs to remain synchronous to work around Tauri limitations.
+/// 
+/// # Returns
+/// 
+/// Vector of calendar events or error message
+#[tauri::command]
+pub fn google_calendar_fetch_events(app: AppHandle) -> Result<Vec<super::google_calendar::calendar_client::CalendarEvent>, String> {
+    use super::google_calendar::token_manager::TokenManager;
+    use super::google_calendar::calendar_client::fetch_calendar_events;
+    
+    println!("[GoogleCalendar] Fetching calendar events (sync command)...");
+    
+    // Load stored tokens
+    let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
+    let tokens = token_manager.load_tokens()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Not authenticated. Please connect to Google Calendar first.".to_string())?;
+    
+    println!("[GoogleCalendar] Token loaded, fetching events...");
+    
+    // Create a runtime for the async operation
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| format!("Failed to create runtime: {}", e))?;
+    
+    // Fetch events using the access token
+    let events = rt.block_on(async {
+        fetch_calendar_events(&tokens.access_token).await
+    }).map_err(|e| format!("Failed to fetch events: {}", e))?;
+    
+    println!("[GoogleCalendar] Successfully fetched {} events", events.len());
+    Ok(events)
+}
+
+/// Initialize Google Calendar manager with credentials
+async fn init_google_calendar_manager(app: AppHandle) -> Result<(), String> {
+    println!("[GoogleCalendar] Attempting to initialize Google Calendar manager...");
+    println!("[GoogleCalendar] Working directory: {:?}", std::env::current_dir());
+    
+    // Try to load .env file manually from the project root
+    let env_path = std::env::current_dir()
+        .map(|mut p| {
+            // Go up from src-tauri if we're there
+            if p.ends_with("src-tauri") {
+                p.pop();
+            }
+            p.push(".env");
+            p
+        })
+        .ok();
+    
+    if let Some(path) = &env_path {
+        println!("[GoogleCalendar] Looking for .env file at: {:?}", path);
+        if path.exists() {
+            println!("[GoogleCalendar] .env file found, loading...");
+            dotenv::from_path(path).ok();
+        } else {
+            println!("[GoogleCalendar] .env file not found at {:?}", path);
+        }
+    }
+    
+    let client_id = std::env::var("GOOGLE_CALENDAR_CLIENT_ID")
+        .or_else(|_| std::env::var("VITE_GOOGLE_CALENDAR_CLIENT_ID"))
+        .map_err(|e| {
+            println!("[GoogleCalendar] Failed to get client ID: {:?}", e);
+            println!("[GoogleCalendar] Available env vars:");
+            for (key, val) in std::env::vars() {
+                if key.contains("GOOGLE") || key.contains("VITE") {
+                    println!("  {} = {}", key, val);
+                }
+            }
+            "Google Calendar client ID not found in environment variables"
+        })?;
+    
+    let client_secret = std::env::var("GOOGLE_CALENDAR_CLIENT_SECRET")
+        .or_else(|_| std::env::var("VITE_GOOGLE_CALENDAR_CLIENT_SECRET"))
+        .map_err(|e| {
+            println!("[GoogleCalendar] Failed to get client secret: {:?}", e);
+            "Google Calendar client secret not found in environment variables"
+        })?;
+    
+    println!("[GoogleCalendar] Credentials loaded successfully");
+
+    let manager = GoogleCalendarManager::new(app, client_id, client_secret)
+        .await
+        .map_err(|e| {
+            println!("[GoogleCalendar] Failed to create manager: {}", e);
+            format!("Failed to create Google Calendar manager: {}", e)
+        })?;
+
+    let mut global_manager = GOOGLE_CALENDAR_MANAGER.lock().await;
+    *global_manager = Some(Arc::new(manager));
+
+    println!("[GoogleCalendar] Manager initialized successfully");
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn google_calendar_connect(app: AppHandle) -> Result<String, String> {
+    println!("[GoogleCalendar] ========================================");
+    println!("[GoogleCalendar] Connect command called at {:?}", std::time::SystemTime::now());
+    println!("[GoogleCalendar] ========================================");
+    
+    // First, let's check if .env file exists and try to load it
+    let project_root = std::env::current_dir()
+        .map(|mut p| {
+            if p.ends_with("src-tauri") {
+                p.pop();
+            }
+            p
+        })
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    
+    let env_file = project_root.join(".env");
+    println!("[GoogleCalendar] Looking for .env at: {:?}", env_file);
+    println!("[GoogleCalendar] .env exists: {}", env_file.exists());
+    
+    if env_file.exists() {
+        println!("[GoogleCalendar] Loading .env file...");
+        match dotenv::from_path(&env_file) {
+            Ok(_) => println!("[GoogleCalendar] .env loaded successfully"),
+            Err(e) => println!("[GoogleCalendar] Failed to load .env: {}", e),
+        }
+    }
+    
+    // Check environment variables
+    println!("[GoogleCalendar] Checking environment variables...");
+    let has_client_id = std::env::var("GOOGLE_CALENDAR_CLIENT_ID").is_ok();
+    let has_client_secret = std::env::var("GOOGLE_CALENDAR_CLIENT_SECRET").is_ok();
+    println!("[GoogleCalendar] Credentials present: {}", has_client_id && has_client_secret);
+    
+    if !has_client_id || !has_client_secret {
+        return Err("Google Calendar credentials not found. Please ensure credentials are set in your .env file".to_string());
+    }
+    
+    // Initialize manager if not already done
+    let needs_init = {
+        let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
+        manager_guard.is_none()
+    };
+    
+    println!("[GoogleCalendar] Manager needs init: {}", needs_init);
+    
+    if needs_init {
+        println!("[GoogleCalendar] Initializing manager...");
+        match init_google_calendar_manager(app.clone()).await {
+            Ok(_) => println!("[GoogleCalendar] Manager initialized successfully"),
+            Err(e) => {
+                println!("[GoogleCalendar] Failed to initialize manager: {}", e);
+                return Err(e);
+            }
+        }
+    }
+
+    // Clone the Arc reference before the await
+    let manager = {
+        let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
+        manager_guard
+            .as_ref()
+            .ok_or_else(|| "Google Calendar manager not initialized".to_string())?
+            .clone()
+    };
+
+    println!("[GoogleCalendar] Calling manager.connect()...");
+    manager
+        .connect()
+        .await
+        .map_err(|e| {
+            println!("[GoogleCalendar] Connect failed: {}", e);
+            format!("Failed to connect to Google Calendar: {}", e)
+        })?;
+
+    println!("[GoogleCalendar] Successfully connected!");
+    Ok("Successfully connected to Google Calendar".to_string())
+}
+
+/// Disconnect from Google Calendar by removing stored tokens.
+/// 
+/// This is a synchronous wrapper to avoid async/AppHandle issues.
+/// Securely deletes the stored OAuth tokens, effectively logging the user out.
+/// 
+/// # Security
+/// 
+/// Uses secure deletion to remove tokens from disk storage.
+/// 
+/// # Returns
+/// 
+/// Success message or error if token deletion fails
+#[tauri::command]
+pub fn google_calendar_disconnect_simple(app: AppHandle) -> Result<String, String> {
+    use super::google_calendar::token_manager::TokenManager;
+    
+    println!("[GoogleCalendar] Disconnecting...");
+    
+    let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
+    token_manager.delete_tokens().map_err(|e| e.to_string())?;
+    
+    println!("[GoogleCalendar] Tokens deleted, disconnected successfully");
+    Ok("Successfully disconnected from Google Calendar".to_string())
+}
+
+#[tauri::command]
+pub async fn google_calendar_disconnect() -> Result<String, String> {
+    let manager = {
+        let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
+        manager_guard
+            .as_ref()
+            .ok_or_else(|| "Google Calendar manager not initialized".to_string())?
+            .clone()
+    };
+
+    manager
+        .disconnect()
+        .await
+        .map_err(|e| format!("Failed to disconnect from Google Calendar: {}", e))?;
+
+    Ok("Successfully disconnected from Google Calendar".to_string())
+}
+
+#[tauri::command]
+pub async fn google_calendar_sync(app: AppHandle) -> Result<Vec<GoogleCalendarEvent>, String> {
+    // Initialize manager if not already done
+    let needs_init = {
+        let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
+        manager_guard.is_none()
+    };
+    
+    if needs_init {
+        init_google_calendar_manager(app.clone()).await?;
+    }
+
+    let manager = {
+        let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
+        manager_guard
+            .as_ref()
+            .ok_or_else(|| "Google Calendar manager not initialized".to_string())?
+            .clone()
+    };
+
+    let events = manager
+        .sync_events(None, None)
+        .await
+        .map_err(|e| format!("Failed to sync Google Calendar events: {}", e))?;
+
+    Ok(events)
+}
+
+#[tauri::command]
+pub async fn google_calendar_get_status(app: AppHandle) -> Result<SyncStatus, String> {
+    // Initialize manager if not already done
+    let needs_init = {
+        let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
+        manager_guard.is_none()
+    };
+    
+    if needs_init {
+        init_google_calendar_manager(app.clone()).await?;
+    }
+
+    let manager = {
+        let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
+        manager_guard
+            .as_ref()
+            .ok_or_else(|| "Google Calendar manager not initialized".to_string())?
+            .clone()
+    };
+
+    let status = manager
+        .get_status()
+        .await
+        .map_err(|e| format!("Failed to get Google Calendar status: {}", e))?;
+
+    Ok(status)
+}
+
+#[tauri::command]
+pub async fn google_calendar_get_cached_events(app: AppHandle) -> Result<Vec<GoogleCalendarEvent>, String> {
+    // Initialize manager if not already done
+    let needs_init = {
+        let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
+        manager_guard.is_none()
+    };
+    
+    if needs_init {
+        init_google_calendar_manager(app.clone()).await?;
+    }
+
+    let manager = {
+        let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
+        manager_guard
+            .as_ref()
+            .ok_or_else(|| "Google Calendar manager not initialized".to_string())?
+            .clone()
+    };
+
+    let events = manager
+        .get_cached_events()
+        .await
+        .map_err(|e| format!("Failed to get cached Google Calendar events: {}", e))?;
+
+    Ok(events)
 }

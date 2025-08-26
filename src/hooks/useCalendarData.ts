@@ -12,13 +12,23 @@ export interface CalendarItem {
   id: string;
   name: string;
   path: string;
-  type: 'project' | 'action' | 'habit';
+  type: 'project' | 'action' | 'habit' | 'google-event';
+  source?: 'gtd' | 'google';
   status?: string;
   due_date?: string;
   focus_date?: string;
+  end_date?: string; // For Google events
   projectName?: string;
   frequency?: string; // For habits
   createdDate?: string; // For habits
+  effort?: string; // For actions
+  // Google Calendar specific fields
+  googleEventId?: string;
+  attendees?: string[];
+  location?: string;
+  meetingLink?: string;
+  description?: string;
+  colorId?: string;
 }
 
 interface UseCalendarDataReturn {
@@ -26,6 +36,23 @@ interface UseCalendarDataReturn {
   isLoading: boolean;
   error: string | null;
   refresh: () => void;
+}
+
+// Google Calendar event payload as received from the Tauri backend/local cache
+// Kept at top-level to avoid re-declaration on every render of the hook
+interface GoogleEvent {
+  id: string;
+  summary?: string;
+  description?: string;
+  start?: string;
+  end?: string;
+  location?: string;
+  meeting_link?: string;
+  meetingLink?: string;
+  attendees?: string[];
+  status?: string;
+  color_id?: string;
+  colorId?: string;
 }
 
 // Pre-compile regex patterns for better performance
@@ -88,6 +115,38 @@ export const useCalendarData = (
   const [items, setItems] = useState<CalendarItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const [googleEvents, setGoogleEvents] = useState<GoogleEvent[]>([]);
+
+  // Listen for Google Calendar sync events
+  useEffect(() => {
+    // Listen for custom window events from settings
+    const handleGoogleCalendarSync = (event: CustomEvent) => {
+      console.log('[CalendarData] Received Google Calendar sync event from window:', event.detail);
+      if (Array.isArray(event.detail)) {
+        setGoogleEvents(event.detail);
+      }
+    };
+    
+    window.addEventListener('google-calendar-synced', handleGoogleCalendarSync as EventListener);
+
+    // Load cached Google events from localStorage
+    console.log('[CalendarData] Attempting to load cached Google events...');
+    const storedEvents = localStorage.getItem('google-calendar-events');
+    if (storedEvents) {
+      try {
+        const events = JSON.parse(storedEvents);
+        console.log('[CalendarData] Loaded', events.length, 'Google events from localStorage');
+        setGoogleEvents(events);
+      } catch (error) {
+        console.error('[CalendarData] Failed to parse stored events:', error);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('google-calendar-synced', handleGoogleCalendarSync as EventListener);
+    };
+  }, []);
 
   const loadAllCalendarItems = useCallback(async () => {
     if (!spacePath) {
@@ -148,10 +207,11 @@ export const useCalendarData = (
               const focusDate = parseDateTimeField(content, 'focus_date');
               const dueDate = parseDateTimeField(content, 'due_date');
               const status = parseSingleSelectField(content, 'status') || 'in-progress';
+              const effort = parseSingleSelectField(content, 'effort');
               
               const finalFocusDate = focusDateTime || focusDate;
               
-              console.log(`[CalendarData] Action ${actionName}: focus=${finalFocusDate}, due=${dueDate}`);
+              console.log(`[CalendarData] Action ${actionName}: focus=${finalFocusDate}, due=${dueDate}, effort=${effort}`);
               
               if (finalFocusDate || dueDate) {
                 allItems.push({
@@ -162,7 +222,8 @@ export const useCalendarData = (
                   status: status,
                   due_date: dueDate,
                   focus_date: finalFocusDate,
-                  projectName: projectName
+                  projectName: projectName,
+                  effort: effort
                 });
               }
             } catch (err) {
@@ -239,11 +300,45 @@ export const useCalendarData = (
         }
       }
       
+      // Add Google Calendar events to the list
+      console.log('[CalendarData] Adding', googleEvents.length, 'Google events to calendar');
+      googleEvents.forEach((event) => {
+        // Convert Google event to CalendarItem format
+        const calendarItem: CalendarItem = {
+          id: `google-${event.id}`,
+          name: event.summary || 'Untitled Event',
+          path: '', // Google events don't have a file path
+          type: 'google-event',
+          source: 'google',
+          status: 'confirmed',
+          due_date: event.end || event.start, // Use end time, fallback to start
+          focus_date: event.start,
+          end_date: event.end, // Add end_date for duration calculation
+          googleEventId: event.id,
+          attendees: event.attendees,
+          location: event.location,
+          meetingLink: event.meeting_link || event.meetingLink,
+          description: event.description,
+          colorId: event.color_id || event.colorId
+        };
+        console.info({
+          level: 'info',
+          ts: new Date().toISOString(),
+          event: 'add_google_event',
+          name: calendarItem.name,
+          focus_date: calendarItem.focus_date,
+          end_date: calendarItem.end_date,
+          source: 'CalendarData'
+        });
+        allItems.push(calendarItem);
+      });
+
       console.log(`[CalendarData] Loaded ${allItems.length} total calendar items`);
       console.log('[CalendarData] Items by type:', {
         projects: allItems.filter(i => i.type === 'project').length,
         actions: allItems.filter(i => i.type === 'action').length,
-        habits: allItems.filter(i => i.type === 'habit').length
+        habits: allItems.filter(i => i.type === 'habit').length,
+        googleEvents: allItems.filter(i => i.type === 'google-event').length
       });
       
       setItems(allItems);
@@ -253,7 +348,7 @@ export const useCalendarData = (
     } finally {
       setIsLoading(false);
     }
-  }, [spacePath, gtdSpace, files]);
+  }, [spacePath, gtdSpace, files, googleEvents]);
 
   // Load data on mount and when dependencies change
   useEffect(() => {

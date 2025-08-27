@@ -62,10 +62,10 @@ impl SimpleAuthConfig {
 
         if !response.status().is_success() {
             let error_text = response.text().await?;
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to exchange code: {}", error_text),
-            )));
+            return Err(Box::new(std::io::Error::other(format!(
+                "Failed to exchange code: {}",
+                error_text
+            ))));
         }
 
         let token_response: TokenResponse = response.json().await?;
@@ -91,10 +91,10 @@ impl SimpleAuthConfig {
 
         if !response.status().is_success() {
             let error_text = response.text().await?;
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to refresh token: {}", error_text),
-            )));
+            return Err(Box::new(std::io::Error::other(format!(
+                "Failed to refresh token: {}",
+                error_text
+            ))));
         }
 
         let token_response: TokenResponse = response.json().await?;

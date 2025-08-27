@@ -4423,7 +4423,7 @@ pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
                 // Callers could use browser_err.auth_url to present to user for manual opening
             }
 
-            return Err(format!("Failed to open browser for OAuth authentication. Please check the logs for details."));
+            return Err("Failed to open browser for OAuth authentication. Please check the logs for details.".to_string());
         }
     };
 

@@ -210,10 +210,10 @@ impl TokenStorage {
         if let Some(parent) = path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
                 log::error!("Failed to create directory '{}': {}", parent.display(), e);
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to create directory: {}", e),
-                )));
+                return Err(Box::new(std::io::Error::other(format!(
+                    "Failed to create directory: {}",
+                    e
+                ))));
             }
 
             // Set restrictive permissions on the directory for Unix-like systems

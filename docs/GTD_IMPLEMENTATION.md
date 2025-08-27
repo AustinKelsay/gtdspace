@@ -82,9 +82,9 @@ YYYY-MM-DD or "Not set"
 
 ## Status
 
-A project can have one or more of the following statuses, stored as a comma-separated list: Active, On Hold, Complete, Cancelled.
+A project uses a SingleSelect block to track its status. Only one of the following canonical values can be selected: Active, On Hold, Complete, Cancelled.
 
-Example: `Active, On Hold`
+Example: `[!singleselect:project-status:Active]`
 
 ## Actions
 

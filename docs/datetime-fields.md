@@ -65,7 +65,8 @@ import {
 import { useDateTimeInsertion } from "@/hooks/useDateTimeInsertion";
 
 // Valid DateTimeFieldType values you can use:
-// 'due_date' | 'focus_date' | 'focus_date_time' | 'created_date_time' | 'modified_date'
+// 'due_date' | 'focus_date' | 'created_date_time' | 'modified_date'
+// Note: The '_time' suffix indicates variants that include a time component.
 
 // Create a datetime field block
 const block = createDateTimeBlock("due_date", "Due Date", "2025-01-20", false);

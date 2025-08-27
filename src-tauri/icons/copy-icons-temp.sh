@@ -45,12 +45,30 @@ if [[ -n "$IM_BIN" ]]; then
     }
 elif command -v icotool &> /dev/null; then
     # icotool is available (Linux)
-    icotool -c -o icon.ico icon.png 2>/dev/null && {
-        echo "✓ Generated proper icon.ico using icotool"
+    # Generate multiple sizes for icotool
+    ICO_SIZES=(16 32 48 64 128 256)
+    TEMP_PNGS=()
+    for size in "${ICO_SIZES[@]}"; do
+        temp_png="icon_${size}x${size}.png"
+        if [[ -n "$IM_BIN" ]]; then
+            "$IM_BIN" icon.png -resize "${size}x${size}" "$temp_png" 2>/dev/null
+        else
+            # Fallback if ImageMagick is not available
+            cp icon.png "$temp_png"
+        fi
+        TEMP_PNGS+=("$temp_png")
+    done
+
+    # Pass all generated PNGs to icotool
+    icotool -c -o icon.ico "${TEMP_PNGS[@]}" 2>/dev/null && {
+        echo "✓ Generated proper icon.ico using icotool (multi-resolution)"
         GENERATED_ICO=true
     } || {
         echo "⚠ icotool failed to generate icon.ico"
     }
+    # Clean up temporary PNGs
+    rm -f "${TEMP_PNGS[@]}"
+
 fi
 
 # If we couldn't generate a real ICO, create PNG copies but warn

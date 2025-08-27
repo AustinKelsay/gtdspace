@@ -4382,28 +4382,9 @@ pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
         }
     };
 
-    // Start OAuth server and wait for callback
-    let server_handle = std::thread::spawn(move || {
-        println!("[GoogleCalendar] Starting OAuth callback server...");
-
-        let rt = match tokio::runtime::Runtime::new() {
-            Ok(rt) => rt,
-            Err(e) => {
-                eprintln!("[GoogleCalendar] Failed to create runtime: {}", e);
-                return Err(format!("Failed to create runtime: {}", e));
-            }
-        };
-
-        rt.block_on(async { run_oauth_server().await })
-            .map_err(|e| e.to_string())
-    });
-
-    // Give server a moment to start
-    std::thread::sleep(std::time::Duration::from_millis(500));
-
     // Open browser
     println!("[GoogleCalendar] Opening browser...");
-    let _state = match start_oauth_flow(&config) {
+    let state = match start_oauth_flow(&config) {
         Ok(state) => {
             println!("[GoogleCalendar] Browser opened with state: {}", state);
             state
@@ -4426,6 +4407,22 @@ pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
             return Err("Failed to open browser for OAuth authentication. Please check the logs for details.".to_string());
         }
     };
+
+    // Restart the server with the expected state so CSRF can be validated
+    let server_handle = std::thread::spawn(move || {
+        println!("[GoogleCalendar] Restarting OAuth callback server with expected state...");
+
+        let rt = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => {
+                eprintln!("[GoogleCalendar] Failed to create runtime: {}", e);
+                return Err(format!("Failed to create runtime: {}", e));
+            }
+        };
+
+        rt.block_on(async { run_oauth_server(Some(state)).await })
+            .map_err(|e| e.to_string())
+    });
 
     // Wait for the OAuth server to receive the code (with timeout)
     println!("[GoogleCalendar] Waiting for OAuth callback...");

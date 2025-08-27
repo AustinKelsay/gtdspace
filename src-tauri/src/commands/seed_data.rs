@@ -419,7 +419,7 @@ pub fn generate_project_readme_with_refs(
 [!datetime:due_date:{}]
 
 ## Created
-[!datetime:created_date:{}]
+[!datetime:created_date_time:{}]
 
 ## Horizon References
 [!areas-references:{}]

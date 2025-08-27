@@ -83,7 +83,7 @@ You can also trigger a build manually from the GitHub Actions tab:
 
 ## Release Workflow
 
-Once a tag is pushed, the GitHub Action automatically:
+When you push a Git tag matching `v*` (for example `v1.2.3`), the 'Build and Release' workflow automatically:
 
 1. **Creates a draft release** with auto-generated release notes
 2. **Builds the app** for all platforms:

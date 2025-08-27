@@ -481,7 +481,7 @@ GOOGLE_CLIENT_SECRET=your-client-secret
 The project includes automated version management scripts:
 
 ```bash
-# Bump version numbers across package.json and Cargo.toml
+# Bump version numbers across package.json, Cargo.toml, and tauri.conf.json
 npm run version:patch   # Patch version (0.1.0 → 0.1.1)
 npm run version:minor   # Minor version (0.1.0 → 0.2.0)
 npm run version:major   # Major version (0.1.0 → 1.0.0)

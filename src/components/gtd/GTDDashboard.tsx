@@ -168,7 +168,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                   if (createdBlock) {
                     createdDateTime = createdBlock[1];
                   } else {
-                    // Fallback for old format
+                    // Fallback for old format (keeping for backward compatibility)
                     const createdDateBlock = content.match(/\[!datetime:created_date:([^\]]+)\]/i);
                     if (createdDateBlock) {
                       createdDateTime = createdDateBlock[1];

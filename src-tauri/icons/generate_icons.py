@@ -101,12 +101,14 @@ def generate_icons():
                         subprocess.run(["iconutil", "-c", "icns", "icon.iconset"], check=True)
                         print("✓ Generated icon.icns using iconutil")
                         
-                        # Clean up
-                        import shutil
-                        shutil.rmtree("icon.iconset")
-                    except Exception as e2:
+                        except Exception as e2:
                         print(f"⚠ Could not generate proper ICNS: {e2}")
                         print("  Tauri will handle this during build")
+                    finally:
+                        # Clean up
+                        import shutil
+                        if os.path.exists("icon.iconset"):
+                            shutil.rmtree("icon.iconset")
             else:
                 print("⚠ Not on macOS - skipping ICNS generation")
                 print("  ICNS will be generated during macOS builds")

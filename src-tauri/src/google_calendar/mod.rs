@@ -151,22 +151,13 @@ impl From<Event> for GoogleCalendarEvent {
             .filter_map(|a| a.email.clone())
             .collect();
 
-        let meeting_link = event
-            .conference_data
-            .as_ref()
-            .and_then(|cd| {
-                cd.entry_points.as_ref().and_then(|eps| {
-                    eps.iter()
-                        .find(|ep| ep.entry_point_type == Some("video".to_string()))
-                        .and_then(|ep| ep.uri.clone())
-                })
+        let meeting_link = event.conference_data.as_ref().and_then(|cd| {
+            cd.entry_points.as_ref().and_then(|eps| {
+                eps.iter()
+                    .find(|ep| ep.entry_point_type == Some("video".to_string()))
+                    .and_then(|ep| ep.uri.clone())
             })
-            .or_else(|| {
-                event
-                    .conference_data
-                    .as_ref()
-                    .and_then(|cd| cd.hangout_link.clone())
-            });
+        });
 
         GoogleCalendarEvent {
             id: event.id.unwrap_or_default(),

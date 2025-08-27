@@ -405,9 +405,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       }
 
       // Handle habits separately - generate recurring events
-      if (item.type === 'habit' && item.frequency && item.createdDate) {
+      if (item.type === 'habit' && item.frequency && item.createdDateTime) {
         // Generate dates only for the current view window
-        const habitDates = generateHabitDates(item.createdDate, item.frequency, viewStart, viewEnd);
+        const habitDates = generateHabitDates(item.createdDateTime, item.frequency, viewStart, viewEnd);
 
         // Extract time from focus_date if available
         let timeString: string | undefined;

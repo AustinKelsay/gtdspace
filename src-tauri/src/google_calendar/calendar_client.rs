@@ -72,10 +72,10 @@ pub async fn fetch_calendar_events(
 
     if !response.status().is_success() {
         let error_text = response.text().await?;
-        return Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to fetch events: {}", error_text),
-        )));
+        return Err(Box::new(std::io::Error::other(format!(
+            "Failed to fetch events: {}",
+            error_text
+        ))));
     }
 
     let google_response: GoogleCalendarListResponse = response.json().await?;

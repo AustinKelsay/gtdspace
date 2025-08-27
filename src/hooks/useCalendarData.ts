@@ -245,30 +245,50 @@ export const useCalendarData = (
               const focusDateTime = parseDateTimeField(content, 'focus_date_time');
               
               // Parse created date using the existing DateTime parser
-              let createdDateTime: string;
+              let createdDateTime: string | undefined;
               const createdDateTimeRaw = parseDateTimeField(content, 'created_date_time');
               if (createdDateTimeRaw) {
                 createdDateTime = createdDateTimeRaw;
               } else {
-                // Fallback to current date if not found
-                createdDateTime = new Date().toISOString();
+                // Try to parse from legacy created_date field
+                const createdDateRaw = parseDateTimeField(content, 'created_date');
+                if (createdDateRaw) {
+                  createdDateTime = createdDateRaw;
+                } else {
+                  // Try to parse from ## Created header
+                  const createdHeaderMatch = content.match(/##\s*Created\s*\n\s*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:\s+[0-9]{1,2}:[0-9]{2}(?:\s*(?:AM|PM))?)?)/i);
+                  if (createdHeaderMatch && createdHeaderMatch[1]) {
+                    try {
+                      const parsedDate = new Date(createdHeaderMatch[1]);
+                      if (!isNaN(parsedDate.getTime())) {
+                        createdDateTime = parsedDate.toISOString();
+                      }
+                    } catch {
+                      // If parsing fails, leave undefined
+                    }
+                  }
+                }
               }
               
               console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDateTime}, focus=${focusDateTime}`);
               
-              // Add the habit with frequency and created date info
-              allItems.push({
-                id: `habit-${habitName}-${fileIndex}`,
-                name: habitName,
-                path: file.path,
-                type: 'habit',
-                status: habitStatus,
-                due_date: undefined,
-                focus_date: focusDateTime, // Now includes the parsed focus time
-                projectName: undefined,
-                frequency: frequency,
-                createdDateTime: createdDateTime
-              });
+              // Only add the habit if we have a created date (required for recurring generation)
+              if (createdDateTime) {
+                allItems.push({
+                  id: `habit-${habitName}-${fileIndex}`,
+                  name: habitName,
+                  path: file.path,
+                  type: 'habit',
+                  status: habitStatus,
+                  due_date: undefined,
+                  focus_date: focusDateTime, // Now includes the parsed focus time
+                  projectName: undefined,
+                  frequency: frequency,
+                  createdDateTime: createdDateTime
+                });
+              } else {
+                console.warn(`[CalendarData] Habit ${habitName} skipped - no created date found`);
+              }
             } catch (err) {
               console.error(`[CalendarData] Failed to read habit ${file.path}:`, err);
             }

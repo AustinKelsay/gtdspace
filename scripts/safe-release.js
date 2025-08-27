@@ -182,8 +182,10 @@ function main() {
     const cleanVersion = versionType.startsWith('v') ? versionType.slice(1) : versionType;
 
     if (isSemver) {
-      // Explicit semver provided: use npm version directly without shell interpolation
-      execCommandFile('npm', ['version', cleanVersion]);
+      // Explicit semver provided: use the centralized bump-version script
+      // This ensures all files (package.json, Cargo.toml, tauri.conf.json) are updated
+      const bumpScriptPath = path.join(__dirname, 'bump-version.js');
+      execCommandFile('node', [bumpScriptPath, cleanVersion]);
     } else if (isIncrementKeyword) {
       // Keyword provided: use namespaced script (e.g., version:patch)
       const scriptName = `version:${versionType}`;

@@ -11,7 +11,7 @@
     "tauri:dev": "tauri dev",
     "pretauri:build": "npm run icons:generate",
     "tauri:build": "tauri build",
-    "icons:generate": "cd src-tauri/icons && (test -f icon.png || echo 'Warning: icon.png not found') && (python3 generate_icons.py 2>/dev/null || python3 create_minimal_ico.py 2>/dev/null || echo 'Warning: Could not generate icons with Python') && npx --yes @tauri-apps/cli icon ./icon.png 2>/dev/null || echo 'Warning: Could not generate icons with Tauri CLI'",
+    "icons:generate": "node scripts/icons-generate.mjs",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",

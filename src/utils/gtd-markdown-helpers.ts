@@ -52,7 +52,7 @@ export function generateProjectReadmeWithSingleSelect(
   projectName: string,
   description: string,
   dueDate: string | null,
-  createdDate: string
+  createdDateTime: string
 ): string {
   const statusMarkup = generateSingleSelectMarkup('project-status', 'Status', 'in-progress');
   
@@ -77,7 +77,7 @@ Each action file contains:
 - **Effort**: Single select field for time estimate
 
 ---
-Created: ${createdDate}`;
+Created: ${createdDateTime}`;
 }
 
 /**
@@ -87,9 +87,9 @@ export function generateProjectReadmeWithMultiSelect(
   projectName: string,
   description: string,
   dueDate: string | null,
-  createdDate: string
+  createdDateTime: string
 ): string {
-  return generateProjectReadmeWithSingleSelect(projectName, description, dueDate, createdDate);
+  return generateProjectReadmeWithSingleSelect(projectName, description, dueDate, createdDateTime);
 }
 
 /**
@@ -101,7 +101,7 @@ export function generateActionFileWithSingleSelect(
   focusDate: string | null,
   dueDate: string | null,
   effort: string,
-  createdDate: string
+  createdDateTime: string
 ): string {
   const statusMarkup = generateSingleSelectMarkup('status', 'Status', status.toLowerCase().replace(' ', '-'));
   const effortMarkup = generateSingleSelectMarkup('effort', 'Effort', effort.toLowerCase());
@@ -145,7 +145,7 @@ ${effortMarkup}
 <!-- Add any additional notes or details about this action here -->
 
 ---
-Created: ${createdDate}`;
+Created: ${createdDateTime}`;
 }
 
 /**
@@ -157,9 +157,9 @@ export function generateActionFileWithMultiSelect(
   focusDate: string | null,
   dueDate: string | null,
   effort: string,
-  createdDate: string
+  createdDateTime: string
 ): string {
-  return generateActionFileWithSingleSelect(actionName, status, focusDate, dueDate, effort, createdDate);
+  return generateActionFileWithSingleSelect(actionName, status, focusDate, dueDate, effort, createdDateTime);
 }
 
 /**

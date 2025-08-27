@@ -48,6 +48,14 @@ impl CalendarSyncManager {
             // Get the primary calendar (we can extend this to multiple calendars later)
             let calendar_id = "primary";
 
+            // Compute effective time bounds once before the loop
+            let effective_min = time_min.unwrap_or_else(|| {
+                Utc::now() - chrono::Duration::days(DEFAULT_SYNC_DAYS_PAST)
+            });
+            let effective_max = time_max.unwrap_or_else(|| {
+                Utc::now() + chrono::Duration::days(DEFAULT_SYNC_DAYS_FUTURE)
+            });
+
             // Fetch events with pagination
             let mut page_token: Option<String> = None;
             loop {
@@ -56,22 +64,9 @@ impl CalendarSyncManager {
                     .events()
                     .list(calendar_id)
                     .single_events(true)
-                    .order_by("startTime");
-
-                // Re-apply time range
-                if let Some(min) = time_min {
-                    call = call.time_min(min);
-                } else {
-                    let default_min = Utc::now() - chrono::Duration::days(DEFAULT_SYNC_DAYS_PAST);
-                    call = call.time_min(default_min);
-                }
-
-                if let Some(max) = time_max {
-                    call = call.time_max(max);
-                } else {
-                    let default_max = Utc::now() + chrono::Duration::days(DEFAULT_SYNC_DAYS_FUTURE);
-                    call = call.time_max(default_max);
-                }
+                    .order_by("startTime")
+                    .time_min(effective_min)
+                    .time_max(effective_max);
 
                 if let Some(token) = &page_token {
                     call = call.page_token(token);

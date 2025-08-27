@@ -475,3 +475,45 @@ GOOGLE_CLIENT_SECRET=your-client-secret
 - Backend loads `.env` file via `dotenv` crate at startup
 - OAuth redirect URI must match Google Console configuration: `http://localhost:9898/callback`
 - Tokens are stored locally, never in version control
+
+## Version Management & Release Process
+
+The project includes automated version management scripts:
+
+```bash
+# Bump version numbers across package.json and Cargo.toml
+npm run version:patch   # Patch version (0.1.0 → 0.1.1)
+npm run version:minor   # Minor version (0.1.0 → 0.2.0)
+npm run version:major   # Major version (0.1.0 → 1.0.0)
+
+# Full release process with validation
+npm run release:patch   # Complete patch release
+npm run release:minor   # Complete minor release
+npm run release:major   # Complete major release
+```
+
+**Icon Generation Pipeline:**
+```bash
+npm run icons:generate  # Auto-generates all platform icons from icon.png
+# Runs: Python scripts → Tauri CLI → Multiple format outputs
+```
+
+## Development Best Practices
+
+### Performance Considerations
+- **Parallel Operations**: File reads and metadata extraction run concurrently
+- **Debounced Operations**: Auto-save (2s), file watcher (500ms), habit reset scheduler (1min intervals)
+- **View-Window Optimization**: Calendar only generates dates in current view
+- **Regex Pre-compilation**: Metadata patterns cached for performance
+
+### Error Handling Patterns
+- **Centralized Error Handling**: All Tauri commands wrapped with `withErrorHandling()`
+- **Toast Deduplication**: Prevents double notifications in React StrictMode
+- **Graceful Degradation**: Web-only fallbacks when Tauri context unavailable
+- **Recursive Event Prevention**: `isEmitting` flags prevent infinite loops
+
+### File System Patterns
+- **Path Validation**: All file operations validated on Rust backend
+- **Atomic Operations**: Multi-step file operations are transactional
+- **External Change Detection**: File watcher monitors for external edits
+- **Conflict Resolution**: User prompts when external changes conflict with unsaved edits

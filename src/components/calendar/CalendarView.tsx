@@ -99,20 +99,20 @@ const getEffortDuration = (effort?: string): number => {
  * - Old approach: Generate 365+ dates, then filter to ~30 for month view
  * - New approach: Generate only the ~30 dates needed for the current view
  * 
- * @param createdDate - The date the habit was created (ISO string)
+ * @param createdDateTime - The date the habit was created (ISO string)
  * @param frequency - The recurrence frequency of the habit
  * @param viewStart - Start of the current view window
  * @param viewEnd - End of the current view window
  * @returns Array of dates when the habit should appear in the current view
  */
 const generateHabitDates = (
-  createdDate: string,
+  createdDateTime: string,
   frequency: string,
   viewStart: Date,
   viewEnd: Date
 ): Date[] => {
   const dates: Date[] = [];
-  const created = parseISO(createdDate);
+  const created = parseISO(createdDateTime);
   if (!isValid(created)) return dates;
 
   // Add a small buffer to handle edge cases at view boundaries

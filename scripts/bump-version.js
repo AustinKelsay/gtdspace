@@ -93,8 +93,12 @@ function main() {
       execSync(`git tag -a ${tagName} -m "Release ${tagName}"`, { stdio: 'inherit' });
       console.log(`✓ Created tag: ${tagName}`);
     } catch (tagError) {
-      console.error('Failed to create tag, rolling back commit...');
-      execSync(`git reset --hard ${commitHash}`, { stdio: 'inherit' });
+      console.error('Failed to create tag, but keeping the commit and staged changes...');
+      execSync(`git reset --soft ${commitHash}`, { stdio: 'inherit' });
+      console.error('\n⚠️  The version bump commit has been preserved.');
+      console.error('Your changes remain staged. You can either:');
+      console.error(`  1. Retry creating the tag: git tag -a ${tagName} -m "Release ${tagName}"`);
+      console.error(`  2. Or commit and tag manually with the commands shown below.`);
       throw tagError;
     }
     console.log('\n🎉 Version bump complete!');

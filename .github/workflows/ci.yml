@@ -75,6 +75,77 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Python dependencies for icon generation
+        run: |
+          python -m pip install --upgrade pip
+          pip install Pillow
+
+      - name: Generate Icons
+        shell: bash
+        run: |
+          cd src-tauri/icons
+          
+          # Check if source icon exists
+          if [ ! -f "icon.png" ]; then
+            echo "⚠ Warning: icon.png not found, skipping icon generation"
+            exit 0
+          fi
+          
+          echo "Generating icons..."
+          
+          # Generate PNG and ICO files using Python
+          python generate_icons.py || {
+            echo "⚠ Warning: generate_icons.py failed, trying minimal ICO generation"
+            python create_minimal_ico.py || echo "⚠ Warning: Could not generate ICO"
+          }
+          
+          # macOS-specific: Generate ICNS
+          if [[ "${{ matrix.platform }}" == "macos-latest" ]]; then
+            echo "Generating macOS ICNS file..."
+            
+            # Try Tauri CLI first
+            if command -v tauri >/dev/null 2>&1; then
+              tauri icon ./icon.png || echo "⚠ Warning: Tauri CLI icon generation failed"
+            elif npx --yes @tauri-apps/cli@latest --version >/dev/null 2>&1; then
+              npx --yes @tauri-apps/cli@latest icon ./icon.png || echo "⚠ Warning: npx tauri icon generation failed"
+            else
+              # Fallback to iconutil if available (built-in on macOS)
+              if command -v iconutil >/dev/null 2>&1; then
+                # Create iconset directory
+                mkdir -p icon.iconset
+                
+                # Generate required sizes using sips (built-in on macOS)
+                sips -z 16 16     icon.png --out icon.iconset/icon_16x16.png >/dev/null 2>&1
+                sips -z 32 32     icon.png --out icon.iconset/icon_16x16@2x.png >/dev/null 2>&1
+                sips -z 32 32     icon.png --out icon.iconset/icon_32x32.png >/dev/null 2>&1
+                sips -z 64 64     icon.png --out icon.iconset/icon_32x32@2x.png >/dev/null 2>&1
+                sips -z 128 128   icon.png --out icon.iconset/icon_128x128.png >/dev/null 2>&1
+                sips -z 256 256   icon.png --out icon.iconset/icon_128x128@2x.png >/dev/null 2>&1
+                sips -z 256 256   icon.png --out icon.iconset/icon_256x256.png >/dev/null 2>&1
+                sips -z 512 512   icon.png --out icon.iconset/icon_256x256@2x.png >/dev/null 2>&1
+                sips -z 512 512   icon.png --out icon.iconset/icon_512x512.png >/dev/null 2>&1
+                sips -z 1024 1024 icon.png --out icon.iconset/icon_512x512@2x.png >/dev/null 2>&1
+                
+                # Convert iconset to icns
+                iconutil -c icns icon.iconset -o icon.icns && {
+                  echo "✓ Generated icon.icns with iconutil"
+                  rm -rf icon.iconset
+                } || echo "⚠ Warning: iconutil failed"
+              else
+                echo "⚠ Warning: No method available to generate ICNS file"
+              fi
+            fi
+          fi
+          
+          # List generated icons
+          echo "Generated icons:"
+          ls -la *.png *.ico *.icns 2>/dev/null || echo "No icons found"
+
       - name: Build frontend
         run: npm run build
 

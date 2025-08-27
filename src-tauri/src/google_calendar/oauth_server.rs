@@ -370,7 +370,10 @@ impl OAuthCallbackServer {
             if start.elapsed() > timeout {
                 let _ = shutdown_tx.send(());
                 let _ = server_handle.await;
-                return Err("OAuth callback timeout".into());
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "OAuth callback timeout"
+                )));
             }
 
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;

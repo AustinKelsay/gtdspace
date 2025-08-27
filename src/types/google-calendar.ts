@@ -36,7 +36,7 @@ export interface ExtendedCalendarItem {
   end_date?: string;  // Add end date for Google events
   projectName?: string;
   frequency?: string;
-  createdDate?: string;
+  createdDateTime?: string;
   // Google Calendar specific fields
   googleEventId?: string;
   attendees?: string[];

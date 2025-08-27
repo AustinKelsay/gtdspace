@@ -153,12 +153,22 @@ impl From<Event> for GoogleCalendarEvent {
 
         let meeting_link = event
             .conference_data
-            .and_then(|cd| cd.entry_points)
-            .and_then(|eps| {
-                eps.into_iter()
-                    .find(|ep| ep.entry_point_type == Some("video".to_string()))
+            .as_ref()
+            .and_then(|cd| {
+                cd.entry_points
+                    .as_ref()
+                    .and_then(|eps| {
+                        eps.iter()
+                            .find(|ep| ep.entry_point_type == Some("video".to_string()))
+                            .and_then(|ep| ep.uri.clone())
+                    })
             })
-            .and_then(|ep| ep.uri);
+            .or_else(|| {
+                event
+                    .conference_data
+                    .as_ref()
+                    .and_then(|cd| cd.hangout_link.clone())
+            });
 
         GoogleCalendarEvent {
             id: event.id.unwrap_or_default(),

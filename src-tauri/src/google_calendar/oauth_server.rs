@@ -350,12 +350,9 @@ impl OAuthCallbackServer {
         let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
         // Run server in background with graceful shutdown
-        let (_bound_addr, server_future) = server.bind_with_graceful_shutdown(
-            addr,
-            async move {
-                let _ = shutdown_rx.await;
-            },
-        );
+        let (_bound_addr, server_future) = server.bind_with_graceful_shutdown(addr, async move {
+            let _ = shutdown_rx.await;
+        });
         let server_handle = tokio::spawn(server_future);
 
         // Wait for code to be received (with timeout)

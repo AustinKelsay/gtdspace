@@ -4382,12 +4382,13 @@ pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
         }
     };
 
-    // Open browser
+    // Open browser (do not log raw state or full URL)
     println!("[GoogleCalendar] Opening browser...");
-    let state = match start_oauth_flow(&config) {
-        Ok(state) => {
-            println!("[GoogleCalendar] Browser opened with state: {}", state);
-            state
+    let start_result = match start_oauth_flow(&config) {
+        Ok(res) => {
+            println!("[GoogleCalendar] Browser opened");
+            println!("[GoogleCalendar] Authorization URL (redacted): {}", res.redacted_auth_url);
+            res
         }
         Err(e) => {
             // Check if this is a BrowserOpenError - if so, we could provide manual instructions
@@ -4397,11 +4398,7 @@ pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
             // If we can downcast to BrowserOpenError, we could access auth_url for manual opening
             // but for security reasons we're not exposing the full URL in the error message
             if let Some(browser_err) = e.downcast_ref::<BrowserOpenError>() {
-                eprintln!(
-                    "[GoogleCalendar] State for manual flow: {}",
-                    browser_err.state
-                );
-                // Callers could use browser_err.auth_url to present to user for manual opening
+                eprintln!("[GoogleCalendar] Authorization URL (redacted): {}", browser_err.redacted_auth_url);
             }
 
             return Err("Failed to open browser for OAuth authentication. Please check the logs for details.".to_string());
@@ -4409,6 +4406,7 @@ pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
     };
 
     // Restart the server with the expected state so CSRF can be validated
+    let state = start_result.state.clone();
     let server_handle = std::thread::spawn(move || {
         println!("[GoogleCalendar] Restarting OAuth callback server with expected state...");
 

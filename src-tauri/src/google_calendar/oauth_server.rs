@@ -530,6 +530,7 @@ impl OAuthCallbackServer {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn start_and_wait_for_code(&self) -> Result<String, Box<dyn std::error::Error>> {
         self.start_and_wait_for_code_with_state(None).await
     }

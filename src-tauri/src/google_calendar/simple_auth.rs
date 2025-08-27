@@ -110,9 +110,10 @@ impl SimpleAuthConfig {
 pub struct BrowserOpenError {
     /// Full OAuth authorization URL including the original state. DO NOT LOG.
     #[allow(dead_code)]
-    pub auth_url: String,
+    auth_url: String,
     /// Original state value required to validate the OAuth callback.
-    pub state: String,
+    #[allow(dead_code)]
+    state: String,
     /// Redacted authorization URL with the state removed. Safe for logs.
     pub redacted_auth_url: String,
 }
@@ -132,14 +133,22 @@ impl std::error::Error for BrowserOpenError {}
 impl std::fmt::Debug for BrowserOpenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BrowserOpenError")
-            .field("state", &self.state)
             .field("redacted_auth_url", &self.redacted_auth_url)
             .finish()
     }
 }
 
+/// Result of starting the OAuth flow. Contains the CSRF `state` (DO NOT LOG)
+/// and a `redacted_auth_url` safe for display/logging.
+pub struct StartOAuthFlowResult {
+    pub state: String,
+    pub redacted_auth_url: String,
+}
+
 // Simple function to start OAuth flow by opening browser
-pub fn start_oauth_flow(config: &SimpleAuthConfig) -> Result<String, Box<dyn std::error::Error>> {
+pub fn start_oauth_flow(
+    config: &SimpleAuthConfig,
+) -> Result<StartOAuthFlowResult, Box<dyn std::error::Error>> {
     // Generate a random state for security
     let state = general_purpose::URL_SAFE_NO_PAD.encode(uuid::Uuid::new_v4().as_bytes());
 
@@ -164,11 +173,7 @@ pub fn start_oauth_flow(config: &SimpleAuthConfig) -> Result<String, Box<dyn std
         url.to_string()
     };
 
-    println!("[SimpleAuth] Opening browser to: {}", redacted_auth_url);
-    println!(
-        "[SimpleAuth] URL length: {} characters",
-        redacted_auth_url.len()
-    );
+    // Do not print raw state or full auth_url; caller may log redacted_auth_url if needed.
 
     // Try direct command execution on macOS first
     #[cfg(target_os = "macos")]
@@ -182,7 +187,7 @@ pub fn start_oauth_flow(config: &SimpleAuthConfig) -> Result<String, Box<dyn std
                     Ok(Some(status)) => {
                         if status.success() {
                             println!("[SimpleAuth] Browser opened successfully with macOS 'open' command");
-                            return Ok(state);
+                            return Ok(StartOAuthFlowResult { state, redacted_auth_url });
                         } else {
                             println!("[SimpleAuth] 'open' command failed with status: {}", status);
                         }
@@ -190,7 +195,7 @@ pub fn start_oauth_flow(config: &SimpleAuthConfig) -> Result<String, Box<dyn std
                     Ok(None) => {
                         // Process is still running, assume success
                         println!("[SimpleAuth] Browser opened successfully with macOS 'open' command (process running)");
-                        return Ok(state);
+                        return Ok(StartOAuthFlowResult { state, redacted_auth_url });
                     }
                     Err(e) => {
                         println!("[SimpleAuth] Failed to check 'open' command status: {}", e);
@@ -208,7 +213,7 @@ pub fn start_oauth_flow(config: &SimpleAuthConfig) -> Result<String, Box<dyn std
     match open::that(&auth_url) {
         Ok(()) => {
             println!("[SimpleAuth] Browser opened successfully with 'open' crate");
-            return Ok(state);
+            return Ok(StartOAuthFlowResult { state, redacted_auth_url });
         }
         Err(e) => {
             println!("[SimpleAuth] Failed to open with 'open' crate: {:?}", e);
@@ -220,7 +225,7 @@ pub fn start_oauth_flow(config: &SimpleAuthConfig) -> Result<String, Box<dyn std
     match webbrowser::open(&auth_url) {
         Ok(()) => {
             println!("[SimpleAuth] Browser opened successfully with 'webbrowser' crate");
-            return Ok(state);
+            return Ok(StartOAuthFlowResult { state, redacted_auth_url });
         }
         Err(e) => {
             println!("[SimpleAuth] Browser open failed with webbrowser: {:?}", e);

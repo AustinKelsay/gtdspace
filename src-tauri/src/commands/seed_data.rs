@@ -381,7 +381,7 @@ Complete weekly GTD review:
 ---
 Created: {}"#,
         next_sunday.to_rfc3339(),
-        now.format("%Y-%m-%d")
+        now.to_rfc3339()
     )
 }
 
@@ -443,7 +443,7 @@ Actions for this project are stored as individual markdown files in this directo
         } else {
             ""
         },
-        Local::now().format("%Y-%m-%d"),
+        Local::now().to_rfc3339(),
         areas_refs,
         goals_refs,
         general_refs

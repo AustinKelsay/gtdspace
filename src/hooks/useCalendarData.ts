@@ -248,12 +248,33 @@ export const useCalendarData = (
               let createdDateTime: string | undefined;
               const createdDateTimeRaw = parseDateTimeField(content, 'created_date_time');
               if (createdDateTimeRaw) {
-                createdDateTime = createdDateTimeRaw;
+                // Parse and normalize to ISO format
+                try {
+                  const parsed = new Date(createdDateTimeRaw);
+                  if (!isNaN(parsed.getTime())) {
+                    createdDateTime = parsed.toISOString();
+                  } else {
+                    // If parsing fails, use raw value as fallback
+                    createdDateTime = createdDateTimeRaw;
+                  }
+                } catch {
+                  // If parsing throws, use raw value as fallback
+                  createdDateTime = createdDateTimeRaw;
+                }
               } else {
                 // Try to parse from legacy created_date field
                 const createdDateRaw = parseDateTimeField(content, 'created_date');
                 if (createdDateRaw) {
-                  createdDateTime = createdDateRaw;
+                  // Parse and normalize to ISO format
+                  try {
+                    const parsed = new Date(createdDateRaw);
+                    if (!isNaN(parsed.getTime())) {
+                      createdDateTime = parsed.toISOString();
+                    }
+                    // If parsing fails, leave undefined (don't use raw YYYY-MM-DD)
+                  } catch {
+                    // If parsing fails, leave undefined
+                  }
                 } else {
                   // Try to parse from ## Created header
                   const createdHeaderMatch = content.match(/##\s*Created\s*\n\s*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:\s+[0-9]{1,2}:[0-9]{2}(?:\s*(?:AM|PM))?)?)/i);

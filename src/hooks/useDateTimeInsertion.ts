@@ -80,8 +80,10 @@ export function useDateTimeInsertion(editor: any) {
   ) => {
     if (!editor) return;
 
-    const value = defaultValue || (type === 'created_date_time' ? new Date().toISOString() : '');
-    const block = createDateTimeBlock(type, undefined, value, includeTime);
+    const isCreated = type === 'created_date_time';
+    const value = defaultValue ?? (isCreated ? new Date().toISOString() : '');
+    const normalizedIncludeTime = isCreated ? true : includeTime;
+    const block = createDateTimeBlock(type, undefined, value, normalizedIncludeTime);
 
     // Safely resolve current block from cursor position with fallbacks
     let cursorPos: unknown;

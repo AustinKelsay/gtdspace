@@ -49,7 +49,7 @@ def create_minimal_ico():
         1,                  # Color planes
         32,                 # Bits per pixel
         0,                  # Compression (none)
-        pixel_data_size + mask_size,  # Image size includes XOR + AND masks
+        pixel_data_size,    # Image size = XOR only (OK to be 0 for BI_RGB)
         0,                  # X pixels per meter
         0,                  # Y pixels per meter
         0,                  # Colors used

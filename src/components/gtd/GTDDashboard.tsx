@@ -166,15 +166,28 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                   let createdDateTime: string | undefined = undefined;
                   const createdBlock = content.match(/\[!datetime:created_date_time:([^\]]+)\]/i);
                   if (createdBlock) {
-                    createdDateTime = createdBlock[1];
+                    const raw = createdBlock[1].trim();
+                    const parsed = new Date(raw);
+                    if (!isNaN(parsed.getTime())) {
+                      createdDateTime = parsed.toISOString();
+                    }
                   } else {
                     // Fallback for old format (keeping for backward compatibility)
                     const createdDateBlock = content.match(/\[!datetime:created_date:([^\]]+)\]/i);
                     if (createdDateBlock) {
-                      createdDateTime = createdDateBlock[1];
+                      const raw = createdDateBlock[1].trim();
+                      const parsed = new Date(raw);
+                      if (!isNaN(parsed.getTime())) {
+                        createdDateTime = parsed.toISOString();
+                      }
                     } else {
-                      const createdSection = content.match(/##\s*Created\n([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
-                      if (createdSection) createdDateTime = new Date(createdSection[1]).toISOString();
+                      const createdSection = content.match(
+                        /##\s*Created\s*\n\s*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2})?(?:\s*(?:AM|PM))?)?)/i
+                      );
+                      if (createdSection) {
+                        const parsed = new Date(createdSection[1]);
+                        if (!isNaN(parsed.getTime())) createdDateTime = parsed.toISOString();
+                      }
                     }
                   }
 

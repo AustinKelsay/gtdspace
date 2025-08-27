@@ -192,8 +192,14 @@ async function main() {
     }
   }
   
-  if (successCount === 0) {
-    log('\n❌ Icon generation failed - no icons were created', 'red');
+  const missingCritical = !existsSync(join(iconsDir, 'icon.ico')) || !existsSync(join(iconsDir, 'icon.icns'));
+  
+  if (successCount === 0 || missingCritical) {
+    if (missingCritical) {
+      log('\n❌ Critical icons missing (icon.ico or icon.icns).', 'red');
+    } else {
+      log('\n❌ Icon generation failed - no icons were created', 'red');
+    }
     log('Please ensure you have the necessary tools installed:', 'yellow');
     log('  - Python 3 with PIL/Pillow library', 'yellow');
     log('  - OR Tauri CLI (@tauri-apps/cli)', 'yellow');

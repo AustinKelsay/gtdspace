@@ -1,3 +1,4 @@
+---
 name: Build and Release
 
 on:
@@ -52,7 +53,7 @@ jobs:
             # GTD Space ${{ steps.get-version.outputs.version }}
 
             ## What's New
-            - 
+            - Initial release
 
             ## Installation
 
@@ -63,7 +64,8 @@ jobs:
             - **Linux**: `.AppImage` (universal) or `.deb` (Debian/Ubuntu)
 
             ## Notes
-            - First-time users: The app will automatically create your GTD Space at `~/GTD Space`
+            - First-time users: The app will automatically create
+              your GTD Space at `~/GTD Space`
             - Google Calendar integration requires setting up OAuth credentials
 
   build-tauri:
@@ -140,25 +142,48 @@ jobs:
             exit 0
           fi
 
-          # Install Python dependencies (try different methods for compatibility)
-          python3 -m pip install --user Pillow 2>/dev/null || pip3 install --user Pillow 2>/dev/null || pip install --user Pillow 2>/dev/null || true
+          # Find Python interpreter (try python3, python, py -3 on Windows)
+          PYTHON_CMD=""
+          if command -v python3 >/dev/null 2>&1; then
+            PYTHON_CMD="python3"
+          elif command -v python >/dev/null 2>&1; then
+            PYTHON_CMD="python"
+          elif command -v py >/dev/null 2>&1; then
+            # Windows Python Launcher
+            if py -3 --version >/dev/null 2>&1; then
+              PYTHON_CMD="py -3"
+            fi
+          fi
+
+          if [ -z "$PYTHON_CMD" ]; then
+            echo "⚠ Warning: No Python interpreter found"
+            echo "Skipping icon generation"
+            exit 0
+          fi
+
+          echo "Found Python: $PYTHON_CMD"
+
+          # Install Pillow using discovered Python
+          $PYTHON_CMD -m pip install --user Pillow 2>/dev/null || {
+            echo "⚠ Warning: Could not install Pillow"
+            echo "Trying icon generation anyway"
+          }
 
           # Generate PNG and ICO files using Python
-          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
-          "$PY" << 'PYTHON_SCRIPT'
+          $PYTHON_CMD << 'PYTHON_SCRIPT'
           import sys
           try:
               from PIL import Image
-              
+
               img = Image.open("icon.png").convert('RGBA')
-              
+
               # Generate required PNG sizes
               sizes = [
                   ("32x32.png", 32),
                   ("128x128.png", 128),
                   ("128x128@2x.png", 256),
               ]
-              
+
               # Pillow compatibility for resampling
               try:
                   RESAMPLE = Image.Resampling.LANCZOS
@@ -169,13 +194,22 @@ jobs:
                   resized = img.resize((size, size), RESAMPLE)
                   resized.save(filename, 'PNG')
                   print(f"✓ Generated {filename}")
+
+              # Generate multi-resolution Windows ICO
+              ico_sizes = []
+              for size in [16, 32, 48, 256]:
+                  ico_img = img.resize((size, size), RESAMPLE)
+                  ico_sizes.append(ico_img)
               
-              # Generate Windows ICO
-              img.resize((256, 256), RESAMPLE).save("icon.ico", format='ICO')
-              print("✓ Generated icon.ico")
+              # Save ICO with multiple resolutions
+              ico_sizes[3].save("icon.ico", format='ICO',
+                               sizes=[(16, 16), (32, 32), (48, 48), (256, 256)],
+                               append_images=ico_sizes[:-1])
+              print("✓ Generated icon.ico (multi-resolution)")
               
           except ImportError:
-              print("⚠ Pillow not available, skipping Python-based icon generation")
+              print("⚠ Pillow not available")
+              print("Skipping Python-based icon generation")
               sys.exit(0)
           except Exception as e:
               print(f"⚠ Icon generation error: {e}")
@@ -200,7 +234,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+            ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: ${{ matrix.args }}
 
@@ -226,7 +261,8 @@ jobs:
         shell: bash
         run: |
           # Find the MSI installer
-          MSI_FILE=$(find src-tauri/target/release/bundle -name "*.msi" | head -n 1)
+          MSI_FILE=$(find src-tauri/target/release/bundle \
+            -name "*.msi" | head -n 1)
           if [ -z "$MSI_FILE" ]; then
             echo "No MSI file found!"
             exit 1
@@ -238,7 +274,8 @@ jobs:
 
           # Copy and rename with version
           VERSION="${{ needs.create-release.outputs.version }}"
-          cp "$MSI_FILE" "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${{ matrix.artifact-ext }}"
+          cp "$MSI_FILE" \
+            "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${{ matrix.artifact-ext }}"
 
           echo "Artifact prepared:"
           ls -la artifacts/
@@ -249,9 +286,13 @@ jobs:
         run: |
           # Find the DMG file based on target architecture
           if [[ "${{ matrix.rust-targets }}" == "aarch64-apple-darwin" ]]; then
-            DMG_FILE=$(find src-tauri/target/aarch64-apple-darwin/release/bundle -name "*.dmg" | head -n 1)
+            DMG_FILE=$(find \
+              src-tauri/target/aarch64-apple-darwin/release/bundle \
+              -name "*.dmg" | head -n 1)
           else
-            DMG_FILE=$(find src-tauri/target/x86_64-apple-darwin/release/bundle -name "*.dmg" | head -n 1)
+            DMG_FILE=$(find \
+              src-tauri/target/x86_64-apple-darwin/release/bundle \
+              -name "*.dmg" | head -n 1)
           fi
 
           if [ -z "$DMG_FILE" ]; then
@@ -265,7 +306,8 @@ jobs:
 
           # Copy and rename with version
           VERSION="${{ needs.create-release.outputs.version }}"
-          cp "$DMG_FILE" "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${{ matrix.artifact-ext }}"
+          cp "$DMG_FILE" \
+            "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${{ matrix.artifact-ext }}"
 
           echo "Artifact prepared:"
           ls -la artifacts/

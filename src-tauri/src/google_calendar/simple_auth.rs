@@ -101,7 +101,6 @@ impl SimpleAuthConfig {
 /// This error intentionally formats/logs only a redacted version of the URL via `Display`.
 /// The full, unredacted `auth_url` is available as a field for callers to access and
 /// open manually, preserving the correct state parameter for OAuth completion.
-#[derive(Debug)]
 pub struct BrowserOpenError {
     /// Full OAuth authorization URL including the original state. DO NOT LOG.
     #[allow(dead_code)]
@@ -121,6 +120,14 @@ impl std::fmt::Display for BrowserOpenError {
 }
 
 impl std::error::Error for BrowserOpenError {}
+
+impl std::fmt::Debug for BrowserOpenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BrowserOpenError")
+            .field("redacted_auth_url", &self.redacted_auth_url)
+            .finish()
+    }
+}
 
 // Simple function to start OAuth flow by opening browser
 pub fn start_oauth_flow(config: &SimpleAuthConfig) -> Result<String, Box<dyn std::error::Error>> {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import process from 'process';
@@ -42,6 +42,21 @@ function execCommand(command, silent = false) {
   }
 }
 
+function execCommandFile(file, args = [], silent = false) {
+  try {
+    const result = execFileSync(file, args, {
+      encoding: 'utf8',
+      stdio: silent ? 'pipe' : 'inherit'
+    });
+    return result ? result.trim() : '';
+  } catch (error) {
+    if (silent) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 function main() {
   // Parse command line arguments
   const args = process.argv.slice(2);
@@ -49,10 +64,11 @@ function main() {
 
   // Validate version type
   const incrementKeywords = new Set(['patch', 'minor', 'major', 'prepatch', 'preminor', 'premajor', 'prerelease']);
-  const semverRegex = /^\d+\.\d+\.\d+(?:-.+)?$/; // e.g., 1.2.3 or 1.2.3-beta.1
+  // Strict SemVer with optional v-prefix, prerelease and build metadata
+  const semverRegex = /^v?(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
   const isIncrementKeyword = incrementKeywords.has(versionType);
-  const isSemver = semverRegex.test(versionType) || (versionType.startsWith('v') && semverRegex.test(versionType.slice(1)));
+  const isSemver = semverRegex.test(versionType);
 
   if (!isIncrementKeyword && !isSemver) {
     exitWithError(
@@ -166,8 +182,8 @@ function main() {
     const cleanVersion = versionType.startsWith('v') ? versionType.slice(1) : versionType;
 
     if (isSemver) {
-      // Explicit semver provided: use npm version directly
-      execCommand(`npm version ${cleanVersion}`);
+      // Explicit semver provided: use npm version directly without shell interpolation
+      execCommandFile('npm', ['version', cleanVersion]);
     } else if (isIncrementKeyword) {
       // Keyword provided: use namespaced script (e.g., version:patch)
       const scriptName = `version:${versionType}`;
@@ -177,7 +193,8 @@ function main() {
           `Missing npm script '${scriptName}'. Define it in package.json or provide an explicit version like 1.2.3`
         );
       }
-      execCommand(`npm run ${scriptName}`);
+      // Run npm script without shell interpolation
+      execCommandFile('npm', ['run', scriptName]);
     } else {
       exitWithError(
         `Invalid version input: ${versionType}. Use an increment keyword (patch, minor, major, prepatch, preminor, premajor, prerelease) or an explicit semver (e.g., 1.2.3)`

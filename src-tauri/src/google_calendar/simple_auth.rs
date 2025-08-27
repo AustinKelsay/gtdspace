@@ -104,6 +104,7 @@ impl SimpleAuthConfig {
 #[derive(Debug)]
 pub struct BrowserOpenError {
     /// Full OAuth authorization URL including the original state. DO NOT LOG.
+    #[allow(dead_code)]
     pub auth_url: String,
     /// Redacted authorization URL with the state removed. Safe for logs.
     pub redacted_auth_url: String,

@@ -44,6 +44,12 @@ echo "✓ Generated 128x128@2x.png (256x256)"
 convert icon.png -resize 256x256 -define icon:auto-resize="256,128,96,64,48,32,16" icon.ico
 echo "✓ Generated icon.ico (Windows)"
 
+# Setup cleanup trap to ensure icon.iconset is removed even on error
+cleanup() {
+    rm -rf icon.iconset
+}
+trap cleanup EXIT
+
 # Generate ICNS for macOS
 # First create the required sizes
 mkdir -p icon.iconset
@@ -60,8 +66,18 @@ convert icon.png -resize 1024x1024 icon.iconset/icon_512x512@2x.png
 
 # Create ICNS file (macOS only)
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    iconutil -c icns icon.iconset
-    echo "✓ Generated icon.icns (macOS)"
+    if command -v iconutil &> /dev/null; then
+        iconutil -c icns icon.iconset
+        echo "✓ Generated icon.icns (macOS)"
+    else
+        echo "⚠ iconutil not found; attempting png2icns..."
+        if command -v png2icns &> /dev/null; then
+            png2icns icon.icns icon.iconset/*.png
+            echo "✓ Generated icon.icns using png2icns"
+        else
+            echo "⚠ Skipping icon.icns generation (iconutil/png2icns not available)"
+        fi
+    fi
 else
     echo "⚠ Skipping icon.icns generation (requires macOS)"
     # Create a placeholder or use png2icns if available
@@ -70,9 +86,6 @@ else
         echo "✓ Generated icon.icns using png2icns"
     fi
 fi
-
-# Clean up
-rm -rf icon.iconset
 
 echo ""
 echo "✅ Icon generation complete!"

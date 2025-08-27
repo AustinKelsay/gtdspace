@@ -110,10 +110,7 @@ pub async fn fetch_events_async(
 ) -> Result<Vec<CalendarEvent>, Box<dyn std::error::Error + Send + Sync>> {
     fetch_calendar_events(access_token).await.map_err(
         |e| -> Box<dyn std::error::Error + Send + Sync> {
-            Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                e.to_string(),
-            ))
+            Box::new(std::io::Error::other(e.to_string()))
         },
     )
 }

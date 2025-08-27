@@ -386,10 +386,7 @@ pub async fn run_oauth_server() -> Result<String, Box<dyn std::error::Error + Se
 
     server.start_and_wait_for_code().await.map_err(
         |e| -> Box<dyn std::error::Error + Send + Sync> {
-            Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                e.to_string(),
-            ))
+            Box::new(std::io::Error::other(e.to_string()))
         },
     )
 }

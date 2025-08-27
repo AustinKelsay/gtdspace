@@ -73,9 +73,9 @@ impl TokenStorage {
 
     #[allow(dead_code)]
     fn get_sync_metadata_path(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let app_dir = self.get_app_data_dir().unwrap_or_else(|_| {
-            std::env::temp_dir()
-        });
+        let app_dir = self
+            .get_app_data_dir()
+            .unwrap_or_else(|_| std::env::temp_dir());
         Ok(app_dir.join("google_calendar_sync.json"))
     }
 

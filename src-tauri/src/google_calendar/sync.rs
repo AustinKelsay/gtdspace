@@ -49,12 +49,10 @@ impl CalendarSyncManager {
             let calendar_id = "primary";
 
             // Compute effective time bounds once before the loop
-            let effective_min = time_min.unwrap_or_else(|| {
-                Utc::now() - chrono::Duration::days(DEFAULT_SYNC_DAYS_PAST)
-            });
-            let effective_max = time_max.unwrap_or_else(|| {
-                Utc::now() + chrono::Duration::days(DEFAULT_SYNC_DAYS_FUTURE)
-            });
+            let effective_min = time_min
+                .unwrap_or_else(|| Utc::now() - chrono::Duration::days(DEFAULT_SYNC_DAYS_PAST));
+            let effective_max = time_max
+                .unwrap_or_else(|| Utc::now() + chrono::Duration::days(DEFAULT_SYNC_DAYS_FUTURE));
 
             // Fetch events with pagination
             let mut page_token: Option<String> = None;

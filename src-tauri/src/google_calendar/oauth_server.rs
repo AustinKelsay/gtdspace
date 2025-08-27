@@ -372,7 +372,7 @@ impl OAuthCallbackServer {
                 let _ = server_handle.await;
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::TimedOut,
-                    "OAuth callback timeout"
+                    "OAuth callback timeout",
                 )));
             }
 

@@ -155,13 +155,11 @@ impl From<Event> for GoogleCalendarEvent {
             .conference_data
             .as_ref()
             .and_then(|cd| {
-                cd.entry_points
-                    .as_ref()
-                    .and_then(|eps| {
-                        eps.iter()
-                            .find(|ep| ep.entry_point_type == Some("video".to_string()))
-                            .and_then(|ep| ep.uri.clone())
-                    })
+                cd.entry_points.as_ref().and_then(|eps| {
+                    eps.iter()
+                        .find(|ep| ep.entry_point_type == Some("video".to_string()))
+                        .and_then(|ep| ep.uri.clone())
+                })
             })
             .or_else(|| {
                 event

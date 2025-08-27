@@ -51,6 +51,7 @@ pub struct GoogleCalendarManager {
     auth_manager: Arc<Mutex<GoogleAuthManager>>,
     sync_manager: Arc<Mutex<CalendarSyncManager>>,
     token_storage: Arc<TokenStorage>,
+    #[allow(dead_code)]
     config: GoogleCalendarConfig,
 }
 

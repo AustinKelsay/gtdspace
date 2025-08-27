@@ -327,7 +327,7 @@ pub fn get_app_version(app: AppHandle) -> Result<String, String> {
 /// }
 /// ```
 #[tauri::command]
-pub async fn check_permissions() -> Result<PermissionStatus, String> {
+pub fn check_permissions() -> Result<PermissionStatus, String> {
     log::info!("Permission check requested");
 
     // For Phase 0, we'll return a basic permission check
@@ -533,7 +533,7 @@ pub fn open_file_location(file_path: String) -> Result<String, String> {
 /// - macOS/Linux: "$HOME/GTD Space"
 /// - Windows: "%USERPROFILE%\\GTD Space"
 #[tauri::command]
-pub async fn get_default_gtd_space_path() -> Result<String, String> {
+pub fn get_default_gtd_space_path() -> Result<String, String> {
     fn home_dir() -> Option<PathBuf> {
         if cfg!(target_os = "windows") {
             std::env::var_os("USERPROFILE").map(PathBuf::from)
@@ -557,51 +557,49 @@ fn scan_directory_recursive(dir_path: &Path, files: &mut Vec<MarkdownFile>) -> R
 
     match fs::read_dir(dir_path) {
         Ok(entries) => {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
+            for entry in entries.flatten() {
+                let path = entry.path();
 
-                    // Recursively scan subdirectories
-                    if path.is_dir() {
-                        // Skip hidden directories (starting with .)
-                        if let Some(dir_name) = path.file_name() {
-                            if !dir_name.to_string_lossy().starts_with('.') {
-                                scan_directory_recursive(&path, files)?;
-                            }
+                // Recursively scan subdirectories
+                if path.is_dir() {
+                    // Skip hidden directories (starting with .)
+                    if let Some(dir_name) = path.file_name() {
+                        if !dir_name.to_string_lossy().starts_with('.') {
+                            scan_directory_recursive(&path, files)?;
                         }
-                    } else if path.is_file() {
-                        // Process markdown files
-                        if let Some(extension) = path.extension() {
-                            let ext_str = extension.to_string_lossy().to_lowercase();
-                            if markdown_extensions.contains(&ext_str.as_str()) {
-                                if let Ok(metadata) = entry.metadata() {
-                                    let file_name = path
-                                        .file_name()
+                    }
+                } else if path.is_file() {
+                    // Process markdown files
+                    if let Some(extension) = path.extension() {
+                        let ext_str = extension.to_string_lossy().to_lowercase();
+                        if markdown_extensions.contains(&ext_str.as_str()) {
+                            if let Ok(metadata) = entry.metadata() {
+                                let file_name = path
+                                    .file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy()
+                                    .to_string();
+
+                                // Generate simple ID from file path
+                                use std::collections::hash_map::DefaultHasher;
+                                use std::hash::{Hash, Hasher};
+                                let mut hasher = DefaultHasher::new();
+                                path.to_string_lossy().hash(&mut hasher);
+                                let id = format!("{:x}", hasher.finish());
+
+                                files.push(MarkdownFile {
+                                    id,
+                                    name: file_name,
+                                    path: path.to_string_lossy().to_string(),
+                                    size: metadata.len(),
+                                    last_modified: metadata
+                                        .modified()
+                                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
                                         .unwrap_or_default()
-                                        .to_string_lossy()
-                                        .to_string();
-
-                                    // Generate simple ID from file path
-                                    use std::collections::hash_map::DefaultHasher;
-                                    use std::hash::{Hash, Hasher};
-                                    let mut hasher = DefaultHasher::new();
-                                    path.to_string_lossy().hash(&mut hasher);
-                                    let id = format!("{:x}", hasher.finish());
-
-                                    files.push(MarkdownFile {
-                                        id,
-                                        name: file_name,
-                                        path: path.to_string_lossy().to_string(),
-                                        size: metadata.len(),
-                                        last_modified: metadata
-                                            .modified()
-                                            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-                                            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                                            .unwrap_or_default()
-                                            .as_secs(),
-                                        extension: ext_str,
-                                    });
-                                }
+                                        .as_secs(),
+                                    extension: ext_str,
+                                });
                             }
                         }
                     }
@@ -680,40 +678,38 @@ pub fn list_project_actions(project_path: String) -> Result<Vec<MarkdownFile>, S
     let mut files = Vec::new();
     match fs::read_dir(dir_path) {
         Ok(entries) => {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    if path.is_file() {
-                        if let Some(extension) = path.extension() {
-                            let ext_str = extension.to_string_lossy().to_lowercase();
-                            if (ext_str == "md" || ext_str == "markdown")
-                                && path.file_name() != Some(std::ffi::OsStr::new("README.md"))
-                            {
-                                if let Ok(metadata) = entry.metadata() {
-                                    use std::collections::hash_map::DefaultHasher;
-                                    use std::hash::{Hash, Hasher};
-                                    let mut hasher = DefaultHasher::new();
-                                    path.to_string_lossy().hash(&mut hasher);
-                                    let id = format!("{:x}", hasher.finish());
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(extension) = path.extension() {
+                        let ext_str = extension.to_string_lossy().to_lowercase();
+                        if (ext_str == "md" || ext_str == "markdown")
+                            && path.file_name() != Some(std::ffi::OsStr::new("README.md"))
+                        {
+                            if let Ok(metadata) = entry.metadata() {
+                                use std::collections::hash_map::DefaultHasher;
+                                use std::hash::{Hash, Hasher};
+                                let mut hasher = DefaultHasher::new();
+                                path.to_string_lossy().hash(&mut hasher);
+                                let id = format!("{:x}", hasher.finish());
 
-                                    files.push(MarkdownFile {
-                                        id,
-                                        name: path
-                                            .file_name()
-                                            .unwrap_or_default()
-                                            .to_string_lossy()
-                                            .to_string(),
-                                        path: path.to_string_lossy().to_string(),
-                                        size: metadata.len(),
-                                        last_modified: metadata
-                                            .modified()
-                                            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-                                            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                                            .unwrap_or_default()
-                                            .as_secs(),
-                                        extension: ext_str,
-                                    });
-                                }
+                                files.push(MarkdownFile {
+                                    id,
+                                    name: path
+                                        .file_name()
+                                        .unwrap_or_default()
+                                        .to_string_lossy()
+                                        .to_string(),
+                                    path: path.to_string_lossy().to_string(),
+                                    size: metadata.len(),
+                                    last_modified: metadata
+                                        .modified()
+                                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs(),
+                                    extension: ext_str,
+                                });
                             }
                         }
                     }
@@ -974,7 +970,7 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
 /// });
 /// ```
 #[tauri::command]
-pub async fn rename_file(
+pub fn rename_file(
     old_path: String,
     new_name: String,
 ) -> Result<FileOperationResult, String> {
@@ -1465,7 +1461,7 @@ pub async fn stop_file_watcher() -> Result<String, String> {
 /// });
 /// ```
 #[tauri::command]
-pub async fn copy_file(source_path: String, dest_path: String) -> Result<String, String> {
+pub fn copy_file(source_path: String, dest_path: String) -> Result<String, String> {
     log::info!("Copying file from {} to {}", source_path, dest_path);
 
     let source = Path::new(&source_path);
@@ -1544,7 +1540,7 @@ pub async fn copy_file(source_path: String, dest_path: String) -> Result<String,
 /// });
 /// ```
 #[tauri::command]
-pub async fn move_file(source_path: String, dest_path: String) -> Result<String, String> {
+pub fn move_file(source_path: String, dest_path: String) -> Result<String, String> {
     log::info!("Moving file from {} to {}", source_path, dest_path);
 
     let source = Path::new(&source_path);
@@ -1658,105 +1654,107 @@ pub async fn search_files(
 
     // Search through all markdown files
     if let Ok(entries) = fs::read_dir(dir_path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
+        for entry in entries.flatten() {
+            let path = entry.path();
 
-                if path.is_file() {
-                    if let Some(extension) = path.extension() {
-                        let ext_str = extension.to_string_lossy().to_lowercase();
-                        if markdown_extensions.contains(&ext_str.as_str()) {
-                            files_searched += 1;
+            if path.is_file() {
+                if let Some(extension) = path.extension() {
+                    let ext_str = extension.to_string_lossy().to_lowercase();
+                    if markdown_extensions.contains(&ext_str.as_str()) {
+                        files_searched += 1;
 
-                            if let Ok(content) = fs::read_to_string(&path) {
-                                let file_name = path
-                                    .file_name()
-                                    .unwrap_or_default()
-                                    .to_string_lossy()
-                                    .to_string();
-                                let file_path = path.to_string_lossy().to_string();
+                        if let Ok(content) = fs::read_to_string(&path) {
+                            let file_name = path
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_string();
+                            let file_path = path.to_string_lossy().to_string();
 
-                                // Search in file name if enabled
-                                if filters.include_file_names {
-                                    if let Some(match_result) =
-                                        search_in_text(&file_name, &query, &filters, &regex_pattern)
-                                    {
-                                        results.push(SearchResult {
-                                            file_path: file_path.clone(),
-                                            file_name: file_name.clone(),
-                                            line_number: 0,
-                                            line_content: format!("📁 {}", file_name),
-                                            match_start: match_result.0,
-                                            match_end: match_result.1,
-                                            context_before: None,
-                                            context_after: None,
-                                        });
-                                        total_matches += 1;
-                                    }
+                            // Search in file name if enabled
+                            if filters.include_file_names {
+                                if let Some(match_result) =
+                                    search_in_text(&file_name, &query, &filters, &regex_pattern)
+                                {
+                                    results.push(SearchResult {
+                                        file_path: file_path.clone(),
+                                        file_name: file_name.clone(),
+                                        line_number: 0,
+                                        line_content: format!("📁 {}", file_name),
+                                        match_start: match_result.0,
+                                        match_end: match_result.1,
+                                        context_before: None,
+                                        context_after: None,
+                                    });
+                                    total_matches += 1;
                                 }
+                            }
 
-                                // Search in file content
-                                let lines: Vec<&str> = content.lines().collect();
-                                for (line_number, line) in lines.iter().enumerate() {
-                                    if let Some(match_result) =
-                                        search_in_text(line, &query, &filters, &regex_pattern)
-                                    {
-                                        let context_before = if line_number > 0 {
-                                            Some(
-                                                lines
-                                                    .get(line_number.saturating_sub(2)..line_number)
-                                                    .unwrap_or(&[])
-                                                    .iter()
-                                                    .map(|s| s.to_string())
-                                                    .collect(),
-                                            )
-                                        } else {
-                                            None
-                                        };
+                            // Search in file content
+                            let lines: Vec<&str> = content.lines().collect();
+                            for (line_number, line) in lines.iter().enumerate() {
+                                if let Some(match_result) =
+                                    search_in_text(line, &query, &filters, &regex_pattern)
+                                {
+                                    let context_before = if line_number > 0 {
+                                        Some(
+                                            lines
+                                                .get(line_number.saturating_sub(2)..line_number)
+                                                .unwrap_or(&[])
+                                                .iter()
+                                                .map(|s| s.to_string())
+                                                .collect(),
+                                        )
+                                    } else {
+                                        None
+                                    };
 
-                                        let context_after = if line_number < lines.len() - 1 {
-                                            Some(
-                                                lines
-                                                    .get(
-                                                        line_number + 1
-                                                            ..std::cmp::min(
-                                                                line_number + 3,
-                                                                lines.len(),
-                                                            ),
-                                                    )
-                                                    .unwrap_or(&[])
-                                                    .iter()
-                                                    .map(|s| s.to_string())
-                                                    .collect(),
-                                            )
-                                        } else {
-                                            None
-                                        };
+                                    let context_after = if line_number < lines.len() - 1 {
+                                        Some(
+                                            lines
+                                                .get(
+                                                    line_number + 1
+                                                        ..std::cmp::min(
+                                                            line_number + 3,
+                                                            lines.len(),
+                                                        ),
+                                                )
+                                                .unwrap_or(&[])
+                                                .iter()
+                                                .map(|s| s.to_string())
+                                                .collect(),
+                                        )
+                                    } else {
+                                        None
+                                    };
 
-                                        results.push(SearchResult {
-                                            file_path: file_path.clone(),
-                                            file_name: file_name.clone(),
-                                            line_number,
-                                            line_content: line.to_string(),
-                                            match_start: match_result.0,
-                                            match_end: match_result.1,
-                                            context_before,
-                                            context_after,
+                                    results.push(SearchResult {
+                                        file_path: file_path.clone(),
+                                        file_name: file_name.clone(),
+                                        line_number,
+                                        line_content: line.to_string(),
+                                        match_start: match_result.0,
+                                        match_end: match_result.1,
+                                        context_before,
+                                        context_after,
+                                    });
+                                    total_matches += 1;
+
+                                    // Check max results limit
+                                    if results.len() >= filters.max_results {
+                                        let duration = start_time.elapsed().as_millis() as u64;
+                                        log::info!(
+                                            "Search completed with {} results in {}ms (truncated)",
+                                            results.len(),
+                                            duration
+                                        );
+                                        return Ok(SearchResponse {
+                                            results,
+                                            total_matches,
+                                            files_searched,
+                                            duration_ms: duration,
+                                            truncated: true,
                                         });
-                                        total_matches += 1;
-
-                                        // Check max results limit
-                                        if results.len() >= filters.max_results {
-                                            let duration = start_time.elapsed().as_millis() as u64;
-                                            log::info!("Search completed with {} results in {}ms (truncated)", results.len(), duration);
-                                            return Ok(SearchResponse {
-                                                results,
-                                                total_matches,
-                                                files_searched,
-                                                duration_ms: duration,
-                                                truncated: true,
-                                            });
-                                        }
                                     }
                                 }
                             }
@@ -1817,8 +1815,8 @@ fn search_in_text(
             if word == &search_query {
                 // Calculate position in original text
                 let mut pos = 0;
-                for j in 0..i {
-                    pos += words[j].len() + 1; // +1 for space
+                for word in words.iter().take(i) {
+                    pos += word.len() + 1; // +1 for space
                 }
                 return Some((pos, pos + query.len()));
             }
@@ -2140,7 +2138,7 @@ pub struct ReverseRelationship {
 /// });
 /// ```
 #[tauri::command]
-pub async fn replace_in_file(
+pub fn replace_in_file(
     file_path: String,
     search_term: String,
     replace_term: String,
@@ -2778,7 +2776,7 @@ pub async fn initialize_default_gtd_space(app: AppHandle) -> Result<String, Stri
     let target_path = if let Some(path) = settings.default_space_path.clone() {
         path
     } else {
-        get_default_gtd_space_path().await?
+        get_default_gtd_space_path()?
     };
 
     // Ensure GTD structure
@@ -2846,7 +2844,7 @@ pub fn create_directory(path: String) -> Result<String, String> {
     // Optionally validate the path is within expected workspace
     // This depends on your security requirements
 
-    fs::create_dir_all(&dir_path).map_err(|e| format!("Failed to create directory: {}", e))?;
+    fs::create_dir_all(dir_path).map_err(|e| format!("Failed to create directory: {}", e))?;
 
     Ok(format!("Directory created: {}", path))
 }
@@ -3302,6 +3300,9 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
 
     let mut reset_habits = Vec::new();
 
+    // Pre-compile regex outside the loop
+    let checkbox_regex = Regex::new(r"\[!checkbox:habit-status:([^\]]+)\]").unwrap();
+
     // Read all habit files
     let entries = fs::read_dir(&habits_path)
         .map_err(|e| format!("Failed to read Habits directory: {}", e))?;
@@ -3322,7 +3323,6 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                 .map(|m| m.as_str());
 
             // Check for new checkbox format first
-            let checkbox_regex = Regex::new(r"\[!checkbox:habit-status:([^\]]+)\]").unwrap();
             let (current_status, is_checkbox_format) =
                 if let Some(cap) = checkbox_regex.captures(&content) {
                     let checkbox_value = cap.get(1).map(|m| m.as_str()).unwrap_or("false");
@@ -3447,8 +3447,6 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                     // ALWAYS update status to 'todo' after a reset (do this AFTER inserting history)
                     let final_content = if is_checkbox_format {
                         // Use checkbox format
-                        let checkbox_regex =
-                            Regex::new(r"\[!checkbox:habit-status:([^\]]+)\]").unwrap();
                         checkbox_regex
                             .replace(
                                 &content_with_history,
@@ -3581,10 +3579,10 @@ fn calculate_missed_periods(
         let mut check_time = Local
             .from_local_datetime(&last_action_time)
             .single()
-            .unwrap_or_else(|| Local::now());
+            .unwrap_or_else(Local::now);
 
         // Move to next day
-        check_time = check_time + Duration::days(1);
+        check_time += Duration::days(1);
 
         // Add all weekdays between last action and now
         while check_time <= now {
@@ -3592,7 +3590,7 @@ fn calculate_missed_periods(
             if check_time.weekday().num_days_from_monday() < 5 {
                 missed_periods.push(check_time);
             }
-            check_time = check_time + Duration::days(1);
+            check_time += Duration::days(1);
 
             // Safety limit
             if missed_periods.len() >= 1000 {
@@ -3652,7 +3650,7 @@ fn calculate_missed_periods(
 
             check_time = next_month.unwrap_or(check_time + Duration::days(30));
         } else {
-            check_time = check_time + reset_period;
+            check_time += reset_period;
         }
     }
 
@@ -3695,7 +3693,7 @@ fn should_reset_habit(content: &str, frequency: &str, _current_status: &str) -> 
         let last_local = Local
             .from_local_datetime(&last_action)
             .single()
-            .unwrap_or_else(|| Local::now());
+            .unwrap_or_else(Local::now);
         let now_local = Local::now();
 
         // Check if it's currently a weekday (Monday = 1, Friday = 5)
@@ -3801,91 +3799,85 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
     // Read all directories in Projects folder
     match fs::read_dir(&projects_path) {
         Ok(entries) => {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
+            for entry in entries.flatten() {
+                let path = entry.path();
 
-                    // Only process directories
-                    if path.is_dir() {
-                        let folder_name = path
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .to_string();
+                // Only process directories
+                if path.is_dir() {
+                    let folder_name = path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
 
-                        // Read README.md to extract project metadata
-                        let readme_path = path.join("README.md");
+                    // Read README.md to extract project metadata
+                    let readme_path = path.join("README.md");
 
-                        let (mut title, description, due_date, status, created_date) =
-                            if readme_path.exists() {
-                                match fs::read_to_string(&readme_path) {
-                                    Ok(content) => {
-                                        let (desc, due, stat, created) =
-                                            parse_project_readme(&content);
-                                        // Extract title from README
-                                        let readme_title = extract_readme_title(&content);
-                                        (readme_title, desc, due, stat, created)
-                                    }
-                                    Err(_) => (
-                                        folder_name.clone(),
-                                        "No description available".to_string(),
-                                        None,
-                                        "in-progress".to_string(),
-                                        "Unknown".to_string(),
-                                    ),
+                    let (mut title, description, due_date, status, created_date) =
+                        if readme_path.exists() {
+                            match fs::read_to_string(&readme_path) {
+                                Ok(content) => {
+                                    let (desc, due, stat, created) = parse_project_readme(&content);
+                                    // Extract title from README
+                                    let readme_title = extract_readme_title(&content);
+                                    (readme_title, desc, due, stat, created)
                                 }
-                            } else {
-                                (
+                                Err(_) => (
                                     folder_name.clone(),
                                     "No description available".to_string(),
                                     None,
                                     "in-progress".to_string(),
                                     "Unknown".to_string(),
-                                )
-                            };
-
-                        // Sync folder name with README title if they don't match
-                        // Prefer folder name as it was likely renamed intentionally
-                        if title != folder_name && readme_path.exists() {
-                            log::info!(
-                                "Syncing project title: folder='{}', README title='{}'",
-                                folder_name,
-                                title
-                            );
-
-                            // Update README to match folder name
-                            if let Ok(content) = fs::read_to_string(&readme_path) {
-                                let updated_content = update_readme_title(&content, &folder_name);
-                                if let Err(e) = fs::write(&readme_path, updated_content) {
-                                    log::error!(
-                                        "Failed to sync README title with folder name: {}",
-                                        e
-                                    );
-                                } else {
-                                    log::info!(
-                                        "Updated README title to match folder name: {}",
-                                        folder_name
-                                    );
-                                }
+                                ),
                             }
+                        } else {
+                            (
+                                folder_name.clone(),
+                                "No description available".to_string(),
+                                None,
+                                "in-progress".to_string(),
+                                "Unknown".to_string(),
+                            )
+                        };
 
-                            // Use folder name as the project name
-                            title = folder_name.clone();
+                    // Sync folder name with README title if they don't match
+                    // Prefer folder name as it was likely renamed intentionally
+                    if title != folder_name && readme_path.exists() {
+                        log::info!(
+                            "Syncing project title: folder='{}', README title='{}'",
+                            folder_name,
+                            title
+                        );
+
+                        // Update README to match folder name
+                        if let Ok(content) = fs::read_to_string(&readme_path) {
+                            let updated_content = update_readme_title(&content, &folder_name);
+                            if let Err(e) = fs::write(&readme_path, updated_content) {
+                                log::error!("Failed to sync README title with folder name: {}", e);
+                            } else {
+                                log::info!(
+                                    "Updated README title to match folder name: {}",
+                                    folder_name
+                                );
+                            }
                         }
 
-                        // Count action files in the project
-                        let action_count = count_project_actions(&path);
-
-                        projects.push(GTDProject {
-                            name: title,
-                            description,
-                            due_date,
-                            status,
-                            path: path.to_string_lossy().to_string(),
-                            created_date,
-                            action_count,
-                        });
+                        // Use folder name as the project name
+                        title = folder_name.clone();
                     }
+
+                    // Count action files in the project
+                    let action_count = count_project_actions(&path);
+
+                    projects.push(GTDProject {
+                        name: title,
+                        description,
+                        due_date,
+                        status,
+                        path: path.to_string_lossy().to_string(),
+                        created_date,
+                        action_count,
+                    });
                 }
             }
         }
@@ -3962,7 +3954,7 @@ pub fn rename_gtd_project(
     }
 
     // Rename the directory
-    match fs::rename(&old_path, &new_path) {
+    match fs::rename(old_path, &new_path) {
         Ok(_) => {
             log::info!(
                 "Successfully renamed project folder to: {}",
@@ -4067,13 +4059,13 @@ pub fn rename_gtd_action(
     // If the path is the same, just update the title in the content
     if new_path == old_path {
         // Read the file content
-        match fs::read_to_string(&old_path) {
+        match fs::read_to_string(old_path) {
             Ok(content) => {
                 // Update the H1 title
                 let updated_content = update_readme_title(&content, &new_action_name);
 
                 // Write back the updated content
-                if let Err(e) = fs::write(&old_path, updated_content) {
+                if let Err(e) = fs::write(old_path, updated_content) {
                     log::error!("Failed to update action title: {}", e);
                     return Err(format!("Failed to update action title: {}", e));
                 }
@@ -4089,7 +4081,7 @@ pub fn rename_gtd_action(
     }
 
     // Rename the file
-    match fs::rename(&old_path, &new_path) {
+    match fs::rename(old_path, &new_path) {
         Ok(_) => {
             log::info!(
                 "Successfully renamed action file to: {}",
@@ -4151,8 +4143,8 @@ fn update_readme_title(content: &str, new_title: &str) -> String {
 fn extract_readme_title(content: &str) -> String {
     for line in content.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("# ") {
-            return trimmed[2..].trim().to_string();
+        if let Some(stripped) = trimmed.strip_prefix("# ") {
+            return stripped.trim().to_string();
         }
     }
     // If no title found, return a default
@@ -4248,16 +4240,14 @@ fn count_project_actions(project_path: &Path) -> u32 {
     let mut count = 0;
 
     if let Ok(entries) = fs::read_dir(project_path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.is_file() {
-                    if let Some(extension) = path.extension() {
-                        if extension == "md"
-                            && path.file_name() != Some(std::ffi::OsStr::new("README.md"))
-                        {
-                            count += 1;
-                        }
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(extension) = path.extension() {
+                    if extension == "md"
+                        && path.file_name() != Some(std::ffi::OsStr::new("README.md"))
+                    {
+                        count += 1;
                     }
                 }
             }
@@ -4400,7 +4390,7 @@ pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
 
     // Open browser
     println!("[GoogleCalendar] Opening browser...");
-    let state = match start_oauth_flow(&config) {
+    let _state = match start_oauth_flow(&config) {
         Ok(state) => {
             println!("[GoogleCalendar] Browser opened with state: {}", state);
             state

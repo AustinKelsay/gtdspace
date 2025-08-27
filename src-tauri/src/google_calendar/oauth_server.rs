@@ -376,7 +376,7 @@ impl OAuthCallbackServer {
 pub async fn run_oauth_server() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     println!("[OAuthServer] Setting up OAuth callback server...");
 
-    let server = OAuthCallbackServer::new(8080);
+    let server = OAuthCallbackServer::new(9898);
 
     server.start_and_wait_for_code().await.map_err(
         |e| -> Box<dyn std::error::Error + Send + Sync> {

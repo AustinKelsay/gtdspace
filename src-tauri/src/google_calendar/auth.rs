@@ -160,6 +160,7 @@ impl GoogleAuthManager {
         Ok(hub)
     }
 
+    #[allow(dead_code)]
     pub async fn refresh_token_if_needed(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(auth) = &self.authenticator {
             // The authenticator handles token refresh automatically

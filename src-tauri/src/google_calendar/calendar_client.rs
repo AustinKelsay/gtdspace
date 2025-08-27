@@ -104,6 +104,7 @@ pub async fn fetch_calendar_events(
 }
 
 // Async wrapper for consistent API
+#[allow(dead_code)]
 pub async fn fetch_events_async(
     access_token: &str,
 ) -> Result<Vec<CalendarEvent>, Box<dyn std::error::Error + Send + Sync>> {

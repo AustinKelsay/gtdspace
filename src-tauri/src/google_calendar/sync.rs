@@ -121,6 +121,7 @@ impl CalendarSyncManager {
         result
     }
 
+    #[allow(dead_code)]
     pub async fn get_calendars(
         &self,
         hub: CalendarHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
@@ -181,6 +182,7 @@ impl CalendarSyncManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn load_cache(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let app_dir = self
             .app_handle

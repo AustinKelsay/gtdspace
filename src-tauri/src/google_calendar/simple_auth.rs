@@ -69,6 +69,7 @@ impl SimpleAuthConfig {
         Ok(token_response)
     }
 
+    #[allow(dead_code)]
     pub async fn refresh_token(
         &self,
         refresh_token: &str,

@@ -347,7 +347,7 @@ pub fn generate_weekly_review_habit() -> String {
     // Find next Sunday at 2 PM
     let mut next_sunday = Local::now();
     while next_sunday.weekday() != Weekday::Sun {
-        next_sunday = next_sunday + chrono::Duration::days(1);
+        next_sunday += chrono::Duration::days(1);
     }
     next_sunday = next_sunday
         .with_hour(14)

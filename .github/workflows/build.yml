@@ -80,7 +80,7 @@ jobs:
             artifact-name: "macos-aarch64"
             artifact-ext: ".dmg"
 
-          - platform: "macos-latest" # Intel
+          - platform: "macos-13" # Intel
             rust-targets: "x86_64-apple-darwin"
             args: "--target x86_64-apple-darwin"
             artifact-name: "macos-x64"
@@ -144,7 +144,8 @@ jobs:
           python3 -m pip install --user Pillow 2>/dev/null || pip3 install --user Pillow 2>/dev/null || pip install --user Pillow 2>/dev/null || true
 
           # Generate PNG and ICO files using Python
-          python3 << 'PYTHON_SCRIPT'
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          "$PY" << 'PYTHON_SCRIPT'
           import sys
           try:
               from PIL import Image
@@ -158,13 +159,19 @@ jobs:
                   ("128x128@2x.png", 256),
               ]
               
+              # Pillow compatibility for resampling
+              try:
+                  RESAMPLE = Image.Resampling.LANCZOS
+              except AttributeError:
+                  RESAMPLE = Image.LANCZOS
+
               for filename, size in sizes:
-                  resized = img.resize((size, size), Image.Resampling.LANCZOS)
+                  resized = img.resize((size, size), RESAMPLE)
                   resized.save(filename, 'PNG')
                   print(f"✓ Generated {filename}")
               
               # Generate Windows ICO
-              img.resize((256, 256), Image.Resampling.LANCZOS).save("icon.ico", format='ICO')
+              img.resize((256, 256), RESAMPLE).save("icon.ico", format='ICO')
               print("✓ Generated icon.ico")
               
           except ImportError:

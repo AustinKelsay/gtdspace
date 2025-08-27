@@ -71,11 +71,13 @@ impl TokenStorage {
         app_dir.join("google_calendar_token.json")
     }
 
+    #[allow(dead_code)]
     fn get_sync_metadata_path(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let app_dir = self.get_app_data_dir()?;
         Ok(app_dir.join("google_calendar_sync.json"))
     }
 
+    #[allow(dead_code)]
     pub async fn save_token(&self, token: StoredToken) -> Result<(), Box<dyn std::error::Error>> {
         let path = self.get_token_path();
         let json = serde_json::to_string_pretty(&token)?;
@@ -101,6 +103,7 @@ impl TokenStorage {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn load_token(&self) -> Result<Option<StoredToken>, Box<dyn std::error::Error>> {
         let path = self.get_token_path();
 
@@ -175,6 +178,7 @@ pub struct SyncMetadata {
 }
 
 impl TokenStorage {
+    #[allow(dead_code)]
     pub async fn save_sync_metadata(
         &self,
         metadata: &SyncMetadata,
@@ -222,6 +226,7 @@ impl TokenStorage {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn load_sync_metadata(
         &self,
     ) -> Result<Option<SyncMetadata>, Box<dyn std::error::Error>> {

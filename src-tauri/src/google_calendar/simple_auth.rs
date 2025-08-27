@@ -187,7 +187,10 @@ pub fn start_oauth_flow(
                     Ok(Some(status)) => {
                         if status.success() {
                             println!("[SimpleAuth] Browser opened successfully with macOS 'open' command");
-                            return Ok(StartOAuthFlowResult { state, redacted_auth_url });
+                            return Ok(StartOAuthFlowResult {
+                                state,
+                                redacted_auth_url,
+                            });
                         } else {
                             println!("[SimpleAuth] 'open' command failed with status: {}", status);
                         }
@@ -195,7 +198,10 @@ pub fn start_oauth_flow(
                     Ok(None) => {
                         // Process is still running, assume success
                         println!("[SimpleAuth] Browser opened successfully with macOS 'open' command (process running)");
-                        return Ok(StartOAuthFlowResult { state, redacted_auth_url });
+                        return Ok(StartOAuthFlowResult {
+                            state,
+                            redacted_auth_url,
+                        });
                     }
                     Err(e) => {
                         println!("[SimpleAuth] Failed to check 'open' command status: {}", e);
@@ -213,7 +219,10 @@ pub fn start_oauth_flow(
     match open::that(&auth_url) {
         Ok(()) => {
             println!("[SimpleAuth] Browser opened successfully with 'open' crate");
-            return Ok(StartOAuthFlowResult { state, redacted_auth_url });
+            return Ok(StartOAuthFlowResult {
+                state,
+                redacted_auth_url,
+            });
         }
         Err(e) => {
             println!("[SimpleAuth] Failed to open with 'open' crate: {:?}", e);
@@ -225,7 +234,10 @@ pub fn start_oauth_flow(
     match webbrowser::open(&auth_url) {
         Ok(()) => {
             println!("[SimpleAuth] Browser opened successfully with 'webbrowser' crate");
-            return Ok(StartOAuthFlowResult { state, redacted_auth_url });
+            return Ok(StartOAuthFlowResult {
+                state,
+                redacted_auth_url,
+            });
         }
         Err(e) => {
             println!("[SimpleAuth] Browser open failed with webbrowser: {:?}", e);

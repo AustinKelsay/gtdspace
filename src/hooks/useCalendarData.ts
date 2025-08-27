@@ -254,12 +254,14 @@ export const useCalendarData = (
                   if (!isNaN(parsed.getTime())) {
                     createdDateTime = parsed.toISOString();
                   } else {
-                    // If parsing fails, use raw value as fallback
-                    createdDateTime = createdDateTimeRaw;
+                    // Invalid date - log warning and leave undefined
+                    console.warn(`[CalendarData] Invalid created_date_time value in habit "${habitName}": "${createdDateTimeRaw}" - skipping`);
+                    createdDateTime = undefined;
                   }
-                } catch {
-                  // If parsing throws, use raw value as fallback
-                  createdDateTime = createdDateTimeRaw;
+                } catch (error) {
+                  // Parsing threw an error - log warning and leave undefined
+                  console.warn(`[CalendarData] Failed to parse created_date_time in habit "${habitName}": "${createdDateTimeRaw}" - ${error}`);
+                  createdDateTime = undefined;
                 }
               } else {
                 // Try to parse from legacy created_date field

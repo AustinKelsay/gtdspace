@@ -33,14 +33,14 @@ interface DateTimeSelectComponentProps {
 
 const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) => {
   const { type, value, label, includeTime, optional } = props.block.props;
-  
+
   const [open, setOpen] = React.useState(false);
   const [timeValue, setTimeValue] = React.useState('12:00');
   const [localTimeEnabled, setLocalTimeEnabled] = React.useState(() => {
     // Initialize based on whether the value has time
     return includeTime || (value && value.includes('T'));
   });
-  
+
   // Parse the ISO date value - handle empty strings gracefully
   let dateValue: Date | null = null;
   if (value && value.trim() !== '') {
@@ -55,7 +55,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
     }
   }
   const isValidDate = dateValue !== null && isValid(dateValue);
-  
+
   // Extract time if value includes it
   React.useEffect(() => {
     if (isValidDate && value && value.includes('T')) {
@@ -65,7 +65,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       setTimeValue(`${hours}:${minutes}`);
     }
   }, [value, isValidDate]);
-  
+
   const updateBlockValue = (newValue: string) => {
     try {
       props.editor.updateBlock(props.block.id, {
@@ -79,10 +79,10 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       console.error('Error updating datetime block:', error);
     }
   };
-  
+
   const handleDateChange = (newDate: Date | undefined) => {
     if (!newDate) return;
-    
+
     let isoString: string;
     if (localTimeEnabled) {
       // Parse time value and create UTC date with time
@@ -107,14 +107,14 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       ));
       isoString = utcDate.toISOString().slice(0, 10);
     }
-    
+
     updateBlockValue(isoString);
   };
-  
+
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = e.target.value;
     setTimeValue(newTime);
-    
+
     if (isValidDate && localTimeEnabled) {
       const [hours, minutes] = newTime.split(':').map(Number);
       const utcDate = new Date(Date.UTC(
@@ -129,29 +129,29 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       updateBlockValue(utcDate.toISOString());
     }
   };
-  
+
   const handleClear = () => {
     updateBlockValue('');
     setOpen(false);
   };
-  
+
   // Format display text based on type and value
   const displayText = React.useMemo(() => {
     if (!isValidDate) {
       return '';
     }
-    
+
     if (value.includes('T')) {
       return format(dateValue, 'MMM dd, yyyy h:mm a');
     } else {
       return format(dateValue, 'MMM dd, yyyy');
     }
   }, [isValidDate, value, dateValue]);
-  
+
   const handleTimeToggle = (checked: boolean) => {
     setLocalTimeEnabled(checked);
   };
-  
+
   const placeholderText = React.useMemo(() => {
     switch (type) {
       case 'created_date_time':
@@ -168,10 +168,10 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
         return 'No date';
     }
   }, [type]);
-  
+
   const fieldLabel = React.useMemo(() => {
     if (label) return label;
-    
+
     switch (type) {
       case 'created_date_time':
         return 'Created';
@@ -187,11 +187,11 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
         return 'Date';
     }
   }, [type, label]);
-  
+
   // Determine field styles based on type
   const fieldStyles = React.useMemo(() => {
     let baseClasses = 'inline-flex items-center gap-2 px-2 py-1 rounded-md text-sm border-0 outline-none ring-0 ';
-    
+
     switch (type) {
       case 'due_date':
         if (isValidDate && dateValue < new Date()) {
@@ -209,7 +209,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       default:
         baseClasses += 'bg-muted/50 dark:bg-muted/20 text-foreground';
     }
-    
+
     return baseClasses;
   }, [type, isValidDate, dateValue]);
 
@@ -269,9 +269,9 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
             </span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent 
-          className="w-[320px] p-0" 
-          align="start" 
+        <PopoverContent
+          className="w-[320px] p-0"
+          align="start"
           sideOffset={5}
           onOpenAutoFocus={(e) => e.preventDefault()}>
           <div className="flex flex-col">
@@ -282,7 +282,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
               className="rounded-md border-0 w-full"
               defaultMonth={isValidDate ? dateValue : undefined}
             />
-            
+
             {/* Time toggle */}
             <div className="p-3 border-t">
               <div className="flex items-center gap-2 mb-2">
@@ -306,7 +306,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
                 />
               )}
             </div>
-            
+
             {/* Clear button */}
             {optional && isValidDate && (
               <div className="p-3 border-t">
@@ -375,10 +375,11 @@ export const DateTimeSelectBlock = createReactBlockSpec(
       }
     },
     toExternalHTML: (props) => {
-      const block = props.block as {props: {type: string; value: string; includeTime?: boolean}};
+      const block = props.block as { props: { type: string; value: string; includeTime?: boolean } };
       const { type, value, includeTime } = block.props;
       // Return the markdown format that can be parsed back
-      const fieldType = includeTime ? `${type}_time` : type;
+      // Avoid double-suffix for canonical *_date_time types
+      const fieldType = type.endsWith('_time') ? type : (includeTime ? `${type}_time` : type);
       const markdownFormat = `[!datetime:${fieldType}:${value || ''}]`;
       // Return raw markdown string instead of JSX
       return markdownFormat;

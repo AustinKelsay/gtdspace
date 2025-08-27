@@ -22,14 +22,15 @@ These are your ongoing responsibilities—the roles you play and standards you m
 
 /// Template for individual Area of Focus pages with references
 pub fn generate_area_of_focus_template_with_refs(
-    name: &str, 
-    description: &str, 
+    name: &str,
+    description: &str,
     standards: &str,
     goals_refs: &str,
     vision_refs: &str,
-    purpose_refs: &str
+    purpose_refs: &str,
 ) -> String {
-    format!(r#"# {}
+    format!(
+        r#"# {}
 
 {}
 
@@ -47,7 +48,9 @@ pub fn generate_area_of_focus_template_with_refs(
 
 ## References
 [!references:]
-"#, name, description, standards, goals_refs, vision_refs, purpose_refs)
+"#,
+        name, description, standards, goals_refs, vision_refs, purpose_refs
+    )
 }
 
 /// Template for Goals overview page
@@ -67,13 +70,14 @@ These accomplishments will require multiple projects to complete. They provide f
 
 /// Template for individual Goal pages with references
 pub fn generate_goal_template_with_refs(
-    name: &str, 
-    target_date: &str, 
+    name: &str,
+    target_date: &str,
     outcome: &str,
     vision_refs: &str,
-    purpose_refs: &str
+    purpose_refs: &str,
 ) -> String {
-    format!(r#"# {}
+    format!(
+        r#"# {}
 
 **Target:** [!datetime:due_date:{}]
 
@@ -90,7 +94,9 @@ pub fn generate_goal_template_with_refs(
 
 ## References
 [!references:]
-"#, name, target_date, outcome, vision_refs, purpose_refs)
+"#,
+        name, target_date, outcome, vision_refs, purpose_refs
+    )
 }
 
 /// Template for Vision folder
@@ -106,7 +112,8 @@ Revisit each year to recalibrate based on progress and life changes.
 
 /// Template for main Vision document with references
 pub fn generate_vision_document_template_with_refs(purpose_refs: &str) -> String {
-    format!(r#"# 3-5 Year Vision
+    format!(
+        r#"# 3-5 Year Vision
 
 **Living My Purpose**
 [!purpose-references:{}]
@@ -135,7 +142,9 @@ I've mastered [skills/knowledge]. I'm exploring [new areas]. I contribute by [te
 
 ## References
 [!references:]
-"#, purpose_refs)
+"#,
+        purpose_refs
+    )
 }
 
 /// Template for Purpose & Principles folder
@@ -333,7 +342,6 @@ pub const CABINET_GTD_PRINCIPLES_TEMPLATE: &str = r#"# GTD Quick Reference
 5. What's the next action? (Next step)
 "#;
 
-
 /// Generate a Weekly Review habit template with next Sunday
 pub fn generate_weekly_review_habit() -> String {
     // Find next Sunday at 2 PM
@@ -348,8 +356,9 @@ pub fn generate_weekly_review_habit() -> String {
         .unwrap()
         .with_second(0)
         .unwrap();
-    
-    format!(r#"# Weekly Review
+
+    format!(
+        r#"# Weekly Review
 ## Frequency
 [!singleselect:habit-frequency:weekly]
 ## Status
@@ -371,19 +380,24 @@ Created: {}"#,
 }
 
 /// Template for project README.md file
-pub fn generate_project_readme(name: &str, description: &str, due_date: Option<String>, status: &str) -> String {
+pub fn generate_project_readme(
+    name: &str,
+    description: &str,
+    due_date: Option<String>,
+    status: &str,
+) -> String {
     generate_project_readme_with_refs(name, description, due_date, status, "", "", "")
 }
 
 /// Template for project README.md file with references
 pub fn generate_project_readme_with_refs(
-    name: &str, 
-    description: &str, 
-    due_date: Option<String>, 
+    name: &str,
+    description: &str,
+    due_date: Option<String>,
     status: &str,
     areas_refs: &str,
     goals_refs: &str,
-    general_refs: &str
+    general_refs: &str,
 ) -> String {
     let due_date_str = due_date.as_deref().unwrap_or("Not set");
     format!(
@@ -418,7 +432,11 @@ Actions for this project are stored as individual markdown files in this directo
         name,
         description,
         status,
-        if due_date_str != "Not set" { due_date_str } else { "" },
+        if due_date_str != "Not set" {
+            due_date_str
+        } else {
+            ""
+        },
         Local::now().format("%Y-%m-%d"),
         areas_refs,
         goals_refs,
@@ -427,7 +445,13 @@ Actions for this project are stored as individual markdown files in this directo
 }
 
 /// Template for action file
-pub fn generate_action_template(name: &str, status: &str, focus_date: Option<String>, due_date: Option<String>, effort: &str) -> String {
+pub fn generate_action_template(
+    name: &str,
+    status: &str,
+    focus_date: Option<String>,
+    due_date: Option<String>,
+    effort: &str,
+) -> String {
     format!(
         r#"# {}
 
@@ -460,4 +484,3 @@ pub fn generate_action_template(name: &str, status: &str, focus_date: Option<Str
         Local::now().to_rfc3339()
     )
 }
-

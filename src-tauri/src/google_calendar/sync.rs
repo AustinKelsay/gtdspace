@@ -1,11 +1,8 @@
 use chrono::{DateTime, Utc};
-use google_calendar3::{
-    hyper, hyper_rustls,
-    CalendarHub,
-};
+use google_calendar3::{hyper, hyper_rustls, CalendarHub};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager};
 use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::{AppHandle, Emitter, Manager};
 
 use super::GoogleCalendarEvent;
 
@@ -36,7 +33,6 @@ impl CalendarSyncManager {
         }
     }
 
-
     pub async fn sync_events(
         &mut self,
         hub: CalendarHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
@@ -65,7 +61,7 @@ impl CalendarSyncManager {
                     .list(calendar_id)
                     .single_events(true)
                     .order_by("startTime");
-                
+
                 // Re-apply time range
                 if let Some(min) = time_min {
                     call = call.time_min(min);
@@ -73,14 +69,14 @@ impl CalendarSyncManager {
                     let default_min = Utc::now() - chrono::Duration::days(DEFAULT_SYNC_DAYS_PAST);
                     call = call.time_min(default_min);
                 }
-                
+
                 if let Some(max) = time_max {
                     call = call.time_max(max);
                 } else {
                     let default_max = Utc::now() + chrono::Duration::days(DEFAULT_SYNC_DAYS_FUTURE);
                     call = call.time_max(default_max);
                 }
-                
+
                 if let Some(token) = &page_token {
                     call = call.page_token(token);
                 }
@@ -116,7 +112,8 @@ impl CalendarSyncManager {
                 .ok();
 
             Ok(all_events)
-        }).await;
+        })
+        .await;
 
         // Always clear the syncing flag
         self.is_syncing.store(false, Ordering::SeqCst);
@@ -136,7 +133,9 @@ impl CalendarSyncManager {
             .into_iter()
             .map(|cal| CalendarInfo {
                 id: cal.id.unwrap_or_default(),
-                summary: cal.summary.unwrap_or_else(|| "Unnamed Calendar".to_string()),
+                summary: cal
+                    .summary
+                    .unwrap_or_else(|| "Unnamed Calendar".to_string()),
                 description: cal.description,
                 color_id: cal.color_id,
                 selected: cal.selected.unwrap_or(false),
@@ -146,7 +145,9 @@ impl CalendarSyncManager {
         Ok(calendars)
     }
 
-    pub fn get_cached_events(&self) -> Result<Vec<GoogleCalendarEvent>, Box<dyn std::error::Error>> {
+    pub fn get_cached_events(
+        &self,
+    ) -> Result<Vec<GoogleCalendarEvent>, Box<dyn std::error::Error>> {
         Ok(self
             .cached_events
             .as_ref()

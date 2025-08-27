@@ -1,7 +1,7 @@
+use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use warp::Filter;
-use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct OAuthCallback {
@@ -23,11 +23,11 @@ impl OAuthCallbackServer {
             received_code: Arc::new(Mutex::new(None)),
         }
     }
-    
+
     pub async fn start_and_wait_for_code(&self) -> Result<String, Box<dyn std::error::Error>> {
         let received_code = self.received_code.clone();
         let port = self.port;
-        
+
         // Create the callback route
         let callback = warp::path::end()
             .and(warp::query::<OAuthCallback>())
@@ -37,7 +37,7 @@ impl OAuthCallbackServer {
                     if let Some(code) = params.code {
                         println!("[OAuthServer] Received authorization code!");
                         *received_code.lock().await = Some(code);
-                        
+
                         // Return a success HTML page with GTD Space theme
                         warp::reply::html(
                             r#"
@@ -336,34 +336,37 @@ impl OAuthCallbackServer {
                     }
                 }
             });
-        
+
         // Start the server
         let server = warp::serve(callback);
         let addr = ([127, 0, 0, 1], port);
-        
-        println!("[OAuthServer] Starting callback server on http://localhost:{}", port);
-        
+
+        println!(
+            "[OAuthServer] Starting callback server on http://localhost:{}",
+            port
+        );
+
         // Run server in background
         let server_handle = tokio::spawn(async move {
             server.run(addr).await;
         });
-        
+
         // Wait for code to be received (with timeout)
         let timeout = tokio::time::Duration::from_secs(300); // 5 minutes
         let start = tokio::time::Instant::now();
-        
+
         loop {
             if let Some(code) = self.received_code.lock().await.clone() {
                 println!("[OAuthServer] Code received, shutting down server");
                 server_handle.abort();
                 return Ok(code);
             }
-            
+
             if start.elapsed() > timeout {
                 server_handle.abort();
                 return Err("OAuth callback timeout".into());
             }
-            
+
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
     }
@@ -372,11 +375,15 @@ impl OAuthCallbackServer {
 // Async function to start server and get code
 pub async fn run_oauth_server() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     println!("[OAuthServer] Setting up OAuth callback server...");
-    
+
     let server = OAuthCallbackServer::new(8080);
-    
-    server.start_and_wait_for_code().await
-        .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
-        })
+
+    server.start_and_wait_for_code().await.map_err(
+        |e| -> Box<dyn std::error::Error + Send + Sync> {
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        },
+    )
 }

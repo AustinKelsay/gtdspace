@@ -1,10 +1,8 @@
 use google_calendar3::{
     hyper, hyper_rustls,
     oauth2::{
-        authenticator::Authenticator, 
-        InstalledFlowAuthenticator,
+        authenticator::Authenticator, ApplicationSecret, InstalledFlowAuthenticator,
         InstalledFlowReturnMethod,
-        ApplicationSecret,
     },
     CalendarHub,
 };
@@ -40,13 +38,13 @@ impl GoogleAuthManager {
 
     pub async fn authenticate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         println!("[GoogleAuth] Starting authentication process...");
-        
+
         // Create OAuth2 secret
         println!("[GoogleAuth] Creating OAuth2 secret");
         println!("  auth_uri: {}", self.config.auth_uri);
         println!("  token_uri: {}", self.config.token_uri);
         println!("  redirect_uri: {}", self.config.redirect_uri);
-        
+
         let secret = ApplicationSecret {
             client_id: self.config.client_id.clone(),
             client_secret: self.config.client_secret.clone(),
@@ -58,17 +56,15 @@ impl GoogleAuthManager {
 
         // Create authenticator with installed flow
         println!("[GoogleAuth] Building InstalledFlowAuthenticator...");
-        let auth = InstalledFlowAuthenticator::builder(
-            secret,
-            InstalledFlowReturnMethod::HTTPRedirect,
-        )
-        .persist_tokens_to_disk(self.token_storage.get_token_path())
-        .build()
-        .await
-        .map_err(|e| {
-            println!("[GoogleAuth] Failed to build authenticator: {}", e);
-            e
-        })?;
+        let auth =
+            InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect)
+                .persist_tokens_to_disk(self.token_storage.get_token_path())
+                .build()
+                .await
+                .map_err(|e| {
+                    println!("[GoogleAuth] Failed to build authenticator: {}", e);
+                    e
+                })?;
 
         // Request a token to trigger the authentication flow
         println!("[GoogleAuth] Requesting token - this should open your browser...");
@@ -80,12 +76,12 @@ impl GoogleAuthManager {
                     .collect::<Vec<_>>(),
             )
             .await;
-        
+
         match &token_result {
             Ok(_) => println!("[GoogleAuth] Token obtained successfully!"),
             Err(e) => println!("[GoogleAuth] Failed to obtain token: {}", e),
         }
-        
+
         token_result?;
 
         // The authentication flow will automatically open the browser via the InstalledFlowAuthenticator
@@ -94,7 +90,7 @@ impl GoogleAuthManager {
         // Save token after successful authentication
         println!("[GoogleAuth] Saving token to disk...");
         self.token_storage.save_authenticator(&auth).await?;
-        
+
         self.authenticator = Some(auth);
 
         println!("[GoogleAuth] Authentication successful!");
@@ -176,7 +172,7 @@ impl GoogleAuthManager {
                         .collect::<Vec<_>>(),
                 )
                 .await?;
-            
+
             // Save the potentially refreshed token
             self.token_storage.save_authenticator(auth).await?;
         }

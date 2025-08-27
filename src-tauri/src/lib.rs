@@ -2,7 +2,7 @@
 //!
 //! Core library exports for the Tauri markdown editor application.
 
-// Import command modules  
+// Import command modules
 mod commands;
 mod google_calendar;
 
@@ -13,7 +13,7 @@ use tauri::Manager;
 pub fn run() {
     // Load .env file if it exists
     dotenv::dotenv().ok();
-    
+
     // Initialize logging for development
     env_logger::init();
 

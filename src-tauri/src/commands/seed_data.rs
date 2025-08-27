@@ -357,7 +357,7 @@ pub fn generate_weekly_review_habit() -> String {
         .unwrap()
         .with_second(0)
         .unwrap();
-    
+
     // If we're already past Sunday 2pm, advance to next Sunday
     if next_sunday <= now {
         next_sunday += chrono::Duration::days(7);

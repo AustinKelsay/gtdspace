@@ -22,7 +22,7 @@ updates:
         dependency-type: "development"
         patterns:
           - "*"
-    
+
   # Enable version updates for Rust dependencies
   - package-ecosystem: "cargo"
     directory: "/src-tauri"
@@ -35,7 +35,7 @@ updates:
       tauri:
         patterns:
           - "tauri*"
-      
+
   # Keep GitHub Actions up to date
   - package-ecosystem: "github-actions"
     directory: "/"

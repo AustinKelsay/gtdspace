@@ -143,34 +143,34 @@ jobs:
           fi
 
           # Find Python interpreter (try python3, python, py -3 on Windows)
-          PYTHON_CMD=""
+          PYTHON_CMD=()
           if command -v python3 >/dev/null 2>&1; then
-            PYTHON_CMD="python3"
+            PYTHON_CMD=(python3)
           elif command -v python >/dev/null 2>&1; then
-            PYTHON_CMD="python"
+            PYTHON_CMD=(python)
           elif command -v py >/dev/null 2>&1; then
             # Windows Python Launcher
             if py -3 --version >/dev/null 2>&1; then
-              PYTHON_CMD="py -3"
+              PYTHON_CMD=(py -3)
             fi
           fi
 
-          if [ -z "$PYTHON_CMD" ]; then
+          if [ ${#PYTHON_CMD[@]} -eq 0 ]; then
             echo "⚠ Warning: No Python interpreter found"
             echo "Skipping icon generation"
             exit 0
           fi
 
-          echo "Found Python: $PYTHON_CMD"
+          echo "Found Python: ${PYTHON_CMD[*]}"
 
           # Install Pillow using discovered Python
-          $PYTHON_CMD -m pip install --user Pillow 2>/dev/null || {
+          "${PYTHON_CMD[@]}" -m pip install --user Pillow 2>/dev/null || {
             echo "⚠ Warning: Could not install Pillow"
             echo "Trying icon generation anyway"
           }
 
           # Generate PNG and ICO files using Python
-          $PYTHON_CMD << 'PYTHON_SCRIPT'
+          "${PYTHON_CMD[@]}" << 'PYTHON_SCRIPT'
           import sys
           try:
               from PIL import Image

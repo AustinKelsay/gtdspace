@@ -344,8 +344,9 @@ pub const CABINET_GTD_PRINCIPLES_TEMPLATE: &str = r#"# GTD Quick Reference
 
 /// Generate a Weekly Review habit template with next Sunday
 pub fn generate_weekly_review_habit() -> String {
+    let now = Local::now();
     // Find next Sunday at 2 PM
-    let mut next_sunday = Local::now();
+    let mut next_sunday = now;
     while next_sunday.weekday() != Weekday::Sun {
         next_sunday += chrono::Duration::days(1);
     }
@@ -356,6 +357,11 @@ pub fn generate_weekly_review_habit() -> String {
         .unwrap()
         .with_second(0)
         .unwrap();
+    
+    // If we're already past Sunday 2pm, advance to next Sunday
+    if next_sunday <= now {
+        next_sunday += chrono::Duration::days(7);
+    }
 
     format!(
         r#"# Weekly Review
@@ -375,7 +381,7 @@ Complete weekly GTD review:
 ---
 Created: {}"#,
         next_sunday.to_rfc3339(),
-        Local::now().format("%Y-%m-%d")
+        now.format("%Y-%m-%d")
     )
 }
 

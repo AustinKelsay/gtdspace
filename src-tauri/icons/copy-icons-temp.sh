@@ -26,10 +26,18 @@ cp icon.png 128x128.png
 cp icon.png 128x128@2x.png
 echo "✓ Created PNG copies (not properly sized)"
 
+# Detect ImageMagick executable (prefer 'magick' over 'convert' to avoid Windows conflicts)
+IM_BIN=""
+if command -v magick &>/dev/null; then 
+    IM_BIN="magick"
+elif command -v convert &>/dev/null; then 
+    IM_BIN="convert"
+fi
+
 # Try to generate real ICO file for Windows
-if command -v convert &> /dev/null; then
+if [[ -n "$IM_BIN" ]]; then
     # ImageMagick is available
-    convert icon.png -resize 256x256 -define icon:auto-resize="256,128,96,64,48,32,16" icon.ico 2>/dev/null && {
+    "$IM_BIN" icon.png -resize 256x256 -define icon:auto-resize="256,128,96,64,48,32,16" icon.ico 2>/dev/null && {
         echo "✓ Generated proper icon.ico using ImageMagick"
         GENERATED_ICO=true
     } || {

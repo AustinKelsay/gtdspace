@@ -4336,7 +4336,9 @@ pub fn google_calendar_test() -> Result<String, String> {
 #[tauri::command]
 pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
     use super::google_calendar::oauth_server::run_oauth_server;
-    use super::google_calendar::simple_auth::{start_oauth_flow, SimpleAuthConfig, BrowserOpenError};
+    use super::google_calendar::simple_auth::{
+        start_oauth_flow, BrowserOpenError, SimpleAuthConfig,
+    };
     use super::google_calendar::token_manager::{StoredTokens, TokenManager};
 
     println!("[GoogleCalendar] Starting OAuth flow (sync command)...");
@@ -4410,14 +4412,17 @@ pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
             // Check if this is a BrowserOpenError - if so, we could provide manual instructions
             // For now, we just log the error (which will use the safe redacted URL)
             eprintln!("[GoogleCalendar] Failed to open browser: {}", e);
-            
+
             // If we can downcast to BrowserOpenError, we could access auth_url for manual opening
             // but for security reasons we're not exposing the full URL in the error message
             if let Some(browser_err) = e.downcast_ref::<BrowserOpenError>() {
-                eprintln!("[GoogleCalendar] State for manual flow: {}", browser_err.state);
+                eprintln!(
+                    "[GoogleCalendar] State for manual flow: {}",
+                    browser_err.state
+                );
                 // Callers could use browser_err.auth_url to present to user for manual opening
             }
-            
+
             return Err(format!("Failed to open browser for OAuth authentication. Please check the logs for details."));
         }
     };

@@ -109,7 +109,7 @@ impl GoogleCalendarManager {
             let auth = self.auth_manager.lock().await;
             auth.get_calendar_hub().await?
         }; // auth lock is dropped here
-        
+
         // Now acquire the sync lock without holding auth lock
         let mut sync = self.sync_manager.lock().await;
         sync.sync_events(hub, time_min, time_max).await

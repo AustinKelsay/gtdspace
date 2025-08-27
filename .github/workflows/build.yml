@@ -30,12 +30,12 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.version }}" != "" ]; then
             VERSION="${{ github.event.inputs.version }}"
-          elif [[ $GITHUB_REF == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/}
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
           else
             VERSION="v0.1.0-dev"
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION"
 
       - name: Create release
@@ -325,13 +325,13 @@ jobs:
           VERSION="${{ needs.create-release.outputs.version }}"
 
           # Copy AppImage if found
-          if [ ! -z "$APPIMAGE_FILE" ]; then
+          if [ -n "$APPIMAGE_FILE" ]; then
             echo "Found AppImage: $APPIMAGE_FILE"
             cp "$APPIMAGE_FILE" "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}.AppImage"
           fi
 
           # Copy Deb if found
-          if [ ! -z "$DEB_FILE" ]; then
+          if [ -n "$DEB_FILE" ]; then
             echo "Found Deb: $DEB_FILE"
             cp "$DEB_FILE" "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}.deb"
           fi

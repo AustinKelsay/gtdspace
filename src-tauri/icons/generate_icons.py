@@ -26,9 +26,10 @@ def generate_icons():
         # Open the source icon
         with Image.open(source_icon) as img:
             # Convert to RGBA if needed
+            orig_mode = img.mode
             if img.mode != 'RGBA':
                 img = img.convert('RGBA')
-                print(f"Converted to RGBA from {img.mode}")
+                print(f"Converted to RGBA from {orig_mode}")
             
             # Define sizes needed for different platforms
             sizes = [

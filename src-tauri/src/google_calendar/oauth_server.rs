@@ -29,7 +29,7 @@ impl OAuthCallbackServer {
         let port = self.port;
 
         // Create the callback route
-        let callback = warp::path::end()
+        let callback = warp::path("callback")
             .and(warp::query::<OAuthCallback>())
             .then(move |params: OAuthCallback| {
                 let received_code = received_code.clone();

@@ -443,7 +443,7 @@ export interface GTDProject {
   /** Full path to project folder */
   path: string;
   /** Date project was created */
-  created_date: string;
+  created_date_time: string;
   /** Number of actions in the project */
   action_count?: number;
 }
@@ -467,7 +467,7 @@ export interface GTDAction {
   /** Optional notes */
   notes?: string;
   /** Date action was created */
-  created_date: string;
+  created_date_time: string;
   /** Project this action belongs to */
   project_path: string;
 }
@@ -567,4 +567,6 @@ export interface GTDHabit {
   path?: string;
   /** Last update time */
   last_updated?: string;
+  /** Date habit was created */
+  created_date_time?: string;
 }

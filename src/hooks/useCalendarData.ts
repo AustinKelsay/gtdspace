@@ -20,7 +20,7 @@ export interface CalendarItem {
   end_date?: string; // For Google events
   projectName?: string;
   frequency?: string; // For habits
-  createdDate?: string; // For habits
+  createdDateTime?: string; // For habits
   effort?: string; // For actions
   // Google Calendar specific fields
   googleEventId?: string;
@@ -245,17 +245,16 @@ export const useCalendarData = (
               const focusDateTime = parseDateTimeField(content, 'focus_date_time');
               
               // Parse created date using the existing DateTime parser
-              let createdDate: string;
-              const createdDateRaw = parseDateTimeField(content, 'created_date');
-              if (createdDateRaw) {
-                // Extract just the date part (YYYY-MM-DD) from the parsed value
-                createdDate = createdDateRaw.split('T')[0];
+              let createdDateTime: string;
+              const createdDateTimeRaw = parseDateTimeField(content, 'created_date_time');
+              if (createdDateTimeRaw) {
+                createdDateTime = createdDateTimeRaw;
               } else {
                 // Fallback to current date if not found
-                createdDate = new Date().toISOString().split('T')[0];
+                createdDateTime = new Date().toISOString();
               }
               
-              console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDate}, focus=${focusDateTime}`);
+              console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDateTime}, focus=${focusDateTime}`);
               
               // Add the habit with frequency and created date info
               allItems.push({
@@ -268,7 +267,7 @@ export const useCalendarData = (
                 focus_date: focusDateTime, // Now includes the parsed focus time
                 projectName: undefined,
                 frequency: frequency,
-                createdDate: createdDate
+                createdDateTime: createdDateTime
               });
             } catch (err) {
               console.error(`[CalendarData] Failed to read habit ${file.path}:`, err);

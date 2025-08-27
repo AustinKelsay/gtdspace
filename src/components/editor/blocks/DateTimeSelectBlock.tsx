@@ -154,7 +154,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
   
   const placeholderText = React.useMemo(() => {
     switch (type) {
-      case 'created_date':
+      case 'created_date_time':
         return 'No date set';
       case 'modified_date':
         return 'No date set';
@@ -173,7 +173,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
     if (label) return label;
     
     switch (type) {
-      case 'created_date':
+      case 'created_date_time':
         return 'Created';
       case 'modified_date':
         return 'Modified';
@@ -335,7 +335,7 @@ export const DateTimeSelectBlock = createReactBlockSpec(
     propSchema: {
       type: {
         default: 'due_date',
-        values: ['created_date', 'modified_date', 'due_date', 'focus_date', 'completed_date'],
+        values: ['created_date_time', 'modified_date', 'due_date', 'focus_date', 'completed_date'],
       },
       value: {
         default: '',

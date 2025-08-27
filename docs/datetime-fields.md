@@ -21,7 +21,7 @@ GTD Space now includes beautiful, interactive date and time selection components
 
 The system supports multiple datetime field types:
 
-- `created_date` - When an item was created
+- `created_date_time` - When an item was created
 - `modified_date` - Last modification time
 - `due_date` - Deadline for completion (date only)
 - `focus_date` - When to work on the item (includes time)
@@ -45,7 +45,7 @@ The `_time` suffix indicates fields that include time components.
 
 - **Cmd/Ctrl+Alt+D** - Insert Due Date field
 - **Cmd/Ctrl+Alt+T** - Insert Focus Date with Time
-- **Cmd/Ctrl+Alt+C** - Insert Created Date (auto-fills current time)
+- **Cmd/Ctrl+Alt+C** - Insert Created Date/Time (auto-fills current time)
 
 ### In the Editor
 
@@ -65,7 +65,7 @@ import {
 import { useDateTimeInsertion } from "@/hooks/useDateTimeInsertion";
 
 // Valid DateTimeFieldType values you can use:
-// 'due_date' | 'focus_date' | 'created_date' | 'modified_date'
+// 'due_date' | 'focus_date' | 'created_date_time' | 'modified_date'
 
 // Create a datetime field block
 const block = createDateTimeBlock("due_date", "Due Date", "2025-01-20", false);

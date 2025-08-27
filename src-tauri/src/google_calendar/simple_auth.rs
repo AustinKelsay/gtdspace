@@ -96,6 +96,31 @@ impl SimpleAuthConfig {
     }
 }
 
+/// Error returned when all attempts to open the user's browser fail during OAuth.
+///
+/// This error intentionally formats/logs only a redacted version of the URL via `Display`.
+/// The full, unredacted `auth_url` is available as a field for callers to access and
+/// open manually, preserving the correct state parameter for OAuth completion.
+#[derive(Debug)]
+pub struct BrowserOpenError {
+    /// Full OAuth authorization URL including the original state. DO NOT LOG.
+    pub auth_url: String,
+    /// Redacted authorization URL with the state removed. Safe for logs.
+    pub redacted_auth_url: String,
+}
+
+impl std::fmt::Display for BrowserOpenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Failed to open browser. Please visit this URL manually:\n{}",
+            self.redacted_auth_url
+        )
+    }
+}
+
+impl std::error::Error for BrowserOpenError {}
+
 // Simple function to start OAuth flow by opening browser
 pub fn start_oauth_flow(config: &SimpleAuthConfig) -> Result<String, Box<dyn std::error::Error>> {
     // Generate a random state for security
@@ -107,8 +132,26 @@ pub fn start_oauth_flow(config: &SimpleAuthConfig) -> Result<String, Box<dyn std
         &state,
     )?;
 
-    println!("[SimpleAuth] Opening browser to: {}", auth_url);
-    println!("[SimpleAuth] URL length: {} characters", auth_url.len());
+    // Redact the state from the URL before printing to avoid leaking the CSRF token
+    let redacted_auth_url = {
+        let mut url = Url::parse(&auth_url).expect("URL parsing for redaction failed");
+        let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+        for (key, value) in url.query_pairs() {
+            if key == "state" {
+                serializer.append_pair(key.as_ref(), "[REDACTED]");
+            } else {
+                serializer.append_pair(key.as_ref(), value.as_ref());
+            }
+        }
+        url.set_query(Some(&serializer.finish()));
+        url.to_string()
+    };
+
+    println!("[SimpleAuth] Opening browser to: {}", redacted_auth_url);
+    println!(
+        "[SimpleAuth] URL length: {} characters",
+        redacted_auth_url.len()
+    );
 
     // Try direct command execution on macOS first
     #[cfg(target_os = "macos")]
@@ -169,9 +212,8 @@ pub fn start_oauth_flow(config: &SimpleAuthConfig) -> Result<String, Box<dyn std
 
     // All methods failed - return error with URL for manual access
     println!("[SimpleAuth] All browser opening methods failed. Returning URL for manual access.");
-    Err(format!(
-        "Failed to open browser. Please visit this URL manually:\n{}",
-        auth_url
-    )
-    .into())
+    Err(Box::new(BrowserOpenError {
+        auth_url: auth_url.clone(),
+        redacted_auth_url: redacted_auth_url.clone(),
+    }))
 }

@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
 use warp::Filter;
 
 #[derive(Debug, Deserialize)]
@@ -337,7 +337,7 @@ impl OAuthCallbackServer {
                 }
             });
 
-        // Start the server
+        // Start the server with graceful shutdown
         let server = warp::serve(callback);
         let addr = ([127, 0, 0, 1], port);
 
@@ -346,10 +346,17 @@ impl OAuthCallbackServer {
             port
         );
 
-        // Run server in background
-        let server_handle = tokio::spawn(async move {
-            server.run(addr).await;
-        });
+        // Create a oneshot channel to trigger graceful shutdown
+        let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+        // Run server in background with graceful shutdown
+        let (_bound_addr, server_future) = server.bind_with_graceful_shutdown(
+            addr,
+            async move {
+                let _ = shutdown_rx.await;
+            },
+        );
+        let server_handle = tokio::spawn(server_future);
 
         // Wait for code to be received (with timeout)
         let timeout = tokio::time::Duration::from_secs(300); // 5 minutes
@@ -358,12 +365,14 @@ impl OAuthCallbackServer {
         loop {
             if let Some(code) = self.received_code.lock().await.clone() {
                 println!("[OAuthServer] Code received, shutting down server");
-                server_handle.abort();
+                let _ = shutdown_tx.send(());
+                let _ = server_handle.await;
                 return Ok(code);
             }
 
             if start.elapsed() > timeout {
-                server_handle.abort();
+                let _ = shutdown_tx.send(());
+                let _ = server_handle.await;
                 return Err("OAuth callback timeout".into());
             }
 

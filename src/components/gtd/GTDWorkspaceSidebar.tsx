@@ -752,7 +752,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           due_date: undefined,
           status: ['in-progress'],
           path: projectPath,
-          created_date: new Date().toISOString().split('T')[0],
+          created_date_time: new Date().toISOString(),
           action_count: 0,
         };
         setPendingProjects(prev => (prev.some(p => p.path === optimistic.path) ? prev : [...prev, optimistic]));

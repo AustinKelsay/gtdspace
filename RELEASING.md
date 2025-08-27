@@ -3,16 +3,20 @@
 ## 🚀 Creating a New Release
 
 ### Fastest Method (Patch Release)
+
 ```bash
 npm run release
 ```
+
 This command will:
+
 1. Bump the patch version
 2. Create a git commit and tag
 3. Push everything to GitHub
 4. Trigger automatic builds for all platforms
 
 ### Other Version Types
+
 ```bash
 npm run version:minor  # 0.1.0 → 0.2.0
 npm run version:major  # 0.1.0 → 1.0.0
@@ -25,9 +29,9 @@ git push && git push --tags
 ## 📦 What Happens Next?
 
 After pushing a tag, GitHub Actions automatically:
+
 1. Builds for Windows, macOS (Intel & Apple Silicon), and Linux
-2. Creates a GitHub Release with all installers
-3. Publishes the release when ready
+2. Creates a draft GitHub Release with all installers; you must publish it manually in the GitHub UI when ready
 
 Monitor progress: [GitHub Actions](../../actions)
 

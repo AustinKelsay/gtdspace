@@ -162,14 +162,20 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                   const frequencyMatch = content.match(/\[!singleselect:habit-frequency:([^\]]+)\]/);
                   const checkboxStatus = content.match(/\[!checkbox:habit-status:(true|false)\]/);
                   const singleselectStatus = content.match(/\[!singleselect:habit-status:([^\]]+)\]/);
-                  
-                  let createdDate: string | undefined = undefined;
-                  const createdBlock = content.match(/\[!datetime:created_date:([^\]]+)\]/i);
+
+                  let createdDateTime: string | undefined = undefined;
+                  const createdBlock = content.match(/\[!datetime:created_date_time:([^\]]+)\]/i);
                   if (createdBlock) {
-                    createdDate = createdBlock[1].split('T')[0];
+                    createdDateTime = createdBlock[1];
                   } else {
-                    const createdSection = content.match(/##\s*Created\n([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
-                    if (createdSection) createdDate = createdSection[1];
+                    // Fallback for old format
+                    const createdDateBlock = content.match(/\[!datetime:created_date:([^\]]+)\]/i);
+                    if (createdDateBlock) {
+                      createdDateTime = createdDateBlock[1];
+                    } else {
+                      const createdSection = content.match(/##\s*Created\n([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
+                      if (createdSection) createdDateTime = new Date(createdSection[1]).toISOString();
+                    }
                   }
 
                   return {
@@ -180,7 +186,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                       : ((singleselectStatus?.[1] || 'todo') as 'todo' | 'complete'),
                     path: file.path,
                     last_updated: new Date(file.last_modified).toISOString(),
-                    created_date: createdDate
+                    created_date_time: createdDateTime
                   };
                 } catch (error) {
                   return null;

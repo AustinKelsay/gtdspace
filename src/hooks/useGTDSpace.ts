@@ -153,7 +153,7 @@ export function useGTDSpace() {
             due_date: params.due_date,
             status: [params.status || 'in-progress'],
             path: projectPath,
-            created_date: new Date().toISOString().split('T')[0],
+            created_date_time: new Date().toISOString(),
             action_count: 0,
           };
           

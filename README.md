@@ -70,7 +70,7 @@ Download the latest version for your platform from the [Releases page](https://g
 
 - [Node.js](https://nodejs.org/) v18+
 - [Rust](https://www.rust-lang.org/) (latest stable)
-- Platform-specific requirements in [docs/installation.md](docs/installation.md)
+- Platform-specific requirements in [docs/build-setup.md](docs/build-setup.md)
 
 ### Installation from Source
 

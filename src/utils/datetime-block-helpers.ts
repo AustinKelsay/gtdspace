@@ -5,7 +5,7 @@
  */
 
 export type DateTimeFieldType = 
-  | 'created_date'
+  | 'created_date_time'
   | 'modified_date'
   | 'due_date'
   | 'focus_date'
@@ -38,7 +38,7 @@ export function createDateTimeBlock(
  */
 function getDefaultLabel(type: DateTimeFieldType): string {
   switch (type) {
-    case 'created_date':
+    case 'created_date_time':
       return 'Created';
     case 'modified_date':
       return 'Modified';

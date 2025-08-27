@@ -32,7 +32,7 @@ impl TokenManager {
             std::fs::set_permissions(&storage_path, perms)?;
         }
 
-        storage_path.push("tokens.json");
+        storage_path.push("google_calendar_tokens.json");
 
         Ok(Self { storage_path })
     }
@@ -53,8 +53,31 @@ impl TokenManager {
             std::fs::set_permissions(&temp_path, perms)?;
         }
 
-        // Atomic rename operation
-        std::fs::rename(&temp_path, &self.storage_path)?;
+        // Atomic rename operation.
+        // This is not truly atomic on all platforms (e.g., Windows), so we handle errors carefully.
+        if let Err(e) = std::fs::rename(&temp_path, &self.storage_path) {
+            #[cfg(windows)]
+            {
+                use std::io::ErrorKind;
+                // On Windows, `rename` will fail if the destination file already exists.
+                // We check for this specific error and, if it occurs, we attempt to remove the old file
+                // and then try the rename again.
+                if e.kind() == ErrorKind::AlreadyExists || e.kind() == ErrorKind::PermissionDenied {
+                    // Attempt to remove the existing file. If this fails, we propagate the error.
+                    std::fs::remove_file(&self.storage_path)?;
+                    // Retry the rename. If this fails, we propagate the error.
+                    std::fs::rename(&temp_path, &self.storage_path)?;
+                } else {
+                    // For other errors, we propagate them immediately.
+                    return Err(e.into());
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                // On Unix-like systems, `rename` is an atomic overwrite, so any error is unexpected.
+                return Err(e.into());
+            }
+        }
 
         println!(
             "[TokenManager] Tokens saved securely to {:?}",

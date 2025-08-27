@@ -60,7 +60,7 @@ export function useDateTimeInsertion(editor: any) {
       if (modKey && e.altKey && e.key === 'c') {
         e.preventDefault();
         const now = new Date().toISOString();
-        const block = createDateTimeBlock('created_date', 'Created', now, true);
+        const block = createDateTimeBlock('created_date_time', 'Created', now, true);
         insertAfterCurrent(block);
       }
     };
@@ -80,7 +80,7 @@ export function useDateTimeInsertion(editor: any) {
   ) => {
     if (!editor) return;
 
-    const value = defaultValue || (type === 'created_date' ? new Date().toISOString() : '');
+    const value = defaultValue || (type === 'created_date_time' ? new Date().toISOString() : '');
     const block = createDateTimeBlock(type, undefined, value, includeTime);
 
     // Safely resolve current block from cursor position with fallbacks

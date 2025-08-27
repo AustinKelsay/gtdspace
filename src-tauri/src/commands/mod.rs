@@ -58,7 +58,7 @@ static HABIT_HISTORY_REGEX: Lazy<Regex> = Lazy::new(|| {
 /// Regex for extracting creation date from habit file
 /// Format: ## Created\nYYYY-MM-DD
 static HABIT_CREATED_DATE_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"## Created\n(\d{4}-\d{2}-\d{2})")
+    Regex::new(r"## Created\n[!datetime:created_date_time:([^\]]+)]")
         .expect("Invalid habit created date regex pattern")
 });
 
@@ -97,8 +97,8 @@ fn parse_last_habit_action_time(content: &str) -> Option<chrono::NaiveDateTime> 
     if last_action_time.is_none() {
         if let Some(cap) = HABIT_CREATED_DATE_REGEX.captures(content) {
             if let Some(date_str) = cap.get(1) {
-                if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str.as_str(), "%Y-%m-%d") {
-                    last_action_time = Some(date.and_hms_opt(0, 0, 0).unwrap());
+                if let Ok(datetime) = chrono::DateTime::parse_from_rfc3339(date_str.as_str()) {
+                    last_action_time = Some(datetime.naive_local());
                 }
             }
         }
@@ -970,10 +970,7 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
 /// });
 /// ```
 #[tauri::command]
-pub fn rename_file(
-    old_path: String,
-    new_name: String,
-) -> Result<FileOperationResult, String> {
+pub fn rename_file(old_path: String, new_name: String) -> Result<FileOperationResult, String> {
     log::info!("Renaming file: {} to: {}", old_path, new_name);
 
     let old_file_path = Path::new(&old_path);
@@ -3111,7 +3108,7 @@ pub fn create_gtd_habit(
 [!singleselect:habit-frequency:{}]
 {}
 ## Created
-[!datetime:created_date:{}]
+[!datetime:created_date_time:{}]
 
 ## History
 | Date | Time | Status | Action | Notes |
@@ -3122,7 +3119,7 @@ pub fn create_gtd_habit(
         checkbox_value,
         frequency_value,
         focus_time_section,
-        now.format("%Y-%m-%d")
+        now.to_rfc3339()
     );
 
     match fs::write(&habit_path, habit_content) {
@@ -3757,7 +3754,7 @@ pub struct GTDProject {
     /// Full path to project directory
     pub path: String,
     /// Created date
-    pub created_date: String,
+    pub created_date_time: String,
     /// Number of actions in the project
     pub action_count: u32,
 }
@@ -3813,7 +3810,7 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
                     // Read README.md to extract project metadata
                     let readme_path = path.join("README.md");
 
-                    let (mut title, description, due_date, status, created_date) =
+                    let (mut title, description, due_date, status, created_date_time) =
                         if readme_path.exists() {
                             match fs::read_to_string(&readme_path) {
                                 Ok(content) => {
@@ -3875,7 +3872,7 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
                         due_date,
                         status,
                         path: path.to_string_lossy().to_string(),
-                        created_date,
+                        created_date_time,
                         action_count,
                     });
                 }
@@ -4156,7 +4153,7 @@ fn parse_project_readme(content: &str) -> (String, Option<String>, String, Strin
     let mut description = "No description available".to_string();
     let mut due_date = None;
     let mut status = "in-progress".to_string();
-    let mut created_date = "Unknown".to_string();
+    let mut created_date_time = "Unknown".to_string();
 
     let lines: Vec<&str> = content.lines().collect();
     let mut current_section = "";
@@ -4171,8 +4168,8 @@ fn parse_project_readme(content: &str) -> (String, Option<String>, String, Strin
             current_section = "due_date";
         } else if trimmed.starts_with("## Status") {
             current_section = "status";
-        } else if trimmed.starts_with("Created:") {
-            created_date = trimmed.replace("Created:", "").trim().to_string();
+        } else if trimmed.starts_with("## Created") {
+            current_section = "created";
         } else if trimmed.starts_with("##") {
             current_section = "";
         } else if !trimmed.is_empty() && !trimmed.starts_with('#') {
@@ -4227,12 +4224,26 @@ fn parse_project_readme(content: &str) -> (String, Option<String>, String, Strin
                         status = trimmed.to_string();
                     }
                 }
+                "created" => {
+                    if trimmed.starts_with("[!datetime:created_date_time:") {
+                        if let Some(last_colon) = trimmed.rfind(':') {
+                            if let Some(end_bracket) = trimmed.rfind(']') {
+                                if last_colon < end_bracket {
+                                    let value = &trimmed[last_colon + 1..end_bracket];
+                                    if !value.is_empty() {
+                                        created_date_time = value.to_string();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 _ => {}
             }
         }
     }
 
-    (description, due_date, status, created_date)
+    (description, due_date, status, created_date_time)
 }
 
 /// Count the number of action files in a project directory

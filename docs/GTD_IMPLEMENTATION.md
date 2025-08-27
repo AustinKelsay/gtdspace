@@ -254,7 +254,7 @@ interface GTDProject {
   due_date?: string | null; // snake_case to match Rust
   status: GTDProjectStatus;
   path: string;
-  created_date: string; // snake_case to match Rust
+  created_date_time: string; // snake_case to match Rust
   action_count?: number; // snake_case to match Rust
 }
 
@@ -267,7 +267,7 @@ interface GTDAction {
   due_date?: string | null; // snake_case to match Rust, ISO date
   effort: GTDActionEffort;
   notes?: string;
-  created_date: string; // snake_case to match Rust
+  created_date_time: string; // snake_case to match Rust
   project_path: string; // snake_case to match Rust
 }
 ```

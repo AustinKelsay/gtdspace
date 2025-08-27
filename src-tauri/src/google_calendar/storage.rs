@@ -68,7 +68,7 @@ impl TokenStorage {
             }
         }
 
-        app_dir.join("google_calendar_token.json")
+        app_dir.join("google_calendar_tokens.json")
     }
 
     #[allow(dead_code)]
@@ -96,8 +96,27 @@ impl TokenStorage {
             tokio::fs::set_permissions(&temp_path, perms).await?;
         }
 
-        // Atomic rename operation
-        tokio::fs::rename(&temp_path, &path).await?;
+        // Atomic rename operation (cross-platform safe)
+        if let Err(e) = tokio::fs::rename(&temp_path, &path).await {
+            #[cfg(windows)]
+            {
+                use std::io::ErrorKind;
+                if matches!(
+                    e.kind(),
+                    ErrorKind::AlreadyExists | ErrorKind::PermissionDenied
+                ) {
+                    // On Windows, remove the existing file and retry rename
+                    let _ = tokio::fs::remove_file(&path).await;
+                    tokio::fs::rename(&temp_path, &path).await?;
+                } else {
+                    return Err(e.into());
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                return Err(e.into());
+            }
+        }
 
         log::debug!("Token saved securely to {:?}", path);
         Ok(())
@@ -220,8 +239,27 @@ impl TokenStorage {
             tokio::fs::set_permissions(&temp_path, perms).await?;
         }
 
-        // Atomic rename operation
-        tokio::fs::rename(&temp_path, &path).await?;
+        // Atomic rename operation (cross-platform safe)
+        if let Err(e) = tokio::fs::rename(&temp_path, &path).await {
+            #[cfg(windows)]
+            {
+                use std::io::ErrorKind;
+                if matches!(
+                    e.kind(),
+                    ErrorKind::AlreadyExists | ErrorKind::PermissionDenied
+                ) {
+                    // On Windows, remove the existing file and retry rename
+                    let _ = tokio::fs::remove_file(&path).await;
+                    tokio::fs::rename(&temp_path, &path).await?;
+                } else {
+                    return Err(e.into());
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                return Err(e.into());
+            }
+        }
 
         Ok(())
     }

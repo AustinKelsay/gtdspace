@@ -25,24 +25,37 @@ function writeFile(filePath, content) {
 
 // Helper function to bump version
 function bumpVersion(currentVersion, type) {
-  const parts = currentVersion.replace('v', '').split('.').map(Number);
-  
+  const sanitize = (v) => String(v).trim().replace(/^v/i, '');
+  const parse = (v) => {
+    const parts = sanitize(v).split('.');
+    if (parts.length !== 3) {
+      console.error(`Invalid semantic version: ${v}`);
+      process.exit(1);
+    }
+    const nums = parts.map((p) => Number(p));
+    if (nums.some((n) => !Number.isFinite(n) || n < 0)) {
+      console.error(`Invalid semantic version: ${v}`);
+      process.exit(1);
+    }
+    return nums;
+  };
+
+  // If caller passed an explicit version (with or without 'v'), just return it
+  if (/^v?\d+\.\d+\.\d+$/.test(type)) {
+    return sanitize(type);
+  }
+
+  const parts = parse(currentVersion);
   if (type === 'major') {
-    parts[0]++;
-    parts[1] = 0;
-    parts[2] = 0;
+    parts[0]++; parts[1] = 0; parts[2] = 0;
   } else if (type === 'minor') {
-    parts[1]++;
-    parts[2] = 0;
+    parts[1]++; parts[2] = 0;
   } else if (type === 'patch') {
     parts[2]++;
-  } else if (/^\d+\.\d+\.\d+$/.test(type)) {
-    return type;
   } else {
     console.error(`Invalid version type: ${type}`);
     process.exit(1);
   }
-  
   return parts.join('.');
 }
 
@@ -59,10 +72,14 @@ console.log(`✓ Updated package.json: ${currentVersion} → ${newVersion}`);
 // Update src-tauri/Cargo.toml
 const cargoTomlPath = path.join(__dirname, '..', 'src-tauri', 'Cargo.toml');
 let cargoToml = readFile(cargoTomlPath);
-cargoToml = cargoToml.replace(
-  /^version = ".*"$/m,
-  `version = "${newVersion}"`
-);
+
+// Find the [package] section and replace version only within it
+const packageSectionRegex = /(\[package\][^\[]*version\s*=\s*")[^"]*("/m);
+if (!packageSectionRegex.test(cargoToml)) {
+  console.error('Could not find version in [package] section of Cargo.toml');
+  process.exit(1);
+}
+cargoToml = cargoToml.replace(packageSectionRegex, `$1${newVersion}$2`);
 writeFile(cargoTomlPath, cargoToml);
 console.log(`✓ Updated src-tauri/Cargo.toml to version ${newVersion}`);
 

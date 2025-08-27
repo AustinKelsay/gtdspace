@@ -17,7 +17,10 @@
     "version:major": "node scripts/bump-version.js major",
     "version:minor": "node scripts/bump-version.js minor",
     "version:patch": "node scripts/bump-version.js patch",
-    "release": "npm run version:patch && git push && git push --tags"
+    "release": "node scripts/safe-release.js patch",
+    "release:major": "node scripts/safe-release.js major",
+    "release:minor": "node scripts/safe-release.js minor",
+    "release:patch": "node scripts/safe-release.js patch"
   },
   "dependencies": {
     "@blocknote/code-block": "^0.35.0",

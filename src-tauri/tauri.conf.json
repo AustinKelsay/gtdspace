@@ -40,7 +40,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "identifier": "com.gtdspace.app",
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",

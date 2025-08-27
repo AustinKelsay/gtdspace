@@ -6,7 +6,6 @@ Requires: pip install Pillow
 
 import os
 import sys
-from pathlib import Path
 
 try:
     from PIL import Image

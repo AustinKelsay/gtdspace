@@ -64,19 +64,81 @@ Required icon files:
 - `icon.ico` - Windows icon
 - `icon.icns` - macOS icon
 
-#### Option 3: Use placeholder icons
+#### Option 3: Generate with Tauri CLI (Recommended for proper ICNS)
 
-For development/testing, you can copy the base icon:
+The Tauri CLI can generate all required icon formats:
+```bash
+cd src-tauri/icons
+npx @tauri-apps/cli icon ./icon.png
+```
+
+This will create properly formatted icons including valid ICNS for macOS.
+
+#### Option 4: Manual generation with ImageMagick
+
+If you have ImageMagick installed, generate proper icons:
+```bash
+cd src-tauri/icons
+
+# Generate properly sized PNGs
+convert icon.png -resize 32x32 32x32.png
+convert icon.png -resize 128x128 128x128.png
+convert icon.png -resize 256x256 128x128@2x.png
+
+# Create a proper multi-resolution ICO file
+convert icon.png -resize 256x256 \
+  -define icon:auto-resize="256,128,96,64,48,32,16" \
+  icon.ico
+
+# For macOS ICNS (only works on macOS with iconutil)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  mkdir icon.iconset
+  sips -z 16 16 icon.png --out icon.iconset/icon_16x16.png
+  sips -z 32 32 icon.png --out icon.iconset/icon_16x16@2x.png
+  sips -z 32 32 icon.png --out icon.iconset/icon_32x32.png
+  sips -z 64 64 icon.png --out icon.iconset/icon_32x32@2x.png
+  sips -z 128 128 icon.png --out icon.iconset/icon_128x128.png
+  sips -z 256 256 icon.png --out icon.iconset/icon_128x128@2x.png
+  sips -z 256 256 icon.png --out icon.iconset/icon_256x256.png
+  sips -z 512 512 icon.png --out icon.iconset/icon_256x256@2x.png
+  sips -z 512 512 icon.png --out icon.iconset/icon_512x512.png
+  sips -z 1024 1024 icon.png --out icon.iconset/icon_512x512@2x.png
+  iconutil -c icns icon.iconset
+  rm -rf icon.iconset
+fi
+```
+
+#### Option 5: Quick placeholder icons (NOT RECOMMENDED)
+
+⚠️ **WARNING**: This method creates INVALID icon files that will cause build failures!
+
+For quick local development ONLY (will break macOS bundling):
 ```bash
 cd src-tauri/icons
 cp icon.png 32x32.png
 cp icon.png 128x128.png
 cp icon.png 128x128@2x.png
-cp icon.png icon.ico
-cp icon.png icon.icns
+cp icon.png icon.ico  # ⚠️ NOT a real ICO file!
+cp icon.png icon.icns # ⚠️ NOT a real ICNS file!
 ```
 
-Note: This will work for testing but won't look good in production.
+**IMPORTANT**: 
+- This creates fake ICO/ICNS files (just renamed PNGs)
+- **macOS bundling WILL FAIL** with invalid ICNS files
+- Windows may not display icons correctly with invalid ICO
+- Only use for quick local testing, never for production
+- If ImageMagick or Tauri CLI are unavailable, skip creating fake ICO/ICNS files
+
+**Better alternative when tools are unavailable:**
+```bash
+# Only create the PNG files
+cd src-tauri/icons
+cp icon.png 32x32.png
+cp icon.png 128x128.png
+cp icon.png 128x128@2x.png
+# Skip ICO and ICNS - let the build fail cleanly
+# rather than creating invalid files
+```
 
 ## Building Locally
 

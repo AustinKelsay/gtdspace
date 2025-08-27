@@ -1,11 +1,19 @@
 #!/bin/bash
 
+# Enable strict mode for safety
+set -euo pipefail
+IFS=$'\n\t'
+
+# Get the directory of this script and cd to it
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$DIR"
+
 # Generate all required icon sizes from icon.png
 # Requires ImageMagick (install with: brew install imagemagick)
 
 # Check if icon.png exists
 if [ ! -f "icon.png" ]; then
-    echo "Error: icon.png not found in current directory"
+    echo "Error: icon.png not found in $DIR"
     echo "Please ensure you have a high-resolution icon.png (at least 512x512) in src-tauri/icons/"
     exit 1
 fi

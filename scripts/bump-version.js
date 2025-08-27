@@ -66,7 +66,7 @@ function main() {
 
   const cargoTomlPath = path.join(__dirname, '..', 'src-tauri', 'Cargo.toml');
   let cargoToml = readFile(cargoTomlPath);
-  const packageSectionRegex = /(\[package\][^\[]*version\s*=\s*")[^"]*(")/m;
+  const packageSectionRegex = /(\[package\][^[]*version\s*=\s*")[^"]*(")/m;
   if (!packageSectionRegex.test(cargoToml)) {
     console.error('Could not find version in [package] section of Cargo.toml');
     process.exit(1);

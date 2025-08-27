@@ -43,10 +43,16 @@ def generate_icons():
                 resized.save(filename, 'PNG')
                 print(f"✓ Generated {filename} ({size[0]}x{size[1]})")
             
-            # Generate Windows ICO (simplified - single size)
-            ico_size = img.resize((256, 256), Image.Resampling.LANCZOS)
-            ico_size.save("icon.ico", format='ICO', sizes=[(256, 256)])
-            print("✓ Generated icon.ico (Windows)")
+            # Generate Windows ICO with multiple sizes for better compatibility
+            # Windows Resource Compiler expects specific sizes
+            ico_sizes = []
+            for size in [16, 32, 48, 64, 128, 256]:
+                ico_img = img.resize((size, size), Image.Resampling.LANCZOS)
+                ico_sizes.append(ico_img)
+            
+            # Save with all sizes - the first image is the main one
+            ico_sizes[5].save("icon.ico", format='ICO', sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)], append_images=ico_sizes[:-1])
+            print("✓ Generated icon.ico (Windows - multi-resolution)")
             
             # macOS ICNS generation
             import platform

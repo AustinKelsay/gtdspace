@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -101,6 +101,7 @@ async function main() {
     
     // Try generate_icons.py first (comprehensive solution)
     const generateScript = join(iconsDir, 'generate_icons.py');
+    let pythonGenSucceeded = false;
     if (existsSync(generateScript)) {
       const result = execCommand(`${pythonCmd} "${generateScript}"`, { 
         cwd: iconsDir,
@@ -108,6 +109,7 @@ async function main() {
       });
       if (result.success) {
         log('✓ Successfully generated icons with Python script', 'green');
+        pythonGenSucceeded = true;
       } else {
         log('⚠️  Python icon generation failed, will continue with Tauri CLI', 'yellow');
       }
@@ -115,7 +117,7 @@ async function main() {
     
     // Try create_minimal_ico.py as fallback
     const minimalScript = join(iconsDir, 'create_minimal_ico.py');
-    if (existsSync(minimalScript)) {
+    if (!pythonGenSucceeded && !existsSync(join(iconsDir, 'icon.ico')) && existsSync(minimalScript)) {
       const result = execCommand(`${pythonCmd} "${minimalScript}"`, { 
         cwd: iconsDir,
         silent: false 
@@ -132,10 +134,33 @@ async function main() {
   log('\n🔧 Running Tauri CLI icon generation...', 'blue');
   const tauriCmd = findTauriCLI();
   
-  const tauriResult = execCommand(`${tauriCmd} icon "${iconPath}"`, {
-    cwd: join(__dirname, '..'),
-    silent: false
-  });
+  let tauriResult;
+  try {
+    let command;
+    let args;
+
+    if (tauriCmd.startsWith('npx')) {
+      const parts = tauriCmd.split(' ');
+      command = parts[0];
+      args = [...parts.slice(1), 'icon', iconPath];
+    } else {
+      command = tauriCmd;
+      args = ['icon', iconPath];
+    }
+
+    execFileSync(command, args, {
+      cwd: join(__dirname, '..'),
+      stdio: 'inherit',
+      encoding: 'utf8',
+    });
+    tauriResult = { success: true };
+  } catch (error) {
+    tauriResult = {
+      success: false,
+      error: error.message,
+      stderr: error.stderr ? error.stderr.toString() : '',
+    };
+  }
   
   if (tauriResult.success) {
     log('✓ Successfully generated icons with Tauri CLI', 'green');

@@ -1,7 +1,7 @@
 ---
 name: Build and Release
 
-on:
+'on':
   push:
     tags:
       - "v*"
@@ -76,13 +76,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest" # ARM (M1/M2/M3)
+          - platform: "macos-latest"  # ARM (M1/M2/M3)
             rust-targets: "aarch64-apple-darwin"
             args: "--target aarch64-apple-darwin"
             artifact-name: "macos-aarch64"
             artifact-ext: ".dmg"
 
-          - platform: "macos-13" # Intel
+          - platform: "macos-13"  # Intel
             rust-targets: "x86_64-apple-darwin"
             args: "--target x86_64-apple-darwin"
             artifact-name: "macos-x64"
@@ -200,13 +200,13 @@ jobs:
               for size in [16, 32, 48, 256]:
                   ico_img = img.resize((size, size), RESAMPLE)
                   ico_sizes.append(ico_img)
-              
+
               # Save ICO with multiple resolutions
               ico_sizes[3].save("icon.ico", format='ICO',
                                sizes=[(16, 16), (32, 32), (48, 48), (256, 256)],
                                append_images=ico_sizes[:-1])
               print("✓ Generated icon.ico (multi-resolution)")
-              
+
           except ImportError:
               print("⚠ Pillow not available")
               print("Skipping Python-based icon generation")
@@ -234,8 +234,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
-            ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: ${{ matrix.args }}
 
@@ -274,8 +273,7 @@ jobs:
 
           # Copy and rename with version
           VERSION="${{ needs.create-release.outputs.version }}"
-          cp "$MSI_FILE" \
-            "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${{ matrix.artifact-ext }}"
+          cp "$MSI_FILE" "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${{ matrix.artifact-ext }}"
 
           echo "Artifact prepared:"
           ls -la artifacts/
@@ -306,8 +304,7 @@ jobs:
 
           # Copy and rename with version
           VERSION="${{ needs.create-release.outputs.version }}"
-          cp "$DMG_FILE" \
-            "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${{ matrix.artifact-ext }}"
+          cp "$DMG_FILE" "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${{ matrix.artifact-ext }}"
 
           echo "Artifact prepared:"
           ls -la artifacts/
@@ -317,8 +314,10 @@ jobs:
         shell: bash
         run: |
           # Find AppImage and Deb files
-          APPIMAGE_FILE=$(find src-tauri/target/release/bundle -name "*.AppImage" | head -n 1)
-          DEB_FILE=$(find src-tauri/target/release/bundle -name "*.deb" | head -n 1)
+          APPIMAGE_FILE=$(find src-tauri/target/release/bundle \
+            -name "*.AppImage" | head -n 1)
+          DEB_FILE=$(find src-tauri/target/release/bundle \
+            -name "*.deb" | head -n 1)
 
           # Create artifacts directory
           mkdir -p artifacts
@@ -355,14 +354,16 @@ jobs:
             for (const file of files) {
               const filePath = path.join(artifactsDir, file);
               const stats = await fs.stat(filePath);
-              
+
               if (stats.isFile()) {
                 console.log(`Uploading ${file}...`);
                 const data = await fs.readFile(filePath);
-                
+
+                const uploadUrl = 
+                  '${{ needs.create-release.outputs.release_upload_url }}';
                 try {
                   await github.rest.repos.uploadReleaseAsset({
-                    url: '${{ needs.create-release.outputs.release_upload_url }}',
+                    url: uploadUrl,
                     headers: {
                       'content-type': 'application/octet-stream',
                       'content-length': stats.size

@@ -20,18 +20,23 @@ fi
 
 # Detect ImageMagick executable (prefer 'magick' over 'convert')
 IM_BIN=""
-if command -v magick &> /dev/null; then
-    IM_BIN="magick"
-elif command -v convert &> /dev/null; then
-    IM_BIN="convert"
-else
-    echo "ImageMagick is required but not installed or not on PATH."
-    echo "Install it with:"
-    echo "  macOS: brew install imagemagick"
-    echo "  Ubuntu/Debian: sudo apt-get install imagemagick"
-    echo "  Windows: Download from https://imagemagick.org/script/download.php"
-    exit 1
-fi
+ if command -v magick &> /dev/null; then
+     IM_BIN="magick"
+ elif command -v convert &> /dev/null; then
+     IM_BIN="convert"
+     # Ensure 'convert' is ImageMagick, not Windows NTFS or GraphicsMagick
+     if ! convert -version 2>&1 | grep -qi "ImageMagick"; then
+         echo "Found 'convert' but it's not ImageMagick. Install ImageMagick v7 ('magick') or ensure PATH points to ImageMagick's 'convert'."
+         exit 1
+     fi
+ else
+     echo "ImageMagick is required but not installed or not on PATH."
+     echo "Install it with:"
+     echo "  macOS: brew install imagemagick"
+     echo "  Ubuntu/Debian: sudo apt-get install imagemagick"
+     echo "  Windows: Download from https://imagemagick.org/script/download.php"
+     exit 1
+ fi
 
 # Normalize convert invocation for ImageMagick v7 ('magick') and v6 ('convert')
 if [ "$IM_BIN" = "magick" ]; then

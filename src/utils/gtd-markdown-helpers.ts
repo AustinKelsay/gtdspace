@@ -5,6 +5,52 @@
  */
 
 /**
+ * Escapes special characters for safe inclusion in HTML attributes
+ * @param str - The string to escape
+ * @returns Escaped string safe for HTML attributes
+ */
+function escapeHtmlAttr(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Escapes special characters for safe inclusion in HTML text content
+ * @param str - The string to escape
+ * @returns Escaped string safe for HTML text
+ */
+function escapeHtmlText(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Normalizes a string into a slug format (lowercase, hyphenated)
+ * @param str - The string to normalize
+ * @returns Normalized slug string
+ */
+function normalizeSlug(str: string): string {
+  return str.toLowerCase().trim().replace(/\s+/g, '-');
+}
+
+/**
+ * Escapes angle brackets for safe inclusion in plain Markdown text
+ * @param str - The string to escape
+ * @returns Escaped string safe for Markdown
+ */
+function escapePlain(str: string): string {
+  return str
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
  * Generates HTML markup for a multiselect field that BlockNote can parse
  */
 export function generateMultiSelectMarkup(
@@ -21,8 +67,14 @@ export function generateMultiSelectMarkup(
     maxCount: options?.maxCount,
   });
   
+  // Safely escape values for HTML
+  const escapedData = escapeHtmlAttr(data);
+  const escapedLabel = escapeHtmlText(label);
+  const escapedValues = value.map(v => escapeHtmlText(v)).join(', ');
+  const escapedType = escapeHtmlText(type);
+  
   // Return HTML that BlockNote will parse into a multiselect block
-  return `<div data-multiselect='${data}' class="multiselect-block">${label}: ${value.join(', ') || `[No ${type} selected]`}</div>`;
+  return `<div data-multiselect='${escapedData}' class="multiselect-block">${escapedLabel}: ${escapedValues || `[No ${escapedType} selected]`}</div>`;
 }
 
 /**
@@ -41,8 +93,14 @@ export function generateSingleSelectMarkup(
     placeholder: options?.placeholder,
   });
   
+  // Safely escape values for HTML
+  const escapedData = escapeHtmlAttr(data);
+  const escapedLabel = escapeHtmlText(label);
+  const escapedValue = escapeHtmlText(value);
+  const escapedType = escapeHtmlText(type);
+  
   // Return HTML that BlockNote will parse into a single select block
-  return `<div data-singleselect='${data}' class="singleselect-block">${label}: ${value || `[No ${type} selected]`}</div>`;
+  return `<div data-singleselect='${escapedData}' class="singleselect-block">${escapedLabel}: ${escapedValue || `[No ${escapedType} selected]`}</div>`;
 }
 
 /**
@@ -55,6 +113,9 @@ export function generateProjectReadmeWithSingleSelect(
   createdDateTime: string
 ): string {
   const statusMarkup = generateSingleSelectMarkup('project-status', 'Status', 'in-progress');
+  
+  // Escape createdDateTime to prevent angle bracket injection
+  const escapedCreatedDateTime = escapePlain(createdDateTime);
   
   return `# ${projectName}
 
@@ -77,7 +138,7 @@ Each action file contains:
 - **Effort**: Single select field for time estimate
 
 ---
-Created: ${createdDateTime}`;
+Created: ${escapedCreatedDateTime}`;
 }
 
 /**
@@ -103,8 +164,12 @@ export function generateActionFileWithSingleSelect(
   effort: string,
   createdDateTime: string
 ): string {
-  const statusMarkup = generateSingleSelectMarkup('status', 'Status', status.toLowerCase().replace(' ', '-'));
-  const effortMarkup = generateSingleSelectMarkup('effort', 'Effort', effort.toLowerCase());
+  // Properly normalize status and effort slugs using the normalizeSlug function
+  const normalizedStatus = normalizeSlug(status);
+  const normalizedEffort = normalizeSlug(effort);
+  
+  const statusMarkup = generateSingleSelectMarkup('status', 'Status', normalizedStatus);
+  const effortMarkup = generateSingleSelectMarkup('effort', 'Effort', normalizedEffort);
   
   // Format focus date for display
   let focusDateDisplay = 'Not set';
@@ -129,6 +194,9 @@ export function generateActionFileWithSingleSelect(
     }
   }
   
+  // Escape createdDateTime to prevent angle bracket injection
+  const escapedCreatedDateTime = escapePlain(createdDateTime);
+  
   return `# ${actionName}
 
 ${statusMarkup}
@@ -145,7 +213,7 @@ ${effortMarkup}
 <!-- Add any additional notes or details about this action here -->
 
 ---
-Created: ${createdDateTime}`;
+Created: ${escapedCreatedDateTime}`;
 }
 
 /**

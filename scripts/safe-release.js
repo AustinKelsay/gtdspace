@@ -106,19 +106,24 @@ function main() {
     exitWithError('Failed to get current branch name. Ensure you are in a git repository');
   }
 
-  const localCommit = execCommand('git rev-parse HEAD', true);
+  // Validate branch name to prevent shell injection
+  if (!/^[a-zA-Z0-9/_-]+$/.test(currentBranch)) {
+    exitWithError(`Invalid branch name detected: "${currentBranch}". Aborting for safety.`);
+  }
+
+  const localCommit = execCommandFile('git', ['rev-parse', 'HEAD'], true);
   if (!localCommit) {
     exitWithError('Failed to get local commit hash. Ensure you have at least one commit');
   }
 
-  const remoteCommit = execCommand(`git rev-parse origin/${currentBranch}`, true);
+  const remoteCommit = execCommandFile('git', ['rev-parse', `origin/${currentBranch}`], true);
   if (!remoteCommit) {
     exitWithError(`Remote branch origin/${currentBranch} not found. Ensure the branch exists on remote`);
   }
 
   if (localCommit !== remoteCommit) {
-    const behindStr = execCommand(`git rev-list --count HEAD..origin/${currentBranch}`, true);
-    const aheadStr = execCommand(`git rev-list --count origin/${currentBranch}..HEAD`, true);
+    const behindStr = execCommandFile('git', ['rev-list', '--count', `HEAD..origin/${currentBranch}`], true);
+    const aheadStr = execCommandFile('git', ['rev-list', '--count', `origin/${currentBranch}..HEAD`], true);
 
     // Parse and normalize the counts
     const behind = parseInt((behindStr || '0').trim(), 10) || 0;

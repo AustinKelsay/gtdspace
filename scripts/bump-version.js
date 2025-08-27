@@ -84,19 +84,29 @@ function main() {
   const commitMessage = `chore: bump version to v${newVersion}`;
   const tagName = `v${newVersion}`;
 
+  // Pre-check if tag already exists before staging files and committing
+  try {
+    execSync(`git rev-parse --verify refs/tags/${tagName}`, { stdio: 'ignore' });
+    // If the command succeeds, the tag exists.
+    console.error(`❌ Error: Git tag '${tagName}' already exists. Aborting.`);
+    process.exit(1);
+  } catch (error) {
+    // This is expected if the tag does not exist. We can proceed.
+  }
+
   try {
     execSync('git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json', { stdio: 'inherit' });
-    const commitHash = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+    const preCommitHash = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
     execSync(`git commit -m "${commitMessage}"`, { stdio: 'inherit' });
     console.log(`✓ Created commit: ${commitMessage}`);
     try {
       execSync(`git tag -a ${tagName} -m "Release ${tagName}"`, { stdio: 'inherit' });
       console.log(`✓ Created tag: ${tagName}`);
     } catch (tagError) {
-      console.error('Failed to create tag, but keeping the commit and staged changes...');
-      execSync(`git reset --soft ${commitHash}`, { stdio: 'inherit' });
-      console.error('\n⚠️  The version bump commit has been preserved.');
-      console.error('Your changes remain staged. You can either:');
+      console.error('Failed to create tag. Undoing the version bump commit while keeping your changes staged...');
+      execSync(`git reset --soft ${preCommitHash}`, { stdio: 'inherit' });
+      console.error('\n⚠️  The version bump commit has been undone; your changes remain staged.');
+      console.error('You can either:');
       console.error(`  1. Retry creating the tag: git tag -a ${tagName} -m "Release ${tagName}"`);
       console.error(`  2. Or commit and tag manually with the commands shown below.`);
       throw tagError;

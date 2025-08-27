@@ -62,7 +62,10 @@ impl SimpleAuthConfig {
 
         if !response.status().is_success() {
             let error_text = response.text().await?;
-            return Err(format!("Failed to exchange code: {}", error_text).into());
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to exchange code: {}", error_text),
+            )));
         }
 
         let token_response: TokenResponse = response.json().await?;
@@ -88,7 +91,10 @@ impl SimpleAuthConfig {
 
         if !response.status().is_success() {
             let error_text = response.text().await?;
-            return Err(format!("Failed to refresh token: {}", error_text).into());
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to refresh token: {}", error_text),
+            )));
         }
 
         let token_response: TokenResponse = response.json().await?;
@@ -105,6 +111,8 @@ pub struct BrowserOpenError {
     /// Full OAuth authorization URL including the original state. DO NOT LOG.
     #[allow(dead_code)]
     pub auth_url: String,
+    /// Original state value required to validate the OAuth callback.
+    pub state: String,
     /// Redacted authorization URL with the state removed. Safe for logs.
     pub redacted_auth_url: String,
 }
@@ -113,7 +121,7 @@ impl std::fmt::Display for BrowserOpenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Failed to open browser. Please visit this URL manually:\n{}",
+            "Failed to open browser. The URL below is redacted for logs; the app should present the full authorization URL to open manually:\n{}",
             self.redacted_auth_url
         )
     }
@@ -124,6 +132,7 @@ impl std::error::Error for BrowserOpenError {}
 impl std::fmt::Debug for BrowserOpenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BrowserOpenError")
+            .field("state", &self.state)
             .field("redacted_auth_url", &self.redacted_auth_url)
             .finish()
     }
@@ -222,6 +231,7 @@ pub fn start_oauth_flow(config: &SimpleAuthConfig) -> Result<String, Box<dyn std
     println!("[SimpleAuth] All browser opening methods failed. Returning URL for manual access.");
     Err(Box::new(BrowserOpenError {
         auth_url: auth_url.clone(),
+        state,
         redacted_auth_url: redacted_auth_url.clone(),
     }))
 }

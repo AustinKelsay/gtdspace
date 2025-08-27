@@ -67,7 +67,7 @@ impl GoogleCalendarManager {
         let config = GoogleCalendarConfig {
             client_id: client_id.clone(),
             client_secret: client_secret.clone(),
-            redirect_uri: "http://localhost:8080".to_string(),
+            redirect_uri: "http://localhost:9898/callback".to_string(),
             auth_uri: "https://accounts.google.com/o/oauth2/auth".to_string(),
             token_uri: "https://oauth2.googleapis.com/token".to_string(),
         };
@@ -104,9 +104,13 @@ impl GoogleCalendarManager {
         time_min: Option<DateTime<Utc>>,
         time_max: Option<DateTime<Utc>>,
     ) -> Result<Vec<GoogleCalendarEvent>, Box<dyn std::error::Error>> {
-        let auth = self.auth_manager.lock().await;
-        let hub = auth.get_calendar_hub().await?;
-
+        // Get the hub while holding the auth lock
+        let hub = {
+            let auth = self.auth_manager.lock().await;
+            auth.get_calendar_hub().await?
+        }; // auth lock is dropped here
+        
+        // Now acquire the sync lock without holding auth lock
         let mut sync = self.sync_manager.lock().await;
         sync.sync_events(hub, time_min, time_max).await
     }

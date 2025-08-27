@@ -82,7 +82,9 @@ YYYY-MM-DD or "Not set"
 
 ## Status
 
-Active | On Hold | Complete | Cancelled
+A project can have one or more of the following statuses, stored as a comma-separated list: Active, On Hold, Complete, Cancelled.
+
+Example: `Active, On Hold`
 
 ## Actions
 
@@ -252,7 +254,7 @@ interface GTDProject {
   name: string;
   description: string;
   due_date?: string | null; // snake_case to match Rust
-  status: GTDProjectStatus;
+  status: GTDProjectStatus[];
   path: string;
   created_date_time: string; // snake_case to match Rust
   action_count?: number; // snake_case to match Rust

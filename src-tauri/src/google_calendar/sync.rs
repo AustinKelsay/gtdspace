@@ -58,13 +58,14 @@ impl CalendarSyncManager {
             let mut page_token: Option<String> = None;
             loop {
                 // Recreate the call for each page
+                // Clone the DateTime values since time_min/time_max take ownership
                 let mut call = hub
                     .events()
                     .list(calendar_id)
                     .single_events(true)
                     .order_by("startTime")
-                    .time_min(effective_min)
-                    .time_max(effective_max);
+                    .time_min(effective_min.clone())
+                    .time_max(effective_max.clone());
 
                 if let Some(token) = &page_token {
                     call = call.page_token(token);

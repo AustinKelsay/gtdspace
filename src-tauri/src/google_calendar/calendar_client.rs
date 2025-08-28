@@ -124,7 +124,11 @@ pub async fn fetch_calendar_events(
             })
             .collect();
 
-        println!("[CalendarClient] Page {} returned {} events", page_count, page_events.len());
+        println!(
+            "[CalendarClient] Page {} returned {} events",
+            page_count,
+            page_events.len()
+        );
         all_events.extend(page_events);
 
         // Check if there are more pages
@@ -146,7 +150,10 @@ pub async fn fetch_calendar_events(
         }
     }
 
-    println!("[CalendarClient] Total events fetched: {}", all_events.len());
+    println!(
+        "[CalendarClient] Total events fetched: {}",
+        all_events.len()
+    );
     Ok(all_events)
 }
 

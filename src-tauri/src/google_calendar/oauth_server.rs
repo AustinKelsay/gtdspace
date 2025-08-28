@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex};
-use warp::{Filter, http::StatusCode};
+use warp::{http::StatusCode, Filter};
 
 #[derive(Debug, Deserialize)]
 struct OAuthCallback {

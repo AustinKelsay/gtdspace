@@ -1,5 +1,6 @@
 use reqwest::header::AUTHORIZATION;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CalendarEvent {
@@ -41,7 +42,9 @@ pub async fn fetch_calendar_events(
 ) -> Result<Vec<CalendarEvent>, Box<dyn std::error::Error>> {
     println!("[CalendarClient] Fetching calendar events...");
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()?;
 
     // Calculate time range (last 30 days to next 90 days)
     let time_min = chrono::Utc::now() - chrono::Duration::days(30);

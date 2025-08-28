@@ -106,9 +106,14 @@ function main() {
     exitWithError('Failed to get current branch name. Ensure you are in a git repository');
   }
 
-  // Validate branch name to prevent shell injection
-  if (!/^[a-zA-Z0-9/_-]+$/.test(currentBranch)) {
-    exitWithError(`Invalid branch name detected: "${currentBranch}". Aborting for safety.`);
+  // Validate branch name using git check-ref-format to prevent shell injection
+  try {
+    execFileSync('git', ['check-ref-format', '--branch', currentBranch], {
+      encoding: 'utf8',
+      stdio: 'pipe'
+    });
+  } catch (error) {
+    exitWithError(`Invalid branch name detected: "${currentBranch}". Git reports this as an invalid refname. Aborting for safety.`);
   }
 
   const localCommit = execCommandFile('git', ['rev-parse', 'HEAD'], true);
@@ -219,7 +224,12 @@ function main() {
   // Note: The bump-version.js script already creates the commit and tag,
   // so we don't need to do it again here
 
-  // Step 9: Push changes and tags
+  // Step 9: Get the tag name that was created
+  const updatedPackageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+  const newVersion = updatedPackageJson.version;
+  const tagName = `v${newVersion}`;
+
+  // Step 10: Push changes and the specific tag
   log('\n📤 Pushing changes to remote...', 'yellow');
   try {
     execCommand('git push');
@@ -228,17 +238,15 @@ function main() {
     exitWithError(`Failed to push commits: ${error.message}`);
   }
 
-  log('\n📤 Pushing tags to remote...', 'yellow');
+  log(`\n📤 Pushing tag ${tagName} to remote...`, 'yellow');
   try {
-    execCommand('git push --tags');
-    log('✓ Pushed tags to remote', 'green');
+    execCommandFile('git', ['push', 'origin', tagName]);
+    log(`✓ Pushed tag ${tagName} to remote`, 'green');
   } catch (error) {
-    exitWithError(`Failed to push tags: ${error.message}`);
+    exitWithError(`Failed to push tag ${tagName}: ${error.message}`);
   }
 
   // Success!
-  const updatedPackageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-  const newVersion = updatedPackageJson.version;
 
   log('\n' + '='.repeat(50), 'green');
   log('🎉 Release completed successfully!', 'green');

@@ -137,13 +137,13 @@ impl BrowserOpenError {
     pub fn auth_url(&self) -> &str {
         &self.auth_url
     }
-    
+
     /// CSRF state (required to validate callback). DO NOT LOG.
     #[allow(dead_code)]
     pub fn state(&self) -> &str {
         &self.state
     }
-    
+
     /// PKCE verifier for token exchange. DO NOT LOG.
     #[allow(dead_code)]
     pub fn code_verifier(&self) -> &str {

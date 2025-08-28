@@ -15,7 +15,10 @@ pub fn run() {
     dotenv::dotenv().ok();
 
     // Initialize logging for development
-    env_logger::init();
+    #[cfg(debug_assertions)]
+    {
+        let _ = env_logger::try_init();
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

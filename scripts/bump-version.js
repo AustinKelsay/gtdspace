@@ -19,8 +19,9 @@ function writeFile(filePath, content) {
 
 function bumpVersion(currentVersion, type) {
   const sanitize = (v) => String(v).trim().replace(/^v/i, '');
+  const base = (v) => sanitize(v).replace(/[+-].*$/, ''); // strip prerelease/build for bump math
   const parse = (v) => {
-    const parts = sanitize(v).split('.');
+    const parts = base(v).split('.');
     if (parts.length !== 3) {
       console.error(`Invalid semantic version: ${v}`);
       process.exit(1);
@@ -33,13 +34,21 @@ function bumpVersion(currentVersion, type) {
     return nums;
   };
 
-  if (/^v?\d+\.\d+\.\d+$/.test(type)) return sanitize(type);
+  // Strict SemVer with optional v-prefix, prerelease and build metadata
+  const semverFull = /^v?(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+  if (semverFull.test(type)) return sanitize(type);
 
   const parts = parse(currentVersion);
-  if (type === 'major') parts[0]++, parts[1] = 0, parts[2] = 0;
-  else if (type === 'minor') parts[1]++, parts[2] = 0;
-  else if (type === 'patch') parts[2]++;
-  else {
+  if (type === 'major') {
+    parts[0]++;
+    parts[1] = 0;
+    parts[2] = 0;
+  } else if (type === 'minor') {
+    parts[1]++;
+    parts[2] = 0;
+  } else if (type === 'patch') {
+    parts[2]++;
+  } else {
     console.error(`Invalid version type: ${type}`);
     process.exit(1);
   }
@@ -96,7 +105,12 @@ function main() {
 
   try {
     execSync('git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json', { stdio: 'inherit' });
-    const preCommitHash = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+    let preCommitHash = null;
+    try {
+      preCommitHash = execSync('git rev-parse --verify HEAD', { encoding: 'utf8', stdio: 'pipe' }).trim();
+    } catch {
+      // No previous commit in the repository (fresh repo)
+    }
     execSync(`git commit -m "${commitMessage}"`, { stdio: 'inherit' });
     console.log(`✓ Created commit: ${commitMessage}`);
     try {
@@ -104,8 +118,12 @@ function main() {
       console.log(`✓ Created tag: ${tagName}`);
     } catch (tagError) {
       console.error('Failed to create tag. Undoing the version bump commit while keeping your changes staged...');
-      execSync(`git reset --soft ${preCommitHash}`, { stdio: 'inherit' });
-      console.error('\n⚠️  The version bump commit has been undone; your changes remain staged.');
+      if (preCommitHash) {
+        execSync(`git reset --soft ${preCommitHash}`, { stdio: 'inherit' });
+        console.error('\n⚠️  The version bump commit has been undone; your changes remain staged.');
+      } else {
+        console.error('No previous commit detected; skip reset. Your changes remain in the new commit — amend or revert manually.');
+      }
       console.error('You can either:');
       console.error(`  1. Retry creating the tag: git tag -a ${tagName} -m "Release ${tagName}"`);
       console.error(`  2. Or commit and tag manually with the commands shown below.`);

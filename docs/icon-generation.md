@@ -3,6 +3,7 @@
 ## Overview
 
 GTD Space requires application icons in multiple formats for different platforms:
+
 - **PNG files**: 32x32.png, 128x128.png, 128x128@2x.png for Linux and general use
 - **ICO file**: Multi-resolution icon for Windows
 - **ICNS file**: Apple Icon Image format for macOS
@@ -10,6 +11,7 @@ GTD Space requires application icons in multiple formats for different platforms
 ## Important Notes
 
 ### ICNS File Requirements
+
 - **ICNS files MUST be proper Apple Icon Image format**, not renamed PNGs
 - Invalid ICNS files will cause macOS build failures
 - ICNS generation requires macOS-specific tools
@@ -17,6 +19,7 @@ GTD Space requires application icons in multiple formats for different platforms
 ## Automated Generation (CI/CD)
 
 The GitHub Actions workflow handles icon generation automatically:
+
 1. Uses the NPM script (`npm run icons:generate`) to generate all formats
 2. Leverages Tauri CLI for cross-platform icon generation
 3. Creates PNG, ICO, and ICNS files as needed
@@ -34,6 +37,7 @@ npm run icons:generate
 ```
 
 This script (located at `scripts/icons-generate.mjs`):
+
 - ✅ Uses Tauri CLI to generate all required icon formats
 - ✅ Creates all PNG sizes correctly
 - ✅ Creates valid ICO file for Windows
@@ -82,8 +86,9 @@ rm -rf icon.iconset
 **Cause**: The icon.icns file is actually a renamed PNG, not a proper ICNS.
 
 **Solution**:
+
 1. Delete the invalid `icon.icns`
-2. Run `python3 generate_icons.py` on macOS
+2. Run `npm run icons:generate` on macOS (or check package.json for the exact script name)
 3. Or use `npx @tauri-apps/cli icon ./icon.png`
 
 ### Icon Generation Fails in CI
@@ -91,10 +96,12 @@ rm -rf icon.iconset
 **Problem**: GitHub Actions can't generate icons.
 
 **Possible causes**:
+
 - Missing `icon.png` source file
 - Python/Pillow installation issues
 
-**Solution**: 
+**Solution**:
+
 - Ensure `src-tauri/icons/icon.png` exists in your repository
 - **Note**: The script will fail the build (exit code 1) if the source icon is missing
 - To fix: Either add `src-tauri/icons/icon.png` to your repository, or modify the icon generation script to handle missing files gracefully (exit 0 to skip)
@@ -115,22 +122,25 @@ rm -rf icon.iconset
 ## Platform-Specific Notes
 
 ### Windows
+
 - ICO files should contain multiple resolutions (16, 32, 48, 256)
 - Pillow's ICO generation is sufficient for most cases
 
 ### macOS
+
 - ICNS must be in Apple's format, not renamed PNG
 - Requires macOS to generate properly (iconutil or Tauri CLI)
 - The build will fail if ICNS is invalid
 
 ### Linux
+
 - Uses PNG files directly
 - Supports multiple sizes for different contexts
 
 ## Quick Start for New Projects
 
 1. Add a high-res `icon.png` (512x512 minimum) to `src-tauri/icons/`
-2. Run `python3 generate_icons.py` locally
+2. Run `npm run icons:generate` locally (or check package.json for the exact script name)
 3. Commit only `icon.png` and scripts
 4. Let CI/CD handle the rest
 

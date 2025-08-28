@@ -69,12 +69,14 @@ impl TokenManager {
                     std::fs::rename(&temp_path, &self.storage_path)?;
                 } else {
                     // For other errors, we propagate them immediately.
+                    let _ = std::fs::remove_file(&temp_path); // Clean up temp file on error
                     return Err(e.into());
                 }
             }
             #[cfg(not(windows))]
             {
                 // On Unix-like systems, `rename` is an atomic overwrite, so any error is unexpected.
+                let _ = std::fs::remove_file(&temp_path); // Clean up temp file on error
                 return Err(e.into());
             }
         }

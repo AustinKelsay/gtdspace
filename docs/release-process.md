@@ -5,6 +5,7 @@ This document outlines the process for creating and publishing new releases of G
 ## Overview
 
 GTD Space uses GitHub Actions to automate the build and release process. When you push a version tag to GitHub, the CI/CD pipeline automatically:
+
 1. Builds the application for all platforms (Windows, macOS Intel, macOS Apple Silicon, Linux)
 2. Creates a GitHub Release with all artifacts
 3. Publishes the release with download links
@@ -48,6 +49,7 @@ git push --tags
 ```
 
 Or use the all-in-one command for a patch release:
+
 ```bash
 npm run release
 ```
@@ -55,11 +57,13 @@ npm run release
 ### Method 2: Manual Process
 
 1. **Update version numbers** in three files:
+
    - `package.json`
    - `src-tauri/Cargo.toml`
    - `src-tauri/tauri.conf.json`
 
 2. **Commit the version changes**:
+
    ```bash
    git add .
    git commit -m "chore: bump version to v0.1.1"
@@ -77,11 +81,11 @@ npm run release
 You can trigger a version bump and release from the GitHub Actions tab:
 
 1. Go to Actions → Release
-2. Click "Run workflow" 
+2. Click "Run workflow"
 3. Choose the release type (`patch`, `minor`, or `major`)
 4. Click "Run workflow"
 
-   *Note: This bumps the version, creates a tag, and pushes it. The "Build and Release" workflow will automatically run when the tag is pushed.*
+   _Note: This bumps the version, creates a tag, and pushes it. The "Build and Release" workflow will automatically run when the tag is pushed._
 
 ### Method 4: Trigger Build Manually from GitHub
 
@@ -89,10 +93,10 @@ You can also trigger a build for an existing version:
 
 1. Go to Actions → Build and Release
 2. Click "Run workflow"
-3. Optionally enter the version to release (e.g., `v0.1.1`). Leave blank to create a draft dev release.
+3. Enter the version to release (e.g., `v0.1.1`). **Note: A version must be specified to create a release.**
 4. Click "Run workflow"
-   
-   *Note: This workflow does not bump versions or create tags. It builds and releases for the specified (or development) version.*
+
+   _Note: This workflow does not bump versions or create tags. It builds and releases for the specified version. When no version is provided, only the build artifacts are created without a GitHub release._
 
 ## Release Workflow
 
@@ -102,7 +106,7 @@ When you push a Git tag matching `v*` (for example `v1.2.3`), the 'Build and Rel
 2. **Builds the app** for all platforms:
    - Windows: `.msi` installer
    - macOS Intel: `.dmg` disk image
-   - macOS Apple Silicon: `.dmg` disk image  
+   - macOS Apple Silicon: `.dmg` disk image
    - Linux: `.AppImage` (universal) and `.deb` (Debian/Ubuntu)
 3. **Uploads artifacts** to the GitHub Release
 4. **Publishes the release** when all builds complete successfully
@@ -110,17 +114,20 @@ When you push a Git tag matching `v*` (for example `v1.2.3`), the 'Build and Rel
 ## Platform-Specific Builds
 
 ### Windows
+
 - Produces: `GTDSpace_v0.1.0_windows-x64.msi`
 - Installer includes Start Menu shortcuts
 - Auto-update support (future feature)
 
 ### macOS
+
 - Intel: `GTDSpace_v0.1.0_macos-x64.dmg`
 - Apple Silicon: `GTDSpace_v0.1.0_macos-aarch64.dmg`
 - Drag-and-drop installation to Applications folder
 - Code signing (when certificates are configured)
 
 ### Linux
+
 - AppImage: `GTDSpace_v0.1.0_linux-x64.AppImage` (portable, works on most distributions)
 - Debian package: `GTDSpace_v0.1.0_linux-x64.deb` (for Debian/Ubuntu)
 - Includes desktop entry and icon
@@ -156,6 +163,7 @@ Before releasing:
 ### Build Failures
 
 If a platform build fails:
+
 1. Check the GitHub Actions logs for specific errors
 2. Common issues:
    - Missing dependencies (especially Linux GTK libraries)
@@ -165,6 +173,7 @@ If a platform build fails:
 ### Version Mismatch
 
 If you see version mismatch errors:
+
 - Ensure all three files have the same version:
   - `package.json`
   - `src-tauri/Cargo.toml`
@@ -173,6 +182,7 @@ If you see version mismatch errors:
 ### Tag Already Exists
 
 If Git complains about an existing tag:
+
 ```bash
 # Delete local tag
 git tag -d v0.1.1
@@ -192,12 +202,11 @@ Planned enhancements to the release process:
 1. **Code Signing**:
    - Windows: Certificate signing for SmartScreen
    - macOS: Apple Developer ID for notarization
-   
 2. **Auto-Update**:
    - Built-in update checking
    - Seamless background updates
-   
 3. **Release Channels**:
+
    - Stable releases
    - Beta/preview builds
    - Nightly builds (automated)

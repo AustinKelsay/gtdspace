@@ -16,6 +16,8 @@ pub struct CalendarEvent {
 #[derive(Debug, Deserialize)]
 struct GoogleCalendarListResponse {
     items: Vec<GoogleCalendarEvent>,
+    #[serde(rename = "nextPageToken")]
+    next_page_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,53 +62,92 @@ pub async fn fetch_calendar_events(
         time_max.to_rfc3339()
     );
 
-    let response = client
-        .get(url)
-        .header(AUTHORIZATION, format!("Bearer {}", access_token))
-        .query(&[
-            ("timeMin", time_min.to_rfc3339()),
-            ("timeMax", time_max.to_rfc3339()),
-            ("singleEvents", "true".to_string()),
-            ("orderBy", "startTime".to_string()),
-            ("maxResults", "250".to_string()),
-        ])
-        .send()
-        .await?;
+    let mut all_events: Vec<CalendarEvent> = Vec::new();
+    let mut page_token: Option<String> = None;
+    let mut page_count = 0;
+    const MAX_RESULTS_PER_PAGE: u32 = 250;
 
-    if !response.status().is_success() {
-        let error_text = response.text().await?;
-        return Err(Box::new(std::io::Error::other(format!(
-            "Failed to fetch events: {}",
-            error_text
-        ))));
+    // Loop through all pages
+    loop {
+        page_count += 1;
+        println!("[CalendarClient] Fetching page {}...", page_count);
+
+        let mut query_params = vec![
+            ("timeMin".to_string(), time_min.to_rfc3339()),
+            ("timeMax".to_string(), time_max.to_rfc3339()),
+            ("singleEvents".to_string(), "true".to_string()),
+            ("orderBy".to_string(), "startTime".to_string()),
+            ("maxResults".to_string(), MAX_RESULTS_PER_PAGE.to_string()),
+        ];
+
+        // Add page token if we have one (for subsequent pages)
+        if let Some(token) = &page_token {
+            query_params.push(("pageToken".to_string(), token.clone()));
+        }
+
+        let response = client
+            .get(url)
+            .header(AUTHORIZATION, format!("Bearer {}", access_token))
+            .query(&query_params)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await?;
+            return Err(Box::new(std::io::Error::other(format!(
+                "Failed to fetch events on page {}: {}",
+                page_count, error_text
+            ))));
+        }
+
+        let google_response: GoogleCalendarListResponse = response.json().await?;
+
+        // Convert Google events to our format
+        let page_events: Vec<CalendarEvent> = google_response
+            .items
+            .into_iter()
+            .map(|event| {
+                let start = event.start.and_then(|s| s.date_time.or(s.date));
+                let end = event.end.and_then(|e| e.date_time.or(e.date));
+
+                CalendarEvent {
+                    id: event.id,
+                    summary: event
+                        .summary
+                        .unwrap_or_else(|| "Untitled Event".to_string()),
+                    description: event.description,
+                    start,
+                    end,
+                    location: event.location,
+                    meeting_link: event.hangout_link,
+                }
+            })
+            .collect();
+
+        println!("[CalendarClient] Page {} returned {} events", page_count, page_events.len());
+        all_events.extend(page_events);
+
+        // Check if there are more pages
+        match google_response.next_page_token {
+            Some(token) => {
+                page_token = Some(token);
+                println!("[CalendarClient] More pages available, continuing...");
+            }
+            None => {
+                println!("[CalendarClient] No more pages, pagination complete");
+                break;
+            }
+        }
+
+        // Safety limit to prevent infinite loops (Google Calendar API has a max of 2500 events per query)
+        if page_count > 10 {
+            println!("[CalendarClient] Warning: Reached maximum page limit, stopping pagination");
+            break;
+        }
     }
 
-    let google_response: GoogleCalendarListResponse = response.json().await?;
-
-    // Convert Google events to our format
-    let events: Vec<CalendarEvent> = google_response
-        .items
-        .into_iter()
-        .map(|event| {
-            let start = event.start.and_then(|s| s.date_time.or(s.date));
-            let end = event.end.and_then(|e| e.date_time.or(e.date));
-
-            CalendarEvent {
-                id: event.id,
-                summary: event
-                    .summary
-                    .unwrap_or_else(|| "Untitled Event".to_string()),
-                description: event.description,
-                start,
-                end,
-                location: event.location,
-                meeting_link: event.hangout_link,
-            }
-        })
-        .collect();
-
-    println!("[CalendarClient] Fetched {} events", events.len());
-    Ok(events)
+    println!("[CalendarClient] Total events fetched: {}", all_events.len());
+    Ok(all_events)
 }
 
 // Async wrapper for consistent API

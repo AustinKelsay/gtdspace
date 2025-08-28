@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex};
-use warp::Filter;
+use warp::{Filter, http::StatusCode};
 
 #[derive(Debug, Deserialize)]
 struct OAuthCallback {
@@ -47,8 +47,9 @@ impl OAuthCallbackServer {
                             }
                             _ => {
                                 println!("[OAuthServer] State mismatch or missing. Rejecting request.");
-                                return warp::reply::html(
-                                    r#"
+                                return warp::reply::with_status(
+                                    warp::reply::html(
+                                        r#"
                                     <!DOCTYPE html>
                                     <html>
                                     <head>
@@ -178,7 +179,9 @@ impl OAuthCallbackServer {
                                     </body>
                                     </html>
                                     "#
-                                    .to_string(),
+                                        .to_string(),
+                                    ),
+                                    StatusCode::BAD_REQUEST,
                                 );
                             }
                         }
@@ -189,8 +192,9 @@ impl OAuthCallbackServer {
                         *received_code.lock().await = Some(code);
 
                         // Return a success HTML page with GTD Space theme
-                        warp::reply::html(
-                            r#"
+                        warp::reply::with_status(
+                            warp::reply::html(
+                                r#"
                             <!DOCTYPE html>
                             <html>
                             <head>
@@ -342,12 +346,16 @@ impl OAuthCallbackServer {
                                 <div class="brand">GTD Space</div>
                             </body>
                             </html>
-                            "#.to_string()
+                            "#
+                                .to_string(),
+                            ),
+                            StatusCode::OK,
                         )
                     } else if let Some(error) = params.error {
                         println!("[OAuthServer] Authentication error: {}", error);
-                        warp::reply::html(
-                            format!(
+                        warp::reply::with_status(
+                            warp::reply::html(
+                                format!(
                                 r#"
                                 <!DOCTYPE html>
                                 <html>
@@ -478,11 +486,16 @@ impl OAuthCallbackServer {
                                 </body>
                                 </html>
                                 "#,
-                                error
-                            )
+                                    error
+                                ),
+                            ),
+                            StatusCode::BAD_REQUEST,
                         )
                     } else {
-                        warp::reply::html("Invalid callback parameters".to_string())
+                        warp::reply::with_status(
+                            warp::reply::html("Invalid callback parameters".to_string()),
+                            StatusCode::BAD_REQUEST,
+                        )
                     }
                 }
             });

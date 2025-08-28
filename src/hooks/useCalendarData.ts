@@ -276,6 +276,22 @@ export const useCalendarData = (
                     // If parsing fails, leave undefined
                   }
                 }
+                
+                // Legacy fallback: Try to parse old marker format [!datetime:created_date:YYYY-MM-DD]
+                if (!createdDateTime) {
+                  const legacyMatch = content.match(/\[!datetime:created_date:([0-9]{4}-[0-9]{2}-[0-9]{2})\]/i);
+                  if (legacyMatch && legacyMatch[1]) {
+                    try {
+                      const parsed = new Date(legacyMatch[1]);
+                      if (!isNaN(parsed.getTime())) {
+                        createdDateTime = parsed.toISOString();
+                        console.log(`[CalendarData] Found legacy created_date format in habit "${habitName}": ${legacyMatch[1]}`);
+                      }
+                    } catch {
+                      // If parsing fails, leave undefined
+                    }
+                  }
+                }
               }
               
               console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDateTime}, focus=${focusDateTime}`);

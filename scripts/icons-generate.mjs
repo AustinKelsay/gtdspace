@@ -43,10 +43,11 @@ console.log('🎨 Generating icons from icon.png...');
 // Check if we're in CI or local environment
 const isCI = process.env.CI === 'true';
 
-// Use platform-appropriate command
+// Use platform-appropriate command with pinned version and noninteractive flag
 const isWindows = process.platform === 'win32';
 const command = isWindows ? 'npx.cmd' : 'npx';
-const args = ['@tauri-apps/cli', 'icon', iconPath, '-o', iconsDir];
+// Pin to v2.0.0 to match package.json and add --no-interaction flag for CI
+const args = ['@tauri-apps/cli@2.0.0', 'icon', iconPath, '-o', iconsDir, '--no-interaction'];
 
 console.log(`Running: ${command} ${args.join(' ')}`);
 console.log(`Platform: ${process.platform}`);
@@ -54,10 +55,10 @@ console.log(`CI Environment: ${isCI}`);
 
 try {
   // Use Tauri CLI to generate all icon formats
+  // Don't use shell option to avoid platform differences in argument handling
   execFileSync(command, args, {
     stdio: 'inherit',
-    cwd: projectRoot,
-    shell: isWindows // Use shell on Windows for better compatibility
+    cwd: projectRoot
   });
   
   // Clean up unwanted files

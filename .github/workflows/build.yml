@@ -1,7 +1,7 @@
 ---
 name: Build and Release
 
-'on':
+"on":
   push:
     tags:
       - "v*"
@@ -29,6 +29,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Get version
         id: get-version
@@ -81,13 +83,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest"  # ARM (M1/M2/M3)
+          - platform: "macos-latest" # ARM (M1/M2/M3)
             rust-targets: "aarch64-apple-darwin"
             args: "--target aarch64-apple-darwin"
             artifact-name: "macos-aarch64"
             artifact-ext: ".dmg"
 
-          - platform: "macos-13"  # Intel
+          - platform: "macos-13" # Intel
             rust-targets: "x86_64-apple-darwin"
             args: "--target x86_64-apple-darwin"
             artifact-name: "macos-x64"
@@ -110,6 +112,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -268,8 +272,6 @@ jobs:
 
           echo "Artifacts prepared:"
           ls -la artifacts/
-
-      
 
       - name: Upload artifacts to workflow
         uses: actions/upload-artifact@v4

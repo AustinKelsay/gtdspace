@@ -568,5 +568,5 @@ export interface GTDHabit {
   /** Last update time */
   last_updated?: string;
   /** Date habit was created */
-  created_date_time?: string;
+  created_date_time: string;
 }

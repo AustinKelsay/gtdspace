@@ -43,11 +43,11 @@ console.log('🎨 Generating icons from icon.png...');
 // Check if we're in CI or local environment
 const isCI = process.env.CI === 'true';
 
-// Use platform-appropriate command with pinned version and noninteractive flag
+// Use platform-appropriate command with pinned version and non-interactive npx
 const isWindows = process.platform === 'win32';
 const command = isWindows ? 'npx.cmd' : 'npx';
-// Pin to v2.0.0 to match package.json and add --no-interaction flag for CI
-const args = ['@tauri-apps/cli@2.0.0', 'icon', iconPath, '-o', iconsDir, '--no-interaction'];
+// Pin to v2.0.0 to match package.json and use -y flag for non-interactive npx
+const args = ['-y', '@tauri-apps/cli@2.0.0', 'icon', iconPath, '-o', iconsDir];
 
 console.log(`Running: ${command} ${args.join(' ')}`);
 console.log(`Platform: ${process.platform}`);

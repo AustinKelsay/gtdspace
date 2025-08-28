@@ -1,6 +1,6 @@
 use google_calendar3::oauth2::authenticator::Authenticator;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 use tokio::fs;
 
@@ -129,6 +129,15 @@ impl TokenStorage {
                 // Clean up temp file on error
                 let _ = tokio::fs::remove_file(&temp_path).await;
                 return Err(e.into());
+            }
+        }
+
+        // Best-effort directory fsync for durability
+        let parent_dir = path.parent().unwrap_or_else(|| Path::new("."));
+        if let Ok(dir_file) = tokio::fs::File::open(parent_dir).await {
+            if let Err(sync_err) = dir_file.sync_all().await {
+                log::warn!("Failed to sync directory {:?}: {}", parent_dir, sync_err);
+                // Continue - this is best-effort, don't propagate the error
             }
         }
 

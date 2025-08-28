@@ -124,7 +124,8 @@ rm -rf icon.iconset
 ### Windows
 
 - ICO files should contain multiple resolutions (16, 32, 48, 256)
-- Pillow's ICO generation is sufficient for most cases
+- The project uses the Node-based icon script and Tauri CLI for generating platform icons
+- The Node script (and Tauri CLI) handle ICO generation for Windows
 
 ### macOS
 

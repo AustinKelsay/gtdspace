@@ -147,7 +147,7 @@ interface GTDProject {
   description: string;
   due_date?: string | null; // snake_case for Rust compatibility
   status: GTDProjectStatus[]; // Array for compatibility
-  created_date: string;
+  created_date_time: string;
   action_count?: number;
 }
 
@@ -611,7 +611,7 @@ This repository contains a GitHub Actions workflow to automate the release proce
 
 **Workflow Trigger:**
 
-The workflow is triggered manually via `workflow_dispatch`. Manual runs always operate on the `main` branch. To run it:
+The workflow is triggered manually via `workflow_dispatch` and is restricted to `main` and `staging` branches. To run it:
 
 1.  Navigate to the "Actions" tab of the repository on GitHub.
 2.  Select the "Release" workflow from the list.
@@ -626,7 +626,7 @@ The workflow uses the standard `GITHUB_TOKEN` to commit, tag, and push changes. 
 
 When triggered, the workflow will:
 
-1.  Check out the `main` branch (the workflow explicitly checks out `ref: main` for manual runs).
+1.  Check out the triggering branch (workflow uses default checkout behavior).
 2.  Install all dependencies.
 3.  Run a series of checks (linting, type-checking, tests).
 4.  Bump the version number in `package.json`, `Cargo.toml`, and `tauri.conf.json`.

@@ -65,7 +65,7 @@ import {
 import { useDateTimeInsertion } from "@/hooks/useDateTimeInsertion";
 
 // Valid DateTimeFieldType values you can use:
-// 'due_date' | 'focus_date' | 'completed_date' | 'created_date_time' | 'modified_date' | 'custom'
+// 'due_date' | 'focus_date' | 'completed_date' | 'created_date_time' | 'modified_date'
 //
 // Note: The '_time' suffix is used for variants that include a time component, 
 // such as 'focus_date_time' or 'created_date_time'.

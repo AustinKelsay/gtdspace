@@ -69,6 +69,12 @@ function main() {
   const currentVersion = packageJson.version;
   const newVersion = bumpVersion(currentVersion, versionType);
 
+  // Check if version is unchanged (no-op case)
+  if (newVersion === currentVersion) {
+    console.log(`Version is already ${currentVersion}. No changes needed.`);
+    return;
+  }
+
   packageJson.version = newVersion;
   writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
   console.log(`✓ Updated package.json: ${currentVersion} → ${newVersion}`);
@@ -137,7 +143,7 @@ function main() {
   } catch (error) {
     console.error('Failed to create git commit/tag:', error.message);
     console.log('\nYou can manually commit and tag the changes:');
-    console.log(`  git add .`);
+    console.log(`  git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json`);
     console.log(`  git commit -m "${commitMessage}"`);
     console.log(`  git tag -a ${tagName} -m "Release ${tagName}"`);
   }

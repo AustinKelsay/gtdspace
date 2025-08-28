@@ -21,6 +21,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
     permissions:
       contents: write
     steps:

@@ -265,12 +265,36 @@ export const useCalendarData = (
                 }
               } else {
                 // Try to parse from ## Created header as fallback (handles CRLF and flexible spacing)
-                const createdHeaderMatch = content.match(/##\s*Created\s*(?:\r?\n|\s+)\s*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:\s+[0-9]{1,2}:[0-9]{2}(?:\s*(?:AM|PM))?)?)/i);
-                if (createdHeaderMatch && createdHeaderMatch[1]) {
+                const createdHeaderMatch = content.match(/##\s*Created\s*(?:\r?\n|\s+)\s*([0-9]{4})-([0-9]{2})-([0-9]{2})(?:\s+([0-9]{1,2}):([0-9]{2})(?:\s*(AM|PM))?)?/i);
+                if (createdHeaderMatch) {
                   try {
-                    const parsedDate = new Date(createdHeaderMatch[1]);
-                    if (!isNaN(parsedDate.getTime())) {
-                      createdDateTime = parsedDate.toISOString();
+                    // Parse date components explicitly
+                    const year = parseInt(createdHeaderMatch[1], 10);
+                    const month = parseInt(createdHeaderMatch[2], 10);
+                    const day = parseInt(createdHeaderMatch[3], 10);
+                    let hour = createdHeaderMatch[4] ? parseInt(createdHeaderMatch[4], 10) : 0;
+                    const minute = createdHeaderMatch[5] ? parseInt(createdHeaderMatch[5], 10) : 0;
+                    const ampm = createdHeaderMatch[6];
+
+                    // Convert 12-hour to 24-hour format if AM/PM is present
+                    if (ampm) {
+                      if (ampm.toUpperCase() === 'PM' && hour !== 12) {
+                        hour += 12;
+                      } else if (ampm.toUpperCase() === 'AM' && hour === 12) {
+                        hour = 0;
+                      }
+                    }
+
+                    // Validate components and create UTC timestamp
+                    if (!isNaN(year) && !isNaN(month) && !isNaN(day) && 
+                        !isNaN(hour) && !isNaN(minute) &&
+                        month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
+                        hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+                      const utcTimestamp = Date.UTC(year, month - 1, day, hour, minute, 0);
+                      const parsedDate = new Date(utcTimestamp);
+                      if (!isNaN(parsedDate.getTime())) {
+                        createdDateTime = parsedDate.toISOString();
+                      }
                     }
                   } catch {
                     // If parsing fails, leave undefined
@@ -302,10 +326,16 @@ export const useCalendarData = (
                   }
                 }
               }
+
+              // Deterministic fallback: If we still don't have a created date, use current date
+              if (!createdDateTime) {
+                createdDateTime = new Date().toISOString();
+                console.log(`[CalendarData] Using current date as fallback for habit "${habitName}": ${createdDateTime}`);
+              }
               
               console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDateTime}, focus=${focusDateTime}`);
               
-              // Only add the habit if we have a created date (required for recurring generation)
+              // Always add the habit now that we have a guaranteed created date
               if (createdDateTime) {
                 allItems.push({
                   id: `habit-${habitName}-${fileIndex}`,

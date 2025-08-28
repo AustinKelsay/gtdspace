@@ -19,9 +19,9 @@ Your GTD Space build and release process is now fully configured! Here's what wa
 - ✅ Updated bundle identifier and metadata
 
 ### 4. Icon Setup
-- Created icon generation scripts (Python and Shell)
+- Created icon generation scripts (Node script)
 - Added temporary icon files to allow immediate builds
-- GitHub Actions will auto-generate proper icons during builds
+- GitHub Actions and the Node script (`scripts/icons-generate.mjs`) will generate proper icons during builds
 
 ### 5. Documentation
 - **`docs/release-process.md`**: Comprehensive release guide

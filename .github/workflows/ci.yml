@@ -12,6 +12,15 @@ on:
       - develop
       - staging
 
+# Set minimal permissions for the workflow
+permissions:
+  contents: read
+
+# Cancel in-progress runs when a new run is triggered on the same ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint-and-typecheck:
     runs-on: ubuntu-latest

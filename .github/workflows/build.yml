@@ -12,6 +12,11 @@ name: Build and Release
         required: false
         type: string
 
+# Cancel in-progress runs when a new run is triggered
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   create-release:
     permissions:
@@ -286,7 +291,7 @@ jobs:
           path: artifacts-download
 
       - name: Upload release assets
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         if: needs.create-release.outputs.release_id != ''
         with:
           files: artifacts-download/**/*

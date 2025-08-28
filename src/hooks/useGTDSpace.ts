@@ -157,13 +157,14 @@ export function useGTDSpace() {
             action_count: 0,
           };
           
-          // Update space state if it exists
-          if (gtdSpace) {
-            setGTDSpace({
-              ...gtdSpace,
-              projects: [...(gtdSpace.projects || []), newProject],
-            });
-          }
+          // Update space state using functional form to avoid stale closure
+          setGTDSpace(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              projects: [...(prev.projects || []), newProject],
+            };
+          });
           
           return projectPath;
         },

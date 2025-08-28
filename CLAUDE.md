@@ -2,9 +2,23 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Quick Reference
+
+**Start Development:** `npm run tauri:dev`  
+**Run Tests Before Commit:** `npm run type-check && npm run lint`  
+**Build Production:** `npm run tauri:build`  
+**Main Entry Points:** `src/App.tsx` (frontend), `src-tauri/src/main.rs` (backend)  
+**GTD Logic:** `src/hooks/useGTDSpace.ts`, `src-tauri/src/commands/mod.rs`  
+
 ## Project Overview
 
 GTD Space is a GTD-first productivity system with integrated markdown editing, built with Tauri, React, and TypeScript. The application is architected around Getting Things Done methodology as the primary experience.
+
+**Repository Structure:**
+- `/src` - React frontend (components, hooks, utils, types)
+- `/src-tauri` - Rust backend (Tauri commands, file operations, Google Calendar)
+- `/scripts` - Build automation (version bumping, icon generation, release)
+- `/.github/workflows` - CI/CD pipelines (build, test, release automation)
 
 **Tech Stack:**
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui components
@@ -21,7 +35,7 @@ GTD Space is a GTD-first productivity system with integrated markdown editing, b
 npm run tauri:dev      # Full dev environment (frontend + backend)
 npm run tauri:build    # Production build
 
-# Code quality
+# Code quality - ALWAYS RUN BEFORE COMMITTING
 npm run type-check     # TypeScript validation
 npm run lint           # ESLint check
 npm run lint:fix       # Auto-fix linting issues
@@ -29,12 +43,26 @@ npm run lint:fix       # Auto-fix linting issues
 # Rust backend (from src-tauri/)
 cd src-tauri && cargo check   # Fast compilation check
 cd src-tauri && cargo build   # Full compilation
+cd src-tauri && cargo clippy  # Rust linting
 
 # Frontend-only (limited - no file operations)
 npm run dev            # Port 1420, no backend
 
 # Production preview
 npm run preview        # Preview production build
+
+# Version management
+npm run version:patch  # Bump patch version (0.1.0 → 0.1.1)
+npm run version:minor  # Bump minor version (0.1.0 → 0.2.0)
+npm run version:major  # Bump major version (0.1.0 → 1.0.0)
+
+# Release automation
+npm run release:patch  # Full release process with checks
+npm run release:minor
+npm run release:major
+
+# Icon generation (before build)
+npm run icons:generate # Auto-generates platform icons from icon.png
 ```
 
 ## Architecture: Frontend-Backend Communication
@@ -308,6 +336,29 @@ interface HabitRecord {
 **Google Calendar:**
 `google_calendar_connect`, `google_calendar_disconnect_simple`, `google_calendar_sync`, `google_calendar_get_status`, `google_calendar_get_cached_events`, `google_calendar_is_authenticated`, `google_calendar_fetch_events`
 
+## Common Development Scenarios
+
+### Adding a New GTD Field Type
+1. Create the BlockNote component in `src/components/editor/blocks/`
+2. Add insertion hook in `src/hooks/use[FieldName]Insertion.ts`
+3. Update `preprocessMarkdownForBlockNote()` in `src/utils/blocknote-preprocessing.ts`
+4. Add field extraction in `src/utils/metadata-extractor.ts`
+5. Register keyboard shortcut in `src/hooks/useKeyboardShortcuts.ts`
+6. Update GTD type definitions in `src/types/gtd.ts`
+
+### Modifying File Operations
+1. Update Rust command in `src-tauri/src/commands/mod.rs`
+2. Add error handling in the command
+3. Update frontend hook in `src/hooks/useFileManager.ts`
+4. Wrap with `withErrorHandling()` from `useErrorHandler`
+5. Test with both Tauri context and web-only mode
+
+### Adding Calendar Event Types
+1. Update data aggregation in `src/hooks/useCalendarData.ts`
+2. Add event type to `CalendarEvent` interface in `src/types/calendar.ts`
+3. Update rendering in `src/components/calendar/CalendarView.tsx`
+4. Consider performance impact of additional file reads
+
 ## Known Issues & Troubleshooting
 
 ### Sidebar Not Updating After Project Creation
@@ -452,9 +503,19 @@ interface HabitRecord {
 - **Settings Components** modular panels for different configuration areas
 - **Google Calendar Integration** OAuth server, token management, and calendar sync
 
-## Testing Status
+## Testing Guidelines
 
-**No test suite exists.** Manual testing required for all changes. Test component available at `src/components/test/TestMultiSelect.tsx` for UI experimentation.
+**No automated test suite exists.** Manual testing required for all changes.
+
+### Manual Testing Checklist
+1. **Before any commit:** Run `npm run type-check && npm run lint`
+2. **GTD Operations:** Create project → Add actions → Update statuses → Check sidebar updates
+3. **File Operations:** Save → Rename → Delete → Check tab updates
+4. **Editor:** Insert all field types → Save → Reload → Verify persistence
+5. **Calendar:** Add dates → Check calendar view → Verify Google sync (if configured)
+6. **External Changes:** Edit file outside app → Verify conflict detection
+
+**Test Component:** `src/components/test/TestMultiSelect.tsx` available for UI experimentation.
 
 ## VSCode Configuration
 
@@ -526,6 +587,25 @@ This push will, in turn, trigger the `Build and Release` workflow (`.github/work
 npm run icons:generate  # Auto-generates all platform icons from icon.png
 # Runs: Node/JS script → Tauri CLI → Multiple format outputs
 ```
+
+## Debugging Tips
+
+### Console Logging
+- Frontend: Use `console.log()` freely (ESLint allows it)
+- Backend: Enable Rust logging with `RUST_LOG=debug npm run tauri:dev`
+- Tauri IPC: All commands log to browser console in dev mode
+
+### React DevTools
+- Component tree inspection works normally
+- Custom hooks state visible in Components tab
+- Use Profiler to identify re-render issues
+
+### Common Error Sources
+1. **File paths**: Always use absolute paths in Tauri commands
+2. **Case sensitivity**: Backend uses `snake_case`, frontend uses `camelCase`
+3. **Async timing**: Many operations are debounced (auto-save: 2s, file watcher: 500ms)
+4. **Event loops**: Check for `isEmitting` flags to prevent infinite loops
+5. **Tauri context**: Use `isTauriContext()` before file operations
 
 ## Development Best Practices
 

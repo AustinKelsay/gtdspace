@@ -12,7 +12,7 @@ This command will:
 
 1. Bump the patch version
 2. Create a git commit and tag locally
-3. Push the commit and tag to GitHub
+3. Push commits to GitHub
 4. GitHub Actions will then trigger builds for all platforms
 
 ### Other Version Types

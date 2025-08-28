@@ -98,7 +98,7 @@ rm -rf icon.iconset
 **Possible causes**:
 
 - Missing `icon.png` source file
-- Python/Pillow installation issues
+- Node/Tauri environment or missing Node dependencies
 
 **Solution**:
 

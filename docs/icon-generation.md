@@ -3,7 +3,7 @@
 ## Overview
 
 GTD Space requires application icons in multiple formats for different platforms:
-- **PNG files**: 32x32, 128x128, 256x256 for Linux and general use
+- **PNG files**: 32x32.png, 128x128.png, 128x128@2x.png for Linux and general use
 - **ICO file**: Multi-resolution icon for Windows
 - **ICNS file**: Apple Icon Image format for macOS
 
@@ -19,7 +19,7 @@ GTD Space requires application icons in multiple formats for different platforms
 The GitHub Actions workflow handles icon generation automatically:
 1. Generates PNG files on all platforms using Pillow
 2. Creates ICO files for Windows
-3. **Only generates proper ICNS on macOS runners** using Tauri CLI
+3. **Generates ICNS files cross-platform** using Tauri CLI (with iconutil as a macOS-only fallback)
 4. Falls back gracefully if tools are unavailable
 
 ## Local Generation
@@ -96,7 +96,8 @@ rm -rf icon.iconset
 
 **Solution**: 
 - Ensure `src-tauri/icons/icon.png` exists in your repository
-- The workflow will skip icon generation if the source is missing
+- **Note**: The script will fail the build (exit code 1) if the source icon is missing
+- To fix: Either add `src-tauri/icons/icon.png` to your repository, or modify the icon generation script to handle missing files gracefully (exit 0 to skip)
 
 ### Windows ICO Appears Blurry
 

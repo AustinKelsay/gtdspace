@@ -192,6 +192,8 @@ The GitHub Actions workflow automatically:
 1. Generates icons from `icon.png`
 2. Builds for all platforms
 3. Creates installers/bundles
-4. Uploads to GitHub Releases
+4. Creates a draft GitHub Release
+5. Attaches built artifacts as release assets (using `uploadReleaseAsset`)
+6. Also stores artifacts as workflow artifacts for backup
 
-No local setup needed for CI/CD builds - everything is handled in the workflow.
+No local setup needed for CI/CD builds - everything is handled in the workflow. The artifacts are automatically attached to the draft release via the `Upload artifacts to release` step in `.github/workflows/build.yml`.

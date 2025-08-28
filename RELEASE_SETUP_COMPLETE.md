@@ -67,17 +67,19 @@ npm run release  # Creates v0.1.1, tags, and pushes
 - **CI/CD**: Icons are automatically generated properly in GitHub Actions
 
 ### Version Numbers
-Currently synchronized at v0.1.0 in:
+Currently synchronized at `{{version}}` in:
 - `package.json`
 - `src-tauri/Cargo.toml`  
 - `src-tauri/tauri.conf.json`
 
 ### Platform Builds
 Each release will generate:
-- Windows: `GTDSpace_v0.1.0_windows-x64.msi`
-- macOS Intel: `GTDSpace_v0.1.0_macos-x64.dmg`
-- macOS ARM: `GTDSpace_v0.1.0_macos-aarch64.dmg`
-- Linux: `GTDSpace_v0.1.0_linux-x64.AppImage` and `.deb`
+- Windows: `GTDSpace_{{version}}_windows-x64.msi`
+- macOS Intel: `GTDSpace_{{version}}_macos-x64.dmg`
+- macOS ARM: `GTDSpace_{{version}}_macos-aarch64.dmg`
+- Linux: `GTDSpace_{{version}}_linux-x64.AppImage` and `GTDSpace_{{version}}_linux-x64.deb`
+
+**Note**: Ensure the `VERSION` environment variable is set in your release pipeline to match the desired release version (e.g., `export VERSION=v0.1.1`) before packaging to ensure correct artifact naming.
 
 ## Future Enhancements
 

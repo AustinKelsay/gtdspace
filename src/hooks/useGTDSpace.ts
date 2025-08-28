@@ -184,7 +184,7 @@ export function useGTDSpace() {
       setIsLoading(false);
       return result;
     },
-    [gtdSpace, withErrorHandling, showSuccess]
+    [withErrorHandling, showSuccess]
   );
 
   /**

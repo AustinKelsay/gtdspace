@@ -214,9 +214,11 @@ export function useGTDSpace() {
       if (result) {
         showSuccess(`Action "${params.action_name}" created successfully`);
         
-        // Update project action count if space is loaded
-        if (gtdSpace && gtdSpace.projects) {
-          const updatedProjects = gtdSpace.projects.map(project => {
+        // Update project action count using functional state update
+        setGTDSpace(prev => {
+          if (!prev || !prev.projects) return prev;
+          
+          const updatedProjects = prev.projects.map(project => {
             if (project.path === params.project_path) {
               return {
                 ...project,
@@ -226,12 +228,12 @@ export function useGTDSpace() {
             return project;
           });
           
-          setGTDSpace({
-            ...gtdSpace,
+          return {
+            ...prev,
             projects: updatedProjects,
-            total_actions: (gtdSpace.total_actions || 0) + 1,
-          });
-        }
+            total_actions: (prev.total_actions || 0) + 1,
+          };
+        });
         
         // Emit custom event to trigger sidebar refresh
         window.dispatchEvent(new CustomEvent('gtd-action-created', {
@@ -242,7 +244,7 @@ export function useGTDSpace() {
       setIsLoading(false);
       return result;
     },
-    [gtdSpace, withErrorHandling, showSuccess]
+    [withErrorHandling, showSuccess]
   );
 
   /**

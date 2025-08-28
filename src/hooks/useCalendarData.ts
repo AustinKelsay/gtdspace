@@ -264,8 +264,8 @@ export const useCalendarData = (
                   createdDateTime = undefined;
                 }
               } else {
-                // Try to parse from ## Created header as fallback
-                const createdHeaderMatch = content.match(/##\s*Created\s*\n\s*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:\s+[0-9]{1,2}:[0-9]{2}(?:\s*(?:AM|PM))?)?)/i);
+                // Try to parse from ## Created header as fallback (handles CRLF and flexible spacing)
+                const createdHeaderMatch = content.match(/##\s*Created\s*(?:\r?\n|\s+)\s*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:\s+[0-9]{1,2}:[0-9]{2}(?:\s*(?:AM|PM))?)?)/i);
                 if (createdHeaderMatch && createdHeaderMatch[1]) {
                   try {
                     const parsedDate = new Date(createdHeaderMatch[1]);
@@ -279,13 +279,22 @@ export const useCalendarData = (
                 
                 // Legacy fallback: Try to parse old marker format [!datetime:created_date:YYYY-MM-DD]
                 if (!createdDateTime) {
-                  const legacyMatch = content.match(/\[!datetime:created_date:([0-9]{4}-[0-9]{2}-[0-9]{2})\]/i);
-                  if (legacyMatch && legacyMatch[1]) {
+                  const legacyMatch = content.match(/\[!datetime:created_date:([0-9]{4})-([0-9]{2})-([0-9]{2})\]/i);
+                  if (legacyMatch && legacyMatch[1] && legacyMatch[2] && legacyMatch[3]) {
                     try {
-                      const parsed = new Date(legacyMatch[1]);
-                      if (!isNaN(parsed.getTime())) {
-                        createdDateTime = parsed.toISOString();
-                        console.log(`[CalendarData] Found legacy created_date format in habit "${habitName}": ${legacyMatch[1]}`);
+                      // Extract year, month, day and parse as integers to avoid timezone drift
+                      const year = parseInt(legacyMatch[1], 10);
+                      const month = parseInt(legacyMatch[2], 10);
+                      const day = parseInt(legacyMatch[3], 10);
+                      
+                      // Validate the parsed integers
+                      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                        // Use Date.UTC to create date in UTC (month is 0-based)
+                        const parsed = new Date(Date.UTC(year, month - 1, day));
+                        if (!isNaN(parsed.getTime())) {
+                          createdDateTime = parsed.toISOString();
+                          console.log(`[CalendarData] Found legacy created_date format in habit "${habitName}": ${legacyMatch[1]}-${legacyMatch[2]}-${legacyMatch[3]}`);
+                        }
                       }
                     } catch {
                       // If parsing fails, leave undefined

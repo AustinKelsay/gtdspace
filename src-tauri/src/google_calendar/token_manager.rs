@@ -41,11 +41,13 @@ impl TokenManager {
         let json = serde_json::to_string_pretty(tokens)?;
 
         // Create a unique temporary file name to avoid collisions
-        let temp_path = self.storage_path.with_extension(format!("tmp.{}", uuid::Uuid::new_v4()));
-        
+        let temp_path = self
+            .storage_path
+            .with_extension(format!("tmp.{}", uuid::Uuid::new_v4()));
+
         // Write to temp file
         std::fs::write(&temp_path, &json)?;
-        
+
         // Ensure data is written to disk
         let file = std::fs::File::open(&temp_path)?;
         file.sync_all()?;

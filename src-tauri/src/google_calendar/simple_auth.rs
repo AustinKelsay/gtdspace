@@ -216,7 +216,7 @@ pub fn start_oauth_flow(
                 // If we can't parse the URL for redaction, return an error
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    format!("Failed to parse authorization URL for redaction: {}", e)
+                    format!("Failed to parse authorization URL for redaction: {}", e),
                 )));
             }
         }

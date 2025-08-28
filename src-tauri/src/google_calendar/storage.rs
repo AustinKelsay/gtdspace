@@ -86,7 +86,7 @@ impl TokenStorage {
         // Create a unique temporary file name to avoid collisions
         let temp_path = path.with_extension(format!("tmp.{}", uuid::Uuid::new_v4()));
         fs::write(&temp_path, &json).await?;
-        
+
         // Ensure data is written to disk
         let file = tokio::fs::File::open(&temp_path).await?;
         file.sync_all().await?;
@@ -242,10 +242,10 @@ impl TokenStorage {
 
         let json = serde_json::to_string_pretty(&metadata)?;
 
-        // Create a unique temporary file name to avoid collisions  
+        // Create a unique temporary file name to avoid collisions
         let temp_path = path.with_extension(format!("tmp.{}", uuid::Uuid::new_v4()));
         fs::write(&temp_path, &json).await?;
-        
+
         // Ensure data is written to disk
         let file = tokio::fs::File::open(&temp_path).await?;
         file.sync_all().await?;

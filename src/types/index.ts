@@ -414,7 +414,7 @@ export interface SearchResponse {
 // === GTD TYPES ===
 
 /**
- * GTD Project status options (multiselect)
+ * GTD Project status options
  */
 export type GTDProjectStatus = 'in-progress' | 'waiting' | 'completed';
 
@@ -438,8 +438,8 @@ export interface GTDProject {
   description: string;
   /** Optional due date (ISO format: YYYY-MM-DD) */
   due_date?: string | null;
-  /** Project status (multiselect) */
-  status: GTDProjectStatus[];
+  /** Project status */
+  status: GTDProjectStatus;
   /** Full path to project folder */
   path: string;
   /** Date project was created */

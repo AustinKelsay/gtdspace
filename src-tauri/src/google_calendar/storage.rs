@@ -108,7 +108,7 @@ impl TokenStorage {
                     ErrorKind::AlreadyExists | ErrorKind::PermissionDenied
                 ) {
                     // On Windows, remove the existing file and retry rename
-                    let _ = tokio::fs::remove_file(&path).await;
+                    let _ = tokio::fs::remove__file(&path).await;
                     tokio::fs::rename(&temp_path, &path).await?;
                 } else {
                     return Err(e.into());
@@ -283,4 +283,52 @@ impl TokenStorage {
         let metadata: SyncMetadata = serde_json::from_str(&content)?;
         Ok(Some(metadata))
     }
+}
+
+// Shim functions to match the token_manager API
+// These are intended for temporary use during refactoring
+
+/**
+ * @deprecated Use `TokenStorage::save_token` instead.
+ */
+#[allow(dead_code)]
+pub async fn save_token_info(
+    app_handle: &tauri::AppHandle,
+    token_info: &StoredToken,
+) -> Result<(), String> {
+    let storage = TokenStorage::new(app_handle.clone());
+    storage
+        .save_token(token_info.clone())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/**
+ * @deprecated Use `TokenStorage::load_token` instead.
+ */
+#[allow(dead_code)]
+pub async fn read_token_info(app_handle: &tauri::AppHandle) -> Result<StoredToken, String> {
+    let storage = TokenStorage::new(app_handle.clone());
+    storage
+        .load_token()
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|opt| opt.ok_or_else(|| "No token found".to_string()))
+}
+
+/**
+ * @deprecated Use `TokenStorage::delete_token` instead.
+ */
+#[allow(dead_code)]
+pub async fn delete_token_info(app_handle: &tauri::AppHandle) -> Result<(), String> {
+    let storage = TokenStorage::new(app_handle.clone());
+    storage.delete_token().await.map_err(|e| e.to_string())
+}
+
+/**
+ * @deprecated Use `GoogleAuthManager::is_authenticated` instead.
+ */
+#[allow(dead_code)]
+pub async fn is_authenticated(app_handle: &tauri::AppHandle) -> bool {
+    read_token_info(app_handle).await.is_ok()
 }

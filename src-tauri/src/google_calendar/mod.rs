@@ -10,9 +10,6 @@ pub mod oauth_server;
 pub mod simple_auth;
 pub mod storage;
 pub mod sync;
-// TODO: Consolidate token_manager and storage modules - both implement token storage
-// storage.rs is the primary implementation used by GoogleCalendarManager
-// token_manager.rs is currently used by some command functions but should be migrated
 pub mod token_manager;
 
 use auth::GoogleAuthManager;

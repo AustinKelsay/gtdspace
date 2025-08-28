@@ -264,31 +264,16 @@ export const useCalendarData = (
                   createdDateTime = undefined;
                 }
               } else {
-                // Try to parse from legacy created_date field
-                const createdDateRaw = parseDateTimeField(content, 'created_date');
-                if (createdDateRaw) {
-                  // Parse and normalize to ISO format
+                // Try to parse from ## Created header as fallback
+                const createdHeaderMatch = content.match(/##\s*Created\s*\n\s*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:\s+[0-9]{1,2}:[0-9]{2}(?:\s*(?:AM|PM))?)?)/i);
+                if (createdHeaderMatch && createdHeaderMatch[1]) {
                   try {
-                    const parsed = new Date(createdDateRaw);
-                    if (!isNaN(parsed.getTime())) {
-                      createdDateTime = parsed.toISOString();
+                    const parsedDate = new Date(createdHeaderMatch[1]);
+                    if (!isNaN(parsedDate.getTime())) {
+                      createdDateTime = parsedDate.toISOString();
                     }
-                    // If parsing fails, leave undefined (don't use raw YYYY-MM-DD)
                   } catch {
                     // If parsing fails, leave undefined
-                  }
-                } else {
-                  // Try to parse from ## Created header
-                  const createdHeaderMatch = content.match(/##\s*Created\s*\n\s*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:\s+[0-9]{1,2}:[0-9]{2}(?:\s*(?:AM|PM))?)?)/i);
-                  if (createdHeaderMatch && createdHeaderMatch[1]) {
-                    try {
-                      const parsedDate = new Date(createdHeaderMatch[1]);
-                      if (!isNaN(parsedDate.getTime())) {
-                        createdDateTime = parsedDate.toISOString();
-                      }
-                    } catch {
-                      // If parsing fails, leave undefined
-                    }
                   }
                 }
               }

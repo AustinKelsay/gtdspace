@@ -88,7 +88,7 @@ jobs:
             artifact-name: "macos-x64"
             artifact-ext: ".dmg"
 
-          - platform: "ubuntu-22.04"
+          - platform: "ubuntu-24.04"
             rust-targets: "x86_64-unknown-linux-gnu"
             args: ""
             artifact-name: "linux-x64"
@@ -118,7 +118,7 @@ jobs:
           cache: "npm"
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'ubuntu-24.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -154,7 +154,7 @@ jobs:
             ls -la src-tauri/target/release/bundle/
             ls -la src-tauri/target/release/bundle/msi/ || true
             ls -la src-tauri/target/release/bundle/nsis/ || true
-          elif [ "${{ matrix.platform }}" == "ubuntu-22.04" ]; then
+          elif [ "${{ matrix.platform }}" == "ubuntu-24.04" ]; then
             ls -la src-tauri/target/release/bundle/
             ls -la src-tauri/target/release/bundle/appimage/ || true
             ls -la src-tauri/target/release/bundle/deb/ || true
@@ -218,7 +218,7 @@ jobs:
           ls -la artifacts/
 
       - name: Find and prepare artifacts (Linux)
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'ubuntu-24.04'
         shell: bash
         run: |
           # Find AppImage and Deb files

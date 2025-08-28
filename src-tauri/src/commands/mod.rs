@@ -4413,6 +4413,7 @@ pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
 
     // Restart the server with the expected state so CSRF can be validated
     let state = start_result.state.clone();
+    let code_verifier = start_result.code_verifier.clone();
     let server_handle = std::thread::spawn(move || {
         println!("[GoogleCalendar] Restarting OAuth callback server with expected state...");
 
@@ -4436,7 +4437,8 @@ pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
             println!("[GoogleCalendar] Received authorization code!");
 
             // Exchange code for tokens
-            let token_response = rt.block_on(async { config.exchange_code(&code).await });
+            let token_response =
+                rt.block_on(async { config.exchange_code(&code, &code_verifier).await });
 
             match token_response {
                 Ok(tokens) => {

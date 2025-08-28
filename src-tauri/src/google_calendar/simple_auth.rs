@@ -1,5 +1,7 @@
 use base64::{engine::general_purpose, Engine as _};
+use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use url::Url;
 
@@ -46,6 +48,7 @@ impl SimpleAuthConfig {
     pub async fn exchange_code(
         &self,
         code: &str,
+        code_verifier: &str,
     ) -> Result<TokenResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
@@ -57,16 +60,14 @@ impl SimpleAuthConfig {
         params.insert("code", code);
         params.insert("redirect_uri", self.redirect_uri.as_str());
         params.insert("grant_type", "authorization_code");
+        params.insert("code_verifier", code_verifier);
 
-        let response = client.post(&self.token_uri).form(&params).send().await?;
-
-        if !response.status().is_success() {
-            let error_text = response.text().await?;
-            return Err(Box::new(std::io::Error::other(format!(
-                "Failed to exchange code: {}",
-                error_text
-            ))));
-        }
+        let response = client
+            .post(&self.token_uri)
+            .form(&params)
+            .send()
+            .await?
+            .error_for_status()?;
 
         let token_response: TokenResponse = response.json().await?;
         Ok(token_response)
@@ -87,15 +88,12 @@ impl SimpleAuthConfig {
         params.insert("refresh_token", refresh_token);
         params.insert("grant_type", "refresh_token");
 
-        let response = client.post(&self.token_uri).form(&params).send().await?;
-
-        if !response.status().is_success() {
-            let error_text = response.text().await?;
-            return Err(Box::new(std::io::Error::other(format!(
-                "Failed to refresh token: {}",
-                error_text
-            ))));
-        }
+        let response = client
+            .post(&self.token_uri)
+            .form(&params)
+            .send()
+            .await?
+            .error_for_status()?;
 
         let token_response: TokenResponse = response.json().await?;
         Ok(token_response)
@@ -114,6 +112,9 @@ pub struct BrowserOpenError {
     /// Original state value required to validate the OAuth callback.
     #[allow(dead_code)]
     state: String,
+    /// PKCE code_verifier value required for token exchange. DO NOT LOG.
+    #[allow(dead_code)]
+    code_verifier: String,
     /// Redacted authorization URL with the state removed. Safe for logs.
     pub redacted_auth_url: String,
 }
@@ -138,10 +139,11 @@ impl std::fmt::Debug for BrowserOpenError {
     }
 }
 
-/// Result of starting the OAuth flow. Contains the CSRF `state` (DO NOT LOG)
-/// and a `redacted_auth_url` safe for display/logging.
+/// Result of starting the OAuth flow. Contains the CSRF `state` (DO NOT LOG),
+/// PKCE `code_verifier` (DO NOT LOG), and a `redacted_auth_url` safe for display/logging.
 pub struct StartOAuthFlowResult {
     pub state: String,
+    pub code_verifier: String,
     pub redacted_auth_url: String,
 }
 
@@ -152,18 +154,35 @@ pub fn start_oauth_flow(
     // Generate a random state for security
     let state = general_purpose::URL_SAFE_NO_PAD.encode(uuid::Uuid::new_v4().as_bytes());
 
-    // Build the authorization URL
+    // Generate PKCE code_verifier (cryptographically random, 43-128 chars)
+    let mut code_verifier_bytes = [0u8; 64];
+    OsRng.fill_bytes(&mut code_verifier_bytes);
+    let code_verifier = general_purpose::URL_SAFE_NO_PAD.encode(code_verifier_bytes);
+
+    // Compute S256 code_challenge (SHA256 then URL_SAFE_NO_PAD base64)
+    let mut hasher = Sha256::new();
+    hasher.update(code_verifier.as_bytes());
+    let code_challenge = general_purpose::URL_SAFE_NO_PAD.encode(hasher.finalize());
+
+    // Build the authorization URL with PKCE parameters
     let auth_url = config.build_auth_url(
         &["https://www.googleapis.com/auth/calendar.readonly"],
         &state,
     )?;
 
-    // Redact the state from the URL before printing to avoid leaking the CSRF token
+    // Add PKCE parameters to the URL
+    let mut url = Url::parse(&auth_url)?;
+    url.query_pairs_mut()
+        .append_pair("code_challenge", &code_challenge)
+        .append_pair("code_challenge_method", "S256");
+    let auth_url = url.to_string();
+
+    // Redact the state and code_challenge from the URL before printing to avoid leaking
     let redacted_auth_url = {
         let mut url = Url::parse(&auth_url).expect("URL parsing for redaction failed");
         let mut serializer = url::form_urlencoded::Serializer::new(String::new());
         for (key, value) in url.query_pairs() {
-            if key == "state" {
+            if key == "state" || key == "code_challenge" {
                 serializer.append_pair(key.as_ref(), "[REDACTED]");
             } else {
                 serializer.append_pair(key.as_ref(), value.as_ref());
@@ -189,6 +208,7 @@ pub fn start_oauth_flow(
                             println!("[SimpleAuth] Browser opened successfully with macOS 'open' command");
                             return Ok(StartOAuthFlowResult {
                                 state,
+                                code_verifier: code_verifier.clone(),
                                 redacted_auth_url,
                             });
                         } else {
@@ -200,6 +220,7 @@ pub fn start_oauth_flow(
                         println!("[SimpleAuth] Browser opened successfully with macOS 'open' command (process running)");
                         return Ok(StartOAuthFlowResult {
                             state,
+                            code_verifier: code_verifier.clone(),
                             redacted_auth_url,
                         });
                     }
@@ -221,6 +242,7 @@ pub fn start_oauth_flow(
             println!("[SimpleAuth] Browser opened successfully with 'open' crate");
             return Ok(StartOAuthFlowResult {
                 state,
+                code_verifier: code_verifier.clone(),
                 redacted_auth_url,
             });
         }
@@ -236,6 +258,7 @@ pub fn start_oauth_flow(
             println!("[SimpleAuth] Browser opened successfully with 'webbrowser' crate");
             return Ok(StartOAuthFlowResult {
                 state,
+                code_verifier: code_verifier.clone(),
                 redacted_auth_url,
             });
         }
@@ -249,6 +272,7 @@ pub fn start_oauth_flow(
     Err(Box::new(BrowserOpenError {
         auth_url: auth_url.clone(),
         state,
+        code_verifier,
         redacted_auth_url: redacted_auth_url.clone(),
     }))
 }

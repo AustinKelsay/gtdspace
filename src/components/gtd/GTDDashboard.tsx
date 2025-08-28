@@ -172,22 +172,13 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                       createdDateTime = parsed.toISOString();
                     }
                   } else {
-                    // Fallback for old format (keeping for backward compatibility)
-                    const createdDateBlock = content.match(/\[!datetime:created_date:([^\]]+)\]/i);
-                    if (createdDateBlock) {
-                      const raw = createdDateBlock[1].trim();
-                      const parsed = new Date(raw);
-                      if (!isNaN(parsed.getTime())) {
-                        createdDateTime = parsed.toISOString();
-                      }
-                    } else {
-                      const createdSection = content.match(
-                        /##\s*Created\s*\n\s*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2})?(?:\s*(?:AM|PM))?)?)/i
-                      );
-                      if (createdSection) {
-                        const parsed = new Date(createdSection[1]);
-                        if (!isNaN(parsed.getTime())) createdDateTime = parsed.toISOString();
-                      }
+                    // Fallback to parse from ## Created header
+                    const createdSection = content.match(
+                      /##\s*Created\s*\n\s*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2})?(?:\s*(?:AM|PM))?)?)/i
+                    );
+                    if (createdSection) {
+                      const parsed = new Date(createdSection[1]);
+                      if (!isNaN(parsed.getTime())) createdDateTime = parsed.toISOString();
                     }
                   }
 
@@ -335,10 +326,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     };
 
     gtdSpace.projects.forEach(project => {
-      // Normalize status coming from backend (string) or frontend (array)
-      const rawStatus = Array.isArray(project.status)
-        ? (project.status[0] || 'in-progress')
-        : ((project.status as unknown as string) || 'in-progress');
+      const rawStatus = project.status || 'in-progress';
       const primaryStatus = rawStatus === 'complete' ? 'completed' : rawStatus;
       switch (primaryStatus) {
         case 'in-progress':
@@ -414,9 +402,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   }, [currentFolder, gtdSpace?.isGTDSpace, loadProjects]);
 
   const getProjectCompletion = (project: GTDProject): number => {
-    const statusStr = Array.isArray(project.status)
-      ? (project.status[0] || '')
-      : (project.status as unknown as string) || '';
+    const statusStr = project.status || '';
     if (statusStr.includes('completed')) return 100;
     if (statusStr.includes('in-progress')) return 50;
     if (statusStr.includes('waiting')) return 25;
@@ -823,7 +809,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                         </div>
                       ) : (
                         gtdSpace.projects
-                          ?.filter(p => (Array.isArray(p.status) ? p.status.includes('in-progress') : String(p.status).includes('in-progress')))
+                          ?.filter(p => p.status === 'in-progress')
                           .map(project => (
                             <div
                               key={project.path}
@@ -984,7 +970,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                           {gtdSpace.projects
                             ?.filter(p => {
                               const due = parseProjectDueDate((p as unknown as { due_date?: string }).due_date);
-                              const statusStr = Array.isArray(p.status) ? (p.status[0] || '') : (p.status as unknown as string) || '';
+                              const statusStr = p.status || '';
                               return due && due < new Date() && !statusStr.includes('completed');
                             })
                             .map(project => (

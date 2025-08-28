@@ -750,7 +750,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           name: projectName,
           description: '',
           due_date: undefined,
-          status: ['in-progress'],
+          status: 'in-progress',
           path: projectPath,
           created_date_time: new Date().toISOString(),
           action_count: 0,
@@ -862,10 +862,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     );
   };
 
-  const getProjectStatusColor = (statusInput: string | string[]) => {
-    // Handle both string and array inputs
-    const status = Array.isArray(statusInput) ? statusInput[0] : statusInput;
-    const normalizedStatus = status || 'in-progress';
+  const getProjectStatusColor = (statusInput: string) => {
+    const normalizedStatus = statusInput || 'in-progress';
     switch (normalizedStatus) {
       case 'completed': return 'text-green-600 dark:text-green-500';
       case 'waiting': return 'text-purple-600 dark:text-purple-500';
@@ -874,10 +872,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     }
   };
 
-  const getProjectStatusIcon = (statusInput: string | string[]) => {
-    // Handle both string and array inputs
-    const status = Array.isArray(statusInput) ? statusInput[0] : statusInput;
-    const normalizedStatus = status || 'in-progress';
+  const getProjectStatusIcon = (statusInput: string) => {
+    const normalizedStatus = statusInput || 'in-progress';
     switch (normalizedStatus) {
       case 'completed': return CheckCircle2; // Filled circle with checkmark for completed
       case 'waiting': return CircleDot; // Filled circle (dot in center) for waiting

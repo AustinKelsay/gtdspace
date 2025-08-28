@@ -151,7 +151,7 @@ export function useGTDSpace() {
             name: params.project_name,
             description: params.description,
             due_date: params.due_date,
-            status: [params.status || 'in-progress'],
+            status: params.status || 'in-progress',
             path: projectPath,
             created_date_time: new Date().toISOString(),
             action_count: 0,

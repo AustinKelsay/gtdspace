@@ -48,7 +48,6 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
         'due_date': 'dueDate',
         'focus_date': 'focusDate',
         'focus_date_time': 'focusDate',
-        'created_date': 'createdDateTime',
         'created_date_time': 'createdDateTime'
       };
       const field = fieldMap[match[1]] || match[1];

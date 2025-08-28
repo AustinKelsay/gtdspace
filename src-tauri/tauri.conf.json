@@ -27,7 +27,9 @@
       "csp": "default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://accounts.google.com https://www.googleapis.com https://www.google.com http://localhost:1420 ws://localhost:1420; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
       "dangerousDisableAssetCspModification": false,
       "freezePrototype": true,
-      "capabilities": ["default"]
+      "capabilities": [
+        "default"
+      ]
     }
   },
   "bundle": {

@@ -254,7 +254,7 @@ interface GTDProject {
   name: string;
   description: string;
   due_date?: string | null; // snake_case to match Rust
-  status: GTDProjectStatus[];
+  status: GTDProjectStatus;
   path: string;
   created_date_time: string; // snake_case to match Rust
   action_count?: number; // snake_case to match Rust

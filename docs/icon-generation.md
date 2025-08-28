@@ -17,29 +17,29 @@ GTD Space requires application icons in multiple formats for different platforms
 ## Automated Generation (CI/CD)
 
 The GitHub Actions workflow handles icon generation automatically:
-1. Generates PNG files on all platforms using Pillow
-2. Creates ICO files for Windows
-3. **Generates ICNS files cross-platform** using Tauri CLI (with iconutil as a macOS-only fallback)
-4. Falls back gracefully if tools are unavailable
+1. Uses the NPM script (`npm run icons:generate`) to generate all formats
+2. Leverages Tauri CLI for cross-platform icon generation
+3. Creates PNG, ICO, and ICNS files as needed
+4. Automatically cleans up unnecessary files
 
 ## Local Generation
 
-### Method 1: Python Script (Recommended)
+### Method 1: NPM Script (Recommended)
+
+**Prerequisites**: Ensure `src-tauri/icons/icon.png` exists (your source icon).
 
 ```bash
-# Install dependencies
-pip install Pillow
-
-# Run the script
-cd src-tauri/icons
-python3 generate_icons.py
+# From project root
+npm run icons:generate
 ```
 
-This script:
-- ✅ Generates all PNG sizes correctly
+This script (located at `scripts/icons-generate.mjs`):
+- ✅ Uses Tauri CLI to generate all required icon formats
+- ✅ Creates all PNG sizes correctly
 - ✅ Creates valid ICO file for Windows
-- ✅ On macOS: Creates proper ICNS using Tauri CLI or iconutil
-- ✅ On other platforms: Skips ICNS (will be generated during macOS builds)
+- ✅ Creates proper ICNS file for macOS
+- ✅ Automatically cleans up unnecessary files
+- ✅ Works cross-platform
 
 ### Method 2: Using Tauri CLI Directly
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* eslint-env node */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { existsSync, rmSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -29,9 +29,12 @@ if (!existsSync(iconPath)) {
 
 console.log('🎨 Generating icons from icon.png...');
 
+const command = 'npx';
+const args = ['tauri', 'icon', iconPath, '-o', iconsDir];
+
 try {
   // Use Tauri CLI to generate all icon formats
-  execSync(`npx -y @tauri-apps/cli@^2 icon "${iconPath}" -o "${iconsDir}"`, {
+  execFileSync(command, args, {
     stdio: 'inherit',
     cwd: join(__dirname, '..')
   });
@@ -49,7 +52,11 @@ try {
   console.log('✅ Icons generated successfully!');
   console.log('   Kept only essential files:', KEEP_FILES.join(', '));
 } catch (error) {
-  console.error('❌ Failed to generate icons');
-  console.error('Make sure @tauri-apps/cli is installed');
+  console.error('❌ Failed to generate icons.');
+  console.error(`Command failed with exit code ${error.status}:`);
+  console.error(`  Command: ${command} ${args.join(' ')}`);
+  if (error.stderr) {
+    console.error('  Stderr:', error.stderr.toString());
+  }
   process.exit(1);
 }

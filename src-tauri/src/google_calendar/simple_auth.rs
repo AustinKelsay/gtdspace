@@ -131,6 +131,26 @@ impl std::fmt::Display for BrowserOpenError {
 
 impl std::error::Error for BrowserOpenError {}
 
+impl BrowserOpenError {
+    /// Full OAuth URL for manual copy/paste. DO NOT LOG.
+    #[allow(dead_code)]
+    pub fn auth_url(&self) -> &str {
+        &self.auth_url
+    }
+    
+    /// CSRF state (required to validate callback). DO NOT LOG.
+    #[allow(dead_code)]
+    pub fn state(&self) -> &str {
+        &self.state
+    }
+    
+    /// PKCE verifier for token exchange. DO NOT LOG.
+    #[allow(dead_code)]
+    pub fn code_verifier(&self) -> &str {
+        &self.code_verifier
+    }
+}
+
 impl std::fmt::Debug for BrowserOpenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BrowserOpenError")

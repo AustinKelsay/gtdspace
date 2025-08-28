@@ -376,10 +376,12 @@ export const DateTimeSelectBlock = createReactBlockSpec(
     },
     toExternalHTML: (props) => {
       const block = props.block as { props: { type: string; value: string; includeTime?: boolean } };
-      const { type, value, includeTime } = block.props;
+      const { type, value } = block.props;
       // Return the markdown format that can be parsed back
+      // Determine if value contains time to decide on field type
+      const hasTime = (value || '').includes('T');
       // Avoid double-suffix for canonical *_date_time types
-      const fieldType = type.endsWith('_time') ? type : (includeTime ? `${type}_time` : type);
+      const fieldType = type.endsWith('_time') ? type : (hasTime ? `${type}_time` : type);
       const markdownFormat = `[!datetime:${fieldType}:${value || ''}]`;
       // Return raw markdown string instead of JSX
       return markdownFormat;

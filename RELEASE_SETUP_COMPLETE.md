@@ -56,15 +56,15 @@ npm run release  # Creates v0.1.1, tags, and pushes
 ```
 
 ### 4. Monitor the Build
-- Go to [GitHub Actions](../../actions) to watch the build progress
-- The release will appear in [Releases](../../releases) when complete
+- Go to [GitHub Actions](https://github.com/AustinKelsay/gtdspace/actions) to watch the build progress
+- The release will appear in [Releases](https://github.com/AustinKelsay/gtdspace/releases) when complete
 
 ## Important Notes
 
 ### Icons
-- **Current state**: Using copied placeholders (not resized)
-- **For production**: Install Pillow (`pip install Pillow`) and run `python3 src-tauri/icons/generate_icons.py`
-- **CI/CD**: Icons are automatically generated properly in GitHub Actions
+- **Current state**: Using copied placeholders.
+- **To generate locally**: Run `npm run icons:generate`. This will generate the necessary icons from `src-tauri/icons/icon.png`.
+- **CI/CD**: Icons are automatically generated in GitHub Actions during the release process.
 
 ### Version Numbers
 Currently synchronized at `{{version}}` in:

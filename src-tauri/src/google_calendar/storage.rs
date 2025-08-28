@@ -108,7 +108,7 @@ impl TokenStorage {
                     ErrorKind::AlreadyExists | ErrorKind::PermissionDenied
                 ) {
                     // On Windows, remove the existing file and retry rename
-                    let _ = tokio::fs::remove__file(&path).await;
+                    let _ = tokio::fs::remove_file(&path).await;
                     tokio::fs::rename(&temp_path, &path).await?;
                 } else {
                     return Err(e.into());

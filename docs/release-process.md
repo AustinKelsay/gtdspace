@@ -72,14 +72,27 @@ npm run release
    git push origin v0.1.1
    ```
 
-### Method 3: Trigger Manually from GitHub
+### Method 3: Trigger Version Bump from GitHub
 
-You can also trigger a build manually from the GitHub Actions tab:
+You can trigger a version bump and release from the GitHub Actions tab:
+
+1. Go to Actions → Release
+2. Click "Run workflow" 
+3. Choose the release type (`patch`, `minor`, or `major`)
+4. Click "Run workflow"
+
+   *Note: This bumps the version, creates a tag, and pushes it. The "Build and Release" workflow will automatically run when the tag is pushed.*
+
+### Method 4: Trigger Build Manually from GitHub
+
+You can also trigger a build for an existing version:
 
 1. Go to Actions → Build and Release
 2. Click "Run workflow"
-3. Enter the version (e.g., `v0.1.1`)
+3. Optionally enter the version to release (e.g., `v0.1.1`). Leave blank to create a draft dev release.
 4. Click "Run workflow"
+   
+   *Note: This workflow does not bump versions or create tags. It builds and releases for the specified (or development) version.*
 
 ## Release Workflow
 

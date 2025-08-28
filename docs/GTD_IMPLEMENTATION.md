@@ -197,7 +197,8 @@ create_gtd_project(
     space_path: String,
     project_name: String,
     description: String,
-    due_date: Option<String>
+    due_date: Option<String>,
+    status: Option<String>
 ) -> Result<String, String>
 
 // Create new action
@@ -226,6 +227,7 @@ await invoke('create_gtd_project', {
   projectName,
   description,
   dueDate,
+  status: 'in-progress',
 });
 
 // Create new action

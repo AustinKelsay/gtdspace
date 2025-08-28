@@ -58,7 +58,7 @@ jobs:
             ## Installation
 
             Download the appropriate installer for your platform below:
-            - **Windows**: `.msi` installer
+            - **Windows**: `.msi` installer or `.exe` (NSIS) installer
             - **macOS Intel**: `.dmg` for Intel Macs
             - **macOS Apple Silicon**: `.dmg` for M1/M2/M3 Macs
             - **Linux**: `.AppImage` (universal) or `.deb` (Debian/Ubuntu)
@@ -167,21 +167,32 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: bash
         run: |
-          # Find the MSI installer
-          MSI_FILE=$(find src-tauri/target/release/bundle \
-            -name "*.msi" | head -n 1)
-          if [ -z "$MSI_FILE" ]; then
-            echo "No MSI file found!"
-            exit 1
+          set -euo pipefail
+          # Prefer MSI from the known bundle directory
+          ARTIFACT_FILE=$(find src-tauri/target/release/bundle/msi -type f -name "*.msi" 2>/dev/null | head -n 1 || true)
+          ARTIFACT_EXT="${{ matrix.artifact-ext }}"
+          
+          if [ -z "$ARTIFACT_FILE" ]; then
+            echo "No MSI file found, searching for NSIS .exe..."
+            # Fallback to NSIS .exe from the nsis bundle directory
+            ARTIFACT_FILE=$(find src-tauri/target/release/bundle/nsis -type f -name "*.exe" 2>/dev/null | head -n 1 || true)
+            ARTIFACT_EXT=".exe"
+            
+            if [ -z "$ARTIFACT_FILE" ]; then
+              echo "No MSI or NSIS .exe file found!"
+              exit 1
+            fi
+            echo "Found NSIS installer: $ARTIFACT_FILE"
+          else
+            echo "Found MSI installer: $ARTIFACT_FILE"
           fi
-          echo "Found MSI: $MSI_FILE"
 
           # Create artifacts directory
           mkdir -p artifacts
 
           # Copy and rename with version
           VERSION="${{ needs.create-release.outputs.version }}"
-          cp "$MSI_FILE" "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${{ matrix.artifact-ext }}"
+          cp "$ARTIFACT_FILE" "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${ARTIFACT_EXT}"
 
           echo "Artifact prepared:"
           ls -la artifacts/

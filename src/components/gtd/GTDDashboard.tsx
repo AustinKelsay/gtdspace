@@ -326,8 +326,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     };
 
     gtdSpace.projects.forEach(project => {
-      const rawStatus = project.status || 'in-progress';
-      const primaryStatus = rawStatus === 'complete' ? 'completed' : rawStatus;
+      const primaryStatus = project.status || 'in-progress';
       switch (primaryStatus) {
         case 'in-progress':
           stats.active++;

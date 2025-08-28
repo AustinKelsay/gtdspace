@@ -73,9 +73,8 @@ impl TokenStorage {
 
     #[allow(dead_code)]
     fn get_sync_metadata_path(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let app_dir = self
-            .get_app_data_dir()
-            .unwrap_or_else(|_| std::env::temp_dir());
+        // Use the same fallback logic as get_token_path to ensure proper app-specific directory
+        let app_dir = self.get_app_data_dir_or_fallback();
         Ok(app_dir.join("google_calendar_sync.json"))
     }
 
@@ -84,9 +83,14 @@ impl TokenStorage {
         let path = self.get_token_path();
         let json = serde_json::to_string_pretty(&token)?;
 
-        // Write to a temporary file first for atomic operation
-        let temp_path = path.with_extension("tmp");
+        // Create a unique temporary file name to avoid collisions
+        let temp_path = path.with_extension(format!("tmp.{}", uuid::Uuid::new_v4()));
         fs::write(&temp_path, &json).await?;
+        
+        // Ensure data is written to disk
+        let file = tokio::fs::File::open(&temp_path).await?;
+        file.sync_all().await?;
+        drop(file);
 
         // Set restrictive permissions on Unix-like systems
         #[cfg(unix)]
@@ -109,13 +113,21 @@ impl TokenStorage {
                 ) {
                     // On Windows, remove the existing file and retry rename
                     let _ = tokio::fs::remove_file(&path).await;
-                    tokio::fs::rename(&temp_path, &path).await?;
+                    if let Err(rename_err) = tokio::fs::rename(&temp_path, &path).await {
+                        // Clean up temp file on error
+                        let _ = tokio::fs::remove_file(&temp_path).await;
+                        return Err(rename_err.into());
+                    }
                 } else {
+                    // Clean up temp file on error
+                    let _ = tokio::fs::remove_file(&temp_path).await;
                     return Err(e.into());
                 }
             }
             #[cfg(not(windows))]
             {
+                // Clean up temp file on error
+                let _ = tokio::fs::remove_file(&temp_path).await;
                 return Err(e.into());
             }
         }
@@ -230,9 +242,14 @@ impl TokenStorage {
 
         let json = serde_json::to_string_pretty(&metadata)?;
 
-        // Write to a temporary file first for atomic operation
-        let temp_path = path.with_extension("tmp");
+        // Create a unique temporary file name to avoid collisions  
+        let temp_path = path.with_extension(format!("tmp.{}", uuid::Uuid::new_v4()));
         fs::write(&temp_path, &json).await?;
+        
+        // Ensure data is written to disk
+        let file = tokio::fs::File::open(&temp_path).await?;
+        file.sync_all().await?;
+        drop(file);
 
         // Set restrictive permissions on Unix-like systems
         #[cfg(unix)]
@@ -255,13 +272,21 @@ impl TokenStorage {
                 ) {
                     // On Windows, remove the existing file and retry rename
                     let _ = tokio::fs::remove_file(&path).await;
-                    tokio::fs::rename(&temp_path, &path).await?;
+                    if let Err(rename_err) = tokio::fs::rename(&temp_path, &path).await {
+                        // Clean up temp file on error
+                        let _ = tokio::fs::remove_file(&temp_path).await;
+                        return Err(rename_err.into());
+                    }
                 } else {
+                    // Clean up temp file on error
+                    let _ = tokio::fs::remove_file(&temp_path).await;
                     return Err(e.into());
                 }
             }
             #[cfg(not(windows))]
             {
+                // Clean up temp file on error
+                let _ = tokio::fs::remove_file(&temp_path).await;
                 return Err(e.into());
             }
         }

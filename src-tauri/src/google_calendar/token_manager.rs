@@ -40,9 +40,16 @@ impl TokenManager {
     pub fn save_tokens(&self, tokens: &StoredTokens) -> Result<(), Box<dyn std::error::Error>> {
         let json = serde_json::to_string_pretty(tokens)?;
 
-        // Write to a temporary file first, then rename for atomic operation
-        let temp_path = self.storage_path.with_extension("tmp");
+        // Create a unique temporary file name to avoid collisions
+        let temp_path = self.storage_path.with_extension(format!("tmp.{}", uuid::Uuid::new_v4()));
+        
+        // Write to temp file
         std::fs::write(&temp_path, &json)?;
+        
+        // Ensure data is written to disk
+        let file = std::fs::File::open(&temp_path)?;
+        file.sync_all()?;
+        drop(file);
 
         // Set restrictive permissions on Unix-like systems
         #[cfg(unix)]

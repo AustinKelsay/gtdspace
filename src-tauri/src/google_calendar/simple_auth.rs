@@ -199,17 +199,27 @@ pub fn start_oauth_flow(
 
     // Redact the state and code_challenge from the URL before printing to avoid leaking
     let redacted_auth_url = {
-        let mut url = Url::parse(&auth_url).expect("URL parsing for redaction failed");
-        let mut serializer = url::form_urlencoded::Serializer::new(String::new());
-        for (key, value) in url.query_pairs() {
-            if key == "state" || key == "code_challenge" {
-                serializer.append_pair(key.as_ref(), "[REDACTED]");
-            } else {
-                serializer.append_pair(key.as_ref(), value.as_ref());
+        match Url::parse(&auth_url) {
+            Ok(mut url) => {
+                let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+                for (key, value) in url.query_pairs() {
+                    if key == "state" || key == "code_challenge" {
+                        serializer.append_pair(key.as_ref(), "[REDACTED]");
+                    } else {
+                        serializer.append_pair(key.as_ref(), value.as_ref());
+                    }
+                }
+                url.set_query(Some(&serializer.finish()));
+                url.to_string()
+            }
+            Err(e) => {
+                // If we can't parse the URL for redaction, return an error
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Failed to parse authorization URL for redaction: {}", e)
+                )));
             }
         }
-        url.set_query(Some(&serializer.finish()));
-        url.to_string()
     };
 
     // Do not print raw state or full auth_url; caller may log redacted_auth_url if needed.

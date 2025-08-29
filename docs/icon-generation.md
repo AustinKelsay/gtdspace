@@ -12,9 +12,9 @@ GTD Space requires application icons in multiple formats for different platforms
 
 ### ICNS File Requirements
 
-- **ICNS files MUST be proper Apple Icon Image format**, not renamed PNGs
-- Invalid ICNS files will cause macOS build failures
-- ICNS generation requires macOS-specific tools
+- **ICNS files MUST be proper Apple Icon Image format**, not renamed PNGs.
+- Using an invalid ICNS file (e.g., a renamed PNG) will cause the macOS build to fail.
+- ICNS files can be generated on any platform using cross-platform tools like the Tauri CLI; macOS-specific tools are not required.
 
 ## Automated Generation (CI/CD)
 
@@ -47,7 +47,7 @@ This script (located at `scripts/icons-generate.mjs`):
 
 ### Method 2: Using Tauri CLI Directly
 
-On macOS, you can use Tauri's icon command:
+To generate icons using the Tauri CLI (cross-platform, requires Node.js/npm):
 
 ```bash
 cd src-tauri/icons

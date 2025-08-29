@@ -37,8 +37,8 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
   const [open, setOpen] = React.useState(false);
   const [timeValue, setTimeValue] = React.useState('12:00');
   const [localTimeEnabled, setLocalTimeEnabled] = React.useState(() => {
-    // Initialize based on whether the value has time
-    return includeTime || (value && value.includes('T'));
+    // Initialize based solely on whether the current value has time
+    return Boolean(value && value.includes('T'));
   });
 
   // Parse the ISO date value - handle empty strings gracefully
@@ -56,9 +56,14 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
   }
   const isValidDate = dateValue !== null && isValid(dateValue);
 
-  // Extract time if value includes it
+  // Sync localTimeEnabled with value changes and extract time if present
   React.useEffect(() => {
-    if (isValidDate && value && value.includes('T')) {
+    // Update localTimeEnabled based on whether value contains time
+    const hasTime = Boolean(value && value.includes('T'));
+    setLocalTimeEnabled(hasTime);
+    
+    // Extract time if value includes it
+    if (isValidDate && hasTime) {
       const date = new Date(value);
       const hours = date.getUTCHours().toString().padStart(2, '0');
       const minutes = date.getUTCMinutes().toString().padStart(2, '0');

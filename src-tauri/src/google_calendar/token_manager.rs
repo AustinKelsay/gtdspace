@@ -63,16 +63,30 @@ impl TokenManager {
         }
 
         // Persist the temp file to the final location (atomic rename)
-        // Handle Windows-specific error where destination file already exists
+        // Handle Windows-specific errors where destination file already exists or permission issues
         match temp_file.persist(&self.storage_path) {
             Ok(_) => {}
             Err(persist_err) => {
-                // On Windows, persist can fail if destination already exists
-                // Check if it's an AlreadyExists error
-                if persist_err.error.kind() == std::io::ErrorKind::AlreadyExists {
-                    // Delete the existing file and retry once
-                    std::fs::remove_file(&self.storage_path)?;
-                    // Recover the temp file from the error and retry
+                // On Windows, persist can fail if destination already exists or has permission issues
+                // Check if it's an AlreadyExists or PermissionDenied error
+                let error_kind = persist_err.error.kind();
+                if error_kind == std::io::ErrorKind::AlreadyExists
+                    || error_kind == std::io::ErrorKind::PermissionDenied
+                {
+                    log::warn!(
+                        "[TokenManager] Persist failed with {:?}, attempting to remove existing file and retry",
+                        error_kind
+                    );
+
+                    // Try to delete the existing file
+                    if let Err(remove_err) = std::fs::remove_file(&self.storage_path) {
+                        log::error!(
+                            "[TokenManager] Failed to remove existing file: {}",
+                            remove_err
+                        );
+                    }
+
+                    // Recover the temp file from the error and retry once
                     let temp_file = persist_err.file;
                     temp_file.persist(&self.storage_path)?;
                 } else {
@@ -87,15 +101,12 @@ impl TokenManager {
             if let Ok(dir_file) = std::fs::File::open(parent) {
                 if let Err(sync_err) = dir_file.sync_all() {
                     // Log but don't fail - this is best-effort
-                    println!(
-                        "[TokenManager] Warning: Failed to sync directory: {}",
-                        sync_err
-                    );
+                    log::warn!("[TokenManager] Failed to sync directory: {}", sync_err);
                 }
             }
         }
 
-        println!(
+        log::debug!(
             "[TokenManager] Tokens saved securely to {:?}",
             self.storage_path
         );
@@ -143,7 +154,7 @@ impl TokenManager {
             // Now remove the file
             std::fs::remove_file(&self.storage_path)?;
 
-            println!("[TokenManager] Tokens securely deleted");
+            log::debug!("[TokenManager] Tokens securely deleted");
         }
         Ok(())
     }

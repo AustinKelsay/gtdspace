@@ -24,8 +24,13 @@
    **Linux:**
    ```bash
    sudo apt update
-   sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev \
-     libayatana-appindicator3-dev librsvg2-dev patchelf
+   sudo apt install libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+   ```
+   Then, install the WebKit2GTK dependency. The package name differs across Linux distributions. For instance, Ubuntu 22.04 requires `libwebkit2gtk-4.0-dev`, whereas `libwebkit2gtk-4.1-dev` is used on newer systems.
+
+   To automatically install the correct version, you can run the following command, which tries the newer package first and falls back to the older one, mirroring the CI build process:
+   ```bash
+   sudo apt install libwebkit2gtk-4.1-dev || sudo apt install libwebkit2gtk-4.0-dev
    ```
 
 ### Icon Generation

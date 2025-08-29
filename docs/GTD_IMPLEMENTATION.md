@@ -82,9 +82,17 @@ YYYY-MM-DD or "Not set"
 
 ## Status
 
-A project uses a SingleSelect block to track its status. Only one of the following canonical values can be selected: Active, On Hold, Complete, Cancelled.
+A project uses a SingleSelect block to track its status. The block stores a canonical token representing the status.
 
-Example: `[!singleselect:project-status:Active]`
+The canonical status tokens are:
+- `in-progress`
+- `on-hold`
+- `completed`
+- `cancelled`
+
+Example: `[!singleselect:project-status:in-progress]`
+
+**Note:** The UI may display more user-friendly labels (e.g., "Active" for `in-progress`). The code should map these display labels to the correct canonical tokens to ensure data consistency, as seen in hooks like `useCalendarData`.
 
 ## Actions
 

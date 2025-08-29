@@ -91,15 +91,14 @@ pub async fn fetch_calendar_events(
             .bearer_auth(access_token)
             .query(&query_params)
             .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let error_text = response.text().await?;
-            return Err(Box::new(std::io::Error::other(format!(
-                "Failed to fetch events on page {}: {}",
-                page_count, error_text
-            ))));
-        }
+            .await?
+            .error_for_status()
+            .map_err(|e| -> Box<dyn std::error::Error> {
+                Box::new(std::io::Error::other(format!(
+                    "Failed to fetch events on page {}: {}",
+                    page_count, e
+                )))
+            })?;
 
         let google_response: GoogleCalendarListResponse = response.json().await?;
 

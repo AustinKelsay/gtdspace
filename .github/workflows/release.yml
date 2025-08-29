@@ -45,12 +45,7 @@ jobs:
         run: npm run type-check
 
       - name: Run tests
-        run: |
-          # Note: No test suite currently defined in package.json
-          # When tests are added, update this to: npm test
-          echo "No test suite defined yet - skipping tests"
-          # Uncomment the following line when tests are added:
-          # npm test
+        run: npm test --if-present
 
       - name: Lint
         run: npm run lint

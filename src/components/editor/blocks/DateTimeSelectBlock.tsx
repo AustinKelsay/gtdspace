@@ -385,8 +385,15 @@ export const DateTimeSelectBlock = createReactBlockSpec(
       // Return the markdown format that can be parsed back
       // Determine if value contains time to decide on field type
       const hasTime = (value || '').includes('T');
-      // Avoid double-suffix for canonical *_date_time types
-      const fieldType = type.endsWith('_time') ? type : (hasTime ? `${type}_time` : type);
+      // Special case for focus_date - always keep as 'focus_date'
+      let fieldType: string;
+      if (type === 'focus_date') {
+        fieldType = 'focus_date';
+      } else if (type.endsWith('_time')) {
+        fieldType = type;
+      } else {
+        fieldType = hasTime ? `${type}_time` : type;
+      }
       const markdownFormat = `[!datetime:${fieldType}:${value || ''}]`;
       // Return raw markdown string instead of JSX
       return markdownFormat;

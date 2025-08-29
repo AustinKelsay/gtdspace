@@ -34,7 +34,7 @@ git push && git push --tags
 After pushing a tag, GitHub Actions automatically:
 
 1. Builds for Windows, macOS (Intel & Apple Silicon), and Linux
-2. Creates a draft GitHub Release with all installers; you must publish it manually in the GitHub UI when ready
+2. Releases are published automatically by the CI via the `finalize-release` job in `.github/workflows/build.yml`.
 
 Monitor progress: [GitHub Actions](https://github.com/AustinKelsay/gtdspace/actions)
 

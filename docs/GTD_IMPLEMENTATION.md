@@ -86,9 +86,8 @@ A project uses a SingleSelect block to track its status. The block stores a cano
 
 The canonical status tokens are:
 - `in-progress`
-- `on-hold`
+- `waiting`
 - `completed`
-- `cancelled`
 
 Example: `[!singleselect:project-status:in-progress]`
 

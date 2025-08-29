@@ -288,12 +288,12 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
               <div className="flex items-center gap-2 mb-2">
                 <input
                   type="checkbox"
-                  id="include-time"
+                  id={`${props.block.id}-include-time`}
                   checked={localTimeEnabled}
                   onChange={(e) => handleTimeToggle(e.target.checked)}
                   className="rounded border-gray-300"
                 />
-                <label htmlFor="include-time" className="text-sm font-medium">
+                <label htmlFor={`${props.block.id}-include-time`} className="text-sm font-medium">
                   Include time
                 </label>
               </div>

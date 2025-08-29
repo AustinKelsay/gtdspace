@@ -79,9 +79,18 @@ function main() {
   writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
   console.log(`✓ Updated package.json: ${currentVersion} → ${newVersion}`);
 
+  try {
+    console.log('⟳ Syncing package-lock.json...');
+    execSync('npm install --package-lock-only', { stdio: 'inherit' });
+    console.log('✓ Synced package-lock.json');
+  } catch (error) {
+    console.error('❌ Failed to sync package-lock.json:', error.message);
+    process.exit(1);
+  }
+
   const cargoTomlPath = path.join(__dirname, '..', 'src-tauri', 'Cargo.toml');
   let cargoToml = readFile(cargoTomlPath);
-  const packageSectionRegex = /(\[package\][^[]*version\s*=\s*")[^"]*(")/m;
+  const packageSectionRegex = /(\[package\][\s\S]*?^\s*version\s*=\s*")[^"]+(")/m;
   if (!packageSectionRegex.test(cargoToml)) {
     console.error('Could not find version in [package] section of Cargo.toml');
     process.exit(1);
@@ -110,7 +119,7 @@ function main() {
   }
 
   try {
-    execSync('git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json', { stdio: 'inherit' });
+    execSync('git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/tauri.conf.json', { stdio: 'inherit' });
     let preCommitHash = null;
     try {
       preCommitHash = execSync('git rev-parse --verify HEAD', { encoding: 'utf8', stdio: 'pipe' }).trim();
@@ -143,7 +152,7 @@ function main() {
   } catch (error) {
     console.error('Failed to create git commit/tag:', error.message);
     console.log('\nYou can manually commit and tag the changes:');
-    console.log(`  git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json`);
+    console.log(`  git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/tauri.conf.json`);
     console.log(`  git commit -m "${commitMessage}"`);
     console.log(`  git tag -a ${tagName} -m "Release ${tagName}"`);
   }

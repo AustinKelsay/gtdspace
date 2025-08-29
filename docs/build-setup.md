@@ -180,10 +180,20 @@ If you get icon-related errors during build:
 
 ### Bundle Not Created
 
-If the build succeeds but no installer is created:
-- Check `src-tauri/tauri.conf.json`
-- Ensure `bundle.active = true`
-- Verify `bundle.targets = "all"` or specific targets
+If the build succeeds but no installer is created, check the `bundle` configuration in `src-tauri/tauri.conf.json`.
+
+A correct configuration should look similar to this, ensuring `active` is `true` and `targets` is an array of desired formats:
+
+```json
+"bundle": {
+  "active": true,
+  "targets": ["msi", "dmg", "appimage", "deb"],
+  "identifier": "com.gtd.space"
+}
+```
+
+- **`bundle.active`**: Must be set to `true` to enable bundling.
+- **`bundle.targets`**: An array of strings specifying which installers to build. While `"all"` is a valid option to build for the current platform, explicitly listing the targets is clearer.
 
 ## CI/CD Builds
 

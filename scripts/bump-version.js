@@ -122,7 +122,18 @@ function main() {
   }
 
   try {
-    execSync('git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/tauri.conf.json', { stdio: 'inherit' });
+    const repoRoot = path.join(__dirname, '..');
+    const filesToAdd = [
+      path.join(repoRoot, 'package.json'),
+      path.join(repoRoot, 'src-tauri', 'Cargo.toml'),
+      path.join(repoRoot, 'src-tauri', 'tauri.conf.json'),
+    ];
+
+    if (fs.existsSync(path.join(repoRoot, 'package-lock.json'))) {
+      filesToAdd.push(path.join(repoRoot, 'package-lock.json'));
+    }
+
+    execSync(`git add ${filesToAdd.join(' ')}`, { stdio: 'inherit' });
     let preCommitHash = null;
     try {
       preCommitHash = execSync('git rev-parse --verify HEAD', { encoding: 'utf8', stdio: 'pipe' }).trim();

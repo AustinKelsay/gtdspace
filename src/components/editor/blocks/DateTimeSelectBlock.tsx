@@ -102,14 +102,11 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       );
       isoString = localDate.toISOString();
     } else {
-      // Create local date at midnight
-      const localDate = new Date(
-        newDate.getFullYear(),
-        newDate.getMonth(),
-        newDate.getDate(),
-        0, 0, 0, 0
-      );
-      isoString = localDate.toISOString().slice(0, 10);
+      // Create local date string without time component
+      const year = newDate.getFullYear();
+      const month = (newDate.getMonth() + 1).toString().padStart(2, '0');
+      const day = newDate.getDate().toString().padStart(2, '0');
+      isoString = `${year}-${month}-${day}`;
     }
 
     updateBlockValue(isoString);
@@ -243,14 +240,11 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
               );
               isoString = localDate.toISOString();
             } else {
-              // Remove time from existing date - use local date at midnight
-              const localDate = new Date(
-                dateValue.getFullYear(),
-                dateValue.getMonth(),
-                dateValue.getDate(),
-                0, 0, 0, 0
-              );
-              isoString = localDate.toISOString().slice(0, 10);
+              // Remove time from existing date - construct date string from local parts
+              const year = dateValue.getFullYear();
+              const month = (dateValue.getMonth() + 1).toString().padStart(2, '0');
+              const day = dateValue.getDate().toString().padStart(2, '0');
+              isoString = `${year}-${month}-${day}`;
             }
             updateBlockValue(isoString);
           }

@@ -14,10 +14,10 @@ Your GTD Space build and release process is now fully configured! Here's what wa
 - **NPM scripts**: `version:major`, `version:minor`, `version:patch`, `release`
 
 ### 3. Tauri Configuration Fixed
-- ✅ `bundle.active` set to `true` at root level (was false - would have prevented builds!)
+- ✅ `tauri.bundle.active` set to `true` (was false - would have prevented builds!)
 - ✅ Added platform-specific bundle configurations
 - ✅ Updated bundle identifier and metadata
-- ✅ Bundle configuration is at root level (not nested under "tauri" key for Tauri v2)
+- ✅ Bundle configuration is nested under the "tauri" key (correct for Tauri v2)
 
 ### 4. Icon Setup
 - Created icon generation scripts (Node script)

@@ -6,6 +6,7 @@
 
 export type DateTimeFieldType = 
   | 'created_date_time'
+  | 'created_date' // Legacy support - will be normalized to created_date_time
   | 'modified_date'
   | 'due_date'
   | 'focus_date'

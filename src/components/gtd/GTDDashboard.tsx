@@ -173,12 +173,26 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     }
                   } else {
                     // Fallback to parse from ## Created header
-                    const createdSection = content.match(
-                      /##\s*Created\s*\n\s*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2})?(?:\s*(?:AM|PM))?)?)/i
+                    const hdr = content.match(
+                      /##\s*Created\s*(?:\r?\n|\s+)\s*([0-9]{4})-([0-9]{2})-([0-9]{2})(?:\s+([0-9]{1,2}):([0-9]{2})(?:\s*(AM|PM))?)?/i
                     );
-                    if (createdSection) {
-                      const parsed = new Date(createdSection[1]);
-                      if (!isNaN(parsed.getTime())) createdDateTime = parsed.toISOString();
+                    if (hdr) {
+                      const y  = parseInt(hdr[1], 10),
+                            mo = parseInt(hdr[2], 10),
+                            d  = parseInt(hdr[3], 10);
+                      let hh = hdr[4] ? parseInt(hdr[4], 10) : 0;
+                      const mm  = hdr[5] ? parseInt(hdr[5], 10) : 0;
+                      const mer = (hdr[6] || '').toUpperCase();
+                      if (mer === 'PM' && hh < 12) hh += 12;
+                      if (mer === 'AM' && hh === 12) hh = 0;
+                      if (
+                        mo >= 1 && mo <= 12 &&
+                        d  >= 1 && d  <= 31 &&
+                        hh >= 0 && hh <= 23 &&
+                        mm >= 0 && mm <= 59
+                      ) {
+                        createdDateTime = new Date(Date.UTC(y, mo - 1, d, hh, mm)).toISOString();
+                      }
                     }
                   }
 

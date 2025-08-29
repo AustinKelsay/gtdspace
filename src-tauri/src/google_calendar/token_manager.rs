@@ -52,13 +52,11 @@ impl TokenManager {
         // Ensure data is written to disk
         temp_file.as_file().sync_all()?;
 
-        // Get the temp file path for later operations
-        let temp_path = temp_file.path().to_path_buf();
-
         // Set restrictive permissions on Unix-like systems
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
+            let temp_path = temp_file.path().to_path_buf();
             let mut perms = std::fs::metadata(&temp_path)?.permissions();
             perms.set_mode(0o600); // Read/write for owner only
             std::fs::set_permissions(&temp_path, perms)?;

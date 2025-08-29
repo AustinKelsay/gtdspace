@@ -200,6 +200,7 @@ impl TokenStorage {
         self.get_token_path().exists()
     }
 
+    #[allow(dead_code)]
     pub async fn save_authenticator<T>(
         &self,
         _authenticator: &Authenticator<T>,

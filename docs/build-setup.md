@@ -34,11 +34,10 @@ GTD Space requires application icons in multiple formats. You have several optio
 
 #### Option 1: Use the provided scripts (Recommended)
 
-**Python method** (cross-platform):
+**Node script (recommended, cross-platform)**:
 ```bash
-pip install Pillow
-cd src-tauri/icons
-python3 generate_icons.py
+# Run from the project root
+npm run icons:generate
 ```
 
 **Shell script method** (requires ImageMagick):

@@ -65,8 +65,24 @@ impl TokenManager {
         }
 
         // Persist the temp file to the final location (atomic rename)
-        // This handles platform-specific behavior and cleanup automatically
-        temp_file.persist(&self.storage_path)?;
+        // Handle Windows-specific error where destination file already exists
+        match temp_file.persist(&self.storage_path) {
+            Ok(_) => {}
+            Err(persist_err) => {
+                // On Windows, persist can fail if destination already exists
+                // Check if it's an AlreadyExists error
+                if persist_err.error.kind() == std::io::ErrorKind::AlreadyExists {
+                    // Delete the existing file and retry once
+                    std::fs::remove_file(&self.storage_path)?;
+                    // Recover the temp file from the error and retry
+                    let temp_file = persist_err.file;
+                    temp_file.persist(&self.storage_path)?;
+                } else {
+                    // For other error types, propagate as-is
+                    return Err(persist_err.error.into());
+                }
+            }
+        }
 
         // After successful persist, fsync the parent directory for durability
         if let Some(parent) = self.storage_path.parent() {

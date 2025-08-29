@@ -176,7 +176,7 @@ interface GTDHabit {
 }
 
 interface HabitRecord {
-  date: string; // YYYY-MM-DD HH:MM format
+  date: string; // RFC 3339 / ISO 8601 with timezone (e.g., 2025-08-29T14:30:00Z or 2025-08-29T14:30:00-07:00)
   status: "todo" | "complete";
   action: "created" | "changed" | "auto-reset";
 }
@@ -212,7 +212,7 @@ interface HabitRecord {
 
 ```markdown
 [!datetime:due_date:2025-01-20] # Date only
-[!datetime:focus_date_time:2025-01-20T14:30:00] # Date with time
+[!datetime:focus_date:2025-01-20T14:30:00] # Date with time
 [!datetime:created_date_time:2025-01-17T10:00:00Z] # ISO 8601 with timezone
 ```
 
@@ -254,7 +254,7 @@ interface HabitRecord {
 ### Keyboard Shortcuts
 
 - **Single Select**: `Cmd/Ctrl+Alt+S` (Status), `+E` (Effort), `+P` (Project Status), `+F` (Habit Frequency), `+H` (Habit Status)
-- **DateTime**: `Cmd/Ctrl+Alt+D` (Due Date), `+T` (Focus DateTime), `+C` (Created Date)
+- **DateTime**: `Cmd/Ctrl+Alt+D` (Due Date), `+T` (Focus Date), `+C` (Created Date)
 - **References**: `Cmd/Ctrl+Alt+R` (Insert References block)
 - **Horizon References**: `Cmd/Ctrl+Alt+A` (Areas), `+G` (Goals), `+V` (Vision), `+U` (Purpose)
 - **Multi Select**: `Cmd/Ctrl+Shift+S/E/P` (legacy)

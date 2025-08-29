@@ -87,10 +87,8 @@ impl GoogleAuthManager {
         // The authentication flow will automatically open the browser via the InstalledFlowAuthenticator
         println!("[GoogleAuth] Authentication flow completed");
 
-        // Save token after successful authentication
-        println!("[GoogleAuth] Saving token to disk...");
-        self.token_storage.save_authenticator(&auth).await?;
-
+        // Token is already persisted by InstalledFlowAuthenticator via persist_tokens_to_disk
+        // No need for manual save - removing duplicate persistence
         self.authenticator = Some(auth);
 
         println!("[GoogleAuth] Authentication successful!");
@@ -174,8 +172,8 @@ impl GoogleAuthManager {
                 )
                 .await?;
 
-            // Save the potentially refreshed token
-            self.token_storage.save_authenticator(auth).await?;
+            // Token is already persisted by InstalledFlowAuthenticator via persist_tokens_to_disk
+            // No need for manual save - removing duplicate persistence
         }
         Ok(())
     }

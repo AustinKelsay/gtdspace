@@ -3840,19 +3840,34 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
                     // If created_date_time is empty, use file metadata timestamp as fallback
                     if created_date_time.is_empty() {
                         if let Ok(metadata) = fs::metadata(&readme_path) {
-                            if let Ok(created_time) = metadata.created().or_else(|_| metadata.modified()) {
-                                if let Ok(duration) = created_time.duration_since(std::time::SystemTime::UNIX_EPOCH) {
-                                    let timestamp = chrono::DateTime::from_timestamp(duration.as_secs() as i64, 0)
-                                        .unwrap_or_else(chrono::Utc::now);
+                            if let Ok(created_time) =
+                                metadata.created().or_else(|_| metadata.modified())
+                            {
+                                if let Ok(duration) =
+                                    created_time.duration_since(std::time::SystemTime::UNIX_EPOCH)
+                                {
+                                    let timestamp = chrono::DateTime::from_timestamp(
+                                        duration.as_secs() as i64,
+                                        0,
+                                    )
+                                    .unwrap_or_else(chrono::Utc::now);
                                     created_date_time = timestamp.to_rfc3339();
-                                    log::debug!("Using file metadata timestamp for project {}: {}", folder_name, created_date_time);
+                                    log::debug!(
+                                        "Using file metadata timestamp for project {}: {}",
+                                        folder_name,
+                                        created_date_time
+                                    );
                                 }
                             }
                         }
                         // Final fallback to current time if metadata isn't available
                         if created_date_time.is_empty() {
                             created_date_time = chrono::Utc::now().to_rfc3339();
-                            log::debug!("Using current timestamp for project {}: {}", folder_name, created_date_time);
+                            log::debug!(
+                                "Using current timestamp for project {}: {}",
+                                folder_name,
+                                created_date_time
+                            );
                         }
                     }
 

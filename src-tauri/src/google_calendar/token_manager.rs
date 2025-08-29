@@ -43,15 +43,15 @@ impl TokenManager {
         // Create a temporary file in the same directory as the target file
         let parent_dir = self.storage_path.parent().ok_or("Invalid storage path")?;
         let mut temp_file = tempfile::NamedTempFile::new_in(parent_dir)?;
-        
+
         // Write to temp file
         use std::io::Write;
         temp_file.write_all(json.as_bytes())?;
         temp_file.flush()?;
-        
+
         // Ensure data is written to disk
         temp_file.as_file().sync_all()?;
-        
+
         // Get the temp file path for later operations
         let temp_path = temp_file.path().to_path_buf();
 
@@ -67,13 +67,16 @@ impl TokenManager {
         // Persist the temp file to the final location (atomic rename)
         // This handles platform-specific behavior and cleanup automatically
         temp_file.persist(&self.storage_path)?;
-        
+
         // After successful persist, fsync the parent directory for durability
         if let Some(parent) = self.storage_path.parent() {
             if let Ok(dir_file) = std::fs::File::open(parent) {
                 if let Err(sync_err) = dir_file.sync_all() {
                     // Log but don't fail - this is best-effort
-                    println!("[TokenManager] Warning: Failed to sync directory: {}", sync_err);
+                    println!(
+                        "[TokenManager] Warning: Failed to sync directory: {}",
+                        sync_err
+                    );
                 }
             }
         }

@@ -28,8 +28,16 @@ if (!existsSync(iconPath)) {
   process.exit(1);
 }
 
-// Check if all required icons already exist
-const requiredIcons = ['32x32.png', '128x128.png', '128x128@2x.png', 'icon.ico', 'icon.icns'];
+// Check if all required icons already exist (platform-aware)
+const isWin = process.platform === 'win32';
+const isMac = process.platform === 'darwin';
+const requiredIcons = [
+  '32x32.png',
+  '128x128.png',
+  '128x128@2x.png',
+  ...(isWin ? ['icon.ico'] : []),
+  ...(isMac ? ['icon.icns'] : []),
+];
 const allIconsExist = requiredIcons.every(icon => existsSync(join(iconsDir, icon)));
 
 if (allIconsExist) {

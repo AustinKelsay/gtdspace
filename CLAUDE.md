@@ -605,36 +605,7 @@ npm run release:minor   # Complete minor release
 npm run release:major   # Complete major release
 ```
 
-### Automated Release Workflow
 
-This repository contains a GitHub Actions workflow to automate the release process, located at `.github/workflows/release.yml`. This workflow is designed to be triggered manually, providing a safe and consistent way to create new releases.
-
-**Workflow Trigger:**
-
-The workflow is triggered manually via `workflow_dispatch` and is restricted to `main` and `staging` branches. To run it:
-
-1.  Navigate to the "Actions" tab of the repository on GitHub.
-2.  Select the "Release" workflow from the list.
-3.  Click the "Run workflow" button.
-4.  Choose the type of release (`patch`, `minor`, or `major`) from the dropdown menu.
-
-**Required Secrets:**
-
-The workflow uses the standard `GITHUB_TOKEN` to commit, tag, and push changes. No additional secrets are required.
-
-**Expected Behavior:**
-
-When triggered, the workflow will:
-
-1.  Check out the triggering branch (workflow uses default checkout behavior).
-2.  Install all dependencies.
-3.  Run a series of checks (linting, type-checking, tests).
-4.  Bump the version number in `package.json`, `Cargo.toml`, and `tauri.conf.json`.
-5.  Create a version commit (e.g., `chore: bump version to v0.1.1`).
-6.  Create an annotated tag for the new version (e.g., `v0.1.1`).
-7.  7.  Push the commit and tag back to the triggering branch (`main` or `staging`).
-
-This push will, in turn, trigger the `Build and Release` workflow (`.github/workflows/build.yml`), which builds the application for all platforms and attaches the artifacts to a new GitHub Release.
 
 **Icon Generation Pipeline:**
 

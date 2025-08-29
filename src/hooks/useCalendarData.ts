@@ -254,14 +254,14 @@ export const useCalendarData = (
                   if (!isNaN(parsed.getTime())) {
                     createdDateTime = parsed.toISOString();
                   } else {
-                    // Invalid date - log warning and leave undefined
-                    console.warn(`[CalendarData] Invalid created_date_time value in habit "${habitName}": "${createdDateTimeRaw}" - skipping`);
-                    createdDateTime = undefined;
+                    // Invalid date - log warning and use file.last_modified
+                    console.warn(`[CalendarData] Invalid created_date_time value in habit "${habitName}": "${createdDateTimeRaw}" - using file.last_modified`);
+                    createdDateTime = new Date(file.last_modified * 1000).toISOString();
                   }
                 } catch (error) {
-                  // Parsing threw an error - log warning and leave undefined
-                  console.warn(`[CalendarData] Failed to parse created_date_time in habit "${habitName}": "${createdDateTimeRaw}" - ${error}`);
-                  createdDateTime = undefined;
+                  // Parsing threw an error - use file.last_modified
+                  console.warn(`[CalendarData] Failed to parse created_date_time in habit "${habitName}": "${createdDateTimeRaw}" - ${error} - using file.last_modified`);
+                  createdDateTime = new Date(file.last_modified * 1000).toISOString();
                 }
               } else {
                 // Try to parse from ## Created header as fallback (handles CRLF and flexible spacing)
@@ -297,42 +297,31 @@ export const useCalendarData = (
                       }
                     }
                   } catch {
-                    // If parsing fails, leave undefined
+                    // If parsing fails, use file.last_modified
+                    createdDateTime = new Date(file.last_modified * 1000).toISOString();
                   }
+                } else {
+                  // No created date found in content, use file.last_modified
+                  createdDateTime = new Date(file.last_modified * 1000).toISOString();
+                  console.log(`[CalendarData] Habit ${habitName} missing created_date_time - using file.last_modified: ${createdDateTime}`);
                 }
               }
 
-              // Log warning if no created date found
-              if (!createdDateTime) {
-                console.warn(`[CalendarData] Habit ${habitName} missing created_date_time - skipping calendar generation`);
-              }
+              console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDateTime}, focus=${focusDateTime}`);
               
-              // Store importedDateTime for provenance if needed
-              let importedDateTime: string | undefined;
-              if (!createdDateTime && file.last_modified) {
-                importedDateTime = new Date(file.last_modified).toISOString();
-                console.log(`[CalendarData] Habit ${habitName} will use importedDateTime from file mtime: ${importedDateTime}`);
-              }
-              
-              console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDateTime}, imported=${importedDateTime}, focus=${focusDateTime}`);
-              
-              // Only add habits with explicit created dates for calendar generation
-              if (createdDateTime) {
-                allItems.push({
-                  id: `habit-${habitName}-${fileIndex}`,
-                  name: habitName,
-                  path: file.path,
-                  type: 'habit',
-                  status: habitStatus,
-                  due_date: undefined,
-                  focus_date: focusDateTime, // Now includes the parsed focus time
-                  projectName: undefined,
-                  frequency: frequency,
-                  createdDateTime: createdDateTime
-                });
-              } else {
-                console.warn(`[CalendarData] Habit ${habitName} skipped - no created_date_time found`);
-              }
+              // Always add habits now that we have fallback to file.last_modified
+              allItems.push({
+                id: `habit-${habitName}-${fileIndex}`,
+                name: habitName,
+                path: file.path,
+                type: 'habit',
+                status: habitStatus,
+                due_date: undefined,
+                focus_date: focusDateTime, // Now includes the parsed focus time
+                projectName: undefined,
+                frequency: frequency,
+                createdDateTime: createdDateTime
+              });
             } catch (err) {
               console.error(`[CalendarData] Failed to read habit ${file.path}:`, err);
             }

@@ -1450,6 +1450,7 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-store",
  "tauri-plugin-updater",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "url 2.5.4",

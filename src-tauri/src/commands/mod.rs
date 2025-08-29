@@ -3810,7 +3810,7 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
                     // Read README.md to extract project metadata
                     let readme_path = path.join("README.md");
 
-                    let (mut title, description, due_date, status, created_date_time) =
+                    let (mut title, description, due_date, status, mut created_date_time) =
                         if readme_path.exists() {
                             match fs::read_to_string(&readme_path) {
                                 Ok(content) => {
@@ -3824,7 +3824,7 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
                                     "No description available".to_string(),
                                     None,
                                     "in-progress".to_string(),
-                                    "Unknown".to_string(),
+                                    String::new(),
                                 ),
                             }
                         } else {
@@ -3833,9 +3833,28 @@ pub async fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, St
                                 "No description available".to_string(),
                                 None,
                                 "in-progress".to_string(),
-                                "Unknown".to_string(),
+                                String::new(),
                             )
                         };
+
+                    // If created_date_time is empty, use file metadata timestamp as fallback
+                    if created_date_time.is_empty() {
+                        if let Ok(metadata) = fs::metadata(&readme_path) {
+                            if let Ok(created_time) = metadata.created().or_else(|_| metadata.modified()) {
+                                if let Ok(duration) = created_time.duration_since(std::time::SystemTime::UNIX_EPOCH) {
+                                    let timestamp = chrono::DateTime::from_timestamp(duration.as_secs() as i64, 0)
+                                        .unwrap_or_else(chrono::Utc::now);
+                                    created_date_time = timestamp.to_rfc3339();
+                                    log::debug!("Using file metadata timestamp for project {}: {}", folder_name, created_date_time);
+                                }
+                            }
+                        }
+                        // Final fallback to current time if metadata isn't available
+                        if created_date_time.is_empty() {
+                            created_date_time = chrono::Utc::now().to_rfc3339();
+                            log::debug!("Using current timestamp for project {}: {}", folder_name, created_date_time);
+                        }
+                    }
 
                     // Sync folder name with README title if they don't match
                     // Prefer folder name as it was likely renamed intentionally
@@ -4153,7 +4172,7 @@ fn parse_project_readme(content: &str) -> (String, Option<String>, String, Strin
     let mut description = "No description available".to_string();
     let mut due_date = None;
     let mut status = "in-progress".to_string();
-    let mut created_date_time = "Unknown".to_string();
+    let mut created_date_time = String::new();
 
     let lines: Vec<&str> = content.lines().collect();
     let mut current_section = "";

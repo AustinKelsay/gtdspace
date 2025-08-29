@@ -22,9 +22,10 @@ updates:
         dependency-type: "development"
         patterns:
           - "*"
-          - "!@radix-ui/*"
-          - "!@blocknote/*"
-          - "!@tauri-apps/*"
+        exclude-patterns:
+          - "@radix-ui/*"
+          - "@blocknote/*"
+          - "@tauri-apps/*"
 
   # Enable version updates for Rust dependencies
   - package-ecosystem: "cargo"

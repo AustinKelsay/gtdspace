@@ -130,8 +130,9 @@ rm -rf icon.iconset
 ### macOS
 
 - ICNS must be in Apple's format, not renamed PNG
-- Requires macOS to generate properly (iconutil or Tauri CLI)
-- The build will fail if ICNS is invalid
+- Tauri CLI can generate ICNS on any OS (cross-platform support)
+- iconutil is a macOS-only fallback option for manual generation
+- The build will fail if ICNS is invalid, but using Tauri CLI avoids the macOS requirement
 
 ### Linux
 

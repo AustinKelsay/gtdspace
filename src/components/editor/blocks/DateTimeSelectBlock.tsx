@@ -22,7 +22,6 @@ interface DateTimeSelectComponentProps {
       type: string;
       value: string;
       label?: string;
-      includeTime?: boolean;
       optional?: boolean;
     };
   };
@@ -32,7 +31,7 @@ interface DateTimeSelectComponentProps {
 }
 
 const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) => {
-  const { type, value, label, includeTime, optional } = props.block.props;
+  const { type, value, label, optional } = props.block.props;
 
   const [open, setOpen] = React.useState(false);
   const [timeValue, setTimeValue] = React.useState('12:00');
@@ -224,7 +223,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
         if (newOpen) {
           // When opening, sync local state with current value
           const currentHasTime = value && value.includes('T');
-          setLocalTimeEnabled(currentHasTime || includeTime);
+          setLocalTimeEnabled(currentHasTime);
         } else if (!newOpen && isValidDate) {
           // When closing, update the value if time toggle was changed
           const currentHasTime = value && value.includes('T');
@@ -370,7 +369,6 @@ export const DateTimeSelectBlock = createReactBlockSpec(
             type: data.type || 'due_date',
             value: data.value || '',
             label: data.label || '',
-            includeTime: data.includeTime || false,
             optional: data.optional !== undefined ? data.optional : true,
           };
         } catch (e) {
@@ -380,7 +378,7 @@ export const DateTimeSelectBlock = createReactBlockSpec(
       }
     },
     toExternalHTML: (props) => {
-      const block = props.block as { props: { type: string; value: string; includeTime?: boolean } };
+      const block = props.block as { props: { type: string; value: string } };
       const { type, value } = block.props;
       // Return the markdown format that can be parsed back
       // Determine if value contains time to decide on field type

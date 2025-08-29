@@ -57,7 +57,6 @@ interface DatetimeBlock {
   props: {
     type: string;
     value: string;
-    includeTime: boolean;
     label: string;
     optional: boolean;
   };
@@ -202,7 +201,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   const multiSelectBlocks: Array<{ text: string; type: string; value: string[]; label?: string }> = [];
   const singleSelectBlocks: Array<{ text: string; type: string; value: string; label?: string }> = [];
   const checkboxBlocks: Array<{ text: string; type: string; checked: boolean; label?: string }> = [];
-  const dateTimeBlocks: Array<{ text: string; type: string; value: string; includeTime?: boolean; label?: string }> = [];
+  const dateTimeBlocks: Array<{ text: string; type: string; value: string; label?: string }> = [];
   const referencesBlocks: Array<{ text: string; references: string; blockType?: string }> = [];
   let match;
   
@@ -294,9 +293,9 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
     const value = match[2];
     // Check if type ends with _time OR if the value contains time (T followed by time)
     const hasTimeInValue = value && value.includes('T') && /T\d{2}:\d{2}/.test(value);
-    const includeTime = type.endsWith('_time') || hasTimeInValue;
-    const baseType = includeTime ? type.replace('_time', '') : type;
-    dateTimeBlocks.push({ text: match[0], type: baseType, value, includeTime });
+    const hasTimeSuffix = type.endsWith('_time') || hasTimeInValue;
+    const baseType = hasTimeSuffix ? type.replace('_time', '') : type;
+    dateTimeBlocks.push({ text: match[0], type: baseType, value });
   }
   
   // Check for datetime HTML syntax
@@ -307,16 +306,14 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
         jsonStr = jsonStr.replace(/\\"/g, '"');
       }
       const data = JSON.parse(jsonStr);
-      // Normalize type and includeTime semantics
+      // Normalize type semantics
       const rawType = (data.type ?? 'due_date') as string;
-      const includeTimeFromType = /_time$/.test(rawType);
       const normalizedType = rawType.replace(/_time$/, '');
 
       dateTimeBlocks.push({
         text: match[0],
         type: normalizedType,
         value: data.value ?? '',
-        includeTime: data.includeTime ?? includeTimeFromType,
         label: data.label
       });
     } catch (e) {
@@ -518,7 +515,6 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
               props: {
                 type: dtBlock.type || 'due_date',
                 value: dtBlock.value || '',
-                includeTime: dtBlock.includeTime || false,
                 label: dtBlock.label || '',
                 optional: true,
               },

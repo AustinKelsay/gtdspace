@@ -44,15 +44,18 @@ export function useDateTimeInsertion(editor: any) {
       // Cmd+Alt+D (Mac) or Ctrl+Alt+D (Windows/Linux) for Due Date field (with Shift for time)
       if (modKey && e.altKey && e.key === 'd') {
         e.preventDefault();
-        const includeTime = e.shiftKey; // Add Shift to include time
-        const block = createDateTimeBlock('due_date', 'Due Date', '', includeTime);
+        // If Shift is pressed, include time in the initial value
+        const initialValue = e.shiftKey ? new Date().toISOString() : '';
+        const block = createDateTimeBlock('due_date', 'Due Date', initialValue);
         insertAfterCurrent(block);
       }
 
       // Cmd+Alt+T (Mac) or Ctrl+Alt+T (Windows/Linux) for Focus Date with Time field
       if (modKey && e.altKey && e.key === 't') {
         e.preventDefault();
-        const block = createDateTimeBlock('focus_date', 'Focus Date', '', true);
+        // Focus date typically includes time by default
+        const initialValue = new Date().toISOString();
+        const block = createDateTimeBlock('focus_date', 'Focus Date', initialValue);
         insertAfterCurrent(block);
       }
 
@@ -60,7 +63,7 @@ export function useDateTimeInsertion(editor: any) {
       if (modKey && e.altKey && e.key === 'c') {
         e.preventDefault();
         const now = new Date().toISOString();
-        const block = createDateTimeBlock('created_date_time', 'Created', now, true);
+        const block = createDateTimeBlock('created_date_time', 'Created', now);
         insertAfterCurrent(block);
       }
     };
@@ -75,15 +78,13 @@ export function useDateTimeInsertion(editor: any) {
   // Function to manually insert datetime blocks
   const insertDateTime = (
     type: DateTimeFieldType,
-    includeTime = false,
     defaultValue?: string
   ) => {
     if (!editor) return;
 
     const isCreated = type === 'created_date_time';
     const value = defaultValue ?? (isCreated ? new Date().toISOString() : '');
-    const normalizedIncludeTime = isCreated ? true : includeTime;
-    const block = createDateTimeBlock(type, undefined, value, normalizedIncludeTime);
+    const block = createDateTimeBlock(type, undefined, value);
 
     // Safely resolve current block from cursor position with fallbacks
     let cursorPos: unknown;

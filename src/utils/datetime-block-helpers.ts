@@ -18,8 +18,7 @@ export type DateTimeFieldType =
 export function createDateTimeBlock(
   type: DateTimeFieldType,
   label?: string,
-  value?: string,
-  includeTime = false
+  value?: string
 ) {
   return {
     type: 'datetime',
@@ -27,7 +26,6 @@ export function createDateTimeBlock(
       type,
       value: value || '',
       label: label || getDefaultLabel(type),
-      includeTime,
       optional: true,
     },
   };
@@ -60,7 +58,6 @@ function getDefaultLabel(type: DateTimeFieldType): string {
 export function parseDateTimeField(markdown: string): {
   type: DateTimeFieldType;
   value: string;
-  includeTime: boolean;
 } | null {
   // Match patterns like:
   // [!datetime:due_date:2025-01-17]
@@ -77,13 +74,12 @@ export function parseDateTimeField(markdown: string): {
   const value = match[3];
 
   const rawType = capturedBaseType + (capturedSuffix || '');
-  const includeTime = Boolean(capturedSuffix) || rawType.endsWith('_time');
-  const baseType = includeTime ? rawType.replace(/_time$/, '') : rawType;
+  const hasTimeSuffix = Boolean(capturedSuffix) || rawType.endsWith('_time');
+  const baseType = hasTimeSuffix ? rawType.replace(/_time$/, '') : rawType;
 
   return {
     type: baseType as DateTimeFieldType,
     value,
-    includeTime,
   };
 }
 
@@ -92,9 +88,18 @@ export function parseDateTimeField(markdown: string): {
  */
 export function dateTimeBlockToMarkdown(
   type: DateTimeFieldType,
-  value: string,
-  includeTime: boolean
+  value: string
 ): string {
-  const fieldType = includeTime ? `${type}_time` : type;
+  // Derive includeTime from the value itself
+  const hasTime = value && value.includes('T');
+  // Special case for focus_date - always keep as 'focus_date'
+  let fieldType: string;
+  if (type === 'focus_date') {
+    fieldType = 'focus_date';
+  } else if (type.endsWith('_time')) {
+    fieldType = type;
+  } else {
+    fieldType = hasTime ? `${type}_time` : type;
+  }
   return `[!datetime:${fieldType}:${value}]`;
 }

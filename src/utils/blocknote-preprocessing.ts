@@ -291,11 +291,8 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   while ((match = dateTimeMarkerPattern.exec(markdown)) !== null) {
     const type = match[1];
     const value = match[2];
-    // Check if type ends with _time OR if the value contains time (T followed by time)
-    const hasTimeInValue = value && value.includes('T') && /T\d{2}:\d{2}/.test(value);
-    const hasTimeSuffix = type.endsWith('_time') || hasTimeInValue;
-    const baseType = hasTimeSuffix ? type.replace('_time', '') : type;
-    dateTimeBlocks.push({ text: match[0], type: baseType, value });
+    // Preserve the original type string - don't strip _time suffix
+    dateTimeBlocks.push({ text: match[0], type: type, value });
   }
   
   // Check for datetime HTML syntax
@@ -306,13 +303,12 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
         jsonStr = jsonStr.replace(/\\"/g, '"');
       }
       const data = JSON.parse(jsonStr);
-      // Normalize type semantics
+      // Preserve the original full type from HTML data
       const rawType = (data.type ?? 'due_date') as string;
-      const normalizedType = rawType.replace(/_time$/, '');
 
       dateTimeBlocks.push({
         text: match[0],
-        type: normalizedType,
+        type: rawType,
         value: data.value ?? '',
         label: data.label
       });

@@ -64,8 +64,8 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
     // Extract time if value includes it
     if (isValidDate && hasTime) {
       const date = new Date(value);
-      const hours = date.getUTCHours().toString().padStart(2, '0');
-      const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
       setTimeValue(`${hours}:${minutes}`);
     }
   }, [value, isValidDate]);
@@ -89,9 +89,9 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
 
     let isoString: string;
     if (localTimeEnabled) {
-      // Parse time value and create UTC date with time
+      // Parse time value and create local date with time
       const [hours, minutes] = timeValue.split(':').map(Number);
-      const utcDate = new Date(Date.UTC(
+      const localDate = new Date(
         newDate.getFullYear(),
         newDate.getMonth(),
         newDate.getDate(),
@@ -99,17 +99,17 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
         minutes || 0,
         0,
         0
-      ));
-      isoString = utcDate.toISOString();
+      );
+      isoString = localDate.toISOString();
     } else {
-      // Create UTC date at midnight
-      const utcDate = new Date(Date.UTC(
+      // Create local date at midnight
+      const localDate = new Date(
         newDate.getFullYear(),
         newDate.getMonth(),
         newDate.getDate(),
         0, 0, 0, 0
-      ));
-      isoString = utcDate.toISOString().slice(0, 10);
+      );
+      isoString = localDate.toISOString().slice(0, 10);
     }
 
     updateBlockValue(isoString);
@@ -121,7 +121,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
 
     if (isValidDate && localTimeEnabled) {
       const [hours, minutes] = newTime.split(':').map(Number);
-      const utcDate = new Date(Date.UTC(
+      const localDate = new Date(
         dateValue.getFullYear(),
         dateValue.getMonth(),
         dateValue.getDate(),
@@ -129,8 +129,8 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
         minutes || 0,
         0,
         0
-      ));
-      updateBlockValue(utcDate.toISOString());
+      );
+      updateBlockValue(localDate.toISOString());
     }
   };
 
@@ -230,9 +230,9 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
           if (localTimeEnabled !== currentHasTime) {
             let isoString: string;
             if (localTimeEnabled) {
-              // Add time to existing date using UTC
+              // Add time to existing date using local time
               const [hours, minutes] = timeValue.split(':').map(Number);
-              const utcDate = new Date(Date.UTC(
+              const localDate = new Date(
                 dateValue.getFullYear(),
                 dateValue.getMonth(),
                 dateValue.getDate(),
@@ -240,17 +240,17 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
                 minutes || 0,
                 0,
                 0
-              ));
-              isoString = utcDate.toISOString();
+              );
+              isoString = localDate.toISOString();
             } else {
-              // Remove time from existing date - use UTC date at midnight
-              const utcDate = new Date(Date.UTC(
+              // Remove time from existing date - use local date at midnight
+              const localDate = new Date(
                 dateValue.getFullYear(),
                 dateValue.getMonth(),
                 dateValue.getDate(),
                 0, 0, 0, 0
-              ));
-              isoString = utcDate.toISOString().slice(0, 10);
+              );
+              isoString = localDate.toISOString().slice(0, 10);
             }
             updateBlockValue(isoString);
           }

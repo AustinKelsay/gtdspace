@@ -154,8 +154,8 @@ Before releasing:
 
 ## Monitoring Releases
 
-1. **GitHub Actions**: Monitor the build progress at [Actions tab](../../actions)
-2. **Release Page**: View published releases at [Releases](../../releases)
+1. **GitHub Actions**: Monitor the build progress at [Actions tab](https://github.com/plebdev/gtdspace/actions)
+2. **Release Page**: View published releases at [Releases](https://github.com/plebdev/gtdspace/releases)
 3. **Download Stats**: GitHub provides download counts for each artifact
 
 ## Troubleshooting

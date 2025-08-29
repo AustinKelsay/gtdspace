@@ -102,6 +102,9 @@ function main() {
   const tauriConfPath = path.join(__dirname, '..', 'src-tauri', 'tauri.conf.json');
   const tauriConf = JSON.parse(readFile(tauriConfPath));
   tauriConf.version = newVersion;
+  if (tauriConf.package && tauriConf.package.version) {
+    tauriConf.package.version = newVersion;
+  }
   writeFile(tauriConfPath, JSON.stringify(tauriConf, null, 2) + '\n');
   console.log(`✓ Updated src-tauri/tauri.conf.json to version ${newVersion}`);
 

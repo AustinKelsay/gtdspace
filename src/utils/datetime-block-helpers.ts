@@ -74,11 +74,24 @@ export function parseDateTimeField(markdown: string): {
   const value = match[3];
 
   const rawType = capturedBaseType + (capturedSuffix || '');
-  const hasTimeSuffix = Boolean(capturedSuffix) || rawType.endsWith('_time');
-  const baseType = hasTimeSuffix ? rawType.replace(/_time$/, '') : rawType;
+  
+  // Normalize the type - special case for created_date_time
+  let normalizedType: string;
+  if (rawType === 'created_date' || rawType === 'created_date_time') {
+    normalizedType = 'created_date_time';
+  } else {
+    // For other types, strip _time suffix if present
+    normalizedType = rawType.replace(/_time$/, '');
+  }
+  
+  // Validate against DateTimeFieldType union
+  const validTypes: DateTimeFieldType[] = ['created_date_time', 'modified_date', 'due_date', 'focus_date', 'completed_date', 'custom'];
+  const finalType: DateTimeFieldType = validTypes.includes(normalizedType as DateTimeFieldType) 
+    ? normalizedType as DateTimeFieldType 
+    : 'custom';
 
   return {
-    type: baseType as DateTimeFieldType,
+    type: finalType,
     value,
   };
 }

@@ -172,23 +172,13 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                       createdDateTime = parsed.toISOString();
                     }
                   } else {
-                    // Legacy fallback: check for created_date token
-                    const createdDateBlock = content.match(/\[!datetime:created_date:([^\]]+)\]/i);
-                    if (createdDateBlock) {
-                      const raw = createdDateBlock[1].trim();
-                      const parsed = new Date(raw);
-                      if (!isNaN(parsed.getTime())) {
-                        createdDateTime = parsed.toISOString();
-                      }
-                    } else {
-                      // Fallback to parse from ## Created header
-                      const createdSection = content.match(
-                        /##\s*Created\s*\n\s*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2})?(?:\s*(?:AM|PM))?)?)/i
-                      );
-                      if (createdSection) {
-                        const parsed = new Date(createdSection[1]);
-                        if (!isNaN(parsed.getTime())) createdDateTime = parsed.toISOString();
-                      }
+                    // Fallback to parse from ## Created header
+                    const createdSection = content.match(
+                      /##\s*Created\s*\n\s*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2})?(?:\s*(?:AM|PM))?)?)/i
+                    );
+                    if (createdSection) {
+                      const parsed = new Date(createdSection[1]);
+                      if (!isNaN(parsed.getTime())) createdDateTime = parsed.toISOString();
                     }
                   }
 

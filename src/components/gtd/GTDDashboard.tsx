@@ -192,6 +192,11 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     }
                   }
 
+                  // Final fallback: use file last_modified timestamp if no created date found
+                  if (!createdDateTime) {
+                    createdDateTime = new Date(file.last_modified).toISOString();
+                  }
+
                   return {
                     name: file.name.replace('.md', ''),
                     frequency: (frequencyMatch?.[1] || 'daily') as GTDHabit['frequency'],

@@ -327,10 +327,17 @@ export const useCalendarData = (
                 }
               }
 
-              // Deterministic fallback: If we still don't have a created date, use current date
+              // Deterministic fallback: If we still don't have a created date, use file mtime or current date
               if (!createdDateTime) {
-                createdDateTime = new Date().toISOString();
-                console.log(`[CalendarData] Using current date as fallback for habit "${habitName}": ${createdDateTime}`);
+                // Try to use file last_modified timestamp if available
+                if (file.last_modified) {
+                  createdDateTime = new Date(file.last_modified).toISOString();
+                  console.log(`[CalendarData] Using file mtime as fallback for habit "${habitName}": ${createdDateTime}`);
+                } else {
+                  // Last resort: use current date
+                  createdDateTime = new Date().toISOString();
+                  console.log(`[CalendarData] Using current date as fallback for habit "${habitName}": ${createdDateTime}`);
+                }
               }
               
               console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDateTime}, focus=${focusDateTime}`);

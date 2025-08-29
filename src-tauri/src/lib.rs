@@ -11,8 +11,11 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Load .env file if it exists
-    dotenv::dotenv().ok();
+    // Load .env file only in debug builds to avoid loading secrets in release
+    #[cfg(debug_assertions)]
+    {
+        dotenv::dotenv().ok();
+    }
 
     // Initialize logging for development
     #[cfg(debug_assertions)]

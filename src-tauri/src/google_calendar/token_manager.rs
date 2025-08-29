@@ -72,12 +72,26 @@ impl TokenManager {
                 // We check for this specific error and, if it occurs, we attempt to remove the old file
                 // and then try the rename again.
                 if e.kind() == ErrorKind::AlreadyExists || e.kind() == ErrorKind::PermissionDenied {
-                    // Attempt to remove the existing file. If this fails, we propagate the error.
-                    std::fs::remove_file(&self.storage_path)?;
-                    // Retry the rename. If this fails, we propagate the error.
-                    std::fs::rename(&temp_path, &self.storage_path)?;
+                    // Attempt to remove the existing file. If this fails, clean up and propagate.
+                    if let Err(remove_err) = std::fs::remove_file(&self.storage_path) {
+                        let _ = std::fs::remove_file(&temp_path); // Clean up temp file
+                        return Err(remove_err.into());
+                    }
+                    // Retry the rename. If this fails, clean up and propagate.
+                    if let Err(rename_err) = std::fs::rename(&temp_path, &self.storage_path) {
+                        let _ = std::fs::remove_file(&temp_path); // Clean up temp file
+                        return Err(rename_err.into());
+                    }
+                    // After successful Windows retry, fsync the parent directory
+                    if let Some(parent) = self.storage_path.parent() {
+                        if let Ok(dir_file) = std::fs::File::open(parent) {
+                            if let Err(sync_err) = dir_file.sync_all() {
+                                return Err(sync_err.into());
+                            }
+                        }
+                    }
                 } else {
-                    // For other errors, we propagate them immediately.
+                    // For other errors, clean up and propagate.
                     let _ = std::fs::remove_file(&temp_path); // Clean up temp file on error
                     return Err(e.into());
                 }
@@ -87,6 +101,15 @@ impl TokenManager {
                 // On Unix-like systems, `rename` is an atomic overwrite, so any error is unexpected.
                 let _ = std::fs::remove_file(&temp_path); // Clean up temp file on error
                 return Err(e.into());
+            }
+        } else {
+            // Successful rename - fsync the parent directory for durability
+            if let Some(parent) = self.storage_path.parent() {
+                if let Ok(dir_file) = std::fs::File::open(parent) {
+                    if let Err(sync_err) = dir_file.sync_all() {
+                        return Err(sync_err.into());
+                    }
+                }
             }
         }
 

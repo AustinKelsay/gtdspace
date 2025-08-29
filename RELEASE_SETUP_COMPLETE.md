@@ -52,7 +52,8 @@ After merging to main:
 ```bash
 git checkout main
 git pull
-npm run release  # Creates v0.1.1, tags, and pushes
+npm run release  # Creates v0.1.1 and tags locally (does not push)
+git push && git push --tags  # trigger CI/CD
 ```
 
 ### 4. Monitor the Build

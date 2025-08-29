@@ -146,7 +146,7 @@ interface GTDProject {
   name: string;
   description: string;
   due_date?: string | null; // snake_case for Rust compatibility
-  status: GTDProjectStatus[]; // Array for compatibility
+  status: GTDProjectStatus; // e.g., 'active', 'on-hold', 'completed'
   created_date_time: string;
   action_count?: number;
 }
@@ -632,7 +632,7 @@ When triggered, the workflow will:
 4.  Bump the version number in `package.json`, `Cargo.toml`, and `tauri.conf.json`.
 5.  Create a version commit (e.g., `chore: bump version to v0.1.1`).
 6.  Create an annotated tag for the new version (e.g., `v0.1.1`).
-7.  Push the commit and tag to the `main` branch.
+7.  7.  Push the commit and tag back to the triggering branch (`main` or `staging`).
 
 This push will, in turn, trigger the `Build and Release` workflow (`.github/workflows/build.yml`), which builds the application for all platforms and attaches the artifacts to a new GitHub Release.
 

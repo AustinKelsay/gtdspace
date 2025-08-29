@@ -1,81 +1,79 @@
 {
-  "tauri": {
-    "$schema": "https://schema.tauri.app/config/2.0.0",
-    "productName": "GTD Space",
-    "version": "0.1.0",
-    "identifier": "com.gtdspace.app",
-    "build": {
-      "frontendDist": "../dist",
-      "beforeDevCommand": "npm run dev",
-      "beforeBuildCommand": "npm run build",
-      "devUrl": "http://localhost:1420"
-    },
-    "app": {
-      "withGlobalTauri": false,
-      "windows": [
-        {
-          "label": "main",
-          "title": "GTD Space - Markdown Editor",
-          "width": 1200,
-          "height": 800,
-          "minWidth": 800,
-          "minHeight": 600,
-          "resizable": true,
-          "fullscreen": false
-        }
-      ],
-      "security": {
-        "csp": "default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://accounts.google.com https://www.googleapis.com https://www.google.com https://oauth2.googleapis.com http://localhost:1420 ws://localhost:1420 http://127.0.0.1:1420 ws://127.0.0.1:1420 http://127.0.0.1:9898 ws://127.0.0.1:9898; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
-        "dangerousDisableAssetCspModification": false,
-        "freezePrototype": true,
-        "capabilities": [
-          "default"
-        ]
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "productName": "GTD Space",
+  "version": "0.1.0",
+  "identifier": "com.gtdspace.app",
+  "build": {
+    "frontendDist": "../dist",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "GTD Space - Markdown Editor",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false
       }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://accounts.google.com https://www.googleapis.com https://www.google.com https://oauth2.googleapis.com http://localhost:1420 ws://localhost:1420 http://localhost:9898 ws://localhost:9898 http://127.0.0.1:1420 ws://127.0.0.1:1420 http://127.0.0.1:9898 ws://127.0.0.1:9898; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "dangerousDisableAssetCspModification": false,
+      "freezePrototype": true,
+      "capabilities": [
+        "default"
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
     },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "windows": {
-        "certificateThumbprint": null,
-        "digestAlgorithm": "sha256",
-        "timestampUrl": ""
-      },
-      "macOS": {
-        "entitlements": null,
-        "exceptionDomain": "",
-        "frameworks": [],
-        "providerShortName": null,
-        "signingIdentity": null
-      },
-      "linux": {
-        "deb": {
-          "depends": [
-            "libgtk-3-0",
-            "libwebkit2gtk-4.1-0",
-            "libayatana-appindicator3-1",
-            "librsvg2-2",
-            "libx11-6",
-            "libxkbcommon0",
-            "libgdk-pixbuf2.0-0",
-            "libatk1.0-0",
-            "libcairo2",
-            "libpango-1.0-0",
-            "libnss3",
-            "libasound2",
-            "libxss1",
-            "libgbm1",
-            "libxcomposite1",
-            "libxrandr2"
-          ]
-        }
+    "macOS": {
+      "entitlements": null,
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": null
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libgtk-3-0",
+          "libwebkit2gtk-4.1-0",
+          "libayatana-appindicator3-1",
+          "librsvg2-2",
+          "libx11-6",
+          "libxkbcommon0",
+          "libgdk-pixbuf2.0-0",
+          "libatk1.0-0",
+          "libcairo2",
+          "libpango-1.0-0",
+          "libnss3",
+          "libasound2",
+          "libxss1",
+          "libgbm1",
+          "libxcomposite1",
+          "libxrandr2"
+        ]
       }
     }
   }

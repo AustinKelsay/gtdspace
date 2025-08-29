@@ -1,3 +1,6 @@
+#![allow(unknown_lints)] // Allow unknown lints for compatibility
+#![allow(clippy::io_other_error)] // Maintain compatibility with older Rust versions
+
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex};

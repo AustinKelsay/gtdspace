@@ -302,22 +302,21 @@ export const useCalendarData = (
                 }
               }
 
-              // Deterministic fallback: If we still don't have a created date, use file mtime or current date
+              // Log warning if no created date found
               if (!createdDateTime) {
-                // Try to use file last_modified timestamp if available
-                if (file.last_modified) {
-                  createdDateTime = new Date(file.last_modified).toISOString();
-                  console.log(`[CalendarData] Using file mtime as fallback for habit "${habitName}": ${createdDateTime}`);
-                } else {
-                  // Last resort: use current date
-                  createdDateTime = new Date().toISOString();
-                  console.log(`[CalendarData] Using current date as fallback for habit "${habitName}": ${createdDateTime}`);
-                }
+                console.warn(`[CalendarData] Habit ${habitName} missing created_date_time - skipping calendar generation`);
               }
               
-              console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDateTime}, focus=${focusDateTime}`);
+              // Store importedDateTime for provenance if needed
+              let importedDateTime: string | undefined;
+              if (!createdDateTime && file.last_modified) {
+                importedDateTime = new Date(file.last_modified).toISOString();
+                console.log(`[CalendarData] Habit ${habitName} will use importedDateTime from file mtime: ${importedDateTime}`);
+              }
               
-              // Always add the habit now that we have a guaranteed created date
+              console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDateTime}, imported=${importedDateTime}, focus=${focusDateTime}`);
+              
+              // Only add habits with explicit created dates for calendar generation
               if (createdDateTime) {
                 allItems.push({
                   id: `habit-${habitName}-${fileIndex}`,
@@ -332,7 +331,7 @@ export const useCalendarData = (
                   createdDateTime: createdDateTime
                 });
               } else {
-                console.warn(`[CalendarData] Habit ${habitName} skipped - no created date found`);
+                console.warn(`[CalendarData] Habit ${habitName} skipped - no created_date_time found`);
               }
             } catch (err) {
               console.error(`[CalendarData] Failed to read habit ${file.path}:`, err);

@@ -1,4 +1,3 @@
-use reqwest::header::AUTHORIZATION;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -15,6 +14,7 @@ pub struct CalendarEvent {
 
 #[derive(Debug, Deserialize)]
 struct GoogleCalendarListResponse {
+    #[serde(default)]
     items: Vec<GoogleCalendarEvent>,
     #[serde(rename = "nextPageToken")]
     next_page_token: Option<String>,
@@ -45,6 +45,7 @@ pub async fn fetch_calendar_events(
     println!("[CalendarClient] Fetching calendar events...");
 
     let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(15))
         .build()?;
 
@@ -87,7 +88,7 @@ pub async fn fetch_calendar_events(
 
         let response = client
             .get(url)
-            .header(AUTHORIZATION, format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .query(&query_params)
             .send()
             .await?;

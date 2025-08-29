@@ -40,18 +40,20 @@ impl TokenManager {
     pub fn save_tokens(&self, tokens: &StoredTokens) -> Result<(), Box<dyn std::error::Error>> {
         let json = serde_json::to_string_pretty(tokens)?;
 
-        // Create a unique temporary file name to avoid collisions
-        let temp_path = self
-            .storage_path
-            .with_extension(format!("tmp.{}", uuid::Uuid::new_v4()));
-
+        // Create a temporary file in the same directory as the target file
+        let parent_dir = self.storage_path.parent().ok_or("Invalid storage path")?;
+        let mut temp_file = tempfile::NamedTempFile::new_in(parent_dir)?;
+        
         // Write to temp file
-        std::fs::write(&temp_path, &json)?;
-
+        use std::io::Write;
+        temp_file.write_all(json.as_bytes())?;
+        temp_file.flush()?;
+        
         // Ensure data is written to disk
-        let file = std::fs::File::open(&temp_path)?;
-        file.sync_all()?;
-        drop(file);
+        temp_file.as_file().sync_all()?;
+        
+        // Get the temp file path for later operations
+        let temp_path = temp_file.path().to_path_buf();
 
         // Set restrictive permissions on Unix-like systems
         #[cfg(unix)]
@@ -62,53 +64,16 @@ impl TokenManager {
             std::fs::set_permissions(&temp_path, perms)?;
         }
 
-        // Atomic rename operation.
-        // This is not truly atomic on all platforms (e.g., Windows), so we handle errors carefully.
-        if let Err(e) = std::fs::rename(&temp_path, &self.storage_path) {
-            #[cfg(windows)]
-            {
-                use std::io::ErrorKind;
-                // On Windows, `rename` will fail if the destination file already exists.
-                // We check for this specific error and, if it occurs, we attempt to remove the old file
-                // and then try the rename again.
-                if e.kind() == ErrorKind::AlreadyExists || e.kind() == ErrorKind::PermissionDenied {
-                    // Attempt to remove the existing file. If this fails, clean up and propagate.
-                    if let Err(remove_err) = std::fs::remove_file(&self.storage_path) {
-                        let _ = std::fs::remove_file(&temp_path); // Clean up temp file
-                        return Err(remove_err.into());
-                    }
-                    // Retry the rename. If this fails, clean up and propagate.
-                    if let Err(rename_err) = std::fs::rename(&temp_path, &self.storage_path) {
-                        let _ = std::fs::remove_file(&temp_path); // Clean up temp file
-                        return Err(rename_err.into());
-                    }
-                    // After successful Windows retry, fsync the parent directory
-                    if let Some(parent) = self.storage_path.parent() {
-                        if let Ok(dir_file) = std::fs::File::open(parent) {
-                            if let Err(sync_err) = dir_file.sync_all() {
-                                return Err(sync_err.into());
-                            }
-                        }
-                    }
-                } else {
-                    // For other errors, clean up and propagate.
-                    let _ = std::fs::remove_file(&temp_path); // Clean up temp file on error
-                    return Err(e.into());
-                }
-            }
-            #[cfg(not(windows))]
-            {
-                // On Unix-like systems, `rename` is an atomic overwrite, so any error is unexpected.
-                let _ = std::fs::remove_file(&temp_path); // Clean up temp file on error
-                return Err(e.into());
-            }
-        } else {
-            // Successful rename - fsync the parent directory for durability
-            if let Some(parent) = self.storage_path.parent() {
-                if let Ok(dir_file) = std::fs::File::open(parent) {
-                    if let Err(sync_err) = dir_file.sync_all() {
-                        return Err(sync_err.into());
-                    }
+        // Persist the temp file to the final location (atomic rename)
+        // This handles platform-specific behavior and cleanup automatically
+        temp_file.persist(&self.storage_path)?;
+        
+        // After successful persist, fsync the parent directory for durability
+        if let Some(parent) = self.storage_path.parent() {
+            if let Ok(dir_file) = std::fs::File::open(parent) {
+                if let Err(sync_err) = dir_file.sync_all() {
+                    // Log but don't fail - this is best-effort
+                    println!("[TokenManager] Warning: Failed to sync directory: {}", sync_err);
                 }
             }
         }

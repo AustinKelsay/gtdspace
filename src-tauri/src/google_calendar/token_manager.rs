@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::time::Duration;
 use tauri::Manager;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -7,6 +8,42 @@ pub struct StoredTokens {
     pub access_token: String,
     pub refresh_token: Option<String>,
     pub expires_at: Option<i64>,
+}
+
+/// Helper function to retry file reads on Windows with transient failures
+fn read_to_string_retry(
+    path: &std::path::Path,
+    attempts: u32,
+    delay_ms: u64,
+) -> std::io::Result<String> {
+    for attempt in 1..=attempts {
+        match std::fs::read_to_string(path) {
+            Ok(content) => return Ok(content),
+            Err(e) => {
+                let should_retry = matches!(
+                    e.kind(),
+                    std::io::ErrorKind::PermissionDenied
+                        | std::io::ErrorKind::NotFound
+                        | std::io::ErrorKind::Interrupted
+                );
+
+                if should_retry && attempt < attempts {
+                    log::debug!(
+                        "[TokenManager] File read attempt {}/{} failed: {}, retrying in {}ms",
+                        attempt,
+                        attempts,
+                        e,
+                        delay_ms
+                    );
+                    std::thread::sleep(Duration::from_millis(delay_ms));
+                    continue;
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+    }
+    unreachable!()
 }
 
 pub struct TokenManager {
@@ -136,7 +173,7 @@ impl TokenManager {
             }
         }
 
-        let json = std::fs::read_to_string(&self.storage_path)?;
+        let json = read_to_string_retry(&self.storage_path, 5, 20)?;
         let tokens: StoredTokens = serde_json::from_str(&json)?;
         Ok(Some(tokens))
     }

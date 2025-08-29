@@ -33,7 +33,7 @@ impl OAuthCallbackServer {
             let mut code_guard = self.received_code.lock().await;
             *code_guard = None;
         }
-        
+
         let received_code = self.received_code.clone();
         let port = self.port;
         let expected_state_for_route = expected_state.clone();
@@ -586,6 +586,9 @@ pub async fn run_oauth_server(
         .start_and_wait_for_code_with_state(expected_state)
         .await
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
         })
 }

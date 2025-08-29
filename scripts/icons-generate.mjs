@@ -2,7 +2,7 @@
 /* eslint-env node */
 
 import { execFileSync } from 'child_process';
-import { existsSync, rmSync, readdirSync } from 'fs';
+import { existsSync, readdirSync, lstatSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -69,13 +69,17 @@ try {
     cwd: projectRoot
   });
   
-  // Clean up unwanted files
+  // Clean up unwanted files (preserve directories)
   console.log('🧹 Cleaning up extra files...');
   const files = readdirSync(iconsDir);
   for (const file of files) {
     if (!KEEP_FILES.includes(file)) {
       const filePath = join(iconsDir, file);
-      rmSync(filePath, { recursive: true, force: true });
+      const stats = lstatSync(filePath);
+      if (stats.isFile()) {
+        unlinkSync(filePath);
+      }
+      // Skip directories - they are preserved
     }
   }
   

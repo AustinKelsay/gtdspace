@@ -41,11 +41,11 @@ export function useDateTimeInsertion(editor: any) {
       const isMac = navigator.platform.toLowerCase().includes('mac');
       const modKey = isMac ? e.metaKey : e.ctrlKey;
 
-      // Cmd+Alt+D (Mac) or Ctrl+Alt+D (Windows/Linux) for Due Date field (with Shift for time)
+      // Cmd+Alt+D (Mac) or Ctrl+Alt+D (Windows/Linux) for Due Date field (always date-only)
       if (modKey && e.altKey && e.key === 'd') {
         e.preventDefault();
-        // If Shift is pressed, include time in the initial value
-        const initialValue = e.shiftKey ? new Date().toISOString() : '';
+        // Due date is always date-only, ignore Shift and provide YYYY-MM-DD string
+        const initialValue = e.shiftKey ? new Date().toISOString().slice(0, 10) : '';
         const block = createDateTimeBlock('due_date', 'Due Date', initialValue);
         insertAfterCurrent(block);
       }

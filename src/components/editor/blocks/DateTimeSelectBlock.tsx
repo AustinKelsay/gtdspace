@@ -333,7 +333,7 @@ export const DateTimeSelectBlock = createReactBlockSpec(
     propSchema: {
       type: {
         default: 'due_date',
-        values: ['created_date_time', 'modified_date', 'due_date', 'focus_date', 'completed_date'],
+        values: ['due_date', 'focus_date', 'completed_date', 'created_date_time', 'modified_date', 'custom'],
       },
       value: {
         default: '',

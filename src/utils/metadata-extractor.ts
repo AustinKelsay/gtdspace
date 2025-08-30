@@ -47,6 +47,7 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
       const fieldMap: Record<string, string> = {
         'due_date': 'dueDate',
         'focus_date': 'focusDate',
+        'focus_date_time': 'focusDate', // Backward compatibility for new focus field
         // Support both old and new field names for backward compatibility
         'created_date': 'createdDateTime', // Map old field to new camelCase name
         'created_date_time': 'createdDateTime',

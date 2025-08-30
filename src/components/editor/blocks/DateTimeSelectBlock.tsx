@@ -35,8 +35,8 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
 
   // Determine if field is date-only (no time component allowed)
   const isDateOnlyField = React.useMemo(() => {
-    // Due date and completed date are always date-only
-    return type === 'due_date' || type === 'completed_date';
+    // Date-only fields
+    return type === 'due_date' || type === 'modified_date' || type === 'completed_date';
   }, [type]);
 
   const [open, setOpen] = React.useState(false);

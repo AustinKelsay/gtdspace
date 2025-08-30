@@ -73,7 +73,8 @@ export const CheckboxBlock = createReactBlockSpec(
                 });
                 
                 // Show a toast notification
-                const habitName = filePath.split('/').pop()?.replace('.md', '') || 'Habit';
+                // Normalize path separators for cross-platform compatibility
+                const habitName = filePath.replace(/\\/g, '/').split('/').pop()?.replace('.md', '') || 'Habit';
                 toast({
                   title: "Habit Recorded",
                   description: `${habitName} marked as ${newChecked ? 'completed' : 'to do'}`,

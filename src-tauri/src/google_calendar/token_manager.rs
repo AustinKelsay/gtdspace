@@ -11,6 +11,7 @@ pub struct StoredTokens {
 }
 
 /// Helper function to retry file reads on Windows with transient failures
+#[allow(clippy::all)]
 fn read_to_string_retry(
     path: &std::path::Path,
     attempts: u32,

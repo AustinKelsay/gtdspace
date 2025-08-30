@@ -114,7 +114,10 @@ export function dateTimeBlockToMarkdown(
     fieldType = type;
     // enforce date-only for due_date and completed_date
     outValue = value && hasTime ? value.split('T')[0] : value;
-  } else if ((type as string).endsWith('_time') || type === 'created_date_time') {
+  } else if (type === 'created_date' || type === 'created_date_time') {
+    // Canonicalize both created_date and created_date_time to created_date_time
+    fieldType = 'created_date_time';
+  } else if ((type as string).endsWith('_time')) {
     fieldType = String(type);
   } else {
     fieldType = hasTime ? `${type}_time` : type;

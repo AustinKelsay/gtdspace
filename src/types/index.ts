@@ -551,7 +551,7 @@ export type GTDHabitFrequency =
 /**
  * GTD Habit status
  */
-export type GTDHabitStatus = 'todo' | 'complete';
+export type GTDHabitStatus = 'todo' | 'completed';
 
 /**
  * GTD Habit structure

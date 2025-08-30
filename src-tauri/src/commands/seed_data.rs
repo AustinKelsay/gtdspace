@@ -414,10 +414,7 @@ pub fn generate_project_readme_with_refs(
 
 ## Status
 [!singleselect:project-status:{}]
-
-## Due Date
-[!datetime:due_date:{}]
-
+{}
 ## Created
 [!datetime:created_date_time:{}]
 
@@ -439,9 +436,9 @@ Actions for this project are stored as individual markdown files in this directo
         description,
         status,
         if due_date_str != "Not set" {
-            due_date_str
+            format!("\n## Due Date\n[!datetime:due_date:{}]\n", due_date_str)
         } else {
-            ""
+            String::from("")
         },
         Local::now().to_rfc3339(),
         areas_refs,

@@ -70,10 +70,16 @@ npm run release
    ```
 
 3. **Create and push a tag**:
+   First, define your branch and tag variables. For example:
    ```bash
-   git tag -a v0.1.1 -m "Release v0.1.1"
-   git push origin main
-   git push origin v0.1.1
+   BRANCH="main" # or your release branch, e.g., "release/v1.2.3"
+   TAG="v0.1.1" # or your desired tag, e.g., "v1.2.3"
+   ```
+   Then, create and push the tag, ensuring to push both the branch and the tag:
+   ```bash
+   git tag -a ${TAG} -m "Release ${TAG}"
+   git push origin ${BRANCH}
+   git push origin ${TAG}
    ```
 
 ### Method 3: Trigger Version Bump from GitHub

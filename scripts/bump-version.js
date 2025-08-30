@@ -85,8 +85,7 @@ function main() {
     execSync('npm install --package-lock-only', { stdio: 'inherit', cwd: repoRoot });
     console.log('✓ Synced package-lock.json');
   } catch (error) {
-    console.error('❌ Failed to sync package-lock.json:', error.message);
-    process.exit(1);
+    console.warn(`Warning: Failed to sync package-lock.json, continuing without lockfile sync: ${error.message}`);
   }
 
   const cargoTomlPath = path.join(__dirname, '..', 'src-tauri', 'Cargo.toml');

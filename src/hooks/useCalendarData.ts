@@ -262,7 +262,7 @@ export const useCalendarData = (
               const habitName = file.path.split('/').pop()?.replace('.md', '') || '';
               
               // Parse habit fields
-              const habitStatus = parseCheckboxField(content, 'habit-status') ? 'complete' : 'todo';
+              const habitStatus = parseCheckboxField(content, 'habit-status') ? 'completed' : 'todo';
               const frequency = parseSingleSelectField(content, 'habit-frequency') || 'daily';
               
               // Parse focus date for the habit (can include time)

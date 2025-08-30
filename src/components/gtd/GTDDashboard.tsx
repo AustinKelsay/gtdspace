@@ -205,8 +205,8 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     name: file.name.replace('.md', ''),
                     frequency: (frequencyMatch?.[1] || 'daily') as GTDHabit['frequency'],
                     status: checkboxStatus
-                      ? (checkboxStatus[1] === 'true' ? 'complete' : 'todo')
-                      : ((singleselectStatus?.[1] || 'todo') as 'todo' | 'complete'),
+                      ? (checkboxStatus[1] === 'true' ? 'completed' : 'todo')
+                      : ((singleselectStatus?.[1] || 'todo') as 'todo' | 'completed'),
                     path: file.path,
                     last_updated: new Date(file.last_modified).toISOString(),
                     created_date_time: createdDateTime
@@ -401,7 +401,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
       };
     }
 
-    const completedToday = habits.filter(h => h.status === 'complete').length;
+    const completedToday = habits.filter(h => h.status === 'completed').length;
 
     return {
       total: habits.length,
@@ -467,7 +467,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   };
 
   const handleHabitToggle = async (habit: GTDHabit) => {
-    const newStatus = habit.status === 'complete' ? 'todo' : 'complete';
+    const newStatus = habit.status === 'completed' ? 'todo' : 'completed';
     await updateHabitStatus(
       `${currentFolder}/Habits/${habit.name}.md`,
       newStatus
@@ -782,14 +782,14 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                             className="flex items-center gap-2 p-2 rounded hover:bg-accent cursor-pointer"
                             onClick={() => handleHabitToggle(habit)}
                           >
-                            {habit.status === 'complete' ? (
+                            {habit.status === 'completed' ? (
                               <CheckSquare className="h-4 w-4 text-green-600" />
                             ) : (
                               <Square className="h-4 w-4 text-muted-foreground" />
                             )}
                             <span className={cn(
                               "text-sm",
-                              habit.status === 'complete' && "line-through text-muted-foreground"
+                              habit.status === 'completed' && "line-through text-muted-foreground"
                             )}>
                               {habit.name}
                             </span>
@@ -1153,7 +1153,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                         >
                           <div className="flex items-center gap-3">
                             <div className="flex-shrink-0">
-                              {habit.status === 'complete' ? (
+                              {habit.status === 'completed' ? (
                                 <div className="p-2 rounded-full bg-green-500/10">
                                   <CheckCircle2 className="h-5 w-5 text-green-600" />
                                 </div>
@@ -1166,7 +1166,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                             <div className="flex-1">
                               <p className={cn(
                                 "font-medium",
-                                habit.status === 'complete' && "line-through text-muted-foreground"
+                                habit.status === 'completed' && "line-through text-muted-foreground"
                               )}>
                                 {habit.name}
                               </p>
@@ -1174,7 +1174,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                                 <Badge variant="outline" className="text-xs">
                                   {habit.frequency}
                                 </Badge>
-                                {habit.status === 'complete' && (
+                                {habit.status === 'completed' && (
                                   <span className="text-xs text-green-600">Completed today</span>
                                 )}
                               </div>

@@ -3152,7 +3152,7 @@ pub fn create_gtd_habit(
 ///
 /// # Arguments
 /// * `habit_path` - Full path to the habit markdown file
-/// * `new_status` - New status value ("todo" or "complete")
+/// * `new_status` - New status value ("todo" or "completed")
 ///
 /// # Returns
 /// * `Ok(())` if successful
@@ -3178,7 +3178,7 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
         let checkbox_value = cap.get(1).map(|m| m.as_str()).unwrap_or("false");
         // Convert checkbox values to status values for internal processing
         let status = if checkbox_value == "true" {
-            "complete"
+            "completed"
         } else {
             "todo"
         };
@@ -3237,7 +3237,7 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
 
     // After recording a completion, immediately reset to "todo" for the next cycle
     // This ensures each cycle starts fresh and auto-reset can detect if it was missed
-    let final_status = if new_status == "complete" {
+    let final_status = if new_status == "completed" || new_status == "complete" {
         "todo"
     } else {
         new_status.as_str()
@@ -3246,7 +3246,7 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
     // Update the status field in the content based on format
     let updated_content = if is_checkbox_format {
         // Convert status to checkbox value
-        let checkbox_value = if final_status == "complete" {
+        let checkbox_value = if final_status == "completed" {
             "true"
         } else {
             "false"
@@ -3339,7 +3339,7 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                     let checkbox_value = cap.get(1).map(|m| m.as_str()).unwrap_or("false");
                     // Convert checkbox values to status values
                     let status = if checkbox_value == "true" {
-                        "complete"
+                        "completed"
                     } else {
                         "todo"
                     };

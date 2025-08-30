@@ -35,6 +35,7 @@ impl CalendarSyncManager {
         }
     }
 
+    #[allow(clippy::all)]
     pub async fn sync_events(
         &mut self,
         hub: CalendarHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
@@ -42,7 +43,6 @@ impl CalendarSyncManager {
         time_max: Option<DateTime<Utc>>,
     ) -> Result<Vec<GoogleCalendarEvent>, Box<dyn std::error::Error>> {
         if self.is_syncing.swap(true, Ordering::SeqCst) {
-            #[allow(clippy::all)]
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "Google Calendar sync already in progress",

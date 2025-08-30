@@ -68,9 +68,10 @@ import { useDateTimeInsertion } from "@/hooks/useDateTimeInsertion";
 // 'created_date_time' | 'modified_date' | 'due_date' | 'focus_date' | 'completed_date' | 'custom'
 //
 // Note: The runtime determines time inclusion based on the field type and ISO format.
-// Fields intended to include time (e.g., created_date_time) require ISO date-time format (YYYY-MM-DDTHH:mm:ssZ).
-// Fields intended to be date-only (e.g., due_date, modified_date, completed_date) expect YYYY-MM-DD format.
+// Fields intended to include time (e.g., created_date_time, modified_date) require ISO date-time format (YYYY-MM-DDTHH:mm:ssZ).
+// Fields intended to be date-only (e.g., due_date, completed_date) expect YYYY-MM-DD format.
 // The 'focus_date' field is flexible and can accept either date-only (YYYY-MM-DD) or date-time (YYYY-MM-DDTHH:mm:ss) values.
+// The 'custom' field accepts user-defined formats and is parsed using the runtime's flexible parsing rules, falling back to ISO formats if parsing fails.
 
 // Create a datetime field block
 const block = createDateTimeBlock("due_date", "Due Date", "2025-01-20", false);

@@ -17,7 +17,7 @@ export function useHabitTracking() {
    * Updates a habit's status and records it in the history
    */
   const updateHabitStatus = useCallback(
-    async (habitPath: string, newStatus: 'todo' | 'complete') => {
+    async (habitPath: string, newStatus: 'todo' | 'completed') => {
       const result = await withErrorHandling(
         async () => {
           await invoke('update_habit_status', {
@@ -31,7 +31,7 @@ export function useHabitTracking() {
       );
 
       if (result) {
-        showSuccess(`Habit marked as ${newStatus === 'complete' ? 'complete' : 'to do'}`);
+        showSuccess(`Habit marked as ${newStatus === 'completed' ? 'completed' : 'to do'}`);
       }
 
       return result;

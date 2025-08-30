@@ -125,7 +125,7 @@ export function useGTDSpace() {
           showSuccess(result);
         }
         
-        return result !== null;
+        return result != null; // Checks for both null and undefined
       } finally {
         setIsLoading(false);
       }

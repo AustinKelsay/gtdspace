@@ -16,6 +16,12 @@ fn read_to_string_retry(
     attempts: u32,
     delay_ms: u64,
 ) -> std::io::Result<String> {
+    if attempts == 0 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "attempts must be > 0",
+        ));
+    }
     for attempt in 1..=attempts {
         match std::fs::read_to_string(path) {
             Ok(content) => return Ok(content),
@@ -43,7 +49,10 @@ fn read_to_string_retry(
             }
         }
     }
-    unreachable!()
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "exhausted attempts without success",
+    ))
 }
 
 pub struct TokenManager {

@@ -446,7 +446,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
             // Special handling for habit-status: convert to checkbox block
             if (ssBlock.type === 'habit-status') {
               // Convert old habit status to checkbox
-              const checked = ssBlock.value === 'complete' || ssBlock.value === 'true';
+              const checked = ssBlock.value === 'completed' || ssBlock.value === 'complete' || ssBlock.value === 'true';
               processedBlocks.push({
                 type: 'checkbox',
                 props: {

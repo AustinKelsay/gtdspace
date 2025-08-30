@@ -66,7 +66,7 @@ export const CheckboxBlock = createReactBlockSpec(
                 const { toast } = await import('@/hooks/use-toast');
                 
                 // Convert checkbox state to status values for backend
-                const statusValue = newChecked ? 'complete' : 'todo';
+                const statusValue = newChecked ? 'completed' : 'todo';
                 await invoke('update_habit_status', {
                   habitPath: filePath,
                   newStatus: statusValue,
@@ -76,7 +76,7 @@ export const CheckboxBlock = createReactBlockSpec(
                 const habitName = filePath.split('/').pop()?.replace('.md', '') || 'Habit';
                 toast({
                   title: "Habit Recorded",
-                  description: `${habitName} marked as ${newChecked ? 'complete' : 'to do'}`,
+                  description: `${habitName} marked as ${newChecked ? 'completed' : 'to do'}`,
                 });
                 
                 // Small delay to let the backend write the file

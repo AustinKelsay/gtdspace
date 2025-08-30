@@ -862,8 +862,22 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     );
   };
 
+  // Helper function to normalize status values consistently
+  const normalizeStatus = (status: string | undefined | null): string => {
+    if (!status) return 'in-progress';
+    
+    const raw = status.trim().toLowerCase().replace(/[\s_]+/g, '-');
+    
+    // Map various status variations to canonical values
+    if (raw === 'done' || raw === 'complete' || raw === 'completed') return 'completed';
+    if (raw === 'in-progress' || raw === 'inprogress') return 'in-progress';
+    if (raw === 'waiting-for' || raw === 'on-hold') return 'waiting';
+    
+    return raw;
+  };
+
   const getProjectStatusColor = (statusInput: string) => {
-    const normalizedStatus = statusInput || 'in-progress';
+    const normalizedStatus = normalizeStatus(statusInput);
     switch (normalizedStatus) {
       case 'completed': return 'text-green-600 dark:text-green-500';
       case 'waiting': return 'text-purple-600 dark:text-purple-500';
@@ -873,7 +887,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   };
 
   const getProjectStatusIcon = (statusInput: string) => {
-    const normalizedStatus = statusInput || 'in-progress';
+    const normalizedStatus = normalizeStatus(statusInput);
     switch (normalizedStatus) {
       case 'completed': return CheckCircle2;
       case 'waiting': return CircleDot; // Filled circle (dot in center) for waiting
@@ -883,7 +897,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   };
 
   const getActionStatusColor = (status: string) => {
-    const normalizedStatus = status || 'in-progress';
+    const normalizedStatus = normalizeStatus(status);
     switch (normalizedStatus) {
       case 'completed': return 'text-green-600 dark:text-green-500';
       case 'waiting': return 'text-purple-600 dark:text-purple-500';
@@ -893,7 +907,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   };
 
   const getActionStatusIcon = (status: string) => {
-    const normalizedStatus = status || 'in-progress';
+    const normalizedStatus = normalizeStatus(status);
     switch (normalizedStatus) {
       case 'completed': return CheckCircle2;
       case 'waiting': return CircleDot;

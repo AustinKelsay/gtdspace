@@ -8,6 +8,7 @@ import {
   GTDProjectCreate,
   GTDActionCreate,
 } from '@/types';
+import { migrateGTDObjects } from '@/utils/data-migration';
 
 /**
  * Hook for managing GTD space operations
@@ -306,9 +307,12 @@ export function useGTDSpace() {
       
       const result = await withErrorHandling(
         async () => {
-          const projects = await invoke<GTDProject[]>('list_gtd_projects', {
+          let projects = await invoke<GTDProject[]>('list_gtd_projects', {
             spacePath: spacePath,
           });
+          
+          // Apply migrations to ensure backward compatibility
+          projects = migrateGTDObjects(projects);
           
           // Loaded projects count
           

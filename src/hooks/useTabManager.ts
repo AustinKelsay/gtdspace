@@ -16,6 +16,7 @@ import type {
 } from '@/types';
 import { extractMetadata, getMetadataChanges } from '@/utils/metadata-extractor';
 import { emitContentChange, emitContentSaved, emitMetadataChange } from '@/utils/content-event-bus';
+import { migrateMarkdownContent, needsMigration } from '@/utils/data-migration';
 
 // Extend the global Window interface to include our custom callback
 declare global {
@@ -193,6 +194,15 @@ export const useTabManager = () => {
         // Normal file - load content
         console.log('Loading file content for new tab:', file.path);
         content = await invoke<string>('read_file', { path: file.path });
+        
+        // Apply migrations if needed
+        if (needsMigration(content)) {
+          console.log('useTabManager: Applying data migrations to file:', file.path);
+          content = migrateMarkdownContent(content);
+          // Auto-save the migrated content
+          await invoke('save_file', { path: file.path, content });
+        }
+        
         originalContent = content;
         console.log('useTabManager: File content loaded, length:', content.length);
       }

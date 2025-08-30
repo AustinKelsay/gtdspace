@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { GTDSpace, MarkdownFile } from '@/types';
+import { migrateMarkdownContent, needsMigration } from '@/utils/data-migration';
 
 export interface CalendarItem {
   id: string;
@@ -168,7 +169,15 @@ export const useCalendarData = (
           // Check if it's a project README
           if (file.path.includes('/Projects/') && file.path.endsWith('README.md')) {
             try {
-              const content = await invoke<string>('read_file', { path: file.path });
+              let content = await invoke<string>('read_file', { path: file.path });
+              
+              // Apply migrations if needed
+              if (needsMigration(content)) {
+                content = migrateMarkdownContent(content);
+                // Auto-save migrated content
+                await invoke('save_file', { path: file.path, content });
+              }
+              
               const projectName = file.path.split('/Projects/')[1]?.split('/')[0] || '';
               
               // Parse dates from project README
@@ -197,7 +206,15 @@ export const useCalendarData = (
           // Check if it's an action file (in Projects but not README)
           if (file.path.includes('/Projects/') && !file.path.includes('README') && file.path.endsWith('.md')) {
             try {
-              const content = await invoke<string>('read_file', { path: file.path });
+              let content = await invoke<string>('read_file', { path: file.path });
+              
+              // Apply migrations if needed
+              if (needsMigration(content)) {
+                content = migrateMarkdownContent(content);
+                // Auto-save migrated content
+                await invoke('save_file', { path: file.path, content });
+              }
+              
               const pathParts = file.path.split('/');
               const projectName = file.path.split('/Projects/')[1]?.split('/')[0] || '';
               const actionName = pathParts[pathParts.length - 1].replace('.md', '');
@@ -233,7 +250,15 @@ export const useCalendarData = (
           // Check if it's a habit file
           if (file.path.includes('/Habits/') && file.path.endsWith('.md')) {
             try {
-              const content = await invoke<string>('read_file', { path: file.path });
+              let content = await invoke<string>('read_file', { path: file.path });
+              
+              // Apply migrations if needed
+              if (needsMigration(content)) {
+                content = migrateMarkdownContent(content);
+                // Auto-save migrated content
+                await invoke('save_file', { path: file.path, content });
+              }
+              
               const habitName = file.path.split('/').pop()?.replace('.md', '') || '';
               
               // Parse habit fields

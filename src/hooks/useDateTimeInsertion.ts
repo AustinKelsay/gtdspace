@@ -42,7 +42,7 @@ export function useDateTimeInsertion(editor: any) {
       const modKey = isMac ? e.metaKey : e.ctrlKey;
 
       // Cmd+Alt+D (Mac) or Ctrl+Alt+D (Windows/Linux) for Due Date field (always date-only)
-      if (modKey && e.altKey && e.key === 'd') {
+      if (modKey && e.altKey && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         // Due date is always date-only, ignore Shift and provide local YYYY-MM-DD string
         let initialValue = '';

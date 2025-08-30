@@ -4,6 +4,7 @@ import { execSync, execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import process from 'process';
+import { createInterface } from 'readline';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -57,10 +58,11 @@ function execCommandFile(file, args = [], silent = false) {
   }
 }
 
-function main() {
+async function main() {
   // Parse command line arguments
-  const args = process.argv.slice(2);
-  const versionType = args[0] || 'patch'; // Default to patch
+  const rawArgs = process.argv.slice(2);
+  const flags = new Set(rawArgs.filter((arg) => arg.startsWith('-')));
+  const versionType = rawArgs.find((arg) => !arg.startsWith('-')) || 'patch'; // Default to patch
 
   // Validate version type
   const incrementKeywords = new Set(['patch', 'minor', 'major', 'prepatch', 'preminor', 'premajor', 'prerelease']);
@@ -151,7 +153,8 @@ function main() {
   const packageJsonPath = path.join(__dirname, '..', 'package.json');
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
 
-  if (packageJson.scripts && packageJson.scripts.test) {
+  const hasTestScript = Boolean(packageJson.scripts && packageJson.scripts.test);
+  if (hasTestScript) {
     log('Running test suite...', 'yellow');
     try {
       execCommand('npm test');
@@ -160,7 +163,31 @@ function main() {
       exitWithError('Tests failed. Please fix all failing tests before releasing');
     }
   } else {
-    log('⚠ No test script found, skipping tests', 'yellow');
+    // No test script present: require explicit confirmation or CLI flag to proceed
+    if (flags.has('--no-tests')) {
+      log("⚠ Proceeding without tests due to '--no-tests' flag", 'yellow');
+    } else if (process.stdin.isTTY && process.stdout.isTTY && !process.env.CI) {
+      const confirmed = await new Promise((resolve) => {
+        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        rl.question(
+          "No 'test' script found in package.json. Releases should not proceed silently without tests.\nTo continue without tests, type 'yes' and press Enter (recommended: add tests and a 'test' npm script). Continue? ",
+          (answer) => {
+            rl.close();
+            resolve(answer.trim().toLowerCase() === 'yes');
+          }
+        );
+      });
+      if (!confirmed) {
+        exitWithError(
+          "Release aborted. Add tests and a 'test' script, or re-run with the '--no-tests' flag to bypass explicitly."
+        );
+      }
+      log('⚠ Continuing without tests (user confirmed)', 'yellow');
+    } else {
+      exitWithError(
+        "No 'test' script found. In non-interactive environments, a release requires tests. Add tests and a 'test' script, or re-run with the '--no-tests' flag to bypass explicitly."
+      );
+    }
   }
 
   // Step 5: Run type checking

@@ -4458,7 +4458,9 @@ pub async fn google_calendar_start_auth(app: AppHandle) -> Result<String, String
     let code_verifier = start_result.code_verifier.clone();
     let server_handle = tokio::spawn(async move {
         println!("[GoogleCalendar] Restarting OAuth callback server with expected state...");
-        run_oauth_server(Some(state)).await.map_err(|e| e.to_string())
+        run_oauth_server(Some(state))
+            .await
+            .map_err(|e| e.to_string())
     });
 
     // Wait for the OAuth server to receive the code (with timeout)

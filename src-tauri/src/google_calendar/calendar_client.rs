@@ -95,10 +95,10 @@ pub async fn fetch_calendar_events(
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
             .error_for_status()
             .map_err(|e| -> Box<dyn std::error::Error> {
-                Box::new(std::io::Error::other(format!(
-                    "Failed to fetch events on page {}: {}",
-                    page_count, e
-                )))
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to fetch events on page {}: {}", page_count, e),
+                ))
             })?;
 
         let google_response: GoogleCalendarListResponse = response
@@ -168,7 +168,10 @@ pub async fn fetch_events_async(
 ) -> Result<Vec<CalendarEvent>, Box<dyn std::error::Error + Send + Sync>> {
     fetch_calendar_events(access_token).await.map_err(
         |e| -> Box<dyn std::error::Error + Send + Sync> {
-            Box::new(std::io::Error::other(e.to_string()))
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
         },
     )
 }

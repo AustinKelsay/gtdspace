@@ -238,11 +238,11 @@ export function mapLegacyStatus(status: string): string {
     'Not Started': 'in-progress',  // Map old "Not Started" to new default "in-progress"
     'In Progress': 'in-progress',
     'Waiting': 'waiting',
-    'Completed': 'completed',
+    'completed': 'completed',
     'Active': 'in-progress',  // Map old project status to new
     'Planning': 'in-progress',
     'On Hold': 'waiting',
-    'Cancelled': 'cancelled',  // Map cancelled to cancelled
+    'cancelled': 'cancelled',
   };
   
   return statusMap[status] || status.toLowerCase().replace(/\s+/g, '-');

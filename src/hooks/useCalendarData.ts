@@ -249,18 +249,25 @@ export const useCalendarData = (
               if (createdDateTimeRaw) {
                 // Parse and normalize to ISO format
                 try {
-                  const parsed = new Date(createdDateTimeRaw);
+                  // First validate if it's a numeric timestamp
+                  const timestamp = Number(createdDateTimeRaw);
+                  const parsed = !isNaN(timestamp) 
+                    ? new Date(timestamp) 
+                    : new Date(createdDateTimeRaw);
+                    
                   if (!isNaN(parsed.getTime())) {
                     createdDateTime = parsed.toISOString();
                   } else {
                     // Invalid date - log warning and use file.last_modified
                     console.warn(`[CalendarData] Invalid created_date_time value in habit "${habitName}": "${createdDateTimeRaw}" - using file.last_modified`);
-                    createdDateTime = new Date(file.last_modified).toISOString();
+                    // file.last_modified is in seconds, convert to milliseconds
+                    createdDateTime = new Date(file.last_modified * 1000).toISOString();
                   }
                 } catch (error) {
                   // Parsing threw an error - use file.last_modified
                   console.warn(`[CalendarData] Failed to parse created_date_time in habit "${habitName}": "${createdDateTimeRaw}" - ${error} - using file.last_modified`);
-                  createdDateTime = new Date(file.last_modified).toISOString();
+                  // file.last_modified is in seconds, convert to milliseconds
+                  createdDateTime = new Date(file.last_modified * 1000).toISOString();
                 }
               } else {
                 // Try to parse from ## Created header as fallback (handles CRLF and flexible spacing)
@@ -296,12 +303,12 @@ export const useCalendarData = (
                       }
                     }
                   } catch {
-                    // If parsing fails, use file.last_modified
-                    createdDateTime = new Date(file.last_modified).toISOString();
+                    // If parsing fails, use file.last_modified (convert from seconds to milliseconds)
+                    createdDateTime = new Date(file.last_modified * 1000).toISOString();
                   }
                 } else {
-                  // No created date found in content, use file.last_modified
-                  createdDateTime = new Date(file.last_modified).toISOString();
+                  // No created date found in content, use file.last_modified (convert from seconds to milliseconds)
+                  createdDateTime = new Date(file.last_modified * 1000).toISOString();
                   console.log(`[CalendarData] Habit ${habitName} missing created_date_time - using file.last_modified: ${createdDateTime}`);
                 }
               }

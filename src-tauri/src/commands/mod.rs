@@ -56,7 +56,7 @@ static HABIT_HISTORY_REGEX: Lazy<Regex> = Lazy::new(|| {
 });
 
 /// Regex for extracting creation date from habit file
-/// Format: ## Created\nYYYY-MM-DD
+/// Format: ## Created\n[!datetime:created_date_time:YYYY-MM-DDTHH:MM:SS]
 static HABIT_CREATED_DATE_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"## Created\n[!datetime:created_date_time:([^\]]+)]")
         .expect("Invalid habit created date regex pattern")

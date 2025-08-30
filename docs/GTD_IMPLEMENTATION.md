@@ -112,7 +112,7 @@ Use the GTD Project dialog or create manually:
 - Name: Clear, outcome-focused title
 - Description: Desired end result
 - Due Date: Optional deadline
-- Status: Automatically set to "Active"
+- Status: Automatically set to "Active" (canonical token: `in-progress`)
 ```
 
 ## Actions
@@ -126,7 +126,8 @@ Actions are concrete next steps that move projects forward.
 
 ## Status
 
-Not Started | In Progress | Complete
+Display: Not Started | In Progress | Complete
+Canonical tokens: `in-progress` | `waiting` | `complete`
 
 ## Focus Date
 

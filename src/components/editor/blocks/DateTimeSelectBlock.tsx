@@ -33,11 +33,18 @@ interface DateTimeSelectComponentProps {
 const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) => {
   const { type, value, label, optional } = props.block.props;
 
+  // Determine if field is date-only (no time component allowed)
+  const isDateOnlyField = React.useMemo(() => {
+    // Due date and completed date are always date-only
+    return type === 'due_date' || type === 'completed_date';
+  }, [type]);
+
   const [open, setOpen] = React.useState(false);
   const [timeValue, setTimeValue] = React.useState('12:00');
   const [localTimeEnabled, setLocalTimeEnabled] = React.useState(() => {
     // Initialize based solely on whether the current value has time
-    return Boolean(value && value.includes('T'));
+    // Date-only fields never have time enabled
+    return !isDateOnlyField && Boolean(value && value.includes('T'));
   });
 
   // Parse the ISO date value - handle empty strings gracefully
@@ -57,6 +64,12 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
 
   // Sync localTimeEnabled with value changes and extract time if present
   React.useEffect(() => {
+    // Date-only fields never have time enabled
+    if (isDateOnlyField) {
+      setLocalTimeEnabled(false);
+      return;
+    }
+    
     // Update localTimeEnabled based on whether value contains time
     const hasTime = Boolean(value && value.includes('T'));
     setLocalTimeEnabled(hasTime);
@@ -68,7 +81,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       const minutes = date.getMinutes().toString().padStart(2, '0');
       setTimeValue(`${hours}:${minutes}`);
     }
-  }, [value, isValidDate]);
+  }, [value, isValidDate, isDateOnlyField]);
 
   const updateBlockValue = (newValue: string) => {
     try {
@@ -88,7 +101,14 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
     if (!newDate) return;
 
     let isoString: string;
-    if (localTimeEnabled) {
+    // For date-only fields, always emit date string without time
+    if (isDateOnlyField || !localTimeEnabled) {
+      // Create local date string without time component
+      const year = newDate.getFullYear();
+      const month = (newDate.getMonth() + 1).toString().padStart(2, '0');
+      const day = newDate.getDate().toString().padStart(2, '0');
+      isoString = `${year}-${month}-${day}`;
+    } else {
       // Parse time value and create local date with time
       const [hours, minutes] = timeValue.split(':').map(Number);
       const localDate = new Date(
@@ -101,18 +121,15 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
         0
       );
       isoString = localDate.toISOString();
-    } else {
-      // Create local date string without time component
-      const year = newDate.getFullYear();
-      const month = (newDate.getMonth() + 1).toString().padStart(2, '0');
-      const day = newDate.getDate().toString().padStart(2, '0');
-      isoString = `${year}-${month}-${day}`;
     }
 
     updateBlockValue(isoString);
   };
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Skip time updates for date-only fields
+    if (isDateOnlyField) return;
+    
     const newTime = e.target.value;
     setTimeValue(newTime);
 
@@ -150,6 +167,8 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
   }, [isValidDate, value, dateValue]);
 
   const handleTimeToggle = (checked: boolean) => {
+    // Date-only fields cannot have time enabled
+    if (isDateOnlyField) return;
     setLocalTimeEnabled(checked);
   };
 
@@ -219,12 +238,13 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       <Popover open={open} onOpenChange={(newOpen) => {
         if (newOpen) {
           // When opening, sync local state with current value
-          const currentHasTime = value && value.includes('T');
+          // Date-only fields never have time
+          const currentHasTime = !isDateOnlyField && value && value.includes('T');
           setLocalTimeEnabled(currentHasTime);
         } else if (!newOpen && isValidDate) {
           // When closing, update the value if time toggle was changed
           const currentHasTime = value && value.includes('T');
-          if (localTimeEnabled !== currentHasTime) {
+          if (localTimeEnabled !== currentHasTime && !isDateOnlyField) {
             let isoString: string;
             if (localTimeEnabled) {
               // Add time to existing date using local time
@@ -281,29 +301,31 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
               defaultMonth={isValidDate ? dateValue : undefined}
             />
 
-            {/* Time toggle */}
-            <div className="p-3 border-t">
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  id={`${props.block.id}-include-time`}
-                  checked={localTimeEnabled}
-                  onChange={(e) => handleTimeToggle(e.target.checked)}
-                  className="rounded border-gray-300"
-                />
-                <label htmlFor={`${props.block.id}-include-time`} className="text-sm font-medium">
-                  Include time
-                </label>
+            {/* Time toggle - hide for date-only fields */}
+            {!isDateOnlyField && (
+              <div className="p-3 border-t">
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id={`${props.block.id}-include-time`}
+                    checked={localTimeEnabled}
+                    onChange={(e) => handleTimeToggle(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor={`${props.block.id}-include-time`} className="text-sm font-medium">
+                    Include time
+                  </label>
+                </div>
+                {localTimeEnabled && (
+                  <input
+                    type="time"
+                    value={timeValue}
+                    onChange={handleTimeChange}
+                    className="w-full px-3 py-2 border border-input rounded-md text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                )}
               </div>
-              {localTimeEnabled && (
-                <input
-                  type="time"
-                  value={timeValue}
-                  onChange={handleTimeChange}
-                  className="w-full px-3 py-2 border border-input rounded-md text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              )}
-            </div>
+            )}
 
             {/* Clear button */}
             {optional && isValidDate && (

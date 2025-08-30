@@ -81,7 +81,8 @@ function main() {
 
   try {
     console.log('⟳ Syncing package-lock.json...');
-    execSync('npm install --package-lock-only', { stdio: 'inherit' });
+    const repoRoot = path.join(__dirname, '..');
+    execSync('npm install --package-lock-only', { stdio: 'inherit', cwd: repoRoot });
     console.log('✓ Synced package-lock.json');
   } catch (error) {
     console.error('❌ Failed to sync package-lock.json:', error.message);
@@ -124,31 +125,33 @@ function main() {
   try {
     const repoRoot = path.join(__dirname, '..');
     const filesToAdd = [
-      path.join(repoRoot, 'package.json'),
-      path.join(repoRoot, 'src-tauri', 'Cargo.toml'),
-      path.join(repoRoot, 'src-tauri', 'tauri.conf.json'),
+      'package.json',
+      'src-tauri/Cargo.toml',
+      'src-tauri/tauri.conf.json',
     ];
 
     if (fs.existsSync(path.join(repoRoot, 'package-lock.json'))) {
-      filesToAdd.push(path.join(repoRoot, 'package-lock.json'));
+      filesToAdd.push('package-lock.json');
     }
 
-    execSync(`git add ${filesToAdd.join(' ')}`, { stdio: 'inherit' });
+    // Quote each path and execute from repo root
+    const quotedFiles = filesToAdd.map(f => `"${f}"`).join(' ');
+    execSync(`git add ${quotedFiles}`, { stdio: 'inherit', cwd: repoRoot });
     let preCommitHash = null;
     try {
       preCommitHash = execSync('git rev-parse --verify HEAD', { encoding: 'utf8', stdio: 'pipe' }).trim();
     } catch {
       // No previous commit in the repository (fresh repo)
     }
-    execSync(`git commit -m "${commitMessage}"`, { stdio: 'inherit' });
+    execSync(`git commit -m "${commitMessage}"`, { stdio: 'inherit', cwd: repoRoot });
     console.log(`✓ Created commit: ${commitMessage}`);
     try {
-      execSync(`git tag -a ${tagName} -m "Release ${tagName}"`, { stdio: 'inherit' });
+      execSync(`git tag -a ${tagName} -m "Release ${tagName}"`, { stdio: 'inherit', cwd: repoRoot });
       console.log(`✓ Created tag: ${tagName}`);
     } catch (tagError) {
       console.error('Failed to create tag. Undoing the version bump commit while keeping your changes staged...');
       if (preCommitHash) {
-        execSync(`git reset --soft ${preCommitHash}`, { stdio: 'inherit' });
+        execSync(`git reset --soft ${preCommitHash}`, { stdio: 'inherit', cwd: repoRoot });
         console.error('\n⚠️  The version bump commit has been undone; your changes remain staged.');
       } else {
         console.error('No previous commit detected; skip reset. Your changes remain in the new commit — amend or revert manually.');

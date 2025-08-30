@@ -12,21 +12,20 @@ This command will:
 
 1. Bump the patch version
 2. Create a git commit and tag locally
-3. **Manual step**: Push changes and tags to GitHub with:
-   ```bash
-   git push && git push --tags
-   ```
+3. Automatically push changes and tags to GitHub
 4. GitHub Actions will then trigger builds for all platforms
 
 ### Other Version Types
 
 ```bash
-npm run version:minor  # 0.1.0 → 0.2.0
-npm run version:major  # 0.1.0 → 1.0.0
-npm run version:patch  # 0.1.0 → 0.1.1
+npm run release:minor  # 0.1.0 → 0.2.0 (auto-push)
+npm run release:major  # 0.1.0 → 1.0.0 (auto-push)
+npm run release:patch  # 0.1.0 → 0.1.1 (auto-push)
 
-# Then push
-git push && git push --tags
+# Or manually bump version only (no auto-push):
+npm run version:minor  # Then manually: git push && git push --tags
+npm run version:major  # Then manually: git push && git push --tags
+npm run version:patch  # Then manually: git push && git push --tags
 ```
 
 ## 📦 What Happens Next?

@@ -48,6 +48,7 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
         'due_date': 'dueDate',
         'focus_date': 'focusDate',
         'focus_date_time': 'focusDate',
+        'created_date': 'createdDateTime',
         'created_date_time': 'createdDateTime',
         'modified_date': 'modifiedDate',
         'modified_date_time': 'modifiedDate',

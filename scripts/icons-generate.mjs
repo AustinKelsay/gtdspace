@@ -83,10 +83,20 @@ try {
     }
   }
   
-  // Validate that all required icons were generated
+  // Validate that all required icons were generated (platform-aware)
   console.log('🔍 Validating generated icons...');
   const missingIcons = [];
-  for (const requiredFile of KEEP_FILES) {
+  // Use the same platform-aware list as the initial check
+  const requiredFilesForValidation = [
+    'icon.png',
+    '32x32.png',
+    '128x128.png',
+    '128x128@2x.png',
+    ...(isWin ? ['icon.ico'] : []),
+    ...(isMac ? ['icon.icns'] : []),
+  ];
+  
+  for (const requiredFile of requiredFilesForValidation) {
     const filePath = join(iconsDir, requiredFile);
     if (!existsSync(filePath)) {
       missingIcons.push(requiredFile);
@@ -96,14 +106,14 @@ try {
   if (missingIcons.length > 0) {
     console.error('❌ Icon generation validation failed!');
     console.error('   Missing required icon files:', missingIcons.join(', '));
-    console.error('   Expected files:', KEEP_FILES.join(', '));
+    console.error('   Expected files for platform:', requiredFilesForValidation.join(', '));
     console.error('   This will cause packaging failures - aborting.');
     process.exit(1);
   }
   
   console.log('✅ Icons generated successfully!');
   console.log('   Kept only essential files:', KEEP_FILES.join(', '));
-  console.log('   All required icons validated and present.');
+  console.log('   Validated platform-specific icons:', requiredFilesForValidation.join(', '));
 } catch (error) {
   console.error('❌ Failed to generate icons.');
   console.error(`Command failed with exit code ${error.status || error.code}:`);

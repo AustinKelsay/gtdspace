@@ -274,10 +274,9 @@ export const useCalendarData = (
               if (createdDateTimeRaw) {
                 // Parse and normalize to ISO format
                 try {
-                  // First validate if it's a numeric timestamp
                   const timestamp = Number(createdDateTimeRaw);
-                  const parsed = !isNaN(timestamp) 
-                    ? new Date(timestamp) 
+                  const parsed = !isNaN(timestamp)
+                    ? new Date(timestamp < 1e12 ? timestamp * 1000 : timestamp) // Handle seconds or milliseconds
                     : new Date(createdDateTimeRaw);
                     
                   if (!isNaN(parsed.getTime())) {

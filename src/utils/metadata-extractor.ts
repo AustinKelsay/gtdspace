@@ -52,7 +52,8 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
         'created_date_time': 'createdDateTime',
         'modified_date': 'modifiedDate',
         'modified_date_time': 'modifiedDateTime',
-        'completed_date': 'completedDate'
+        'completed_date': 'completedDate',
+        'completed_date_time': 'completedDate' // Both variants map to same camelCase field
       };
       const field = fieldMap[match[1]] || match[1];
       return { key: field, value: match[2] };

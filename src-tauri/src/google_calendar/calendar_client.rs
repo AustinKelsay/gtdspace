@@ -47,7 +47,8 @@ pub async fn fetch_calendar_events(
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(15))
-        .build()?;
+        .build()
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
     // Calculate time range (last 30 days to next 90 days)
     let time_min = chrono::Utc::now() - chrono::Duration::days(30);

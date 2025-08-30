@@ -84,13 +84,13 @@ export function useDateTimeInsertion(editor: any) {
 
   // Function to manually insert datetime blocks
   const insertDateTime = (
-    type: DateTimeFieldType,
+    type: DateTimeFieldType | 'created_date',
     defaultValue?: string
   ) => {
     if (!editor) return;
 
-    // Normalize legacy 'created_date' to 'created_date_time'
-    const normalizedType = type === 'created_date' ? 'created_date_time' : type;
+    // Normalize legacy 'created_date' to 'created_date_time' and ensure narrowed type
+    const normalizedType: DateTimeFieldType = type === 'created_date' ? 'created_date_time' : type;
     const isCreated = normalizedType === 'created_date_time';
     const value = defaultValue ?? (isCreated ? new Date().toISOString() : '');
     const block = createDateTimeBlock(normalizedType, undefined, value);

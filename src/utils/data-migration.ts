@@ -58,14 +58,16 @@ export function migrateMarkdownContent(content: string): string {
     'waiting-for': 'waiting',
     'cancelled': 'completed', // Map cancelled to completed since we only have 3 states
     'done': 'completed',
+    'complete': 'completed', // Map complete to completed
   };
   
   // Apply status mappings to singleselect fields
   migrated = migrated.replace(
     /\[!singleselect:(status|project-status):([^\]]+)\]/g,
     (match, fieldType, value) => {
-      const normalizedValue = value.toLowerCase().trim();
-      const mappedValue = statusMappings[normalizedValue] || value;
+      const normalizedValue = value.toLowerCase().trim().replace(/\s+/g, '-');
+      // Use normalized value as fallback to ensure proper casing
+      const mappedValue = statusMappings[normalizedValue] || normalizedValue;
       return `[!singleselect:${fieldType}:${mappedValue}]`;
     }
   );
@@ -118,12 +120,12 @@ export function migrateGTDObject<T extends Record<string, any>>(obj: T): T {
       'waiting-for': 'waiting',
       'cancelled': 'completed',
       'done': 'completed',
+      'complete': 'completed',
     };
     
     const normalizedStatus = migrated.status.toLowerCase().replace(/\s+/g, '-');
-    if (statusMappings[normalizedStatus]) {
-      migrated.status = statusMappings[normalizedStatus];
-    }
+    // Use normalized value as fallback to ensure proper casing
+    migrated.status = statusMappings[normalizedStatus] || normalizedStatus;
   }
   
   return migrated as T;

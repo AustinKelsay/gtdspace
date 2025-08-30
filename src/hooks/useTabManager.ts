@@ -200,7 +200,22 @@ export const useTabManager = () => {
           console.log('useTabManager: Applying data migrations to file:', file.path);
           content = migrateMarkdownContent(content);
           // Auto-save the migrated content
-          await invoke('save_file', { path: file.path, content });
+          await invoke<void>('save_file', { path: file.path, content });
+          
+          // Emit events to update UI with migrated content
+          const newMetadata = extractMetadata(content);
+          emitContentSaved({
+            filePath: file.path,
+            fileName: file.name,
+            content: content,
+            metadata: newMetadata
+          });
+          emitMetadataChange({
+            filePath: file.path,
+            fileName: file.name,
+            content: content,
+            metadata: newMetadata
+          });
         }
         
         originalContent = content;

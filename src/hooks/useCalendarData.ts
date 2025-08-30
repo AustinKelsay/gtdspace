@@ -270,37 +270,17 @@ export const useCalendarData = (
                   createdDateTime = new Date(file.last_modified * 1000).toISOString();
                 }
               } else {
-                // Try to parse from ## Created header as fallback (handles CRLF and flexible spacing)
-                const createdHeaderMatch = content.match(/##\s*Created\s*(?:\r?\n|\s+)\s*([0-9]{4})-([0-9]{2})-([0-9]{2})(?:\s+([0-9]{1,2}):([0-9]{2})(?:\s*(AM|PM))?)?/i);
-                if (createdHeaderMatch) {
+                // Try to parse from ## Created header as fallback
+                const createdHeaderMatch = content.match(/##\s*Created\s*\r?\n\s*(\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)?)/i);
+                if (createdHeaderMatch && createdHeaderMatch[1]) {
                   try {
-                    // Parse date components explicitly
-                    const year = parseInt(createdHeaderMatch[1], 10);
-                    const month = parseInt(createdHeaderMatch[2], 10);
-                    const day = parseInt(createdHeaderMatch[3], 10);
-                    let hour = createdHeaderMatch[4] ? parseInt(createdHeaderMatch[4], 10) : 0;
-                    const minute = createdHeaderMatch[5] ? parseInt(createdHeaderMatch[5], 10) : 0;
-                    const ampm = createdHeaderMatch[6];
-
-                    // Convert 12-hour to 24-hour format if AM/PM is present
-                    if (ampm) {
-                      if (ampm.toUpperCase() === 'PM' && hour !== 12) {
-                        hour += 12;
-                      } else if (ampm.toUpperCase() === 'AM' && hour === 12) {
-                        hour = 0;
-                      }
-                    }
-
-                    // Validate components and create UTC timestamp
-                    if (!isNaN(year) && !isNaN(month) && !isNaN(day) && 
-                        !isNaN(hour) && !isNaN(minute) &&
-                        month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
-                        hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
-                      const utcTimestamp = Date.UTC(year, month - 1, day, hour, minute, 0);
-                      const parsedDate = new Date(utcTimestamp);
-                      if (!isNaN(parsedDate.getTime())) {
-                        createdDateTime = parsedDate.toISOString();
-                      }
+                    // Let Date constructor handle the parsing
+                    const dateStr = createdHeaderMatch[1].trim();
+                    const parsed = new Date(dateStr + ' UTC'); // Assume UTC for consistency
+                    if (!isNaN(parsed.getTime())) {
+                      createdDateTime = parsed.toISOString();
+                    } else {
+                      throw new Error('Invalid date');
                     }
                   } catch {
                     // If parsing fails, use file.last_modified (convert from seconds to milliseconds)

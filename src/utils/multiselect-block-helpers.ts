@@ -1,12 +1,14 @@
 /**
  * @fileoverview Helper functions for MultiSelect blocks
+ * Note: Status, Effort, and Project Status now use SingleSelectBlock
+ * MultiSelect is for fields that support multiple values (tags, contexts, categories)
  * @author Development Team
  * @created 2025-01-XX
  */
 
 import { Option } from '@/components/ui/multi-select';
 
-export type MultiSelectBlockType = 'status' | 'effort' | 'project-status' | 'contexts' | 'categories' | 'custom';
+export type MultiSelectBlockType = 'tags' | 'contexts' | 'categories' | 'custom';
 
 // Helper function to create multiselect blocks
 export const createMultiSelectBlock = (

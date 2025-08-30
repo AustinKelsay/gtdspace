@@ -26,27 +26,8 @@ type EditorBlockNode = {
   children?: EditorBlockNode[];
 };
 
-// Define status options for GTD
-const GTD_STATUS_OPTIONS: Option[] = [
-  { value: 'in-progress', label: 'In Progress', group: 'Status' },
-  { value: 'waiting', label: 'Waiting', group: 'Status' },
-  { value: 'completed', label: 'Completed', group: 'Status' },
-];
-
-// Define effort options for GTD
-const GTD_EFFORT_OPTIONS: Option[] = [
-  { value: 'small', label: 'Small (<30 min)', group: 'Effort' },
-  { value: 'medium', label: 'Medium (30-90 min)', group: 'Effort' },
-  { value: 'large', label: 'Large (>90 min)', group: 'Effort' },
-  { value: 'extra-large', label: 'Extra Large (>3 hours)', group: 'Effort' },
-];
-
-// Define project status options
-const GTD_PROJECT_STATUS_OPTIONS: Option[] = [
-  { value: 'in-progress', label: 'In Progress', group: 'Project Status' },
-  { value: 'waiting', label: 'Waiting', group: 'Project Status' },
-  { value: 'completed', label: 'Completed', group: 'Project Status' },
-];
+// Note: Status, Effort, and Project Status fields should use SingleSelectBlock
+// MultiSelectBlock is only for fields that support multiple values (tags, contexts, etc.)
 
 // Define prop schema with proper types
 const multiSelectPropSchema = {
@@ -166,19 +147,18 @@ export const MultiSelectBlock = createReactBlockSpec(
       // Get options based on type
       const getOptions = (): Option[] => {
         switch (type) {
-          case 'status':
-            return GTD_STATUS_OPTIONS;
-          case 'effort':
-            return GTD_EFFORT_OPTIONS;
-          case 'project-status':
-            return GTD_PROJECT_STATUS_OPTIONS;
           case 'contexts':
           case 'categories':
             // Use GTDTagSelector for these types
             return [];
           case 'custom':
             return customOptions || [];
+          case 'tags':
+            // Tags can have custom options
+            return customOptions || [];
           default:
+            // Status, effort, and project-status should use SingleSelectBlock
+            console.warn(`MultiSelectBlock: Type '${type}' should use SingleSelectBlock instead`);
             return [];
         }
       };

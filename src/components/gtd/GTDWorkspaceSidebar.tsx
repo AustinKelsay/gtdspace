@@ -292,7 +292,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           const match = content.match(/\[!singleselect:status:(in-progress|waiting|completed?|done)\]/i);
           const raw = (match?.[1] ?? 'in-progress').trim().toLowerCase();
           // Normalize to the canonical set used by the UI
-          const normalized = (raw === 'done') ? 'completed' : raw;
+          const normalized = (raw === 'done' || raw === 'complete') ? 'completed' : raw;
 
           // Extract due date from the markdown content
           // Look for [!datetime:due_date:xxx] pattern
@@ -343,7 +343,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     const checkSpace = async () => {
       // Only use gtdSpace.root_path when available to prevent loading from wrong workspace
       const pathToCheck = gtdSpace?.root_path;
-      
+
       // Skip if no valid GTD space path or if currentFolder doesn't match
       if (!pathToCheck || !currentFolder?.startsWith(pathToCheck)) {
         return;
@@ -381,7 +381,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             loadSectionFiles(areasPath),
             loadSectionFiles(goalsPath)
           ]);
-          
+
           // Load remaining sections after a small delay to reduce UI jank (no dangling timer)
           await new Promise((r) => setTimeout(r, 150));
           await Promise.allSettled([

@@ -12,7 +12,7 @@ All new projects and actions are automatically created with multiselect fields:
 - **Status**: Project status (Active, Planning, On Hold, Completed, Cancelled)
 
 ### Actions  
-- **Status**: Action status (Not Started, In Progress, Waiting For, On Hold, Completed, Cancelled)
+- **Status**: Action status (In Progress, Waiting, Completed)
 - **Effort**: Time estimate (Small <30min, Medium 30-90min, Large >90min, Extra Large >3hrs)
 
 ## Markdown Syntax

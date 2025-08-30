@@ -2941,7 +2941,7 @@ pub fn create_gtd_project(
 ///
 /// * `project_path` - Full path to the project directory
 /// * `action_name` - Name of the action
-/// * `status` - Initial status (Not Started / In Progress / Completed)
+/// * `status` - Initial status (In Progress / Waiting / Completed)
 /// * `due_date` - Optional due date (ISO format: YYYY-MM-DD)
 /// * `effort` - Effort estimate (Small / Medium / Large)
 ///
@@ -4382,14 +4382,14 @@ pub fn google_calendar_test() -> Result<String, String> {
 /// - Token exchange failure
 /// - Token storage failure
 #[tauri::command]
-pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
+pub async fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
     use super::google_calendar::oauth_server::run_oauth_server;
     use super::google_calendar::simple_auth::{
         start_oauth_flow, BrowserOpenError, SimpleAuthConfig,
     };
     use super::google_calendar::token_manager::{StoredTokens, TokenManager};
 
-    println!("[GoogleCalendar] Starting OAuth flow (sync command)...");
+    println!("[GoogleCalendar] Starting OAuth flow (async command)...");
 
     // Load credentials
     let client_id = match std::env::var("GOOGLE_CALENDAR_CLIENT_ID") {
@@ -4422,13 +4422,7 @@ pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
         token_uri: "https://oauth2.googleapis.com/token".to_string(),
     };
 
-    // Create runtime for async operations
-    let rt = match tokio::runtime::Runtime::new() {
-        Ok(rt) => rt,
-        Err(e) => {
-            return Err(format!("Failed to create runtime: {}", e));
-        }
-    };
+    // Use ambient Tokio runtime provided by Tauri for async operations
 
     // Open browser (do not log raw state or full URL)
     println!("[GoogleCalendar] Opening browser...");
@@ -4462,31 +4456,20 @@ pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
     // Restart the server with the expected state so CSRF can be validated
     let state = start_result.state.clone();
     let code_verifier = start_result.code_verifier.clone();
-    let server_handle = std::thread::spawn(move || {
+    let server_handle = tokio::spawn(async move {
         println!("[GoogleCalendar] Restarting OAuth callback server with expected state...");
-
-        let rt = match tokio::runtime::Runtime::new() {
-            Ok(rt) => rt,
-            Err(e) => {
-                eprintln!("[GoogleCalendar] Failed to create runtime: {}", e);
-                return Err(format!("Failed to create runtime: {}", e));
-            }
-        };
-
-        rt.block_on(async { run_oauth_server(Some(state)).await })
-            .map_err(|e| e.to_string())
+        run_oauth_server(Some(state)).await.map_err(|e| e.to_string())
     });
 
     // Wait for the OAuth server to receive the code (with timeout)
     println!("[GoogleCalendar] Waiting for OAuth callback...");
 
-    match server_handle.join() {
+    match server_handle.await {
         Ok(Ok(code)) => {
             println!("[GoogleCalendar] Received authorization code!");
 
             // Exchange code for tokens
-            let token_response =
-                rt.block_on(async { config.exchange_code(&code, &code_verifier).await });
+            let token_response = config.exchange_code(&code, &code_verifier).await;
 
             match token_response {
                 Ok(tokens) => {
@@ -4520,7 +4503,10 @@ pub fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
             eprintln!("[GoogleCalendar] OAuth server error: {}", e);
             Err(format!("OAuth callback failed: {}", e))
         }
-        Err(_) => Err("OAuth server thread panicked".to_string()),
+        Err(e) => {
+            eprintln!("[GoogleCalendar] OAuth server task join error: {}", e);
+            Err("OAuth server task failed".to_string())
+        }
     }
 }
 
@@ -4562,26 +4548,23 @@ pub fn google_calendar_is_authenticated(app: AppHandle) -> Result<bool, String> 
 
 /// Fetch Google Calendar events for the user.
 ///
-/// This is a synchronous wrapper because async Tauri commands with AppHandle parameter
-/// were experiencing hanging issues. Creates its own Tokio runtime to execute async
-/// operations and blocks until completion.
+/// Async command that fetches events using the ambient Tokio runtime.
 ///
 /// # Implementation Details
 ///
-/// Creates a new Tokio runtime for the async calendar API calls. This is necessary
-/// because the function needs to remain synchronous to work around Tauri limitations.
+/// Uses the existing runtime; no ad-hoc runtime creation or blocking occurs.
 ///
 /// # Returns
 ///
 /// Vector of calendar events or error message
 #[tauri::command]
-pub fn google_calendar_fetch_events(
+pub async fn google_calendar_fetch_events(
     app: AppHandle,
 ) -> Result<Vec<super::google_calendar::calendar_client::CalendarEvent>, String> {
     use super::google_calendar::calendar_client::fetch_calendar_events;
     use super::google_calendar::token_manager::TokenManager;
 
-    println!("[GoogleCalendar] Fetching calendar events (sync command)...");
+    println!("[GoogleCalendar] Fetching calendar events (async command)...");
 
     // Load stored tokens
     let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
@@ -4592,13 +4575,9 @@ pub fn google_calendar_fetch_events(
 
     println!("[GoogleCalendar] Token loaded, fetching events...");
 
-    // Create a runtime for the async operation
-    let rt =
-        tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {}", e))?;
-
-    // Fetch events using the access token
-    let events = rt
-        .block_on(async { fetch_calendar_events(&tokens.access_token).await })
+    // Fetch events using the access token with ambient Tokio runtime
+    let events = fetch_calendar_events(&tokens.access_token)
+        .await
         .map_err(|e| format!("Failed to fetch events: {}", e))?;
 
     println!(

@@ -3,7 +3,8 @@
 > **Note**: Single-select fields are now the primary implementation for Status, Effort, and Project Status. See [SingleSelect Fields](singleselect-fields.md) for the current approach. This document covers multi-select fields which are still supported for tags and legacy content.
 
 ## Overview
-GTD Space includes interactive multiselect fields for properties that need multiple values like Tags and Categories. These fields work like Notion's multi-select fields - they cannot be accidentally overwritten with text and provide a consistent dropdown interface.
+
+Multiselect fields are primarily used for associating multiple tags or categories with an item in your markdown files. While historically used for other fields like Status and Effort, these are now handled by single-select fields for better data consistency. Multiselect should be reserved for use cases where multiple, independent values are genuinely applicable, such as tags.
 
 ## Automatic Creation
 All new projects and actions are automatically created with multiselect fields:
@@ -12,8 +13,8 @@ All new projects and actions are automatically created with multiselect fields:
 - **Status**: Project status (Active, Planning, On Hold, Completed, Cancelled)
 
 ### Actions  
-- **Status**: Action status (In Progress, Waiting, Completed)
-- **Effort**: Time estimate (Small <30min, Medium 30-90min, Large >90min, Extra Large >3hrs)
+- **Status**: Action status (In Progress, Waiting, Completed) — legacy; use single-select
+- **Effort**: Time estimate (Small <30min, Medium 30-90min, Large >90min, Extra Large >3hrs) — legacy; use single-select
 
 ## Markdown Syntax
 Multiselect fields use a special marker syntax in markdown:

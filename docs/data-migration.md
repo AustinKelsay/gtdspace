@@ -57,7 +57,7 @@ When files are opened or data is loaded:
    - Automatically saves migrated content back to disk
 
 2. **GTD Object Migration** - Applied when loading from backend
-   - Applied via `migrateGTDObject()` function
+   - Applied via `migrateGTDObjects()` function
    - Ensures field names match current TypeScript interfaces
 
 ### Migration Locations
@@ -85,12 +85,14 @@ Applies all migrations to markdown content:
 - Converts multiselect to singleselect
 - Maps old status values
 
-### `migrateGTDObject<T>(obj: T): T`
+### `migrateGTDObjects<T>(objects: T[]): T[]`
 
-Migrates JavaScript/TypeScript objects:
+Migrates an array of JavaScript/TypeScript objects:
 - Renames object properties
 - Ensures status is single value
 - Maps status tokens
+
+This function is invoked by the `useGTDSpace` hook to automatically migrate GTD objects retrieved from storage.
 
 ## Example Migration
 
@@ -149,7 +151,7 @@ When adding new breaking changes:
 
 1. Update `needsMigration()` to detect old format
 2. Add migration logic to `migrateMarkdownContent()`
-3. Update `migrateGTDObject()` if object structure changes
+3. Update `migrateGTDObjects()` if object structure changes
 4. Document the change in this file
 5. Test with real user data before release
 

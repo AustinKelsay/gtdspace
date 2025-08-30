@@ -892,6 +892,16 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     }
   };
 
+  const getActionStatusIcon = (status: string) => {
+    const normalizedStatus = status || 'in-progress';
+    switch (normalizedStatus) {
+      case 'completed': return CheckCircle2;
+      case 'waiting': return CircleDot;
+      case 'in-progress': return Circle;
+      default: return Circle;
+    }
+  };
+
   // Generic search results across all sections
   const searchResults = React.useMemo(() => {
     if (!searchQuery) {

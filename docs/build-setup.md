@@ -198,7 +198,7 @@ A correct configuration should look similar to this, ensuring `active` is `true`
 ```
 
 - **`bundle.active`**: Must be set to `true` to enable bundling.
-- **`bundle.targets`**: An array of strings specifying which installers to build. While `"all"` is a valid option to build for the current platform, explicitly listing the targets is clearer.
+- **`bundle.targets`**: Must be an explicit array of target strings. **Do not use `"all"`** as it will cause configuration errors. You must list each desired installer target explicitly (e.g., `["msi"]` for Windows, `["dmg"]` for macOS, `["deb", "appimage"]` for Linux). Validate your targets against Tauri's supported target names for each platform.
 
 ## CI/CD Builds
 

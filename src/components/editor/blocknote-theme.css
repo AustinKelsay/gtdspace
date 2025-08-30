@@ -281,8 +281,8 @@
 }
 
 /* Color coding for status values - using data attributes and classes */
-.bn-block-content td[data-status="complete"],
-.bn-block-content td.status-complete {
+.bn-block-content td[data-status="completed"],
+.bn-block-content td.status-completed {
   color: rgb(34 197 94);
 }
 
@@ -312,8 +312,8 @@
   background: rgb(var(--accent) / 0.35);
 }
 
-.dark .bn-block-content td[data-status="complete"],
-.dark .bn-block-content td.status-complete {
+.dark .bn-block-content td[data-status="completed"],
+.dark .bn-block-content td.status-completed {
   color: rgb(74 222 128);
 }
 

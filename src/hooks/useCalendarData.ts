@@ -342,7 +342,7 @@ export const useCalendarData = (
               name: project.name,
               path: project.path,
               type: 'project',
-              status: project.status?.[0] || 'in-progress',
+              status: project.status || 'in-progress',
               due_date: project.due_date,
               focus_date: undefined,
               projectName: undefined

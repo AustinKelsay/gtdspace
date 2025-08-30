@@ -107,6 +107,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   const [actionSummary, setActionSummary] = React.useState({
     total: 0,
     inProgress: 0,
+    completed: 0,
     waiting: 0,
     upcomingDue: 0,
   });
@@ -263,12 +264,12 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   React.useEffect(() => {
     const loadActions = async () => {
       if (!gtdSpace?.projects || gtdSpace.projects.length === 0) {
-        setActionSummary({ total: 0, inProgress: 0, waiting: 0, upcomingDue: 0 });
+        setActionSummary({ total: 0, inProgress: 0, completed: 0, waiting: 0, upcomingDue: 0 });
         return;
       }
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        let total = 0, inProgress = 0, waiting = 0, upcomingDue = 0;
+        let total = 0, inProgress = 0, completed = 0, waiting = 0, upcomingDue = 0;
         const now = new Date();
 
         await Promise.all(gtdSpace.projects.map(async (project) => {
@@ -283,6 +284,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                 const normalized = raw === 'done' ? 'completed' : raw;
                 if (normalized === 'in-progress') inProgress++;
                 else if (normalized === 'waiting') waiting++;
+                else if (normalized === 'completed') completed++;
                 
 
                 const dueMatch = content.match(/\[!datetime:due_date:([^\]]*)\]/i);
@@ -300,9 +302,9 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           }
         }));
 
-        setActionSummary({ total, inProgress, waiting, upcomingDue });
+        setActionSummary({ total, inProgress, completed, waiting, upcomingDue });
       } catch (e) {
-        setActionSummary({ total: 0, inProgress: 0, waiting: 0, upcomingDue: 0 });
+        setActionSummary({ total: 0, inProgress: 0, completed: 0, waiting: 0, upcomingDue: 0 });
       }
     };
     loadActions();

@@ -48,12 +48,13 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
         'due_date': 'dueDate',
         'focus_date': 'focusDate',
         'focus_date_time': 'focusDate',
-        'created_date': 'createdDateTime',
+        // Ensure *_date maps to Date (camelCase) and *_date_time maps to DateTime
+        'created_date': 'createdDate',
         'created_date_time': 'createdDateTime',
         'modified_date': 'modifiedDate',
-        'modified_date_time': 'modifiedDate',
+        'modified_date_time': 'modifiedDateTime',
         'completed_date': 'completedDate',
-        'completed_date_time': 'completedDate'
+        'completed_date_time': 'completedDateTime'
       };
       const field = fieldMap[match[1]] || match[1];
       return { key: field, value: match[2] };

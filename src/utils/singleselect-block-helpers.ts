@@ -47,7 +47,6 @@ export const mapStatusValue = (status: string): string => {
     'Active': 'in-progress',
     'Planning': 'in-progress',
     'On Hold': 'waiting',
-    'Completed': 'completed',
     'Cancelled': 'completed',
   };
   

@@ -53,8 +53,7 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
         'created_date_time': 'createdDateTime',
         'modified_date': 'modifiedDate',
         'modified_date_time': 'modifiedDateTime',
-        'completed_date': 'completedDate',
-        'completed_date_time': 'completedDateTime'
+        'completed_date': 'completedDate'
       };
       const field = fieldMap[match[1]] || match[1];
       return { key: field, value: match[2] };

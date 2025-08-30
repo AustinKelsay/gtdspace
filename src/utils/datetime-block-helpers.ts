@@ -62,7 +62,7 @@ export function parseDateTimeField(markdown: string): {
 } | null {
   // Match patterns like:
   // [!datetime:due_date:2025-01-17]
-  // [!datetime:due_date_time:2025-01-17T10:30:00]
+  // [!datetime:focus_date:2025-01-17T10:30:00]
   // Captures:
   //  - Group 1: base type (e.g., "due_date")
   //  - Group 2: optional suffix "_time" if present
@@ -104,16 +104,21 @@ export function dateTimeBlockToMarkdown(
   type: DateTimeFieldType,
   value: string
 ): string {
-  // Derive includeTime from the value itself
-  const hasTime = value && value.includes('T');
-  // Special case for focus_date - always keep as 'focus_date'
+  const hasTime = value?.includes('T');
   let fieldType: string;
+  let outValue = value;
+  
   if (type === 'focus_date') {
     fieldType = 'focus_date';
-  } else if (type.endsWith('_time')) {
+  } else if (type === 'due_date' || type === 'completed_date') {
     fieldType = type;
+    // enforce date-only for due_date and completed_date
+    outValue = value && hasTime ? value.split('T')[0] : value;
+  } else if ((type as string).endsWith('_time') || type === 'created_date_time') {
+    fieldType = String(type);
   } else {
     fieldType = hasTime ? `${type}_time` : type;
   }
-  return `[!datetime:${fieldType}:${value}]`;
+  
+  return `[!datetime:${fieldType}:${outValue}]`;
 }

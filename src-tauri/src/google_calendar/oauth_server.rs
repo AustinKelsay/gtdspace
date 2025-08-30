@@ -558,6 +558,7 @@ impl OAuthCallbackServer {
             if start.elapsed() > timeout {
                 let _ = shutdown_tx.send(());
                 let _ = server_handle.await;
+                #[allow(clippy::all)]
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::TimedOut,
                     "OAuth callback timeout",

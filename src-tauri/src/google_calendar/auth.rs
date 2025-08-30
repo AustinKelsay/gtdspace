@@ -63,7 +63,7 @@ impl GoogleAuthManager {
                 .await
                 .map_err(|e| {
                     println!("[GoogleAuth] Failed to build authenticator: {}", e);
-                    e
+                    Box::new(e) as Box<dyn std::error::Error>
                 })?;
 
         // Request a token to trigger the authentication flow

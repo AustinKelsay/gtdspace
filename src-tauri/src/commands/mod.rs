@@ -2903,6 +2903,18 @@ pub fn create_gtd_project(
         return Err(format!("Failed to create project directory: {}", e));
     }
 
+    // Validate status if provided
+    if let Some(ref status_value) = status {
+        let valid_statuses = ["in-progress", "waiting", "completed"];
+        if !valid_statuses.contains(&status_value.as_str()) {
+            return Err(format!(
+                "Invalid status '{}'. Must be one of: {}",
+                status_value,
+                valid_statuses.join(", ")
+            ));
+        }
+    }
+
     // Create README.md with project template
     let readme_path = project_path.join("README.md");
     let project_status = status.unwrap_or_else(|| "in-progress".to_string());

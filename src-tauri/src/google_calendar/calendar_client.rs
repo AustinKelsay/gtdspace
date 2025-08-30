@@ -91,7 +91,8 @@ pub async fn fetch_calendar_events(
             .bearer_auth(access_token)
             .query(&query_params)
             .send()
-            .await?
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
             .error_for_status()
             .map_err(|e| -> Box<dyn std::error::Error> {
                 Box::new(std::io::Error::other(format!(
@@ -100,7 +101,10 @@ pub async fn fetch_calendar_events(
                 )))
             })?;
 
-        let google_response: GoogleCalendarListResponse = response.json().await?;
+        let google_response: GoogleCalendarListResponse = response
+            .json()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
         // Convert Google events to our format
         let page_events: Vec<CalendarEvent> = google_response

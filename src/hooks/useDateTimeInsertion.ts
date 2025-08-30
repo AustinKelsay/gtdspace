@@ -44,8 +44,15 @@ export function useDateTimeInsertion(editor: any) {
       // Cmd+Alt+D (Mac) or Ctrl+Alt+D (Windows/Linux) for Due Date field (always date-only)
       if (modKey && e.altKey && e.key === 'd') {
         e.preventDefault();
-        // Due date is always date-only, ignore Shift and provide YYYY-MM-DD string
-        const initialValue = e.shiftKey ? new Date().toISOString().slice(0, 10) : '';
+        // Due date is always date-only, ignore Shift and provide local YYYY-MM-DD string
+        let initialValue = '';
+        if (e.shiftKey) {
+          const now = new Date();
+          const year = now.getFullYear();
+          const month = (now.getMonth() + 1).toString().padStart(2, '0');
+          const day = now.getDate().toString().padStart(2, '0');
+          initialValue = `${year}-${month}-${day}`;
+        }
         const block = createDateTimeBlock('due_date', 'Due Date', initialValue);
         insertAfterCurrent(block);
       }

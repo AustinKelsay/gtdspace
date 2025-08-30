@@ -83,8 +83,27 @@ try {
     }
   }
   
+  // Validate that all required icons were generated
+  console.log('🔍 Validating generated icons...');
+  const missingIcons = [];
+  for (const requiredFile of KEEP_FILES) {
+    const filePath = join(iconsDir, requiredFile);
+    if (!existsSync(filePath)) {
+      missingIcons.push(requiredFile);
+    }
+  }
+  
+  if (missingIcons.length > 0) {
+    console.error('❌ Icon generation validation failed!');
+    console.error('   Missing required icon files:', missingIcons.join(', '));
+    console.error('   Expected files:', KEEP_FILES.join(', '));
+    console.error('   This will cause packaging failures - aborting.');
+    process.exit(1);
+  }
+  
   console.log('✅ Icons generated successfully!');
   console.log('   Kept only essential files:', KEEP_FILES.join(', '));
+  console.log('   All required icons validated and present.');
 } catch (error) {
   console.error('❌ Failed to generate icons.');
   console.error(`Command failed with exit code ${error.status || error.code}:`);

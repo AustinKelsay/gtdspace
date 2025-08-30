@@ -1,5 +1,4 @@
-#![allow(unknown_lints)] // Allow unknown lints for compatibility
-#![allow(clippy::io_other_error)] // Maintain compatibility with older Rust versions
+// Compatibility with different Rust versions
 
 use chrono::{DateTime, Utc};
 use google_calendar3::{hyper, hyper_rustls, CalendarHub};

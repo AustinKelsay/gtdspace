@@ -232,6 +232,7 @@ impl TokenStorage {
         if let Some(parent) = path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
                 log::error!("Failed to create directory '{}': {}", parent.display(), e);
+                #[allow(clippy::all)]
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     format!("Failed to create directory: {}", e),

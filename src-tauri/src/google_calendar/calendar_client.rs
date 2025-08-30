@@ -95,6 +95,7 @@ pub async fn fetch_calendar_events(
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
             .error_for_status()
             .map_err(|e| -> Box<dyn std::error::Error> {
+                #[allow(clippy::all)]
                 Box::new(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     format!("Failed to fetch events on page {}: {}", page_count, e),
@@ -168,6 +169,7 @@ pub async fn fetch_events_async(
 ) -> Result<Vec<CalendarEvent>, Box<dyn std::error::Error + Send + Sync>> {
     fetch_calendar_events(access_token).await.map_err(
         |e| -> Box<dyn std::error::Error + Send + Sync> {
+            #[allow(clippy::all)]
             Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 e.to_string(),

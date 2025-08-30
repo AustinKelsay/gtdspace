@@ -1,5 +1,4 @@
-#![allow(unknown_lints)] // Allow unknown lints for compatibility
-#![allow(clippy::io_other_error)] // Maintain compatibility with older Rust versions
+// Compatibility with different Rust versions
 
 use serde::Deserialize;
 use std::sync::Arc;
@@ -534,6 +533,7 @@ impl OAuthCallbackServer {
                     "[OAuthServer] Failed to bind server to port {}: {}",
                     port, e
                 );
+                #[allow(clippy::all)]
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     format!("Failed to start OAuth callback server on port {}: {}. The port may already be in use.", port, e)
@@ -586,6 +586,7 @@ pub async fn run_oauth_server(
         .start_and_wait_for_code_with_state(expected_state)
         .await
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+            #[allow(clippy::all)]
             Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 e.to_string(),

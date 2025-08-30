@@ -93,7 +93,10 @@ function main() {
   // Step 2: Fetch latest changes from remote
   log('\n🔄 Fetching latest changes from remote...', 'yellow');
   try {
-    execCommand('git fetch', true);
+    const fetchResult = execCommand('git fetch', true);
+    if (!fetchResult) {
+      exitWithError('Failed to fetch from remote. Check your internet connection and repository access');
+    }
     log('✓ Fetched latest changes', 'green');
   } catch (error) {
     exitWithError('Failed to fetch from remote. Check your internet connection and repository access');

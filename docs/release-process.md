@@ -98,6 +98,28 @@ You can also trigger a build for an existing version:
 
    _Note: This workflow does not bump versions or create tags. It builds and releases for the specified version. When no version is provided, only the build artifacts are created without a GitHub release._
 
+### VERSION Environment Variable (Automated)
+
+The `VERSION` environment variable is **automatically managed** by the GitHub Actions workflow and does not require manual configuration:
+
+- **For tag pushes**: Extracted from the git tag (e.g., `v0.1.1`)
+- **For manual triggers**: Uses the version input parameter
+- **For non-release builds**: Defaults to `v0.1.0-dev`
+
+The workflow handles this in `.github/workflows/build.yml`:
+```yaml
+# Automatically determines VERSION based on context
+if [ "${{ github.event.inputs.version }}" != "" ]; then
+  VERSION="${{ github.event.inputs.version }}"  # Manual input
+elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+  VERSION="${GITHUB_REF#refs/tags/}"            # From git tag
+else
+  VERSION="v0.1.0-dev"                          # Development build
+fi
+```
+
+**You do not need to set this variable locally or in GitHub secrets.** The CI/CD pipeline handles it automatically based on how the workflow is triggered.
+
 ## Release Workflow
 
 When you push a Git tag matching `v*` (for example `v1.2.3`), the 'Build and Release' workflow automatically:

@@ -34,6 +34,7 @@ After pushing a tag, GitHub Actions automatically:
 
 1. Builds for Windows, macOS (Intel & Apple Silicon), and Linux
 2. Releases are published automatically by the CI via the `finalize-release` job in `.github/workflows/build.yml`.
+3. The VERSION environment variable is automatically set from the git tag - no manual configuration needed
 
 Monitor progress: [GitHub Actions](https://github.com/AustinKelsay/gtdspace/actions)
 

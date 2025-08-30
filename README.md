@@ -76,7 +76,7 @@ Download the latest version for your platform from the [Releases page](https://g
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/gtdspace.git
+git clone https://github.com/AustinKelsay/gtdspace.git
 cd gtdspace
 
 # Install dependencies

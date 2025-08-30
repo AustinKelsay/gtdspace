@@ -242,8 +242,7 @@ export function mapLegacyStatus(status: string): string {
     'Active': 'in-progress',  // Map old project status to new
     'Planning': 'in-progress',
     'On Hold': 'waiting',
-    'Completed': 'completed',
-    'Cancelled': 'completed',  // Map cancelled to completed
+    'Cancelled': 'cancelled',  // Map cancelled to cancelled
   };
   
   return statusMap[status] || status.toLowerCase().replace(/\s+/g, '-');

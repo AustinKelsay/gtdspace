@@ -202,14 +202,13 @@ export const useCalendarData = (
               const projectName = file.path.split('/Projects/')[1]?.split('/')[0] || '';
               const actionName = pathParts[pathParts.length - 1].replace('.md', '');
               
-              // Parse all possible date fields
-              const focusDateTime = parseDateTimeField(content, 'focus_date_time');
+              // Parse focus date field (can include time)
               const focusDate = parseDateTimeField(content, 'focus_date');
               const dueDate = parseDateTimeField(content, 'due_date');
               const status = parseSingleSelectField(content, 'status') || 'in-progress';
               const effort = parseSingleSelectField(content, 'effort');
               
-              const finalFocusDate = focusDateTime || focusDate;
+              const finalFocusDate = focusDate;
               
               console.log(`[CalendarData] Action ${actionName}: focus=${finalFocusDate}, due=${dueDate}, effort=${effort}`);
               
@@ -241,8 +240,8 @@ export const useCalendarData = (
               const habitStatus = parseCheckboxField(content, 'habit-status') ? 'complete' : 'todo';
               const frequency = parseSingleSelectField(content, 'habit-frequency') || 'daily';
               
-              // Parse focus time for the habit
-              const focusDateTime = parseDateTimeField(content, 'focus_date_time');
+              // Parse focus date for the habit (can include time)
+              const focusDate = parseDateTimeField(content, 'focus_date');
               
               // Parse created date using the existing DateTime parser
               let createdDateTime: string | undefined;
@@ -307,7 +306,7 @@ export const useCalendarData = (
                 }
               }
 
-              console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDateTime}, focus=${focusDateTime}`);
+              console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDateTime}, focus=${focusDate}`);
               
               // Always add habits now that we have fallback to file.last_modified
               allItems.push({
@@ -317,7 +316,7 @@ export const useCalendarData = (
                 type: 'habit',
                 status: habitStatus,
                 due_date: undefined,
-                focus_date: focusDateTime, // Now includes the parsed focus time
+                focus_date: focusDate, // Can include time if specified
                 projectName: undefined,
                 frequency: frequency,
                 createdDateTime: createdDateTime

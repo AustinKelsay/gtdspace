@@ -33,7 +33,7 @@ DateTime fields are stored in markdown using a special syntax:
 
 ```markdown
 [!datetime:due_date:2025-01-17]
-[!datetime:focus_date_time:2025-01-17T14:30:00]
+[!datetime:focus_date:2025-01-17T14:30:00]
 [!datetime:created_date_time:2025-01-17T10:00:00Z]
 ```
 
@@ -68,8 +68,8 @@ import { useDateTimeInsertion } from "@/hooks/useDateTimeInsertion";
 // 'due_date' | 'focus_date' | 'completed_date' | 'created_date_time' | 'modified_date'
 //
 // Note: The runtime determines time inclusion based on the field type and ISO format.
-// Fields with '_time' suffix (e.g., focus_date_time, created_date_time,
-// modified_date_time) expect ISO date/time values with time components.
+// Fields with '_time' suffix (e.g., created_date_time, modified_date_time)
+// expect ISO date/time values with time components.
 // Fields without '_time' suffix (e.g., due_date, completed_date) are always date-only (YYYY-MM-DD).
 // Special case: focus_date can include time when needed.
 
@@ -125,7 +125,7 @@ Example action template:
 
 ## Focus Date
 
-[!datetime:focus_date_time:]
+[!datetime:focus_date:]
 
 ## Due Date
 

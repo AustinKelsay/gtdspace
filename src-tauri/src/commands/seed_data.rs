@@ -369,8 +369,8 @@ pub fn generate_weekly_review_habit() -> String {
 [!singleselect:habit-frequency:weekly]
 ## Status
 [!checkbox:habit-status:false]
-## Focus Time
-[!datetime:focus_date_time:{}]
+## Focus Date
+[!datetime:focus_date:{}]
 ## Notes
 Complete weekly GTD review:
 - Process all inboxes to zero
@@ -465,7 +465,7 @@ pub fn generate_action_template(
 [!singleselect:status:{}]
 
 ## Focus Date
-[!datetime:focus_date_time:{}]
+[!datetime:focus_date:{}]
 
 ## Due Date
 [!datetime:due_date:{}]

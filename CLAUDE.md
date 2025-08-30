@@ -132,7 +132,7 @@ gtd-space/
 ├── Vision/               # 3-5 year aspirations (40,000 ft)
 ├── Goals/                # 1-2 year objectives (30,000 ft)
 ├── Areas of Focus/       # Ongoing responsibilities (20,000 ft)
-├── Projects/             # Active projects (folders with README.md + actions)
+├── Projects/             # In-progress projects (folders with README.md + actions)
 ├── Habits/               # Recurring routines with automatic tracking
 ├── Someday Maybe/        # Future ideas
 └── Cabinet/              # Reference materials
@@ -146,7 +146,7 @@ interface GTDProject {
   name: string;
   description: string;
   due_date?: string | null; // snake_case for Rust compatibility
-  status: GTDProjectStatus; // e.g., 'active', 'on-hold', 'completed'
+  status: GTDProjectStatus; // e.g., 'in-progress', 'waiting', 'completed'
   created_date_time: string;
   action_count?: number;
 }
@@ -604,8 +604,6 @@ npm run release:patch   # Complete patch release
 npm run release:minor   # Complete minor release
 npm run release:major   # Complete major release
 ```
-
-
 
 **Icon Generation Pipeline:**
 

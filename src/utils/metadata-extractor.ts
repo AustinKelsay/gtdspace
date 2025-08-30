@@ -47,7 +47,6 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
       const fieldMap: Record<string, string> = {
         'due_date': 'dueDate',
         'focus_date': 'focusDate',
-        'focus_date_time': 'focusDate',
         // Ensure *_date maps to Date (camelCase) and *_date_time maps to DateTime
         'created_date': 'createdDate',
         'created_date_time': 'createdDateTime',

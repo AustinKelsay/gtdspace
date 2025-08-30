@@ -557,7 +557,9 @@ fn scan_directory_recursive(dir_path: &Path, files: &mut Vec<MarkdownFile>) -> R
 
     match fs::read_dir(dir_path) {
         Ok(entries) => {
-            for entry in entries.flatten() {
+            for entry_result in entries {
+                let entry = entry_result
+                    .map_err(|e| format!("Failed to read entry in {:?}: {}", dir_path, e))?;
                 let path = entry.path();
 
                 // Recursively scan subdirectories
@@ -902,7 +904,7 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
 [!singleselect:status:in-progress]
 
 ## Focus Date
-[!datetime:focus_date_time:]
+[!datetime:focus_date:]
 
 ## Due Date
 [!datetime:due_date:]
@@ -3099,7 +3101,7 @@ pub fn create_gtd_habit(
         if time.len() == 5 && time.chars().nth(2) == Some(':') {
             // Create a datetime with today's date and the specified time
             format!(
-                "\n## Focus Time\n[!datetime:focus_date_time:{}T{}:00]\n",
+                "\n## Focus Date\n[!datetime:focus_date:{}T{}:00]\n",
                 now.format("%Y-%m-%d"),
                 time
             )

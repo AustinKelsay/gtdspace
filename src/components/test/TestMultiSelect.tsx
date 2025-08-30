@@ -11,7 +11,7 @@ export const TestMultiSelect: React.FC = () => {
         options={[
           { value: 'not-started', label: 'Not Started' },
           { value: 'in-progress', label: 'In Progress' },
-          { value: 'complete', label: 'Complete' }
+          { value: 'completed', label: 'Completed' }
         ]}
         value={value}
         onValueChange={setValue}

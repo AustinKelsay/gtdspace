@@ -43,7 +43,7 @@ export const mapStatusValue = (status: string): string => {
     'Not Started': 'in-progress',  // Map old "Not Started" to new default "in-progress"
     'In Progress': 'in-progress',
     'Waiting': 'waiting',
-    'Complete': 'complete',
+    'Completed': 'completed',
     'Active': 'in-progress',
     'Planning': 'in-progress',
     'On Hold': 'waiting',

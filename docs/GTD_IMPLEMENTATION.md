@@ -126,8 +126,8 @@ Actions are concrete next steps that move projects forward.
 
 ## Status
 
-Display: Not Started | In Progress | Complete
-Canonical tokens: `in-progress` | `waiting` | `complete`
+Display: Not Started | In Progress | Completed
+Canonical tokens: `in-progress` | `waiting` | `completed`
 
 ## Focus Date
 

@@ -51,9 +51,11 @@ export const GTDProjectList: React.FC<GTDProjectListProps> = ({
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <h3 className="font-medium">{project.name}</h3>
-                <Badge className={getStatusColor(project.status)} variant="secondary">
-                  {project.status}
-                </Badge>
+                {project.status && (
+                  <Badge className={getStatusColor(project.status)} variant="secondary">
+                    {project.status}
+                  </Badge>
+                )}
               </div>
               <p className="text-sm text-muted-foreground line-clamp-2">
                 {project.description}

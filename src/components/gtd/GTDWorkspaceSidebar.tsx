@@ -292,7 +292,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           const match = content.match(/\[!singleselect:status:(in-progress|waiting|completed?|done)\]/i);
           const raw = (match?.[1] ?? 'in-progress').trim().toLowerCase();
           // Normalize to the canonical set used by the UI
-          const normalized = (raw === 'completed' || raw === 'done') ? 'complete' : raw;
+          const normalized = (raw === 'done') ? 'completed' : raw;
 
           // Extract due date from the markdown content
           // Look for [!datetime:due_date:xxx] pattern
@@ -875,7 +875,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const getProjectStatusIcon = (statusInput: string) => {
     const normalizedStatus = statusInput || 'in-progress';
     switch (normalizedStatus) {
-      case 'completed': return CheckCircle2; // Filled circle with checkmark for completed
+      case 'completed': return CheckCircle2;
       case 'waiting': return CircleDot; // Filled circle (dot in center) for waiting
       case 'in-progress': return Circle; // Outline circle for in-progress
       default: return Circle;
@@ -885,7 +885,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const getActionStatusIcon = (status: string) => {
     const normalizedStatus = status || 'in-progress';
     switch (normalizedStatus) {
-      case 'complete': return CheckCircle2;
+      case 'completed': return CheckCircle2;
       case 'waiting': return CircleDot;
       case 'in-progress': return Circle;
       default: return Circle;
@@ -895,7 +895,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const getActionStatusColor = (status: string) => {
     const normalizedStatus = status || 'in-progress';
     switch (normalizedStatus) {
-      case 'complete': return 'text-green-600 dark:text-green-500';
+      case 'completed': return 'text-green-600 dark:text-green-500';
       case 'waiting': return 'text-purple-600 dark:text-purple-500';
       case 'in-progress': return 'text-blue-600 dark:text-blue-500';
       default: return 'text-gray-600 dark:text-gray-400';

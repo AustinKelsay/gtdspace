@@ -2939,7 +2939,7 @@ pub fn create_gtd_project(
 ///
 /// * `project_path` - Full path to the project directory
 /// * `action_name` - Name of the action
-/// * `status` - Initial status (Not Started / In Progress / Complete)
+/// * `status` - Initial status (Not Started / In Progress / Completed)
 /// * `due_date` - Optional due date (ISO format: YYYY-MM-DD)
 /// * `effort` - Effort estimate (Small / Medium / Large)
 ///
@@ -2994,7 +2994,7 @@ pub fn create_gtd_action(
     let status_value = match status.as_str() {
         "In Progress" => "in-progress",
         "Waiting" => "waiting",
-        "Complete" => "complete",
+        "Completed" => "completed",
         _ => "in-progress",
     };
 

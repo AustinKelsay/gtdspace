@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { Calendar as CalendarIcon, X } from 'lucide-react';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, parse } from 'date-fns';
 
 // Component for the DateTimeSelect block
 interface DateTimeSelectComponentProps {
@@ -135,10 +135,26 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
 
     if (isValidDate && localTimeEnabled) {
       const [hours, minutes] = newTime.split(':').map(Number);
+      
+      // If the raw value is date-only, parse it properly to avoid timezone shifts
+      let year: number, month: number, day: number;
+      if (!value.includes('T')) {
+        // Parse the date-only string to get correct local values
+        const parts = value.split('-').map(Number);
+        year = parts[0];
+        month = parts[1] - 1; // Month is 0-indexed for Date constructor
+        day = parts[2];
+      } else {
+        // Use the existing dateValue getters for datetime values
+        year = dateValue.getFullYear();
+        month = dateValue.getMonth();
+        day = dateValue.getDate();
+      }
+      
       const localDate = new Date(
-        dateValue.getFullYear(),
-        dateValue.getMonth(),
-        dateValue.getDate(),
+        year,
+        month,
+        day,
         hours || 0,
         minutes || 0,
         0,
@@ -162,7 +178,9 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
     if (value.includes('T')) {
       return format(dateValue, 'MMM dd, yyyy h:mm a');
     } else {
-      return format(dateValue, 'MMM dd, yyyy');
+      // Parse as local date to avoid TZ shift
+      const localOnly = parse(value, 'yyyy-MM-dd', new Date());
+      return format(localOnly, 'MMM dd, yyyy');
     }
   }, [isValidDate, value, dateValue]);
 
@@ -239,25 +257,18 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
         if (newOpen) {
           // When opening, sync local state with current value
           // Date-only fields never have time
-          const currentHasTime = !isDateOnlyField && value && value.includes('T');
+          const currentHasTime = !!(!isDateOnlyField && value && value.includes('T'));
           setLocalTimeEnabled(currentHasTime);
         } else if (!newOpen && isValidDate) {
           // When closing, update the value if time toggle was changed
-          const currentHasTime = value && value.includes('T');
+          const currentHasTime = !!(value && value.includes('T'));
           if (localTimeEnabled !== currentHasTime && !isDateOnlyField) {
             let isoString: string;
             if (localTimeEnabled) {
               // Add time to existing date using local time
               const [hours, minutes] = timeValue.split(':').map(Number);
-              const localDate = new Date(
-                dateValue.getFullYear(),
-                dateValue.getMonth(),
-                dateValue.getDate(),
-                hours || 0,
-                minutes || 0,
-                0,
-                0
-              );
+              const localDate = new Date(dateValue);
+              localDate.setHours(hours || 0, minutes || 0, 0, 0);
               isoString = localDate.toISOString();
             } else {
               // Remove time from existing date - construct date string from local parts

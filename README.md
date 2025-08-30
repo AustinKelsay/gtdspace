@@ -148,7 +148,7 @@ GTD Space is designed from the ground up around David Allen's Getting Things Don
   - See all actions directly in the sidebar
   - Example content is created on first run to help you get started
 - **Actions** - Concrete next steps within projects
-  - Interactive Status tracking (In Progress, Waiting, Complete) via single-select dropdowns
+  - Interactive Status tracking (In Progress, Waiting, Completed) via single-select dropdowns
   - Interactive Effort estimates (Small <30min, Medium 30-90min, Large >90min, Extra Large >3hr) via single-select dropdowns
   - Optional focus dates (when to work on) and due dates (deadlines)
   - References to Cabinet and Someday Maybe pages for context and supporting materials

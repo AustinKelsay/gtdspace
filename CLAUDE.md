@@ -154,7 +154,7 @@ interface GTDProject {
 // Actions: Individual .md files within project folders
 interface GTDAction {
   name: string;
-  status: GTDActionStatus; // in-progress | waiting | complete
+  status: GTDActionStatus; // in-progress | waiting | completed
   focus_date?: string | null; // When to work on (datetime)
   due_date?: string | null; // Deadline (date only)
   effort: string; // small | medium | large | extra-large

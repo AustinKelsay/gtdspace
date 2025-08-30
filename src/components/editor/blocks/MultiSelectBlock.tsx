@@ -30,7 +30,7 @@ type EditorBlockNode = {
 const GTD_STATUS_OPTIONS: Option[] = [
   { value: 'in-progress', label: 'In Progress', group: 'Status' },
   { value: 'waiting', label: 'Waiting', group: 'Status' },
-  { value: 'complete', label: 'Complete', group: 'Status' },
+  { value: 'completed', label: 'Completed', group: 'Status' },
 ];
 
 // Define effort options for GTD

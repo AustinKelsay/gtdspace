@@ -97,7 +97,7 @@ emitMetadataChange({
   fileName: 'file.md',
   content: markdownContent,
   metadata: newMetadata,
-  changedFields: { status: 'complete' }
+  changedFields: { status: 'completed' }
 });
 ```
 

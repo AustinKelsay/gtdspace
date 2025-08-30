@@ -167,7 +167,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
                 <SelectContent>
                   <SelectItem value="in-progress">In Progress</SelectItem>
                   <SelectItem value="waiting">Waiting</SelectItem>
-                  <SelectItem value="complete">Complete</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
               </Select>
             </div>

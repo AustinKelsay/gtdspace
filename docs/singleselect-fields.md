@@ -10,7 +10,7 @@ All new projects and actions are automatically created with single-select fields
 - **Status**: Project status (in-progress, waiting, completed)
 
 ### Actions  
-- **Status**: Action status (in-progress, waiting, complete)
+- **Status**: Action status (in-progress, waiting, completed)
 - **Effort**: Time estimate (small <30min, medium 30-90min, large >90min, extra-large >3hrs)
 
 ## Markdown Syntax

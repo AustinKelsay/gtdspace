@@ -108,7 +108,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     total: 0,
     inProgress: 0,
     waiting: 0,
-    complete: 0,
+    completed: 0,
     upcomingDue: 0,
   });
   const [expandedHorizon, setExpandedHorizon] = React.useState<Record<string, boolean>>({});
@@ -264,12 +264,12 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   React.useEffect(() => {
     const loadActions = async () => {
       if (!gtdSpace?.projects || gtdSpace.projects.length === 0) {
-        setActionSummary({ total: 0, inProgress: 0, waiting: 0, complete: 0, upcomingDue: 0 });
+        setActionSummary({ total: 0, inProgress: 0, waiting: 0, completed: 0, upcomingDue: 0 });
         return;
       }
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        let total = 0, inProgress = 0, waiting = 0, complete = 0, upcomingDue = 0;
+        let total = 0, inProgress = 0, waiting = 0, completed = 0, upcomingDue = 0;
         const now = new Date();
 
         await Promise.all(gtdSpace.projects.map(async (project) => {
@@ -281,10 +281,10 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                 const content = await invoke<string>('read_file', { path: file.path });
                 const statusMatch = content.match(/\[!singleselect:status:(in-progress|waiting|completed?|done)\]/i);
                 const raw = (statusMatch?.[1] || 'in-progress').toLowerCase();
-                const normalized = raw === 'completed' || raw === 'done' ? 'complete' : raw;
+                const normalized = raw === 'done' ? 'completed' : raw;
                 if (normalized === 'in-progress') inProgress++;
                 else if (normalized === 'waiting') waiting++;
-                else if (normalized === 'complete') complete++;
+                else if (normalized === 'completed') completed++;
 
                 const dueMatch = content.match(/\[!datetime:due_date:([^\]]*)\]/i);
                 const dueStr = dueMatch?.[1]?.trim();
@@ -301,9 +301,9 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           }
         }));
 
-        setActionSummary({ total, inProgress, waiting, complete, upcomingDue });
+        setActionSummary({ total, inProgress, waiting, completed, upcomingDue });
       } catch (e) {
-        setActionSummary({ total: 0, inProgress: 0, waiting: 0, complete: 0, upcomingDue: 0 });
+        setActionSummary({ total: 0, inProgress: 0, waiting: 0, completed: 0, upcomingDue: 0 });
       }
     };
     loadActions();
@@ -631,8 +631,8 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                           <div>Waiting</div>
                         </div>
                         <div>
-                          <div className="font-semibold">{actionSummary.complete}</div>
-                          <div>Complete</div>
+                          <div className="font-semibold">{actionSummary.completed}</div>
+                          <div>Completed</div>
                         </div>
                       </div>
                     </>

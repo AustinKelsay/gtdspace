@@ -541,10 +541,15 @@ export const App: React.FC = () => {
   // Store refs to avoid re-running effect when functions change
   const checkGTDSpaceRef = React.useRef(checkGTDSpace);
   const loadProjectsRef = React.useRef(loadProjects);
+  const updateTabContentRef = React.useRef(updateTabContent);
+  const activeTabRef = React.useRef(activeTab);
+  
   React.useEffect(() => {
     checkGTDSpaceRef.current = checkGTDSpace;
     loadProjectsRef.current = loadProjects;
-  }, [checkGTDSpace, loadProjects]);
+    updateTabContentRef.current = updateTabContent;
+    activeTabRef.current = activeTab;
+  }, [checkGTDSpace, loadProjects, updateTabContent, activeTab]);
 
   React.useEffect(() => {
     const currentSpacePath = gtdSpace?.root_path;
@@ -571,11 +576,12 @@ export const App: React.FC = () => {
           await loadProjectsRef.current(currentSpacePath);
 
           // Also refresh the current tab if it's a habit
-          if (activeTab?.filePath?.toLowerCase().includes('/habits/')) {
+          const currentTab = activeTabRef.current;
+          if (currentTab?.filePath?.toLowerCase().includes('/habits/')) {
             // Reload the file content from disk
             try {
-              const freshContent = await invoke<string>('read_file', { path: activeTab.filePath });
-              updateTabContent(activeTab.id, freshContent);
+              const freshContent = await invoke<string>('read_file', { path: currentTab.filePath });
+              updateTabContentRef.current(currentTab.id, freshContent);
             } catch (error) {
               console.error('Failed to refresh habit tab:', error);
             }
@@ -616,7 +622,7 @@ export const App: React.FC = () => {
     return () => {
       clearInterval(interval);
     };
-  }, [gtdSpace?.root_path, activeTab?.filePath, activeTab?.id, updateTabContent]);
+  }, [gtdSpace?.root_path]); // Only depend on root_path, use refs for everything else
 
 
 

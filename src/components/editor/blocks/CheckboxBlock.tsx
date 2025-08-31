@@ -34,62 +34,64 @@ export const CheckboxBlock = createReactBlockSpec(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const block = props.block as any;
       const { type, checked, label } = block.props;
-      
+
       // Local state for immediate UI feedback
       // eslint-disable-next-line react-hooks/rules-of-hooks
       const [localChecked, setLocalChecked] = React.useState(checked);
-      
+
       // Update local state when props change (from content reload)
       // eslint-disable-next-line react-hooks/rules-of-hooks
       React.useEffect(() => {
         setLocalChecked(checked);
       }, [checked]);
-      
+
       const handleChange = async (newChecked: boolean) => {
-        
+
         // Immediately update local state for visual feedback
         setLocalChecked(newChecked);
-        
+
         // If this is a habit status checkbox, update the backend
         if (type === 'habit-status') {
           try {
             // Get the current file path from the editor or tab context
             const filePath = (window as Window & { currentFilePath?: string }).currentFilePath || '';
-            
+
             if (filePath) {
               // Check if this is a habit file
-              const isHabitFile = filePath.toLowerCase().includes('/habits/') || 
-                                 filePath.toLowerCase().includes('\\habits\\');
-              
+              const isHabitFile = filePath.toLowerCase().includes('/habits/') ||
+                filePath.toLowerCase().includes('\\habits\\');
+
               if (isHabitFile) {
                 const { invoke } = await import('@tauri-apps/api/core');
                 const { toast } = await import('@/hooks/use-toast');
-                
+
                 // Convert checkbox state to status values for backend
                 const statusValue = newChecked ? 'completed' : 'todo';
                 await invoke('update_habit_status', {
                   habitPath: filePath,
                   newStatus: statusValue,
                 });
-                
+
                 // Show a toast notification
-                // Normalize path separators for cross-platform compatibility
-                const habitName = filePath.replace(/\\/g, '/').split('/').pop()?.replace('.md', '') || 'Habit';
+                // Normalize path once and derive habit name/status for toast
+                const normalizedPath = filePath.replace(/\\/g, '/');
+                const habitName = normalizedPath.split('/').pop()?.replace(/\.(md|markdown)$/i, '') || 'Habit';
+                const statusLabel = newChecked ? 'Completed' : 'To Do';
                 toast({
                   title: "Habit Recorded",
-                  description: `${habitName} marked as ${newChecked ? 'completed' : 'to do'}`,
+                  description: `${habitName} marked as ${statusLabel}`,
                 });
-                
+
                 // Small delay to let the backend write the file
                 await new Promise(resolve => setTimeout(resolve, 100));
-                
+
                 // Emit event to reload the file content for real-time update
                 // This will cause the entire editor content to refresh with the latest state
                 const reloadEvent = new CustomEvent('habit-content-changed', {
                   detail: { filePath }
                 });
                 window.dispatchEvent(reloadEvent);
-                
+
                 // Emit custom event to notify the app that habit status was updated
                 const event = new CustomEvent('habit-status-updated', {
                   detail: { habitPath: filePath }
@@ -102,7 +104,7 @@ export const CheckboxBlock = createReactBlockSpec(
           }
         }
       };
-      
+
       // Determine display label based on type and state
       const getDisplayLabel = () => {
         if (label) return label;
@@ -111,7 +113,7 @@ export const CheckboxBlock = createReactBlockSpec(
         }
         return '';
       };
-      
+
       return (
         <div className="inline-flex items-center gap-2 align-middle mx-1 my-1">
           <Checkbox
@@ -123,7 +125,7 @@ export const CheckboxBlock = createReactBlockSpec(
             )}
           />
           {getDisplayLabel() && (
-            <label 
+            <label
               className={cn(
                 "text-sm select-none cursor-pointer",
                 localChecked && "text-muted-foreground line-through"

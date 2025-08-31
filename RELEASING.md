@@ -23,9 +23,9 @@ npm run release:major  # 0.1.0 → 1.0.0 (auto-push)
 npm run release:patch  # 0.1.0 → 0.1.1 (auto-push)
 
 # Or manually bump version only (no auto-push):
-npm run version:minor  # Then manually: git push && git push --tags
-npm run version:major  # Then manually: git push && git push --tags
-npm run version:patch  # Then manually: git push && git push --tags
+npm run version:minor  # Then manually: git push --follow-tags
+npm run version:major  # Then manually: git push --follow-tags
+npm run version:patch  # Then manually: git push --follow-tags
 ```
 
 ## 📦 What Happens Next?

@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import debounce from 'lodash.debounce';
 import { useErrorHandler } from './useErrorHandler';
 import { useToast } from './useToast';
 import {
@@ -298,11 +299,11 @@ export function useGTDSpace() {
   );
 
   /**
-   * Load projects from a GTD space
+   * Internal implementation of loadProjects
    */
-  const loadProjects = useCallback(
+  const loadProjectsInternal = useCallback(
     async (spacePath: string) => {
-      // Debug: project load
+      console.log('[useGTDSpace] loadProjectsInternal called for path:', spacePath);
       setIsLoading(true);
       
       const result = await withErrorHandling(
@@ -314,22 +315,53 @@ export function useGTDSpace() {
           // Apply migrations to ensure backward compatibility
           projects = migrateGTDObjects(projects);
           
-          // Loaded projects count
-          
           // Calculate total actions
           const totalActions = projects.reduce((sum, project) => sum + (project.action_count || 0), 0);
           
           // Update space state with loaded projects - use functional update to preserve other state
-          setGTDSpace(prev => ({
-            ...prev,
-            root_path: spacePath,
-            is_initialized: true,
-            isGTDSpace: true,
-            projects,
-            total_actions: totalActions,
-          }));
-          
-          // State updated
+          console.log('[useGTDSpace] Updating GTDSpace state with', projects.length, 'projects');
+          setGTDSpace(prev => {
+            // If no previous state, we need to initialize it
+            if (!prev) {
+              console.log('[useGTDSpace] No previous state - initializing with projects');
+              return {
+                root_path: spacePath,
+                is_initialized: true,
+                isGTDSpace: true,
+                projects,
+                total_actions: totalActions,
+              };
+            }
+            
+            // If the path doesn't match, skip update (wrong space)
+            if (prev.root_path !== spacePath) {
+              console.log('[useGTDSpace] Skipping state update - path mismatch');
+              return prev;
+            }
+            
+            // Check if the data has actually changed
+            const projectsChanged = 
+              prev.projects?.length !== projects.length ||
+              prev.total_actions !== totalActions ||
+              JSON.stringify(prev.projects) !== JSON.stringify(projects);
+            
+            if (!projectsChanged) {
+              console.log('[useGTDSpace] Skipping state update - data unchanged');
+              return prev;
+            }
+            
+            console.log('[useGTDSpace] Previous state:', prev);
+            const newState = {
+              ...prev,
+              // Don't update root_path - it's already set and updating it causes re-renders
+              is_initialized: true,
+              isGTDSpace: true,
+              projects,
+              total_actions: totalActions,
+            };
+            console.log('[useGTDSpace] New state:', newState);
+            return newState;
+          });
           
           return projects;
         },
@@ -338,10 +370,53 @@ export function useGTDSpace() {
       );
       
       setIsLoading(false);
-      // Completed project load
+      console.log('[useGTDSpace] loadProjectsInternal completed, returning', result?.length || 0, 'projects');
       return result || [];
     },
     [withErrorHandling]
+  );
+
+  // Track the last spacePath to avoid redundant calls
+  const lastLoadedPath = useRef<string>('');
+  const loadPromise = useRef<Promise<GTDProject[]> | null>(null);
+
+  /**
+   * Debounced version of loadProjects to prevent rapid re-renders
+   */
+  const debouncedLoadProjects = useMemo(
+    () => debounce(
+      async (spacePath: string) => {
+        // Skip if we're already loading the same path
+        if (lastLoadedPath.current === spacePath && loadPromise.current) {
+          console.log('[useGTDSpace] Skipping loadProjects - already loading path:', spacePath);
+          return loadPromise.current;
+        }
+
+        lastLoadedPath.current = spacePath;
+        loadPromise.current = loadProjectsInternal(spacePath);
+        
+        try {
+          const result = await loadPromise.current;
+          return result;
+        } finally {
+          loadPromise.current = null;
+        }
+      },
+      500, // 500ms debounce to batch rapid calls
+      { leading: true, trailing: true } // Execute on first call and after delay
+    ),
+    [loadProjectsInternal]
+  );
+
+  /**
+   * Load projects from a GTD space (debounced)
+   */
+  const loadProjects = useCallback(
+    async (spacePath: string) => {
+      console.log('[useGTDSpace] loadProjects called for path:', spacePath);
+      return debouncedLoadProjects(spacePath);
+    },
+    [debouncedLoadProjects]
   );
 
   /**
@@ -370,6 +445,13 @@ export function useGTDSpace() {
       await loadProjects(gtdSpace.root_path);
     }
   }, [gtdSpace?.root_path, checkGTDSpace, loadProjects]);
+
+  // Cleanup debounced function on unmount
+  React.useEffect(() => {
+    return () => {
+      debouncedLoadProjects.cancel();
+    };
+  }, [debouncedLoadProjects]);
 
   /**
    * Initialize and load a GTD space - used for switching workspaces

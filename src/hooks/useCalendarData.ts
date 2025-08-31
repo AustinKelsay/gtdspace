@@ -108,6 +108,19 @@ const parseCheckboxField = (content: string, fieldName: string): boolean => {
   return match ? match[1] === 'true' : false;
 };
 
+// Helper function to convert file.last_modified to ISO string
+const fileLastModifiedToISO = (lastModified: number | undefined, habitName: string): string => {
+  if (typeof lastModified === 'number' && Number.isFinite(lastModified)) {
+    // Detect if file.last_modified is in seconds or milliseconds
+    // TODO: Standardize all MarkdownFile.last_modified producers to emit seconds consistently
+    const timestamp = lastModified >= 1e12 ? lastModified : lastModified * 1000;
+    return new Date(timestamp).toISOString();
+  } else {
+    console.warn(`[CalendarData] Invalid file.last_modified for habit ` + `"` + `${habitName}` + `"` + `, using current time`);
+    return new Date().toISOString();
+  }
+};
+
 export const useCalendarData = (
   spacePath: string, 
   gtdSpace?: GTDSpace | null,
@@ -281,30 +294,12 @@ export const useCalendarData = (
                   } else {
                     // Invalid date - log warning and use file.last_modified
                     console.warn(`[CalendarData] Invalid created_date_time value in habit "${habitName}": "${createdDateTimeRaw}" - using file.last_modified`);
-                    // Validate and convert file.last_modified
-                    if (typeof file.last_modified === 'number' && Number.isFinite(file.last_modified)) {
-                      // Detect if file.last_modified is in seconds or milliseconds
-                      // TODO: Standardize all MarkdownFile.last_modified producers to emit seconds consistently
-                      const lastModTimestamp = file.last_modified >= 1e12 ? file.last_modified : file.last_modified * 1000;
-                      createdDateTime = new Date(lastModTimestamp).toISOString();
-                    } else {
-                      console.warn(`[CalendarData] Invalid file.last_modified for habit "${habitName}", using current time`);
-                      createdDateTime = new Date().toISOString();
-                    }
+                    createdDateTime = fileLastModifiedToISO(file.last_modified, habitName);
                   }
                 } catch (error) {
                   // Parsing threw an error - use file.last_modified
                   console.warn(`[CalendarData] Failed to parse created_date_time in habit "${habitName}": "${createdDateTimeRaw}" - ${error} - using file.last_modified`);
-                  // Validate and convert file.last_modified
-                  if (typeof file.last_modified === 'number' && Number.isFinite(file.last_modified)) {
-                    // Detect if file.last_modified is in seconds or milliseconds
-                    // TODO: Standardize all MarkdownFile.last_modified producers to emit seconds consistently
-                    const lastModTimestamp = file.last_modified >= 1e12 ? file.last_modified : file.last_modified * 1000;
-                    createdDateTime = new Date(lastModTimestamp).toISOString();
-                  } else {
-                    console.warn(`[CalendarData] Invalid file.last_modified for habit "${habitName}", using current time`);
-                    createdDateTime = new Date().toISOString();
-                  }
+                  createdDateTime = fileLastModifiedToISO(file.last_modified, habitName);
                 }
               } else {
                 // Try to parse from ## Created header as fallback
@@ -321,29 +316,13 @@ export const useCalendarData = (
                     }
                   } catch {
                     // If parsing fails, use file.last_modified
-                    // Validate and convert file.last_modified
-                    if (typeof file.last_modified === 'number' && Number.isFinite(file.last_modified)) {
-                      // Detect if file.last_modified is in seconds or milliseconds
-                      // TODO: Standardize all MarkdownFile.last_modified producers to emit seconds consistently
-                      const lastModTimestamp = file.last_modified >= 1e12 ? file.last_modified : file.last_modified * 1000;
-                      createdDateTime = new Date(lastModTimestamp).toISOString();
-                    } else {
-                      console.warn(`[CalendarData] Invalid file.last_modified for habit "${habitName}", using current time`);
-                      createdDateTime = new Date().toISOString();
-                    }
+                    createdDateTime = fileLastModifiedToISO(file.last_modified, habitName);
                   }
                 } else {
                   // No created date found in content, use file.last_modified
-                  // Validate and convert file.last_modified
+                  createdDateTime = fileLastModifiedToISO(file.last_modified, habitName);
                   if (typeof file.last_modified === 'number' && Number.isFinite(file.last_modified)) {
-                    // Detect if file.last_modified is in seconds or milliseconds
-                    // TODO: Standardize all MarkdownFile.last_modified producers to emit seconds consistently
-                    const lastModTimestamp = file.last_modified >= 1e12 ? file.last_modified : file.last_modified * 1000;
-                    createdDateTime = new Date(lastModTimestamp).toISOString();
                     console.log(`[CalendarData] Habit ${habitName} missing created_date_time - using file.last_modified: ${createdDateTime}`);
-                  } else {
-                    console.warn(`[CalendarData] Invalid file.last_modified for habit "${habitName}", using current time`);
-                    createdDateTime = new Date().toISOString();
                   }
                 }
               }

@@ -92,6 +92,15 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   onSelectFile,
   className = ''
 }) => {
+  // Debug: Track renders
+  const renderCountRef = React.useRef(0);
+  renderCountRef.current++;
+  console.log(`[GTDDashboard] Render #${renderCountRef.current}`, {
+    currentFolder,
+    hasGtdSpace: !!gtdSpace,
+    projectCount: gtdSpace?.projects?.length || 0,
+    timestamp: new Date().toISOString()
+  });
   // Fallback to local hook if parent didn't provide the shared one
   const { isLoading: hookIsLoading, loadProjects: hookLoadProjects } = useGTDSpace();
   const isLoading = isLoadingProp ?? hookIsLoading;
@@ -135,12 +144,22 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
   // Batch all initial data loading into one effect to reduce re-renders
   React.useEffect(() => {
+    console.log('[GTDDashboard] Main data loading effect triggered', {
+      root_path: gtdSpace?.root_path,
+      previousLoadedPath: loadedPathRef.current,
+      willLoad: gtdSpace?.root_path && loadedPathRef.current !== gtdSpace.root_path
+    });
+    
     const loadAllData = async () => {
       if (!gtdSpace?.root_path) return;
       
       // Skip if we already loaded data for this path
-      if (loadedPathRef.current === gtdSpace.root_path) return;
+      if (loadedPathRef.current === gtdSpace.root_path) {
+        console.log('[GTDDashboard] Skipping data load - already loaded for this path');
+        return;
+      }
       
+      console.log('[GTDDashboard] Loading data for path:', gtdSpace.root_path);
       loadedPathRef.current = gtdSpace.root_path;
 
       // Use Promise.allSettled to load all data in parallel
@@ -148,8 +167,11 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
         // Load projects
         (async () => {
           try {
+            console.log('[GTDDashboard] Calling loadProjects');
             await loadProjects(gtdSpace.root_path);
+            console.log('[GTDDashboard] loadProjects completed');
           } catch (error) {
+            console.log('[GTDDashboard] loadProjects error:', error);
             // Error already handled by loadProjects
           }
         })(),
@@ -293,6 +315,10 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
   // Load action summary across all projects
   React.useEffect(() => {
+    console.log('[GTDDashboard] Action summary effect triggered', {
+      projectCount: gtdSpace?.projects?.length || 0
+    });
+    
     const loadActions = async () => {
       if (!gtdSpace?.projects || gtdSpace.projects.length === 0) {
         setActionSummary({ total: 0, inProgress: 0, completed: 0, waiting: 0, upcomingDue: 0 });
@@ -422,6 +448,9 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
   // Calculate habit statistics
   const habitStats = React.useMemo<HabitStats>(() => {
+    console.log('[GTDDashboard] Recalculating habitStats', {
+      habitCount: habits.length
+    });
     if (!habits || habits.length === 0) {
       return {
         total: 0,

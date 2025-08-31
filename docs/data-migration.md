@@ -55,7 +55,9 @@ When files are opened or data is loaded:
 1. **File Content Migration** - Applied when reading markdown files
    - Detected via `needsMigration()` function
    - Applied via `migrateMarkdownContent()` function
-   - Automatically saves migrated content back to disk
+   - **Persistence**:
+     - When a file is opened in a tab, the migrated content is **automatically saved** back to disk.
+     - In other contexts, like the calendar view, migrations are applied **in-memory** for performance and are not saved automatically.
 
 2. **GTD Object Migration** - Applied when loading from backend
    - Applied via `migrateGTDObjects()` function

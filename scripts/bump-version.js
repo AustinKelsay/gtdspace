@@ -3,7 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import process from 'process';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -21,14 +21,18 @@ function bumpVersion(currentVersion, type) {
   const sanitize = (v) => String(v).trim().replace(/^v/i, '');
   const base = (v) => sanitize(v).replace(/[+-].*$/, ''); // strip prerelease/build for bump math
   const parse = (v) => {
-    const parts = base(v).split('.');
-    if (parts.length !== 3) {
-      console.error(`Invalid semantic version: ${v}`);
+    const baseVersion = base(v);
+    // Strict SemVer base (no pre-release/build metadata)
+    const semverBaseRegex = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+    if (!semverBaseRegex.test(baseVersion)) {
+      console.error(`Invalid semantic version: ${v}. Version core must be in X.Y.Z format with non-negative integers and no leading zeros.`);
       process.exit(1);
     }
-    const nums = parts.map((p) => Number(p));
+
+    const nums = baseVersion.split('.').map(Number);
+    // The regex should prevent this, but as a safeguard:
     if (nums.some((n) => !Number.isFinite(n) || n < 0)) {
-      console.error(`Invalid semantic version: ${v}`);
+      console.error(`Invalid semantic version: ${v} (version components must be non-negative integers)`);
       process.exit(1);
     }
     return nums;
@@ -85,7 +89,9 @@ function main() {
     execSync('npm install --package-lock-only', { stdio: 'inherit', cwd: repoRoot });
     console.log('✓ Synced package-lock.json');
   } catch (error) {
-    console.warn(`Warning: Failed to sync package-lock.json, continuing without lockfile sync: ${error.message}`);
+    console.warn(`⚠️  Warning: Failed to sync package-lock.json: ${error.message}`);
+    console.warn('   The lockfile may be out of sync with package.json.');
+    console.warn('   Run "npm install" manually after the version bump to sync.');
   }
 
   const cargoTomlPath = path.join(__dirname, '..', 'src-tauri', 'Cargo.toml');
@@ -133,9 +139,16 @@ function main() {
       filesToAdd.push('package-lock.json');
     }
 
-    // Quote each path and execute from repo root
-    const quotedFiles = filesToAdd.map(f => `"${f}"`).join(' ');
-    execSync(`git add ${quotedFiles}`, { stdio: 'inherit', cwd: repoRoot });
+    // Resolve and validate paths and use array-based exec to avoid shell quoting/injection
+    const validatedRelativeFiles = filesToAdd.map((file) => {
+      const absolutePath = path.resolve(repoRoot, file);
+      const relativePath = path.relative(repoRoot, absolutePath);
+      if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+        throw new Error(`Refusing to add path outside repo: ${file}`);
+      }
+      return relativePath;
+    });
+    execFileSync('git', ['add', ...validatedRelativeFiles], { stdio: 'inherit', cwd: repoRoot });
     let preCommitHash = null;
     try {
       preCommitHash = execSync('git rev-parse --verify HEAD', { encoding: 'utf8', stdio: 'pipe' }).trim();

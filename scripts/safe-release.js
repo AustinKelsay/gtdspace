@@ -259,21 +259,13 @@ async function main() {
   const newVersion = updatedPackageJson.version;
   const tagName = `v${newVersion}`;
 
-  // Step 10: Push changes and the specific tag
-  log('\n📤 Pushing changes to remote...', 'yellow');
+  // Step 10: Push changes and tags
+  log('\n📤 Pushing changes and tags to remote...', 'yellow');
   try {
-    execCommand('git push');
-    log('✓ Pushed commits to remote', 'green');
+    execCommand('git push --follow-tags');
+    log('✓ Pushed commits and tags to remote', 'green');
   } catch (error) {
-    exitWithError(`Failed to push commits: ${error.message}`);
-  }
-
-  log('\n📤 Pushing tag to remote...', 'yellow');
-  try {
-    execCommandFile('git', ['push', 'origin', tagName]);
-    log(`✓ Pushed tag ${tagName} to remote`, 'green');
-  } catch (error) {
-    exitWithError(`Failed to push tag ${tagName}: ${error.message}`);
+    exitWithError(`Failed to push commits and tags: ${error.message}`);
   }
 
   // Success!

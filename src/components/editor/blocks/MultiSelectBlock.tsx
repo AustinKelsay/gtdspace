@@ -203,14 +203,18 @@ export const MultiSelectBlock = createReactBlockSpec(
         const text = element.textContent || '';
         const match = text.match(/\[!multiselect:([^:]+):([^\]]*)\]/);
         if (match) {
-          const type = match[1] || 'status';
+          const type = match[1] || 'tags';
           const value = match[2] || '';
 
+          if (['status', 'effort', 'project-status'].includes(type)) {
+            console.warn(`Legacy type "${type}" found for MultiSelectBlock. These should be migrated to SingleSelectBlock. Skipping.`);
+            return undefined;
+          }
+
           // Get the label from the type
-          const label = type === 'status' ? 'Status' :
-            type === 'effort' ? 'Effort' :
-              type === 'project-status' ? 'Project Status' :
-                type === 'tags' ? 'Tags' : '';
+          const label = type === 'tags' ? 'Tags' :
+                        type === 'contexts' ? 'Contexts' :
+                        type === 'categories' ? 'Categories' : '';
 
           return {
             type,
@@ -227,9 +231,16 @@ export const MultiSelectBlock = createReactBlockSpec(
       if (element.tagName === 'DIV' && element.getAttribute('data-multiselect')) {
         try {
           const data = JSON.parse(element.getAttribute('data-multiselect') || '{}');
+          const type = data.type || 'tags';
+
+          if (['status', 'effort', 'project-status'].includes(type)) {
+            console.warn(`Legacy type "${type}" found for MultiSelectBlock. These should be migrated to SingleSelectBlock. Skipping.`);
+            return undefined;
+          }
+
           // console.log('Parsed multiselect data:', data);
           return {
-            type: data.type || 'status',
+            type: type,
             value: (data.value || []).join(','),
             label: data.label || '',
             placeholder: data.placeholder || '',

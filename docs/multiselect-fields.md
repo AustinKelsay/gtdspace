@@ -7,33 +7,28 @@
 Multiselect fields are primarily used for associating multiple tags or categories with an item in your markdown files. While historically used for other fields like Status and Effort, these are now handled by single-select fields for better data consistency. Multiselect should be reserved for use cases where multiple, independent values are genuinely applicable, such as tags.
 
 ## Automatic Creation
-All new projects and actions are automatically created with multiselect fields:
+New projects and actions are no longer created with multiselect fields for status or effort. Instead, they use **single-select** fields to ensure data consistency.
 
-### Projects
-- **Status**: Project status (Active, Planning, On Hold, Completed, Cancelled)
-
-### Actions  
-- **Status**: Action status (In Progress, Waiting, Completed) — legacy; use single-select
-- **Effort**: Time estimate (Small <30min, Medium 30-90min, Large >90min, Extra Large >3hrs) — legacy; use single-select
+For details on how these fields are implemented, see [SingleSelect Fields](singleselect-fields.md).
 
 ## Markdown Syntax
-Multiselect fields use a special marker syntax in markdown:
+Multiselect fields use a special marker syntax in markdown, primarily for `tags` and `contexts`.
 ```
-[\!multiselect:type:value]
+[\!multiselect:type:value,value2]
 ```
 
 Examples:
-- `[\!multiselect:status:not-started]`
-- `[\!multiselect:effort:medium]`
-- `[\!multiselect:project-status:active]`
+- `[\!multiselect:tags:urgent,home]`
+- `[\!multiselect:contexts:work,deep]`
+
+The legacy syntax for `status`, `effort`, and `project-status` is still parsed for older files but should not be used for new content.
 
 ## Manual Insertion
-You can manually insert multiselect fields using keyboard shortcuts:
+You can manually insert multiselect fields for `contexts` using a keyboard shortcut:
 
-- **Cmd+Shift+S** (Mac) / **Ctrl+Shift+S** (Windows/Linux): Insert Status field
-- **Cmd+Shift+E** (Mac) / **Ctrl+Shift+E** (Windows/Linux): Insert Effort field  
-- **Cmd+Shift+P** (Mac) / **Ctrl+Shift+P** (Windows/Linux): Insert Project Status field
 - **Cmd+Shift+C** (Mac) / **Ctrl+Shift+C** (Windows/Linux): Insert Contexts field
+
+Shortcuts for `status`, `effort`, and `project-status` now insert single-select fields. See [SingleSelect Fields](singleselect-fields.md) for more information.
 
 ## How It Works
 1. When markdown files are loaded, the special markers are converted to interactive BlockNote multiselect blocks

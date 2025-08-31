@@ -278,7 +278,8 @@ pub fn start_oauth_flow(
             });
         }
         Err(e) => {
-            println!("[SimpleAuth] Failed to open with 'open' crate: {:?}", e);
+            let err = e.to_string().replace(&auth_url, &redacted_auth_url);
+            println!("[SimpleAuth] Failed to open with 'open' crate: {}", err);
         }
     }
 
@@ -294,7 +295,8 @@ pub fn start_oauth_flow(
             });
         }
         Err(e) => {
-            println!("[SimpleAuth] Browser open failed with webbrowser: {:?}", e);
+            let err = e.to_string().replace(&auth_url, &redacted_auth_url);
+            println!("[SimpleAuth] Browser open failed with webbrowser: {}", err);
         }
     }
 

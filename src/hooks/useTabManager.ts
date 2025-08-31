@@ -202,24 +202,35 @@ export const useTabManager = () => {
         // Apply migrations if needed
         if (needsMigration(content)) {
           console.log('useTabManager: Applying data migrations to file:', file.path);
-          content = migrateMarkdownContent(content);
-          // Auto-save the migrated content
-          await invoke<void>('save_file', { path: file.path, content });
+          let migrationApplied = false;
+          try {
+            const migratedContent = migrateMarkdownContent(content);
+            // Create a backup before auto-saving migrated content
+            await invoke<void>('save_file', { path: `${file.path}.backup`, content });
+            await invoke<void>('save_file', { path: file.path, content: migratedContent });
+            content = migratedContent;
+            migrationApplied = true;
+          } catch (migrationError) {
+            console.error('Migration failed:', migrationError);
+            // Continue with original content without emitting saved events
+          }
           
-          // Emit events to update UI with migrated content
-          const newMetadata = extractMetadata(content);
-          emitContentSaved({
-            filePath: file.path,
-            fileName: file.name,
-            content: content,
-            metadata: newMetadata
-          });
-          emitMetadataChange({
-            filePath: file.path,
-            fileName: file.name,
-            content: content,
-            metadata: newMetadata
-          });
+          if (migrationApplied) {
+            // Emit events to update UI with migrated content
+            const newMetadata = extractMetadata(content);
+            emitContentSaved({
+              filePath: file.path,
+              fileName: file.name,
+              content: content,
+              metadata: newMetadata
+            });
+            emitMetadataChange({
+              filePath: file.path,
+              fileName: file.name,
+              content: content,
+              metadata: newMetadata
+            });
+          }
         }
         
         originalContent = content;
@@ -402,7 +413,7 @@ export const useTabManager = () => {
     
     if (currentTab) {
       // Process metadata changes with debouncing
-      processMetadataDebounced(tabId, currentTab.file.path, currentTab.file.name, currentTab.content, content);
+      processMetadataDebounced(tabId, currentTab.file.path, currentTab.file.name, currentTab.content || '', content);
     }
     
     // Update tab content immediately for UI responsiveness

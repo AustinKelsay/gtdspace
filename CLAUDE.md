@@ -37,6 +37,7 @@ npm run release:major  # Major release (0.1.0 → 1.0.0)
 ## High-Level Architecture
 
 ### Tech Stack
+
 - **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui
 - **Editor**: BlockNote v0.35 (pinned) with custom GTD blocks
 - **Backend**: Rust + Tauri 2.x
@@ -46,6 +47,7 @@ npm run release:major  # Major release (0.1.0 → 1.0.0)
 ### Frontend-Backend Communication
 
 All Tauri commands follow this pattern:
+
 ```typescript
 import { invoke } from "@tauri-apps/api/core";
 import { withErrorHandling } from "@/hooks/useErrorHandler";
@@ -61,6 +63,7 @@ const result = await withErrorHandling(
 ### GTD Directory Structure
 
 The app auto-creates and manages this structure at `~/GTD Space`:
+
 ```
 gtd-space/
 ├── Purpose & Principles/  # 50,000 ft - Life mission
@@ -82,35 +85,42 @@ The editor uses these custom markdown markers:
 
 ```markdown
 # Single Select
-[!singleselect:status:in-progress]        # Action status: in-progress|waiting|completed
-[!singleselect:effort:medium]             # Effort: small|medium|large|extra-large
-[!singleselect:project-status:waiting]    # Project status
-[!singleselect:habit-frequency:daily]     # Habit frequency
+
+[!singleselect:status:in-progress] # Action status: in-progress|waiting|completed
+[!singleselect:effort:medium] # Effort: small|medium|large|extra-large
+[!singleselect:project-status:waiting] # Project status
+[!singleselect:habit-frequency:daily] # Habit frequency
 
 # DateTime
-[!datetime:due_date:2025-01-20]           # Date only
+
+[!datetime:due_date:2025-01-20] # Date only
 [!datetime:focus_date:2025-01-20T14:30:00] # Date with time
 [!datetime:created_date_time:2025-01-17T10:00:00Z] # ISO 8601
 
 # References & Lists
-[!references:path1.md,path2.md]           # Links to Cabinet/Someday
-[!areas-references:path1.md]              # Links to Areas
-[!projects-list]                          # Dynamic list of referencing projects
+
+[!references:path1.md,path2.md] # Links to Cabinet/Someday
+[!areas-references:path1.md] # Links to Areas
+[!projects-list] # Dynamic list of referencing projects
 
 # Checkbox (Habits)
-[!checkbox:habit-status:false]            # Todo/complete state
+
+[!checkbox:habit-status:false] # Todo/complete state
 ```
 
 ### Critical Event Flow
 
-1. **Project Creation**: 
+1. **Project Creation**:
+
    - `useGTDSpace.createProject()` → `invoke('create_gtd_project')` → dispatches `gtd-project-created` event
    - `GTDWorkspaceSidebar` listens for event → reloads projects
 
 2. **Content Updates**:
+
    - Editor change → `useTabManager` → `content-event-bus` → UI components update
 
 3. **File Operations**:
+
    - UI action → Tauri command → File system → File watcher (500ms) → UI refresh
 
 4. **Data Migration**:
@@ -128,6 +138,7 @@ The editor uses these custom markdown markers:
 ### State Management Hooks
 
 Key hooks and their responsibilities:
+
 - `useGTDSpace` - Workspace initialization, project/action CRUD
 - `useTabManager` - Multi-tab editing with auto-save
 - `useFileWatcher` - External change detection
@@ -138,6 +149,7 @@ Key hooks and their responsibilities:
 ### Google Calendar Integration
 
 OAuth2 setup in `.env`:
+
 ```
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
@@ -176,10 +188,39 @@ GOOGLE_CLIENT_SECRET=your-client-secret
 
 ## Known Issues
 
+### file.last_modified Validation
+
+- **Expected format**: ISO 8601 in UTC (trailing `Z`). Example valid: `2025-02-01T12:34:56Z`.
+- **Timezones**: Inputs with `±hh:mm` offsets are allowed but must be normalized to UTC (`Z`) before storing/returning.
+- **Precision**: Accept seconds or milliseconds.
+  - ISO 8601 with fractional seconds is allowed (e.g., `2025-02-01T12:34:56.789Z`).
+  - Numeric Unix epoch is allowed: 10-digit seconds or 13-digit milliseconds; normalize to ISO UTC on save.
+- **Validation rules**:
+  - Reject non-parseable values.
+  - Reject timestamps more than 5 minutes in the future.
+- **Handling/Fallback**:
+  - If parseable and within tolerance but not UTC, auto-normalize to UTC.
+  - If epoch length is 10 or 13, convert to ISO UTC; otherwise reject.
+  - On invalid input, reject the upload and return HTTP 400 with a field-specific error.
+- **Example error message**: `file.last_modified must be ISO 8601 UTC; received '2025-02-30T10:00:00'`
+- **Example 400 response**:
+
+```json
+{
+  "status": 400,
+  "error": "ValidationError",
+  "fields": {
+    "file.last_modified": "must be ISO 8601 UTC; received '2025-02-30T10:00:00'"
+  }
+}
+```
+
 ### Sidebar Not Updating
+
 Projects may not appear immediately after creation. The event system (`gtd-project-created`) may have timing issues. Workaround: Collapse/expand Projects section.
 
 ### Google Calendar Auth
+
 Check `.env` file, verify redirect URI is `http://localhost:9898/callback`, ensure port 9898 is free.
 
 ## CI/CD Notes

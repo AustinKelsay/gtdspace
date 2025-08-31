@@ -1,5 +1,8 @@
+use rand::Rng;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use tokio::time::sleep;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CalendarEvent {
@@ -87,26 +90,8 @@ pub async fn fetch_calendar_events(
             query_params.push(("pageToken".to_string(), token.clone()));
         }
 
-        let response = client
-            .get(url)
-            .bearer_auth(access_token)
-            .query(&query_params)
-            .send()
-            .await
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
-            .error_for_status()
-            .map_err(|e| -> Box<dyn std::error::Error> {
-                #[allow(clippy::all)]
-                Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to fetch events on page {}: {}", page_count, e),
-                ))
-            })?;
-
-        let google_response: GoogleCalendarListResponse = response
-            .json()
-            .await
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        let google_response: GoogleCalendarListResponse =
+            get_with_retries(&client, url, access_token, &query_params, page_count).await?;
 
         // Convert Google events to our format
         let page_events: Vec<CalendarEvent> = google_response
@@ -177,4 +162,122 @@ pub async fn fetch_events_async(
             ))
         },
     )
+}
+
+/// Executes an HTTP GET with bounded retries, exponential backoff, and jitter.
+/// Retries on HTTP 429, any 5xx, and transient network errors (connect/timeouts).
+async fn get_with_retries(
+    client: &reqwest::Client,
+    url: &str,
+    access_token: &str,
+    query_params: &[(String, String)],
+    page_count: u32,
+) -> Result<GoogleCalendarListResponse, Box<dyn std::error::Error>> {
+    let max_attempts: u32 = 5;
+    let base_delay_ms: u64 = 300;
+
+    for attempt in 1..=max_attempts {
+        let req = client
+            .get(url)
+            .bearer_auth(access_token)
+            .query(query_params);
+
+        match req.send().await {
+            Ok(resp) => {
+                let status = resp.status();
+                if status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
+                    if attempt == max_attempts {
+                        println!(
+                            "[CalendarClient] Final failure (status {}) on page {} after {} attempts",
+                            status,
+                            page_count,
+                            attempt
+                        );
+                        return Err(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!(
+                                "Failed to fetch events on page {}: HTTP status {}",
+                                page_count, status
+                            ),
+                        )));
+                    }
+
+                    let backoff_ms = base_delay_ms.saturating_mul(1u64 << (attempt - 1));
+                    let jitter_ms: u64 = rand::thread_rng().gen_range(0..=backoff_ms / 2 + 1);
+                    let sleep_ms = backoff_ms + jitter_ms;
+                    println!(
+                        "[CalendarClient] Retry {} due to HTTP {} on page {}. Sleeping {} ms...",
+                        attempt, status, page_count, sleep_ms
+                    );
+                    sleep(Duration::from_millis(sleep_ms)).await;
+                    continue;
+                }
+
+                // Status is OK or other non-retryable 4xx
+                match resp.json::<GoogleCalendarListResponse>().await {
+                    Ok(parsed) => return Ok(parsed),
+                    Err(e) => {
+                        // Retry on transient network read errors
+                        let is_transient = e.is_timeout() || e.is_connect();
+                        if is_transient && attempt < max_attempts {
+                            let backoff_ms = base_delay_ms.saturating_mul(1u64 << (attempt - 1));
+                            let jitter_ms: u64 =
+                                rand::thread_rng().gen_range(0..=backoff_ms / 2 + 1);
+                            let sleep_ms = backoff_ms + jitter_ms;
+                            println!(
+                                "[CalendarClient] Retry {} due to body/network error on page {}: {}. Sleeping {} ms...",
+                                attempt, page_count, e, sleep_ms
+                            );
+                            sleep(Duration::from_millis(sleep_ms)).await;
+                            continue;
+                        }
+                        if is_transient {
+                            println!(
+                                "[CalendarClient] Final failure parsing response on page {} after {} attempts: {}",
+                                page_count, attempt, e
+                            );
+                        }
+                        return Err(Box::new(e) as Box<dyn std::error::Error>);
+                    }
+                }
+            }
+            Err(e) => {
+                let mut retryable = e.is_timeout() || e.is_connect();
+                if let Some(status) = e.status() {
+                    retryable = retryable
+                        || status == StatusCode::TOO_MANY_REQUESTS
+                        || status.is_server_error();
+                }
+
+                if retryable && attempt < max_attempts {
+                    let backoff_ms = base_delay_ms.saturating_mul(1u64 << (attempt - 1));
+                    let jitter_ms: u64 = rand::thread_rng().gen_range(0..=backoff_ms / 2 + 1);
+                    let sleep_ms = backoff_ms + jitter_ms;
+                    println!(
+                        "[CalendarClient] Retry {} due to network error on page {}: {}. Sleeping {} ms...",
+                        attempt, page_count, e, sleep_ms
+                    );
+                    sleep(Duration::from_millis(sleep_ms)).await;
+                    continue;
+                }
+
+                if retryable {
+                    println!(
+                        "[CalendarClient] Final failure (network) on page {} after {} attempts: {}",
+                        page_count, attempt, e
+                    );
+                }
+                return Err(Box::new(e) as Box<dyn std::error::Error>);
+            }
+        }
+    }
+
+    // Should be unreachable
+    Err(Box::new(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        format!(
+            "Failed to fetch events on page {} after retries (unexpected fallthrough)",
+            page_count
+        ),
+    )))
 }

@@ -69,11 +69,11 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       setLocalTimeEnabled(false);
       return;
     }
-    
+
     // Update localTimeEnabled based on whether value contains time
     const hasTime = Boolean(value && value.includes('T'));
     setLocalTimeEnabled(hasTime);
-    
+
     // Extract time if value includes it
     if (isValidDate && hasTime) {
       const date = new Date(value);
@@ -129,18 +129,22 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Skip time updates for date-only fields
     if (isDateOnlyField) return;
-    
+
     const newTime = e.target.value;
     setTimeValue(newTime);
 
     if (isValidDate && localTimeEnabled) {
       const [hours, minutes] = newTime.split(':').map(Number);
-      
+
       // If the raw value is date-only, parse it properly to avoid timezone shifts
       let year: number, month: number, day: number;
       if (!value.includes('T')) {
         // Parse the date-only string to get correct local values
         const parts = value.split('-').map(Number);
+        if (parts.length !== 3 || parts.some(isNaN)) {
+          console.error('Invalid date format:', value);
+          return;
+        }
         year = parts[0];
         month = parts[1] - 1; // Month is 0-indexed for Date constructor
         day = parts[2];
@@ -150,7 +154,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
         month = dateValue.getMonth();
         day = dateValue.getDate();
       }
-      
+
       const localDate = new Date(
         year,
         month,

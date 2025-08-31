@@ -209,8 +209,12 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   // First check for new marker syntax
   while ((match = multiSelectMarkerPattern.exec(markdown)) !== null) {
     const type = match[1];
+    if (['status', 'effort', 'project-status'].includes(type)) {
+        console.warn(`Legacy multiselect type "${type}" found in markdown. Skipping.`);
+        continue;
+    }
     const value = match[2].split(',');
-    const label = type === 'status' ? 'Status' : type === 'effort' ? 'Effort' : type === 'project-status' ? 'Project Status' : '';
+    const label = type === 'tags' ? 'Tags' : type === 'contexts' ? 'Contexts' : type === 'categories' ? 'Categories' : '';
     multiSelectBlocks.push({ text: match[0], type, value, label });
   }
   
@@ -224,9 +228,14 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
         jsonStr = jsonStr.replace(/\\"/g, '"');
       }
       const data = JSON.parse(jsonStr);
+      const type = data.type || 'tags';
+      if (['status', 'effort', 'project-status'].includes(type)) {
+        console.warn(`Legacy multiselect type "${type}" found in HTML. Skipping.`);
+        continue;
+      }
       multiSelectBlocks.push({ 
         text: match[0], 
-        type: data.type || 'status', 
+        type: type, 
         value: data.value || [], 
         label: data.label 
       });
@@ -417,14 +426,13 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       
       // Check if this paragraph contains our multiselect markers or HTML
       for (const msBlock of multiSelectBlocks) {
-        if (blockText.includes(msBlock.text) || 
-            blockText.includes(`[!multiselect:${msBlock.type}:`) ||
-            (msBlock.label && blockText.includes(msBlock.label))) {
+        // Only match on exact text, not partial matches or labels
+        if (msBlock.text && blockText.includes(msBlock.text)) {
           // Replace this paragraph with a multiselect block
           processedBlocks.push({
             type: 'multiselect',
             props: {
-              type: msBlock.type || 'status',
+              type: msBlock.type || 'tags',
               value: (msBlock.value || []).join(','),
               label: msBlock.label || '',
               placeholder: '',
@@ -441,9 +449,8 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       // Check if this paragraph contains our singleselect markers or HTML
       if (!blockReplaced) {
         for (const ssBlock of singleSelectBlocks) {
-          if (blockText.includes(ssBlock.text) || 
-              blockText.includes(`[!singleselect:${ssBlock.type}:`) ||
-              (ssBlock.label && blockText.includes(ssBlock.label))) {
+          // Only match on exact text, not partial matches or labels
+          if (ssBlock.text && blockText.includes(ssBlock.text)) {
             // Special handling for habit-status: convert to checkbox block
             if (ssBlock.type === 'habit-status') {
               // Convert old habit status to checkbox
@@ -481,9 +488,8 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       // Check if this paragraph contains our checkbox markers or HTML
       if (!blockReplaced) {
         for (const cbBlock of checkboxBlocks) {
-          if (blockText.includes(cbBlock.text) || 
-              blockText.includes(`[!checkbox:${cbBlock.type}:`) ||
-              (cbBlock.label && blockText.includes(cbBlock.label))) {
+          // Only match on exact text, not partial matches or labels
+          if (cbBlock.text && blockText.includes(cbBlock.text)) {
             // Replace this paragraph with a checkbox block
             processedBlocks.push({
               type: 'checkbox',
@@ -503,9 +509,8 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       // Check if this paragraph contains our datetime markers or HTML
       if (!blockReplaced) {
         for (const dtBlock of dateTimeBlocks) {
-          if (blockText.includes(dtBlock.text) || 
-              blockText.includes(`[!datetime:${dtBlock.type}:`) ||
-              (dtBlock.label && blockText.includes(dtBlock.label))) {
+          // Only match on exact text, not partial matches or labels
+          if (dtBlock.text && blockText.includes(dtBlock.text)) {
             // Replace this paragraph with a datetime block
             processedBlocks.push({
               type: 'datetime',
@@ -526,10 +531,10 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       // Check if this paragraph contains our references markers or HTML
       if (!blockReplaced) {
         for (const refBlock of referencesBlocks) {
-          // Only match if the text explicitly contains our custom syntax with [! prefix
-          // Don't match on generic words like 'References' or 'Areas' to avoid false positives
-          if (blockText.includes(refBlock.text) || 
-              blockText.includes(`[!${refBlock.blockType || 'references'}:`)) {
+          // Only match if the text explicitly contains our exact custom syntax
+          // refBlock.text should be the full match like "[!references:...]"
+          // We should only match on the exact text, not on partial matches
+          if (refBlock.text && blockText.includes(refBlock.text)) {
             // Replace this paragraph with a references block
             processedBlocks.push({
               type: (refBlock.blockType || 'references') as ReferencesBlock['type'],
@@ -547,10 +552,10 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       // Check if this paragraph contains our list markers
       if (!blockReplaced) {
         for (const listBlock of listBlocks) {
-          // Only match if the text explicitly contains our custom syntax with [! prefix
-          // Don't match on generic phrases to avoid false positives with regular content
-          if (blockText.includes(listBlock.text) || 
-              blockText.includes(`[!${listBlock.blockType}]`)) {
+          // Only match if the text explicitly contains our exact custom syntax
+          // listBlock.text should be the full match like "[!projects-list]"
+          // We should only match on the exact text, not on partial matches
+          if (listBlock.text && blockText.includes(listBlock.text)) {
             // Replace this paragraph with a list block
             processedBlocks.push({
               type: listBlock.blockType as ListBlock['type'],

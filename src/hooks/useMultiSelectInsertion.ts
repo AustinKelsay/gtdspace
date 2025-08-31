@@ -29,7 +29,21 @@ export function useMultiSelectInsertion(editor: any) {
       event.preventDefault();
 
       const block = createMultiSelectBlock('contexts', 'Contexts', []);
-      const currentBlock = editor.getTextCursorPosition().block;
+      // Safely resolve current block from cursor position with fallbacks
+      let cursorPos: unknown;
+      try {
+        cursorPos = editor.getTextCursorPosition?.();
+      } catch {
+        cursorPos = undefined;
+      }
+
+      // Prefer the cursor block, then root block, then last document block
+      const currentBlock = (cursorPos as { block?: unknown } | undefined)?.block
+        ?? editor.getRootBlock?.()
+        ?? editor.document?.[editor.document.length - 1]
+        ?? undefined;
+
+      if (!currentBlock) return;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       editor.insertBlocks([block as any], currentBlock, 'after');
     },
@@ -58,7 +72,21 @@ export function useMultiSelectInsertion(editor: any) {
         return;
     }
 
-    const currentBlock = editor.getTextCursorPosition().block;
+    // Safely resolve current block from cursor position with fallbacks
+    let cursorPos: unknown;
+    try {
+      cursorPos = editor.getTextCursorPosition?.();
+    } catch {
+      cursorPos = undefined;
+    }
+
+    // Prefer the cursor block, then root block, then last document block
+    const currentBlock = (cursorPos as { block?: unknown } | undefined)?.block
+      ?? editor.getRootBlock?.()
+      ?? editor.document?.[editor.document.length - 1]
+      ?? undefined;
+
+    if (!currentBlock) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     editor.insertBlocks([block as any], currentBlock, 'after');
   };

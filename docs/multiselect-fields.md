@@ -14,12 +14,12 @@ For details on how these fields are implemented, see [SingleSelect Fields](singl
 ## Markdown Syntax
 Multiselect fields use a special marker syntax in markdown, primarily for `tags` and `contexts`.
 ```
-[\!multiselect:type:value,value2]
+[!multiselect:type:value,value2]
 ```
 
 Examples:
-- `[\!multiselect:tags:urgent,home]`
-- `[\!multiselect:contexts:work,deep]`
+- `[!multiselect:tags:urgent,home]`
+- `[!multiselect:contexts:work,deep]`
 
 The legacy syntax for `status`, `effort`, and `project-status` is still parsed for older files but should not be used for new content.
 

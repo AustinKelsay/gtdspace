@@ -140,7 +140,7 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
 [!purpose-references:]
 
 ## Related Items
-[!projects-areas-list]
+[!projects-and-areas-list]
 
 ## Milestones
 - [ ] [First milestone]
@@ -166,7 +166,7 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
 - [Element 3]
 
 ## Supporting Elements
-[!goals-areas-list]
+[!goals-and-areas-list]
 
 ## Active Projects
 [!projects-list]
@@ -192,7 +192,7 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
 - **Share**: [What you teach and give]
 
 ## Supported By
-[!visions-goals-list]
+[!visions-and-goals-list]
 
 ## References
 [!references:]

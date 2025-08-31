@@ -52,9 +52,20 @@ const MultiSelectRenderer = React.memo(function MultiSelectRenderer(props: {
     }
   }, [customOptionsJson]);
 
+  // Normalize type once for consistent, case-insensitive comparisons
+  const normalizedType = React.useMemo(() => (type || '').toLowerCase(), [type]);
+
   // Get options based on type - memoized
   const options = React.useMemo((): Option[] => {
-    switch (type) {
+    // Guard: legacy types should use SingleSelectBlock
+    if (["status", "effort", "project-status"].includes(normalizedType)) {
+      if (import.meta.env.DEV) {
+        console.warn(`MultiSelectBlock: Legacy type '${normalizedType}' should use SingleSelectBlock instead`);
+      }
+      return [];
+    }
+
+    switch (normalizedType) {
       case 'contexts':
       case 'categories':
         // Use GTDTagSelector for these types
@@ -65,13 +76,13 @@ const MultiSelectRenderer = React.memo(function MultiSelectRenderer(props: {
         // Tags can have custom options
         return customOptions || [];
       default:
-        // Status, effort, and project-status should use SingleSelectBlock
+        // Unknown type - no options
         if (import.meta.env.DEV) {
-          console.warn(`MultiSelectBlock: Type '${type}' should use SingleSelectBlock instead`);
+          console.warn(`MultiSelectBlock: Type '${normalizedType}' is not recognized for MultiSelectBlock`);
         }
         return [];
     }
-  }, [type, customOptions]);
+  }, [normalizedType, customOptions]);
 
   const handleChange = React.useCallback((newValue: string[]) => {
     // Find and update the block in the current document
@@ -223,7 +234,8 @@ export const MultiSelectBlock = createReactBlockSpec(
         const text = element.textContent || '';
         const match = text.match(/\[!multiselect:([^:]+):([^\]]*)\]/);
         if (match) {
-          const type = match[1] || 'tags';
+          // Normalize extracted type for case-insensitive legacy detection
+          const type = (match[1] || 'tags').toLowerCase();
           const value = match[2] || '';
 
           if (['status', 'effort', 'project-status'].includes(type)) {
@@ -251,7 +263,7 @@ export const MultiSelectBlock = createReactBlockSpec(
       if (element.tagName === 'DIV' && element.getAttribute('data-multiselect')) {
         try {
           const data = JSON.parse(element.getAttribute('data-multiselect') || '{}');
-          const type = data.type || 'tags';
+          const type = (data.type || 'tags').toLowerCase();
 
           if (['status', 'effort', 'project-status'].includes(type)) {
             console.warn(`Legacy type "${type}" found for MultiSelectBlock. These should be migrated to SingleSelectBlock. Skipping.`);

@@ -91,7 +91,7 @@ function toHorizonListBlockRenderProps(
   return {
     block: {
       id: p.block.id,
-      props: { 
+      props: {
         listType: p.block.props?.listType,
         currentPath: p.block.props?.currentPath
       },
@@ -138,28 +138,28 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
     if (blocknotePath) {
       return blocknotePath;
     }
-    
+
     // Fallback: Try to get from localStorage (active tab info)
     const tabsJson = localStorage.getItem('gtdspace-tabs');
     if (tabsJson) {
       try {
         const tabsData = JSON.parse(tabsJson);
-        
+
         // Validate the structure before accessing nested properties
         if (!tabsData || typeof tabsData !== 'object') {
           return null;
         }
-        
+
         // Ensure openTabs is an array before trying to use find
         if (!Array.isArray(tabsData.openTabs)) {
           return null;
         }
-        
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const activeTab = tabsData.openTabs.find((t: any) => 
+        const activeTab = tabsData.openTabs.find((t: any) =>
           t && typeof t === 'object' && t.id === tabsData.activeTabId
         );
-        
+
         if (activeTab?.path && typeof activeTab.path === 'string') {
           return activeTab.path;
         }
@@ -167,7 +167,7 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
         // Silent fail - this is a fallback
       }
     }
-    
+
     return null;
   }, []);
 
@@ -187,7 +187,7 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
         setItems([]);
         return;
       }
-      
+
       // Call backend to find reverse relationships
       const relationships = await invoke<ReverseRelationship[]>('find_reverse_relationships', {
         targetPath: currentPath,
@@ -236,7 +236,7 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
 
     window.addEventListener('reference-updated', handleReferenceUpdate);
     window.addEventListener('file-saved', handleReferenceUpdate);
-    
+
     return () => {
       window.removeEventListener('reference-updated', handleReferenceUpdate);
       window.removeEventListener('file-saved', handleReferenceUpdate);
@@ -260,14 +260,13 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
   }, [items]);
 
   const itemTypes = listType === 'projects' ? ['project'] :
-                    listType === 'areas' ? ['area'] :
-                    listType === 'goals' ? ['goal'] :
-                    listType === 'visions' ? ['vision'] : [];
+    listType === 'areas' ? ['area'] :
+      listType === 'goals' ? ['goal'] :
+        listType === 'visions' ? ['vision'] : [];
 
   return (
-    <div className={`${compact ? '' : 'my-3'} border border-border rounded-lg transition-all ${
-      isExpanded ? (compact ? 'p-3' : 'p-4') : 'p-2 bg-muted/30'
-    }`}>
+    <div className={`${compact ? '' : 'my-3'} border border-border rounded-lg transition-all ${isExpanded ? (compact ? 'p-3' : 'p-4') : 'p-2 bg-muted/30'
+      }`}>
       <div className={`flex items-center justify-between ${isExpanded ? 'mb-3' : ''}`}>
         <div className="flex items-center gap-2">
           <button
@@ -275,16 +274,15 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
             className="p-0.5 hover:bg-accent rounded transition-colors"
             aria-label={isExpanded ? "Collapse list" : "Expand list"}
           >
-            <ChevronRight 
-              className={`h-4 w-4 text-muted-foreground transition-transform ${
-                isExpanded ? 'rotate-90' : ''
-              }`} 
+            <ChevronRight
+              className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''
+                }`}
             />
           </button>
           <List className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-medium">{label}</span>
-          <Badge 
-            variant={items.length > 0 ? "outline" : "secondary"} 
+          <Badge
+            variant={items.length > 0 ? "outline" : "secondary"}
             className={`ml-2 ${!isExpanded && items.length > 0 ? 'animate-pulse' : ''}`}
           >
             {items.length}
@@ -295,7 +293,7 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
             </span>
           )}
         </div>
-        
+
         <Button
           onClick={loadItems}
           variant="ghost"
@@ -559,11 +557,11 @@ export const ProjectsAndAreasListBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: () => {
-      return <p>[!projects-areas-list]</p>;
+      return <p>[!projects-and-areas-list]</p>;
     },
     parse: (element) => {
       const textContent = element.textContent || '';
-      if (textContent.includes('[!projects-areas-list]')) {
+      if (textContent.includes('[!projects-and-areas-list]')) {
         // Return a value that represents the combined nature
         return { listType: 'projects-areas' };
       }
@@ -602,11 +600,11 @@ export const GoalsAndAreasListBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: () => {
-      return <p>[!goals-areas-list]</p>;
+      return <p>[!goals-and-areas-list]</p>;
     },
     parse: (element) => {
       const textContent = element.textContent || '';
-      if (textContent.includes('[!goals-areas-list]')) {
+      if (textContent.includes('[!goals-and-areas-list]')) {
         // Return a value that represents the combined nature
         return { listType: 'goals-areas' };
       }
@@ -645,11 +643,11 @@ export const VisionsAndGoalsListBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: () => {
-      return <p>[!visions-goals-list]</p>;
+      return <p>[!visions-and-goals-list]</p>;
     },
     parse: (element) => {
       const textContent = element.textContent || '';
-      if (textContent.includes('[!visions-goals-list]')) {
+      if (textContent.includes('[!visions-and-goals-list]')) {
         // Return a value that represents the combined nature
         return { listType: 'visions-goals' };
       }

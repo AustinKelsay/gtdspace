@@ -142,6 +142,8 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
   }, [type, customOptions]);
 
   const handleChange = React.useCallback(async (newValue: string) => {
+    const selectedValue = newValue; // Use immutable copy to avoid mutation issues
+    
     // If this is a habit status field, update the backend
     if (type === 'habit-status') {
       try {
@@ -156,16 +158,15 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
           if (isHabitFile) {
             const { invoke } = await import('@tauri-apps/api/core');
             await invoke('update_habit_status', {
-              habitPath: currentPath,  // Use camelCase for Tauri 2.0
-              newStatus: newValue,   // Use camelCase for Tauri 2.0
+              habitPath: currentPath,
+              newStatus: selectedValue,
             });
 
             // After marking as complete, backend immediately resets to "todo"
             // Update the UI to reflect this
-            if (newValue === 'completed') {
+            if (selectedValue === 'completed') {
               // Give a brief moment to show the completion, then reset UI
               setTimeout(() => {
-                newValue = 'todo';
                 const target = findBlockInDocument(
                   block.id,
                   (b) => b.type === 'singleselect' && (b.props as { type?: string })?.type === block.props.type
@@ -177,18 +178,28 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                       value: 'todo',
                     },
                   });
+                  
+                  // Emit reset event so consumers see the persisted state
+                  const fileName = currentPath.split('/').pop() || '';
+                  emitMetadataChange({
+                    filePath: currentPath,
+                    fileName,
+                    content: '',
+                    metadata: { habitStatus: 'todo' },
+                    changedFields: { habitStatus: 'todo' }
+                  });
                 }
               }, 500); // Brief delay to show completion
             }
 
-            // Emit through centralized event bus instead of custom window events
+            // Emit initial status change event
             const fileName = currentPath.split('/').pop() || '';
             emitMetadataChange({
               filePath: currentPath,
               fileName,
               content: '', // Content not directly changed
-              metadata: { habitStatus: newValue },
-              changedFields: { habitStatus: newValue }
+              metadata: { habitStatus: selectedValue },
+              changedFields: { habitStatus: selectedValue }
             });
           }
         }
@@ -211,7 +222,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
           props.editor.updateBlock(targetBlock, {
             props: {
               ...targetBlock.props,
-              value: newValue,
+              value: selectedValue,
             },
           });
           return true;

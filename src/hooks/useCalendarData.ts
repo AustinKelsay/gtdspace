@@ -231,7 +231,9 @@ export const useCalendarData = (
               const actionName = pathParts[pathParts.length - 1].replace('.md', '');
               
               // Parse focus date field (can include time)
-              const focusDate = parseDateTimeField(content, 'focus_date');
+              // Try both field names for backward compatibility
+              const focusDate = parseDateTimeField(content, 'focus_date') || 
+                                parseDateTimeField(content, 'focus_date_time');
               const dueDate = parseDateTimeField(content, 'due_date');
               const status = parseSingleSelectField(content, 'status') || 'in-progress';
               const effort = parseSingleSelectField(content, 'effort');
@@ -284,10 +286,27 @@ export const useCalendarData = (
               if (createdDateTimeRaw) {
                 // Parse and normalize to ISO format
                 try {
+                  let parsed: Date;
+                  
+                  // Check if it's a numeric timestamp
                   const timestamp = Number(createdDateTimeRaw);
-                  const parsed = !isNaN(timestamp)
-                    ? new Date(timestamp < 1e12 ? timestamp * 1000 : timestamp) // Handle seconds or milliseconds
-                    : new Date(createdDateTimeRaw);
+                  if (!isNaN(timestamp) && /^\d+$/.test(createdDateTimeRaw)) {
+                    // Only treat as timestamp if it's exactly 10 or 13 digits
+                    const digitCount = createdDateTimeRaw.length;
+                    if (digitCount === 10) {
+                      // Unix timestamp in seconds
+                      parsed = new Date(timestamp * 1000);
+                    } else if (digitCount === 13) {
+                      // Unix timestamp in milliseconds
+                      parsed = new Date(timestamp);
+                    } else {
+                      // Not a standard timestamp format, parse as date string
+                      parsed = new Date(createdDateTimeRaw);
+                    }
+                  } else {
+                    // Parse as date string
+                    parsed = new Date(createdDateTimeRaw);
+                  }
                     
                   if (!isNaN(parsed.getTime())) {
                     createdDateTime = parsed.toISOString();

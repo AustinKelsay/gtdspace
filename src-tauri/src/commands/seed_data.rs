@@ -426,10 +426,8 @@ pub fn generate_project_readme(
 
 /// Template for project README.md file with references
 pub fn generate_project_readme_with_refs(params: ProjectReadmeParams) -> String {
-    let due_date_section = match params.due_date {
-        Some(date) => format!("\n## Due Date\n[!datetime:due_date:{}]\n", date),
-        None => String::new(),
-    };
+    // Always include the due date section, even if empty, so users can fill it in later
+    let due_date_value = params.due_date.unwrap_or_default();
 
     format!(
         r#"# {}
@@ -439,7 +437,10 @@ pub fn generate_project_readme_with_refs(params: ProjectReadmeParams) -> String 
 
 ## Status
 [!singleselect:project-status:{}]
-{}
+
+## Due Date
+[!datetime:due_date:{}]
+
 ## Created
 [!datetime:created_date_time:{}]
 
@@ -462,7 +463,7 @@ Actions for this project are stored as individual markdown files in this directo
         params.name,
         params.description,
         params.status,
-        due_date_section,
+        due_date_value,
         Local::now().to_rfc3339(),
         params.areas_refs,
         params.goals_refs,

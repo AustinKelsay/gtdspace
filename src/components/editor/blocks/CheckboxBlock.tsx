@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { emitMetadataChange } from '@/utils/content-event-bus';
 import { useFilePath } from '../FilePathContext';
+import { isTauriContext } from '@/utils/tauri-ready';
 
 // Memoized renderer component for checkbox blocks
 const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
@@ -42,6 +43,9 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
     // Immediately update local state for visual feedback
     setLocalChecked(checkedVal);
 
+    // Update the BlockNote document's block props
+    props.editor.updateBlock(block, { props: { checked: checkedVal } });
+
     // If this is a habit status checkbox, update the backend
     if (type === 'habit-status') {
       if (filePath) {
@@ -53,16 +57,37 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
           // Use proper error handling for Tauri invoke
           const result = await withErrorHandling(
             async () => {
-              const { invoke } = await import('@tauri-apps/api/core');
-
               // Convert checkbox state to status values for backend
               const statusValue = checkedVal ? 'completed' : 'todo';
-              await invoke('update_habit_status', {
-                habitPath: filePath,
-                newStatus: statusValue,
-              });
 
-              return { statusValue };
+              // Gracefully bail out if not in Tauri/browser-only envs
+              try {
+                if (!isTauriContext()) {
+                  console.warn('[CheckboxBlock] Not in Tauri context; skipping backend update');
+                  return { statusValue };
+                }
+
+                const core = await import('@tauri-apps/api/core');
+                const invoke = (core as unknown as { invoke?: unknown }).invoke as
+                  | ((cmd: string, args: unknown) => Promise<unknown>)
+                  | undefined;
+
+                if (typeof invoke !== 'function') {
+                  console.warn('[CheckboxBlock] Tauri invoke unavailable; skipping backend update');
+                  return { statusValue };
+                }
+
+                await invoke('update_habit_status', {
+                  habitPath: filePath,
+                  newStatus: statusValue,
+                });
+
+                return { statusValue };
+              } catch (e) {
+                console.warn('[CheckboxBlock] Failed to call backend; skipping update', e);
+                // Return consistent shape so callers won’t break
+                return { statusValue };
+              }
             },
             'Failed to update habit status'
           );
@@ -105,7 +130,7 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
         }
       }
     }
-  }, [localChecked, type, withErrorHandling, filePath]);
+  }, [localChecked, type, withErrorHandling, filePath, block, props.editor]);
 
   // Determine display label based on type and state - memoized
   const displayLabel = React.useMemo(() => {

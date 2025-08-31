@@ -108,11 +108,30 @@ export const GTDTagSelector: React.FC<GTDTagSelectorProps> = ({
     }
   };
 
+  // For contexts, ensure the UI receives '@'-prefixed values for matching options,
+  // but propagate normalized values without '@' to callers.
+  const displayValue = React.useMemo(() => {
+    if (type !== 'contexts') return value;
+    return (value || []).map(v => (v.startsWith('@') ? v : `@${v}`));
+  }, [type, value]);
+
+  const handleChange = React.useCallback((newValue: string[]) => {
+    if (!onValueChange) return;
+    if (type !== 'contexts') {
+      onValueChange(newValue);
+      return;
+    }
+    // Propagate values without '@' for storage/markers
+    const withoutAt = newValue.map(v => (v.startsWith('@') ? v.slice(1) : v));
+    onValueChange(withoutAt);
+  }, [onValueChange, type]);
+
+  // For display options, contexts options include '@' values already
   return (
     <MultiSelect
       options={getOptions()}
-      value={value}
-      onValueChange={onValueChange}
+      value={type === 'contexts' ? displayValue : value}
+      onValueChange={type === 'contexts' ? handleChange : onValueChange}
       placeholder={getPlaceholder()}
       searchPlaceholder="Search tags..."
       maxCount={maxCount}

@@ -143,6 +143,32 @@ export function preprocessMarkdownForBlockNote(markdown: string): string {
 const blockProcessingCache = new Map<string, { blocks: unknown[]; timestamp: number }>();
 const CACHE_DURATION = 5000; // 5 second cache to allow for reasonable updates
 
+// Cross-environment base64 encoding helper
+function toBase64(str: string): string {
+  // Ensure we have a string input
+  const input = String(str);
+  
+  // Use btoa if available (browser environment)
+  if (typeof btoa !== 'undefined') {
+    return btoa(input);
+  }
+  
+  // Fallback to Buffer for Node.js environments
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(input, 'utf-8').toString('base64');
+  }
+  
+  // If neither is available, use a simple hash alternative
+  // This provides a stable but non-base64 hash for testing environments
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    const char = input.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return Math.abs(hash).toString(36);
+}
+
 // Create a hash of the content for efficient caching - focus on structural elements
 function createContentHash(markdown: string, blockCount: number): string {
   // Extract only GTD field markers and structural elements for stable caching
@@ -161,7 +187,7 @@ function createContentHash(markdown: string, blockCount: number): string {
   }
   
   // Create hash that's stable for text-only changes but changes for structural modifications
-  const structuralHash = btoa(structuralElements).slice(0, 12);
+  const structuralHash = toBase64(structuralElements).slice(0, 12);
   return `${blockCount}-${gtdFieldCount}-${structuralHash}`;
 }
 
@@ -557,8 +583,8 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       // Check if this paragraph contains our datetime markers or HTML
       if (!blockReplaced) {
         for (const dtBlock of dateTimeBlocks) {
-          // Only match on exact text, not partial matches or labels
-          if (dtBlock.text && blockText.includes(dtBlock.text)) {
+          // Only match on exact text match (trimmed for whitespace tolerance)
+          if (dtBlock.text && blockText.trim() === dtBlock.text.trim()) {
             // Replace this paragraph with a datetime block
             processedBlocks.push({
               type: 'datetime',

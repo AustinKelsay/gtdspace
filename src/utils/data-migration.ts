@@ -26,6 +26,12 @@ export function migrateMarkdownContent(content: string): string {
     '## Created Date/Time'
   );
   
+  // Migration 1b: Rename focus_date_time to focus_date (newer convention)
+  migrated = migrated.replace(
+    /\[!datetime:focus_date_time:([^\]]*)\]/g,
+    '[!datetime:focus_date:$1]'
+  );
+  
   // Migration 2: Convert status arrays to single values
   // If we find a multiselect status with multiple values, take the first one
   migrated = migrated.replace(
@@ -93,6 +99,8 @@ export function needsMigration(content: string): boolean {
   return (
     // Check for old created_date field
     content.includes('[!datetime:created_date:') ||
+    // Check for old focus_date_time field (should be focus_date)
+    content.includes('[!datetime:focus_date_time:') ||
     // Check for multiselect status fields (should be singleselect)
     content.includes('[!multiselect:status:') ||
     content.includes('[!multiselect:project-status:') ||

@@ -81,11 +81,11 @@ import { useDateTimeInsertion } from "@/hooks/useDateTimeInsertion";
 // The 'custom' field accepts user-defined formats and is parsed using the runtime's flexible parsing rules, falling back to ISO formats if parsing fails.
 
 // Create a datetime field block
-const block = createDateTimeBlock("due_date", "Due Date", "2025-01-20", false);
+const block = createDateTimeBlock("due_date", "Due Date", "2025-01-20");
 
 // Insert using the hook (editor is your BlockNote editor instance)
 const { insertDateTime } = useDateTimeInsertion(editor);
-insertDateTime("focus_date", true, "2025-01-20T14:00:00");
+insertDateTime("focus_date", "2025-01-20T14:00:00");
 ```
 
 ## GTD Integration

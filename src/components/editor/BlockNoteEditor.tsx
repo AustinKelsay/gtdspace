@@ -5,7 +5,7 @@
  * @phase 2 - Block-based WYSIWYG editor like Notion
  */
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
@@ -135,8 +135,6 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   const ignoreNextChange = useRef(false);
   // Track the last processed content to avoid unnecessary updates
   const lastProcessedContent = useRef<string>('');
-  // Store cursor position
-  const cursorPositionRef = useRef<{ block: string } | null>(null);
 
   // Handle initial content - only on mount
   useEffect(() => {
@@ -178,48 +176,16 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   // Track previous content to detect external updates
   const previousContent = useRef(content);
 
-  // Save cursor position before updates
-  const saveCursorPosition = useCallback(() => {
-    if (!editor) return;
-    try {
-      const selection = editor.getTextCursorPosition();
-      if (selection) {
-        cursorPositionRef.current = {
-          block: selection.block.id
-        };
-      }
-    } catch (e) {
-      // Cursor position might not be available
-    }
-  }, [editor]);
-
-  // Restore cursor position after updates
-  const restoreCursorPosition = useCallback(() => {
-    if (!editor || !cursorPositionRef.current) return;
-    try {
-      const { block } = cursorPositionRef.current;
-      const targetBlock = editor.document.find(b => b.id === block);
-      if (targetBlock) {
-        editor.setTextCursorPosition(targetBlock, 'end');
-      }
-    } catch (e) {
-      // Cursor restoration might fail
-    }
-  }, [editor]);
-
   // Debounced content update to avoid rapid replacements
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const debouncedContentUpdate = useCallback(
-    debounce(async (newContent: string) => {
+  // Use useMemo to create a stable debounced function
+  const debouncedContentUpdate = useMemo(
+    () => debounce(async (newContent: string) => {
       if (!editor || !initialContentLoaded.current) return;
       
       // Skip if content hasn't meaningfully changed
       if (newContent === lastProcessedContent.current) return;
       
       try {
-        // Save cursor position
-        saveCursorPosition();
-        
         // Set flag to ignore the onChange event from content update
         ignoreNextChange.current = true;
 
@@ -245,9 +211,8 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         editor.replaceBlocks(editor.document, processedBlocks);
         lastProcessedContent.current = newContent;
         
-        // Restore cursor position
+        // Reset flag after update
         setTimeout(() => {
-          restoreCursorPosition();
           ignoreNextChange.current = false;
         }, 50);
       } catch (error) {
@@ -255,7 +220,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         lastProcessedContent.current = newContent; // Update even on error to prevent infinite retries
       }
     }, 300), // 300ms debounce for external updates
-    [editor, saveCursorPosition, restoreCursorPosition]
+    [editor] // Only depend on editor, refs are stable
   );
 
   // Handle content updates after initial load (for real-time updates like habit history)
@@ -268,6 +233,13 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
     debouncedContentUpdate(content);
     previousContent.current = content;
   }, [content, editor, debouncedContentUpdate]);
+  
+  // Cleanup debounced function on unmount
+  useEffect(() => {
+    return () => {
+      debouncedContentUpdate.cancel();
+    };
+  }, [debouncedContentUpdate]);
 
   // Set file path in window context for SingleSelectBlock
   useEffect(() => {

@@ -114,7 +114,7 @@ const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(prop
     try {
       const spacePath = window.localStorage.getItem('gtdspace-current-path') || '';
 
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.log('ReferencesBlock: Loading files, spacePath:', spacePath);
       }
 
@@ -127,7 +127,7 @@ const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(prop
       const cabinetPath = `${spacePath}/Cabinet`;
       const somedayPath = `${spacePath}/Someday Maybe`;
 
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.log('ReferencesBlock: Loading from paths:', { cabinetPath, somedayPath });
       }
 
@@ -146,7 +146,7 @@ const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(prop
         console.error('Failed to load Someday Maybe files:', err);
       }
 
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.log('ReferencesBlock: Total loaded files:', {
           cabinet: cabinetFiles.length,
           someday: somedayFiles.length

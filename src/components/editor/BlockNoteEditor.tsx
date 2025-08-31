@@ -136,8 +136,6 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   const ignoreNextChange = useRef(false);
   // Track the last processed content to avoid unnecessary updates
   const lastProcessedContent = useRef<string>('');
-  // Track when content changes originate from user typing (internal) vs external updates
-  const isInternalChange = useRef(false);
 
   // Handle initial content - only on mount
   useEffect(() => {
@@ -175,9 +173,6 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
     };
     loadContent();
   }, [content, editor]); // Now safe to include content in deps
-
-  // Track previous content to detect external updates
-  const previousContent = useRef(content);
 
   // Debounced content update to avoid rapid replacements
   // Use useMemo to create a stable debounced function
@@ -226,23 +221,44 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
     [editor] // Only depend on editor, refs are stable
   );
 
-  // Handle content updates after initial load (for real-time updates like habit history)
+  // REMOVED: Content update useEffect that was causing typing interruptions
+  // This was triggering block reprocessing during normal typing after the isInternalChange flag reset
+  // External updates (habits, file changes) are now handled through specific events only
+  
+  // Handle habit content updates explicitly - these are real external changes that need processing
   useEffect(() => {
-    // Skip if editor not ready or content hasn't changed
-    if (!editor || !initialContentLoaded.current || content === previousContent.current) {
-      return;
-    }
+    if (!editor || !filePath) return;
     
-    // Skip if this change originated from user typing (internal) to prevent typing interruption
-    if (isInternalChange.current) {
-      previousContent.current = content; // Still update the reference to prevent stale comparisons
-      return;
-    }
-
-    // Only process external updates (file changes, habit history, etc.)
-    debouncedContentUpdate(content);
-    previousContent.current = content;
-  }, [content, editor, debouncedContentUpdate]);
+    const handleHabitContentChanged = async (event: CustomEvent<{ filePath: string }>) => {
+      // Only process if this is for the current file
+      if (event.detail.filePath === filePath && initialContentLoaded.current) {
+        try {
+          // Check if we're in Tauri context before using Tauri APIs
+          const { isTauriContext } = await import('@/utils/tauri-ready');
+          if (!isTauriContext()) {
+            console.warn('Habit content update skipped - not in Tauri context');
+            return;
+          }
+          
+          // Read fresh content from disk instead of using potentially stale prop
+          // This avoids stale closure issues where 'content' might be outdated
+          const { invoke } = await import('@tauri-apps/api/core');
+          const freshContent = await invoke<string>('read_text_file', { path: filePath });
+          
+          // Use the fresh content for the update
+          debouncedContentUpdate(freshContent);
+        } catch (error) {
+          console.error('Failed to read habit content for update:', error);
+        }
+      }
+    };
+    
+    window.addEventListener('habit-content-changed', handleHabitContentChanged as EventListener);
+    
+    return () => {
+      window.removeEventListener('habit-content-changed', handleHabitContentChanged as EventListener);
+    };
+  }, [editor, filePath, debouncedContentUpdate]); // No 'content' in deps - we read fresh from disk
 
   // Cleanup debounced function on unmount
   useEffect(() => {
@@ -353,14 +369,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         }
 
         // No typing activity emission - auto-save removed for smooth typing
-        
-        // Mark this as an internal change (user typing) to prevent content update useEffect from triggering
-        isInternalChange.current = true;
-        
-        // Clear the internal change flag after a short delay to allow external updates
-        setTimeout(() => {
-          isInternalChange.current = false;
-        }, 500);
+        // No content update useEffect - typing won't trigger block reprocessing
 
         onChange(markdown);
       } catch (error) {

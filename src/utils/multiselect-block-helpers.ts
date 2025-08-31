@@ -60,3 +60,42 @@ export function serializeMultiselectsToMarkers(markdown: string): string {
   }
   return processedMarkdown;
 }
+
+/**
+ * Deserializes multiselect markers back into HTML format for the editor.
+ * This is the reverse of serializeMultiselectsToMarkers.
+ * Safe to run multiple times - returns input unchanged if no markers present.
+ * @param markdown The markdown content potentially containing multiselect markers.
+ * @returns Markdown content with multiselect markers converted to HTML blocks.
+ */
+export function deserializeMarkersToMultiselects(markdown: string): string {
+  // Pattern to match multiselect markers like [!multiselect:tags:urgent,important]
+  const multiSelectMarkerPattern = /\[!multiselect:([^:]+):([^\]]*)\]/g;
+  let processedMarkdown = markdown;
+  let match;
+  
+  while ((match = multiSelectMarkerPattern.exec(markdown)) !== null) {
+    try {
+      const type = match[1];
+      const valueStr = match[2] || '';
+      const values = valueStr ? valueStr.split(',').filter(v => v.trim()) : [];
+      
+      // Create the HTML format that the editor expects
+      const data = {
+        type,
+        value: values
+      };
+      
+      // Escape quotes in JSON string for HTML attribute
+      const jsonStr = JSON.stringify(data).replace(/"/g, '\\"');
+      const htmlBlock = `<div data-multiselect='${jsonStr}' class="multiselect-block">${type}: ${values.join(', ')}</div>`;
+      
+      // Replace the marker with HTML block
+      processedMarkdown = processedMarkdown.replace(match[0], htmlBlock);
+    } catch (e) {
+      console.error('Error deserializing multiselect marker:', e, 'Marker:', match[0]);
+    }
+  }
+  
+  return processedMarkdown;
+}

@@ -209,7 +209,7 @@ The release scripts (`scripts/safe-release.js`) include safety checks:
 1. Verifies clean git status (no uncommitted changes)
 2. Ensures on correct branch (main/staging)
 3. Validates version bump type (patch/minor/major)
-4. Updates version in package.json and Cargo.toml
+4. Updates version in package.json, Cargo.toml, and src-tauri/tauri.conf.json
 5. Creates git tag only at HEAD
 6. Triggers GitHub Actions for multi-platform builds
 

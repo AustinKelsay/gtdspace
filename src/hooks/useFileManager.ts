@@ -8,7 +8,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useSettings } from '@/hooks/useSettings';
 // Performance monitoring and caching removed during simplification
-import { serializeMultiselectsToMarkers } from '@/utils/multiselect-block-helpers';
+import { serializeMultiselectsToMarkers, deserializeMarkersToMultiselects } from '@/utils/multiselect-block-helpers';
 import type { 
   MarkdownFile, 
   FileOperationResult, 
@@ -171,8 +171,10 @@ export const useFileManager = () => {
       console.log('Loading file:', file.path);
       
       // Load from file system
-      const content = await invoke<string>('read_file', { path: file.path });
+      const rawContent = await invoke<string>('read_file', { path: file.path });
       
+      // Convert multiselect markers back to HTML format for the editor
+      const content = deserializeMarkersToMultiselects(rawContent);
       
       setState(prev => ({
         ...prev,

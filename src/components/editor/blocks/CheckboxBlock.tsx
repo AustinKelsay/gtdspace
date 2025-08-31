@@ -83,7 +83,8 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
             await new Promise(resolve => setTimeout(resolve, 100));
 
             // Emit through centralized event bus instead of custom window events
-            const fileName = filePath.split('/').pop() || '';
+            // Use the already normalized path from above
+            const fileName = normalizedPath.split('/').pop() || '';
             emitMetadataChange({
               filePath,
               fileName,

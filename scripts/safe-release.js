@@ -262,10 +262,18 @@ async function main() {
   // Step 10: Push changes and tags
   log('\n📤 Pushing changes and tags to remote...', 'yellow');
   try {
-    execCommand('git push --follow-tags');
+    // Validate tag name to prevent injection when used as an argument
+    const tagWhitelist = /^[A-Za-z0-9._-]+$/;
+    if (!tagWhitelist.test(tagName)) {
+      exitWithError(`Invalid tag name: "${tagName}". Allowed characters: A–Z, a–z, 0–9, dot, underscore, hyphen.`);
+    }
+
+    // Push the current HEAD and the tag using execFile with explicit args
+    execCommandFile('git', ['push', 'origin', 'HEAD']);
+    execCommandFile('git', ['push', 'origin', `refs/tags/${tagName}`]);
     log('✓ Pushed commits and tags to remote', 'green');
   } catch (error) {
-    exitWithError(`Failed to push commits and tags: ${error.message}`);
+    exitWithError(`Failed to push commits and tag ${tagName}: ${error.message}`);
   }
 
   // Success!

@@ -95,7 +95,11 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   // Fallback to local hook if parent didn't provide the shared one
   const { isLoading: hookIsLoading, loadProjects: hookLoadProjects } = useGTDSpace();
   const isLoading = isLoadingProp ?? hookIsLoading;
-  const loadProjects = loadProjectsProp ?? hookLoadProjects;
+  // Memoize loadProjects to prevent unnecessary re-renders
+  const loadProjects = React.useMemo(
+    () => loadProjectsProp ?? hookLoadProjects,
+    [loadProjectsProp, hookLoadProjects]
+  );
   const { updateHabitStatus } = useHabitTracking();
   const [showProjectDialog, setShowProjectDialog] = React.useState(false);
   const [showActionDialog, setShowActionDialog] = React.useState(false);
@@ -103,7 +107,6 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   const [activeTab, setActiveTab] = React.useState('overview');
   const [habits, setHabits] = React.useState<GTDHabit[]>([]);
   const [horizonFileCounts, setHorizonFileCounts] = React.useState<Record<string, number>>({});
-  const [, setLocalProjects] = React.useState<GTDProject[]>([]);
   const [actionSummary, setActionSummary] = React.useState({
     total: 0,
     inProgress: 0,
@@ -127,22 +130,27 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     }
   }, [gtdSpace?.root_path, horizonFilesList]);
 
+  // Track if we've already loaded data for this path
+  const loadedPathRef = React.useRef<string | null>(null);
+
   // Batch all initial data loading into one effect to reduce re-renders
   React.useEffect(() => {
     const loadAllData = async () => {
       if (!gtdSpace?.root_path) return;
+      
+      // Skip if we already loaded data for this path
+      if (loadedPathRef.current === gtdSpace.root_path) return;
+      
+      loadedPathRef.current = gtdSpace.root_path;
 
       // Use Promise.allSettled to load all data in parallel
       await Promise.allSettled([
-        // Load projects if needed
+        // Load projects
         (async () => {
-          // Avoid redundant reloads if projects already present
-          if (Array.isArray(gtdSpace.projects) && gtdSpace.projects.length > 0) return;
           try {
-            const projects = await loadProjects(gtdSpace.root_path);
-            setLocalProjects(projects);
+            await loadProjects(gtdSpace.root_path);
           } catch (error) {
-            setLocalProjects([]);
+            // Error already handled by loadProjects
           }
         })(),
 
@@ -281,7 +289,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
     loadAllData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gtdSpace?.root_path, loadProjects]); // Intentionally omit gtdSpace.projects to prevent infinite loop
+  }, [gtdSpace?.root_path]); // Only re-run when root_path changes, not when loadProjects changes
 
   // Load action summary across all projects
   React.useEffect(() => {

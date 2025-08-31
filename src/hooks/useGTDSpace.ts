@@ -319,14 +319,15 @@ export function useGTDSpace() {
           // Calculate total actions
           const totalActions = projects.reduce((sum, project) => sum + (project.action_count || 0), 0);
           
-          // Update space state with loaded projects
-          setGTDSpace({
+          // Update space state with loaded projects - use functional update to preserve other state
+          setGTDSpace(prev => ({
+            ...prev,
             root_path: spacePath,
             is_initialized: true,
             isGTDSpace: true,
             projects,
             total_actions: totalActions,
-          });
+          }));
           
           // State updated
           

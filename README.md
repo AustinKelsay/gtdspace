@@ -192,6 +192,7 @@ See [GTD Implementation](docs/GTD_IMPLEMENTATION.md) for detailed usage.
 | Insert Due Date        | `Ctrl/Cmd+Alt+D`     |
 | Insert Focus DateTime  | `Ctrl/Cmd+Alt+T`     |
 | Insert Created Date    | `Ctrl/Cmd+Alt+C`     |
+| Insert Contexts Field  | `Ctrl/Cmd+Shift+C`   |
 | Insert References      | `Ctrl/Cmd+Alt+R`     |
 | Insert Areas Ref       | `Ctrl/Cmd+Alt+A`     |
 | Insert Goals Ref       | `Ctrl/Cmd+Alt+G`     |

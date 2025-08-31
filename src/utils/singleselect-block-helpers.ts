@@ -47,7 +47,7 @@ export const mapStatusValue = (status: string): string => {
     'Active': 'in-progress',
     'Planning': 'in-progress',
     'On Hold': 'waiting',
-    'Cancelled': 'cancelled',
+    'Cancelled': 'completed',  // Map cancelled to completed as we only have 3 states
   };
   
   return statusMap[status] || status.toLowerCase().replace(/\s+/g, '-');

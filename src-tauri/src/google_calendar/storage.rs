@@ -85,10 +85,18 @@ impl TokenStorage {
 
         // Create a unique temporary file name to avoid collisions
         let temp_path = path.with_extension(format!("tmp.{}", uuid::Uuid::new_v4()));
-        fs::write(&temp_path, &json).await?;
 
-        // Ensure data is written to disk
-        let file = tokio::fs::File::open(&temp_path).await?;
+        // Open temp file with write permissions and write data using same handle
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&temp_path)
+            .await?;
+
+        // Write data and sync using the same file handle for durability
+        use tokio::io::AsyncWriteExt;
+        file.write_all(json.as_bytes()).await?;
         file.sync_all().await?;
         drop(file);
 
@@ -255,10 +263,18 @@ impl TokenStorage {
 
         // Create a unique temporary file name to avoid collisions
         let temp_path = path.with_extension(format!("tmp.{}", uuid::Uuid::new_v4()));
-        fs::write(&temp_path, &json).await?;
 
-        // Ensure data is written to disk
-        let file = tokio::fs::File::open(&temp_path).await?;
+        // Open temp file with write permissions and write data using same handle
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&temp_path)
+            .await?;
+
+        // Write data and sync using the same file handle for durability
+        use tokio::io::AsyncWriteExt;
+        file.write_all(json.as_bytes()).await?;
         file.sync_all().await?;
         drop(file);
 

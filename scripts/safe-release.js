@@ -268,7 +268,7 @@ async function main() {
     exitWithError(`Failed to push commits: ${error.message}`);
   }
 
-  log(`\n📤 Pushing tag ${tagName} to remote...`, 'yellow');
+  log('\n📤 Pushing tag to remote...', 'yellow');
   try {
     execCommandFile('git', ['push', 'origin', tagName]);
     log(`✓ Pushed tag ${tagName} to remote`, 'green');

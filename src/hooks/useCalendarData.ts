@@ -171,11 +171,10 @@ export const useCalendarData = (
             try {
               let content = await invoke<string>('read_file', { path: file.path });
               
-              // Apply migrations if needed
+              // Apply migrations in-memory only (don't auto-save to avoid file churn)
               if (needsMigration(content)) {
                 content = migrateMarkdownContent(content);
-                // Auto-save migrated content
-                await invoke('save_file', { path: file.path, content });
+                // Note: Migration is applied for display only, not saved to disk
               }
               
               const projectName = file.path.split('/Projects/')[1]?.split('/')[0] || '';
@@ -208,11 +207,10 @@ export const useCalendarData = (
             try {
               let content = await invoke<string>('read_file', { path: file.path });
               
-              // Apply migrations if needed
+              // Apply migrations in-memory only (don't auto-save to avoid file churn)
               if (needsMigration(content)) {
                 content = migrateMarkdownContent(content);
-                // Auto-save migrated content
-                await invoke('save_file', { path: file.path, content });
+                // Note: Migration is applied for display only, not saved to disk
               }
               
               const pathParts = file.path.split('/');
@@ -252,11 +250,10 @@ export const useCalendarData = (
             try {
               let content = await invoke<string>('read_file', { path: file.path });
               
-              // Apply migrations if needed
+              // Apply migrations in-memory only (don't auto-save to avoid file churn)
               if (needsMigration(content)) {
                 content = migrateMarkdownContent(content);
-                // Auto-save migrated content
-                await invoke('save_file', { path: file.path, content });
+                // Note: Migration is applied for display only, not saved to disk
               }
               
               const habitName = file.path.split('/').pop()?.replace('.md', '') || '';

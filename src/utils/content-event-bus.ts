@@ -28,7 +28,7 @@ class ContentEventBus {
   private listeners: Map<ContentEventType, Set<EventCallback>> = new Map();
   private fileMetadataCache: Map<string, FileMetadata> = new Map();
   private isEmitting = false;
-  private pendingCascade = false; // Separate flag for async cascade emissions
+  private pendingCascades = new Map<string, boolean>(); // Track pending cascades per file
   private recentEvents = new Map<string, number>(); // Track recent events to prevent cascading
 
   /**
@@ -98,14 +98,15 @@ class ContentEventBus {
     }
     
     // Also emit to general content:changed for any content change
-    // Use separate flag to prevent recursive cascade emissions
+    // Track pending cascades per file to avoid dropping concurrent events
     if (eventType !== 'content:changed' && eventType.startsWith('content:')) {
-      if (!this.pendingCascade) {
-        this.pendingCascade = true;
+      const cascadeKey = `content:changed:${event.filePath}`;
+      if (!this.pendingCascades.get(cascadeKey)) {
+        this.pendingCascades.set(cascadeKey, true);
         // Use queueMicrotask for minimal delay while ensuring async execution
         queueMicrotask(() => {
           this.emit('content:changed', event);
-          this.pendingCascade = false;
+          this.pendingCascades.delete(cascadeKey);
         });
       }
     }

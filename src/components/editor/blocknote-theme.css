@@ -298,15 +298,22 @@
   font-weight: 500;
 }
 
+/*
+ * Restore legacy ‘complete’ selectors and improve light-mode status color contrast
+ * Add td[data-status="complete"] and .status-complete alongside existing completed/todo rules for back-compat.
+ * Change light-mode green to rgb(21 128 61) and amber to rgb(180 83 9) (green-700/amber-700) to raise contrast from 2.28/2.15 up to 5.02 for WCAG 4.5:1 compliance.
+ */
 /* Color coding for status values - using data attributes and classes */
+.bn-block-content td[data-status="complete"],
+.bn-block-content td.status-complete,
 .bn-block-content td[data-status="completed"],
 .bn-block-content td.status-completed {
-  color: rgb(34 197 94);
+  color: rgb(21 128 61); /* Changed from rgb(34 197 94) for WCAG 4.5:1 compliance */
 }
 
 .bn-block-content td[data-status="todo"],
 .bn-block-content td.status-todo {
-  color: rgb(245 158 11);
+  color: rgb(180 83 9); /* Changed from rgb(245 158 11) for WCAG 4.5:1 compliance */
 }
 
 /* Action column styling */
@@ -445,21 +452,21 @@
 }
 
 /* Scrollbar styling */
-.bn-editor::-webkit-scrollbar {
+.bn-container::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-.bn-editor::-webkit-scrollbar-track {
+.bn-container::-webkit-scrollbar-track {
   background: rgb(var(--background));
 }
 
-.bn-editor::-webkit-scrollbar-thumb {
+.bn-container::-webkit-scrollbar-thumb {
   background: rgb(var(--border));
   border-radius: 4px;
 }
 
-.bn-editor::-webkit-scrollbar-thumb:hover {
+.bn-container::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--muted-foreground));
 }
 

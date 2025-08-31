@@ -412,7 +412,7 @@ export function useGTDSpace() {
         }
       },
       500, // 500ms debounce to batch rapid calls
-      { leading: true, trailing: true } // Execute on first call and after delay
+      { leading: true, trailing: true, maxWait: 1000 } // Run immediately and flush the last call within the window
     ),
     [loadProjectsInternal]
   );

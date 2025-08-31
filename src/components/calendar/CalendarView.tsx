@@ -356,11 +356,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           const end = endDate ? (typeof endDate === 'string' ? parseISO(endDate) : endDate) : null;
           
           if (isValid(date)) {
-            // Extract time if it's a datetime
-            const timeMatch = startDate.match(/T(\d{2}:\d{2})/);
+            // Format time from the Date object to get local time, not UTC
             let formattedTime: string | undefined;
-            if (timeMatch) {
-              const [hours, minutes] = timeMatch[1].split(':').map(Number);
+            // Check if this has a time component (not just a date)
+            if (startDate.includes('T') && !startDate.endsWith('T00:00:00')) {
+              const hours = date.getHours();
+              const minutes = date.getMinutes();
               const period = hours >= 12 ? 'PM' : 'AM';
               const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
               formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
@@ -372,10 +373,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             if (end && isValid(end)) {
               duration = Math.round((end.getTime() - date.getTime()) / (1000 * 60)); // Duration in minutes
               
-              // Format end time
-              const endTimeMatch = endDate?.match(/T(\d{2}:\d{2})/);
-              if (endTimeMatch) {
-                const [endHours, endMinutes] = endTimeMatch[1].split(':').map(Number);
+              // Format end time from Date object for local time
+              if (endDate && typeof endDate === 'string' && endDate.includes('T') && !endDate.endsWith('T00:00:00')) {
+                const endHours = end.getHours();
+                const endMinutes = end.getMinutes();
                 const endPeriod = endHours >= 12 ? 'PM' : 'AM';
                 const displayEndHours = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours;
                 endTimeFormatted = `${displayEndHours}:${endMinutes.toString().padStart(2, '0')} ${endPeriod}`;
@@ -412,12 +413,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         // Extract time from focus_date if available
         let timeString: string | undefined;
         let formattedTime: string | undefined;
-        if (item.focus_date) {
-          const timeMatch = item.focus_date.match(/T(\d{2}:\d{2})/);
-          if (timeMatch) {
-            timeString = timeMatch[1];
+        if (item.focus_date && item.focus_date.includes('T') && !item.focus_date.endsWith('T00:00:00')) {
+          // Parse the date to get local time
+          const focusDate = parseISO(item.focus_date);
+          if (isValid(focusDate)) {
+            const hours = focusDate.getHours();
+            const minutes = focusDate.getMinutes();
+            timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
             // Convert to 12-hour format for display
-            const [hours, minutes] = timeString.split(':').map(Number);
             const period = hours >= 12 ? 'PM' : 'AM';
             const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
             formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
@@ -452,11 +455,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         if (item.due_date) {
           const dueDate = typeof item.due_date === 'string' ? parseISO(item.due_date) : item.due_date;
           if (isValid(dueDate)) {
-            // Extract time if it's a datetime
-            const timeMatch = item.due_date.match(/T(\d{2}:\d{2})/);
+            // Format time from the Date object to get local time, not UTC
             let formattedTime: string | undefined;
-            if (timeMatch) {
-              const [hours, minutes] = timeMatch[1].split(':').map(Number);
+            // Check if this has a time component (not just a date)
+            if (item.due_date.includes('T') && !item.due_date.endsWith('T00:00:00')) {
+              const hours = dueDate.getHours();
+              const minutes = dueDate.getMinutes();
               const period = hours >= 12 ? 'PM' : 'AM';
               const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
               formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
@@ -478,11 +482,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         if (item.focus_date) {
           const focusDate = typeof item.focus_date === 'string' ? parseISO(item.focus_date) : item.focus_date;
           if (isValid(focusDate)) {
-            // Extract time if it's a datetime
-            const timeMatch = item.focus_date.match(/T(\d{2}:\d{2})/);
+            // Format time from the Date object to get local time, not UTC
             let formattedTime: string | undefined;
-            if (timeMatch) {
-              const [hours, minutes] = timeMatch[1].split(':').map(Number);
+            // Check if this has a time component (not just a date)
+            if (item.focus_date.includes('T') && !item.focus_date.endsWith('T00:00:00')) {
+              const hours = focusDate.getHours();
+              const minutes = focusDate.getMinutes();
               const period = hours >= 12 ? 'PM' : 'AM';
               const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
               formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
@@ -499,7 +504,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               // Calculate end date/time based on duration
               endDate = new Date(focusDate.getTime() + duration * 60 * 1000);
               
-              // Format end time
+              // Format end time from Date object for local time
               const endHours = endDate.getHours();
               const endMinutes = endDate.getMinutes();
               const endPeriod = endHours >= 12 ? 'PM' : 'AM';

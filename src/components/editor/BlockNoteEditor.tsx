@@ -76,6 +76,13 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   className = '',
   filePath,
 }) => {
+  const lastEmittedMarkdownRef = useRef<string>('');
+
+  // Update lastEmittedMarkdownRef when the incoming content prop changes
+  useEffect(() => {
+    lastEmittedMarkdownRef.current = content;
+  }, [content]);
+
   // Store the current file path in a way that list blocks can access it
   React.useEffect(() => {
     if (filePath) {
@@ -371,7 +378,11 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         // No typing activity emission - auto-save removed for smooth typing
         // No content update useEffect - typing won't trigger block reprocessing
 
+        if (markdown === lastEmittedMarkdownRef.current) {
+          return;
+        }
         onChange(markdown);
+        lastEmittedMarkdownRef.current = markdown;
       } catch (error) {
         console.error('Error converting to markdown:', error);
       }

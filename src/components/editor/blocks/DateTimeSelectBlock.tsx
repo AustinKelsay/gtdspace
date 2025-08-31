@@ -26,7 +26,7 @@ interface DateTimeSelectComponentProps {
     };
   };
   editor: {
-    updateBlock: (id: string, block: unknown) => void;
+    updateBlock: (block: unknown, update: { props: Record<string, unknown> }) => void;
   };
 }
 
@@ -85,8 +85,7 @@ const DateTimeSelectComponent = React.memo<DateTimeSelectComponentProps>(functio
 
   const updateBlockValue = React.useCallback((newValue: string) => {
     try {
-      props.editor.updateBlock(props.block.id, {
-        type: 'datetime',
+      props.editor.updateBlock(props.block, {
         props: {
           ...props.block.props,
           value: newValue,
@@ -95,7 +94,7 @@ const DateTimeSelectComponent = React.memo<DateTimeSelectComponentProps>(functio
     } catch (error) {
       console.error('Error updating datetime block:', error);
     }
-  }, [props.editor, props.block.id, props.block.props]);
+  }, [props.editor, props.block]);
 
   const handleDateChange = React.useCallback((newDate: Date | undefined) => {
     if (!newDate) return;

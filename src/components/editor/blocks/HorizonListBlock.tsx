@@ -160,7 +160,10 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
           t && typeof t === 'object' && t.id === tabsData.activeTabId
         );
 
-        if (activeTab?.path && typeof activeTab.path === 'string') {
+        // Check filePath first (preferred), fallback to path if not available
+        if (activeTab?.filePath && typeof activeTab.filePath === 'string') {
+          return activeTab.filePath;
+        } else if (activeTab?.path && typeof activeTab.path === 'string') {
           return activeTab.path;
         }
       } catch (e) {
@@ -224,8 +227,13 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
 
   // Load items on mount and when list type changes
   React.useEffect(() => {
-    loadItems();
-  }, [loadItems, listType]);
+    debouncedLoadItems();
+    
+    // Cleanup: cancel any pending debounced calls on unmount
+    return () => {
+      debouncedLoadItems.cancel();
+    };
+  }, [debouncedLoadItems, listType]);
 
   // Refresh when file references are updated - use debounced version
   React.useEffect(() => {

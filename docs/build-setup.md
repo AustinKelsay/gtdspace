@@ -44,15 +44,7 @@ GTD Space requires application icons in multiple formats. You have several optio
 # Run from the project root
 npm run icons:generate
 ```
-
-**Shell script method** (requires ImageMagick):
-```bash
-# Install ImageMagick first:
-# macOS: brew install imagemagick
-# Linux: sudo apt install imagemagick
-
-npm run icons:generate
-```
+This script uses the Tauri CLI via `npx` to generate icons and does not require ImageMagick to be installed separately.
 
 #### Option 2: Use online tools
 

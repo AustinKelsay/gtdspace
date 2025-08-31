@@ -445,7 +445,7 @@ export const useTabManager = () => {
               ? { 
                   ...tab, 
                   content: newContent,
-                  hasUnsavedChanges: (tab.originalContent || tab.content) !== newContent,
+                  hasUnsavedChanges: (tab.originalContent ?? tab.content) !== newContent,
                 }
               : tab
           ),

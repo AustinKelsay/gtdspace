@@ -143,7 +143,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
 
   const handleChange = React.useCallback(async (newValue: string) => {
     const selectedValue = newValue; // Use immutable copy to avoid mutation issues
-    
+
     // If this is a habit status field, update the backend
     if (type === 'habit-status') {
       try {
@@ -178,9 +178,10 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                       value: 'todo',
                     },
                   });
-                  
+
                   // Emit reset event so consumers see the persisted state
-                  const fileName = currentPath.split('/').pop() || '';
+                  const normalizedForName = currentPath.replace(/\\/g, '/');
+                  const fileName = normalizedForName.split('/').pop() || '';
                   emitMetadataChange({
                     filePath: currentPath,
                     fileName,
@@ -193,7 +194,8 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
             }
 
             // Emit initial status change event
-            const fileName = currentPath.split('/').pop() || '';
+            const normalizedForName = currentPath.replace(/\\/g, '/');
+            const fileName = normalizedForName.split('/').pop() || '';
             emitMetadataChange({
               filePath: currentPath,
               fileName,

@@ -108,20 +108,26 @@ export const GTDTagSelector: React.FC<GTDTagSelectorProps> = ({
     }
   };
 
-  // For contexts, ensure the UI receives '@'-prefixed values for matching options,
+  // For contexts and 'all' type, ensure the UI receives '@'-prefixed values for matching options,
   // but propagate normalized values without '@' to callers.
   const displayValue = React.useMemo(() => {
-    if (type !== 'contexts') return value;
-    return (value || []).map(v => (v.startsWith('@') ? v : `@${v}`));
+    if (type !== 'contexts' && type !== 'all') return value;
+    const contextSet = new Set(GTD_CONTEXTS.map(o => o.value)); // includes values like '@computer'
+    return (value || []).map(v => {
+      // Normalize only if this is a context tag (with/without @)
+      const hasAt = v.startsWith('@');
+      const normalized = hasAt ? v : `@${v}`;
+      return contextSet.has(normalized) ? normalized : v; // leave non-contexts untouched
+    });
   }, [type, value]);
 
   const handleChange = React.useCallback((newValue: string[]) => {
     if (!onValueChange) return;
-    if (type !== 'contexts') {
+    if (type !== 'contexts' && type !== 'all') {
       onValueChange(newValue);
       return;
     }
-    // Propagate values without '@' for storage/markers
+    // For contexts and 'all' type, propagate values without '@' for storage/markers
     const withoutAt = newValue.map(v => (v.startsWith('@') ? v.slice(1) : v));
     onValueChange(withoutAt);
   }, [onValueChange, type]);
@@ -130,8 +136,8 @@ export const GTDTagSelector: React.FC<GTDTagSelectorProps> = ({
   return (
     <MultiSelect
       options={getOptions()}
-      value={type === 'contexts' ? displayValue : value}
-      onValueChange={type === 'contexts' ? handleChange : onValueChange}
+      value={(type === 'contexts' || type === 'all') ? displayValue : value}
+      onValueChange={(type === 'contexts' || type === 'all') ? handleChange : onValueChange}
       placeholder={getPlaceholder()}
       searchPlaceholder="Search tags..."
       maxCount={maxCount}

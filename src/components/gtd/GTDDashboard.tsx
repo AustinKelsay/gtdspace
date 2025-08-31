@@ -280,7 +280,8 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     };
 
     loadAllData();
-  }, [gtdSpace?.root_path, gtdSpace?.projects, loadProjects]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gtdSpace?.root_path, loadProjects]); // Intentionally omit gtdSpace.projects to prevent infinite loop
 
   // Load action summary across all projects
   React.useEffect(() => {
@@ -434,13 +435,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     };
   }, [habits]);
 
-  // Refresh data
-  React.useEffect(() => {
-    if (currentFolder && gtdSpace?.isGTDSpace) {
-      loadProjects(currentFolder);
-      // TODO: Load habits when habit loading is implemented
-    }
-  }, [currentFolder, gtdSpace?.isGTDSpace, loadProjects]);
+  // Removed duplicate useEffect - data loading is already handled in the main effect above
 
   const getProjectCompletion = (project: GTDProject): number => {
     const statusStr = project.status || '';
@@ -496,18 +491,8 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     );
   };
 
-  // Debug logging
-  console.log('[GTDDashboard] Render check:', {
-    currentFolder,
-    gtdSpace,
-    isGTDSpace: gtdSpace?.isGTDSpace,
-    projects: gtdSpace?.projects?.length,
-    root_path: gtdSpace?.root_path,
-    is_initialized: gtdSpace?.is_initialized
-  });
 
   if (!currentFolder || !gtdSpace?.isGTDSpace) {
-    console.log('[GTDDashboard] Showing no space message - currentFolder:', currentFolder, 'isGTDSpace:', gtdSpace?.isGTDSpace, 'gtdSpace:', gtdSpace);
     return (
       <div className={`flex items-center justify-center h-full ${className}`}>
         <Card className="max-w-md">

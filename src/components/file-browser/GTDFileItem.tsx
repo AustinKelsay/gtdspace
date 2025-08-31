@@ -73,6 +73,22 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
   const [gtdMetadata, setGtdMetadata] = useState<GTDMetadata>({ type: 'regular' });
   const { withErrorHandling } = useErrorHandler();
 
+  const normalizeStatus = (status: string | undefined): string | undefined => {
+    if (!status) return undefined;
+    const statusMappings: Record<string, string> = {
+        'not-started': 'in-progress',
+        'active': 'in-progress',
+        'planning': 'in-progress',
+        'on-hold': 'waiting',
+        'waiting-for': 'waiting',
+        'cancelled': 'completed',
+        'done': 'completed',
+        'complete': 'completed',
+    };
+    const normalized = status.toLowerCase().trim().replace(/\s+/g, '-');
+    return statusMappings[normalized] || normalized;
+  }
+
   // === GTD DETECTION ===
   
   useEffect(() => {
@@ -89,7 +105,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
             const metadata = parseProjectMetadata(content);
             setGtdMetadata({
               type: 'project',
-              status: metadata.status,
+              status: normalizeStatus(metadata.status),
               dueDate: metadata.dueDate,
               description: metadata.description
             });
@@ -110,7 +126,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
             const metadata = parseActionMetadata(content);
             setGtdMetadata({
               type: 'action',
-              status: metadata.status,
+              status: normalizeStatus(metadata.status),
               dueDate: metadata.dueDate,
               effort: metadata.effort
             });
@@ -168,7 +184,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
 
   const parseActionMetadata = (content: string): Partial<GTDMetadata> => {
     const lines = content.split('\n');
-    let status = 'In Progress';
+    let status = 'in-progress';
     let dueDate = null;
     let effort = 'Medium';
     let currentSection = '';
@@ -243,9 +259,9 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
     switch (gtdMetadata.status?.toLowerCase()) {
       case 'completed':
         return <CheckCircle2 className="h-4 w-4 text-green-600" />;
-      case 'in progress':
+      case 'in-progress':
         return <Circle className="h-4 w-4 text-blue-600" />;
-      case 'on hold':
+      case 'waiting':
         return <Clock className="h-4 w-4 text-yellow-600" />;
       default:
         return <Circle className="h-4 w-4 text-gray-400" />;
@@ -254,12 +270,11 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
 
   const getStatusColor = () => {
     switch (gtdMetadata.status?.toLowerCase()) {
-      case 'active':
-      case 'in progress':
+      case 'in-progress':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
       case 'completed':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      case 'on hold':
+      case 'waiting':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';

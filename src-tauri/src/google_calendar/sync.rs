@@ -71,8 +71,8 @@ impl CalendarSyncManager {
                     .list(calendar_id)
                     .single_events(true)
                     .order_by("startTime")
-                    .time_min(effective_min)
-                    .time_max(effective_max);
+                    .time_min(effective_min.clone())
+                    .time_max(effective_max.clone());
 
                 if let Some(token) = &page_token {
                     call = call.page_token(token);

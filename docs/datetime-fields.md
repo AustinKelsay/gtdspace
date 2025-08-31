@@ -65,7 +65,13 @@ import {
 import { useDateTimeInsertion } from "@/hooks/useDateTimeInsertion";
 
 // Valid DateTimeFieldType values you can use:
-// 'created_date_time' | 'modified_date' | 'due_date' | 'focus_date' | 'completed_date' | 'custom'
+//   'created_date_time'
+// | 'created_date'      // Legacy alias, normalized to created_date_time
+// | 'modified_date'
+// | 'due_date'
+// | 'focus_date'
+// | 'completed_date'
+// | 'custom'
 //
 // Note: The runtime determines time inclusion based on the field type and ISO format.
 // Fields intended to include time (e.g., created_date_time, modified_date) require ISO date-time format (YYYY-MM-DDTHH:mm:ssZ).

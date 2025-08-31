@@ -110,9 +110,9 @@ export function dateTimeBlockToMarkdown(
   
   if (type === 'focus_date') {
     fieldType = 'focus_date';
-  } else if (type === 'due_date' || type === 'completed_date') {
+  } else if (type === 'due_date' || type === 'completed_date' || type === 'modified_date') {
     fieldType = type;
-    // enforce date-only for due_date and completed_date
+    // enforce date-only for due_date, completed_date, and modified_date
     outValue = value && hasTime ? value.split('T')[0] : value;
   } else if (type === 'created_date' || type === 'created_date_time') {
     // Canonicalize both created_date and created_date_time to created_date_time

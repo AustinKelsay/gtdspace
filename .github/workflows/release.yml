@@ -65,6 +65,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push tags
-        run: git push --tags
+        run: |
+          # Only push tags that point at HEAD
+          tags_at_head=$(git tag --points-at HEAD)
+          if [ -n "$tags_at_head" ]; then
+            echo "Pushing tags: $tags_at_head"
+            echo "$tags_at_head" | xargs git push origin
+          else
+            echo "No tags at HEAD to push"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

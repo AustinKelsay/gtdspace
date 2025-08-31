@@ -409,7 +409,11 @@ pub fn generate_project_readme_with_refs(
     goals_refs: &str,
     general_refs: &str,
 ) -> String {
-    let due_date_str = due_date.as_deref().unwrap_or("Not set");
+    let due_date_section = match due_date {
+        Some(date) => format!("\n## Due Date\n[!datetime:due_date:{}]\n", date),
+        None => String::new(),
+    };
+
     format!(
         r#"# {}
 
@@ -439,11 +443,7 @@ Actions for this project are stored as individual markdown files in this directo
         name,
         description,
         status,
-        if due_date_str != "Not set" {
-            format!("\n## Due Date\n[!datetime:due_date:{}]\n", due_date_str)
-        } else {
-            String::from("")
-        },
+        due_date_section,
         Local::now().to_rfc3339(),
         areas_refs,
         goals_refs,

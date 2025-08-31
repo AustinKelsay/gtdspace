@@ -197,8 +197,30 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                   }
 
                   // Final fallback: use file last_modified timestamp if no created date found
-                  if (!createdDateTime) {
-                    createdDateTime = new Date(file.last_modified).toISOString();
+                  if (!createdDateTime && file.last_modified != null) {
+                    const lastModTimestamp = Number(file.last_modified);
+                    if (Number.isFinite(lastModTimestamp) && lastModTimestamp > 0) {
+                      // Convert seconds to milliseconds if needed
+                      const timestampMs = lastModTimestamp < 1e12 ? lastModTimestamp * 1000 : lastModTimestamp;
+                      const lastModDate = new Date(timestampMs);
+                      if (!isNaN(lastModDate.getTime())) {
+                        createdDateTime = lastModDate.toISOString();
+                      }
+                    }
+                  }
+
+                  // Validate and normalize last_modified for last_updated field
+                  let lastUpdatedTime: string | undefined;
+                  if (file.last_modified != null) {
+                    const lastModTimestamp = Number(file.last_modified);
+                    if (Number.isFinite(lastModTimestamp) && lastModTimestamp > 0) {
+                      // Convert seconds to milliseconds if needed
+                      const timestampMs = lastModTimestamp < 1e12 ? lastModTimestamp * 1000 : lastModTimestamp;
+                      const lastModDate = new Date(timestampMs);
+                      if (!isNaN(lastModDate.getTime())) {
+                        lastUpdatedTime = lastModDate.toISOString();
+                      }
+                    }
                   }
 
                   return {
@@ -208,7 +230,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                       ? (checkboxStatus[1] === 'true' ? 'completed' : 'todo')
                       : ((singleselectStatus?.[1] || 'todo') as 'todo' | 'completed'),
                     path: file.path,
-                    last_updated: new Date(file.last_modified).toISOString(),
+                    last_updated: lastUpdatedTime || new Date().toISOString(),
                     created_date_time: createdDateTime
                   };
                 } catch (error) {

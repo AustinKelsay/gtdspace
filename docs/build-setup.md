@@ -189,10 +189,14 @@ If the build succeeds but no installer is created, check the `bundle` configurat
 A correct configuration should look similar to this, ensuring `active` is `true` and `targets` is an array of desired formats:
 
 ```json
-"bundle": {
-  "active": true,
-  "targets": ["msi", "dmg", "appimage", "deb"],
-  "identifier": "com.gtd.space"
+{
+  "tauri": {
+    "bundle": {
+      "active": true,
+      "targets": ["msi", "dmg", "appimage", "deb"],
+      "identifier": "com.gtd.space"
+    }
+  }
 }
 ```
 

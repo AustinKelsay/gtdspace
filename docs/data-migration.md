@@ -44,6 +44,7 @@ GTD Space includes automatic data migration to handle breaking changes and ensur
 - `waiting-for` → `waiting`
 - `cancelled` → `completed`
 - `done` → `completed`
+- `complete` → `completed`
 
 ## How Migration Works
 

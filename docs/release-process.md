@@ -4,7 +4,7 @@ This document outlines the process for creating and publishing new releases of G
 
 ## Overview
 
-GTD Space uses GitHub Actions to automate the build and release process. When you push a version tag to GitHub, the CI/CD pipeline automatically:
+GTD Space uses GitHub Actions to automate the build and release process. When you push a version tag prefixed with "v" (e.g., v1.2.3) to GitHub, the CI/CD pipeline automatically:
 
 1. Builds the application for all platforms (Windows, macOS Intel, macOS Apple Silicon, Linux)
 2. Creates a GitHub Release with all artifacts

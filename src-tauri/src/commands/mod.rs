@@ -3026,7 +3026,7 @@ pub fn create_gtd_action(
             .iter()
             .map(|c| match c.as_str() {
                 "Home" => "home".to_string(),
-                "Office" => "office".to_string(), 
+                "Office" => "office".to_string(),
                 "Computer" => "computer".to_string(),
                 "Phone" => "phone".to_string(),
                 "Errands" => "errands".to_string(),

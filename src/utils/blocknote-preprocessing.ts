@@ -159,7 +159,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
     });
   });
   
-  // Pattern to match multiselect markers in markdown (e.g., [!multiselect:status:not-started])
+  // Pattern to match multiselect markers in markdown (e.g., [!multiselect:tags:urgent,important])
   const multiSelectMarkerPattern = /\[!multiselect:([^:]+):([^\]]+)\]/g;
   // Pattern to match HTML multiselect blocks (legacy support)
   const multiSelectHTMLPattern = /<div\s+data-multiselect='([^']+)'\s+class="multiselect-block">([^<]+)<\/div>/g;

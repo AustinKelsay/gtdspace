@@ -81,7 +81,7 @@ pub fn generate_goal_template_with_refs(
     } else {
         String::new()
     };
-    
+
     format!(
         r#"# {}
 
@@ -465,8 +465,7 @@ pub fn generate_action_template(
 ## Status
 [!singleselect:status:{}]
 "#,
-        name,
-        status
+        name, status
     );
 
     // Only add focus date section if provided

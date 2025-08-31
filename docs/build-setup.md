@@ -51,8 +51,7 @@ npm run icons:generate
 # macOS: brew install imagemagick
 # Linux: sudo apt install imagemagick
 
-cd src-tauri/icons
-./generate-icons.sh
+npm run icons:generate
 ```
 
 #### Option 2: Use online tools

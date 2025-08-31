@@ -6,6 +6,7 @@ name: Build and Release
     tags:
       - "v*"
   workflow_dispatch:
+    branches: [main, staging]
     inputs:
       version:
         description: "Version to release (e.g., v0.1.0)"

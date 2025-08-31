@@ -54,7 +54,7 @@ function escapePlain(str: string): string {
  * Generates HTML markup for a multiselect field that BlockNote can parse
  */
 export function generateMultiSelectMarkup(
-  type: 'status' | 'effort' | 'project-status',
+  type: 'tags' | 'contexts' | 'categories' | 'custom',
   label: string,
   value: string[],
   options?: { placeholder?: string; maxCount?: number }
@@ -81,7 +81,7 @@ export function generateMultiSelectMarkup(
  * Generates HTML markup for a single select field that BlockNote can parse
  */
 export function generateSingleSelectMarkup(
-  type: 'status' | 'effort' | 'project-status',
+  type: 'status' | 'effort' | 'project-status' | 'habit-frequency' | 'habit-status',
   label: string,
   value: string,
   options?: { placeholder?: string }

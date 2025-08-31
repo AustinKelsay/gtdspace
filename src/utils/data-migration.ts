@@ -49,7 +49,18 @@ export function migrateMarkdownContent(content: string): string {
     }
   );
   
-  // Migration 4: Map old status values to canonical tokens
+  // Migration 4: Convert effort multiselect to singleselect (effort should be single value)
+  migrated = migrated.replace(
+    /\[!multiselect:effort:([^\]]+)\]/g,
+    (match, values) => {
+      const effortList = values.split(',').map((s: string) => s.trim());
+      const primaryEffort = effortList[0] || 'medium';
+      // Convert to single select format
+      return `[!singleselect:effort:${primaryEffort}]`;
+    }
+  );
+  
+  // Migration 5: Map old status values to canonical tokens
   const statusMappings: Record<string, string> = {
     'not-started': 'in-progress',
     'active': 'in-progress',

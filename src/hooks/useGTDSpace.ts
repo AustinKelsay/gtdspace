@@ -205,9 +205,9 @@ export function useGTDSpace() {
       try {
         const result = await withErrorHandling(
           async () => {
-            // If contexts array is provided, use the first one as the primary context
-            const primaryContext = params.contexts && params.contexts.length > 0 
-              ? params.contexts[0] 
+            // Pass the full contexts array to support multiselect
+            const contextsArray = params.contexts && params.contexts.length > 0 
+              ? params.contexts 
               : undefined;
             
             const actionPath = await invoke<string>('create_gtd_action', {
@@ -217,7 +217,7 @@ export function useGTDSpace() {
               focusDate: params.focus_date || undefined,
               dueDate: params.due_date || undefined,
               effort: params.effort,
-              context: primaryContext,
+              contexts: contextsArray,
             });
             
             return actionPath;

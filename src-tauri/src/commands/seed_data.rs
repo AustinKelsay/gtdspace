@@ -478,7 +478,7 @@ pub fn generate_action_template(
     focus_date: Option<String>,
     due_date: Option<String>,
     effort: &str,
-    context: Option<String>,
+    contexts: Option<Vec<String>>,
 ) -> String {
     let mut template = format!(
         r#"# {}
@@ -517,14 +517,18 @@ pub fn generate_action_template(
         effort
     ));
 
-    // Add context field if provided, default to "anywhere" if not
-    let context_value = context.unwrap_or_else(|| "anywhere".to_string());
+    // Add contexts multiselect field (supports multiple contexts)
+    let contexts_value = if let Some(ctx_vec) = contexts {
+        ctx_vec.join(",")
+    } else {
+        String::new() // Empty for multiselect - users can add contexts later
+    };
     template.push_str(&format!(
         r#"
-## Context
-[!singleselect:context:{}]
+## Contexts
+[!multiselect:contexts:{}]
 "#,
-        context_value
+        contexts_value
     ));
 
     template.push_str(&format!(

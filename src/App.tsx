@@ -61,7 +61,8 @@ function isUnder(p?: string | null, dir?: string | null): boolean {
 }
 
 function isHabitPath(p?: string | null): boolean {
-  return !!p && isUnder(p, '/habits/');
+  const normalized = p?.replace(/\\/g, '/');
+  return !!normalized && normalized.includes('/habits/');
 }
 
 /**

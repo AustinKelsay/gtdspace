@@ -74,7 +74,8 @@ import { useDateTimeInsertion } from "@/hooks/useDateTimeInsertion";
 // | 'custom'
 //
 // Note: The runtime determines time inclusion based on the field type and ISO format.
-// Fields intended to include time (e.g., created_date_time, modified_date) require ISO date-time format (YYYY-MM-DDTHH:mm:ssZ).
+// Fields that include time accept ISO 8601 datetime with optional timezone:
+// e.g., 2025-01-17T14:30:00 (local) or 2025-01-17T14:30:00Z / 2025-01-17T14:30:00-05:00.
 // Fields intended to be date-only (e.g., due_date, completed_date) expect YYYY-MM-DD format.
 // The 'focus_date' field is flexible and can accept either date-only (YYYY-MM-DD) or date-time (YYYY-MM-DDTHH:mm:ss) values.
 // The 'custom' field accepts user-defined formats and is parsed using the runtime's flexible parsing rules, falling back to ISO formats if parsing fails.

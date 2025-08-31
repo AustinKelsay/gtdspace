@@ -426,8 +426,10 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       
       // Check if this paragraph contains our multiselect markers or HTML
       for (const msBlock of multiSelectBlocks) {
-        // Only match on exact text, not partial matches or labels
-        if (msBlock.text && blockText.includes(msBlock.text)) {
+        // Use exact-token match to avoid partial replacements
+        const normalizedBlockText = (blockText ?? '').trim();
+        const normalizedMSText = (msBlock.text ?? '').trim();
+        if (normalizedMSText.length > 0 && normalizedBlockText === normalizedMSText) {
           // Replace this paragraph with a multiselect block
           processedBlocks.push({
             type: 'multiselect',

@@ -2702,7 +2702,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         None,
         Some(chrono::Local::now().to_rfc3339()),
         "medium".to_string(),
-        None, // No context specified
+        None, // No contexts specified
     );
 
     let _ = create_gtd_action(
@@ -2712,7 +2712,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         Some(next_week.to_rfc3339()),
         None,
         "large".to_string(),
-        None, // No context specified
+        None, // No contexts specified
     );
 
     // That's it - just ONE project with maximum connections!
@@ -2983,7 +2983,7 @@ pub fn create_gtd_action(
     due_date: Option<String>,
     focus_date: Option<String>,
     effort: String,
-    context: Option<String>,
+    contexts: Option<Vec<String>>,
 ) -> Result<String, String> {
     log::info!(
         "Creating GTD action: {} in project: {}",
@@ -3020,15 +3020,20 @@ pub fn create_gtd_action(
         _ => "medium",
     };
 
-    // Map context to single select values if provided
-    let context_value = context.map(|c| match c.as_str() {
-        "Home" => "home".to_string(),
-        "Office" => "office".to_string(),
-        "Computer" => "computer".to_string(),
-        "Phone" => "phone".to_string(),
-        "Errands" => "errands".to_string(),
-        "Anywhere" => "anywhere".to_string(),
-        _ => c.to_lowercase().replace(' ', "-"),
+    // Map contexts to normalized values for multiselect
+    let contexts_value = contexts.map(|ctx_vec| {
+        ctx_vec
+            .iter()
+            .map(|c| match c.as_str() {
+                "Home" => "home".to_string(),
+                "Office" => "office".to_string(), 
+                "Computer" => "computer".to_string(),
+                "Phone" => "phone".to_string(),
+                "Errands" => "errands".to_string(),
+                "Anywhere" => "anywhere".to_string(),
+                _ => c.to_lowercase().replace(' ', "-").replace('@', ""),
+            })
+            .collect::<Vec<String>>()
     });
 
     // Create action file with template using single select and datetime fields
@@ -3038,7 +3043,7 @@ pub fn create_gtd_action(
         focus_date,
         due_date,
         effort_value,
-        context_value,
+        contexts_value,
     );
 
     match fs::write(&action_path, action_content) {

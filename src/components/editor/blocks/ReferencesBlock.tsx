@@ -62,7 +62,7 @@ export const ReferencesBlock = createReactBlockSpec(
     content: 'none' as const,
   },
   {
-    render: ReferencesBlockRenderer,
+    render: (props) => <ReferencesBlockRenderer {...props} />,
     toExternalHTML: () => {
       // For blocks with no content, return null to skip HTML serialization
       // The actual markdown conversion happens in the editor's markdown exporter
@@ -95,7 +95,7 @@ interface ReferencesRenderProps {
   };
 }
 
-function ReferencesBlockRenderer(props: ReferencesRenderProps) {
+const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(props: ReferencesRenderProps) {
   const { block, editor } = props;
   const { references } = block.props;
 
@@ -104,14 +104,19 @@ function ReferencesBlockRenderer(props: ReferencesRenderProps) {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
 
-  const parsedReferences = references ? references.split(',').filter(Boolean) : [];
+  const parsedReferences = React.useMemo(() => 
+    references ? references.split(',').filter(Boolean) : [],
+    [references]
+  );
 
   const loadAvailableFiles = React.useCallback(async () => {
     setIsLoading(true);
     try {
       const spacePath = window.localStorage.getItem('gtdspace-current-path') || '';
 
-      console.log('ReferencesBlock: Loading files, spacePath:', spacePath);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('ReferencesBlock: Loading files, spacePath:', spacePath);
+      }
 
       if (!spacePath) {
         console.warn('No GTD space path found in localStorage');
@@ -122,31 +127,31 @@ function ReferencesBlockRenderer(props: ReferencesRenderProps) {
       const cabinetPath = `${spacePath}/Cabinet`;
       const somedayPath = `${spacePath}/Someday Maybe`;
 
-      console.log('ReferencesBlock: Loading from paths:', { cabinetPath, somedayPath });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('ReferencesBlock: Loading from paths:', { cabinetPath, somedayPath });
+      }
 
       let cabinetFiles: MarkdownFile[] = [];
       let somedayFiles: MarkdownFile[] = [];
 
       try {
-        console.log('ReferencesBlock: Invoking list_markdown_files for Cabinet...');
         cabinetFiles = await invoke<MarkdownFile[]>('list_markdown_files', { path: cabinetPath });
-        console.log('ReferencesBlock: Cabinet files loaded:', cabinetFiles.length, cabinetFiles);
       } catch (err) {
         console.error('Failed to load Cabinet files:', err);
       }
 
       try {
-        console.log('ReferencesBlock: Invoking list_markdown_files for Someday Maybe...');
         somedayFiles = await invoke<MarkdownFile[]>('list_markdown_files', { path: somedayPath });
-        console.log('ReferencesBlock: Someday files loaded:', somedayFiles.length, somedayFiles);
       } catch (err) {
         console.error('Failed to load Someday Maybe files:', err);
       }
 
-      console.log('ReferencesBlock: Total loaded files:', {
-        cabinet: cabinetFiles.length,
-        someday: somedayFiles.length
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('ReferencesBlock: Total loaded files:', {
+          cabinet: cabinetFiles.length,
+          someday: somedayFiles.length
+        });
+      }
 
       const files: ReferenceFile[] = [
         ...cabinetFiles.map(f => ({
@@ -229,7 +234,7 @@ function ReferencesBlockRenderer(props: ReferencesRenderProps) {
     window.dispatchEvent(new CustomEvent('open-reference-file', { detail: { path } }));
   };
 
-  const getReferenceInfo = (path: string): { name: string; type: 'cabinet' | 'someday' } => {
+  const getReferenceInfo = React.useCallback((path: string): { name: string; type: 'cabinet' | 'someday' } => {
     const file = availableFiles.find((f) => f.path === path);
     const normalized = path.replace(/\\/g, '/');
     const name = normalized.split('/').pop()?.replace(/\.md$/i, '') || 'Unknown';
@@ -241,7 +246,7 @@ function ReferencesBlockRenderer(props: ReferencesRenderProps) {
           ? 'someday'
           : 'cabinet');
     return { name, type };
-  };
+  }, [availableFiles]);
 
   return (
     <div className="my-2">
@@ -383,4 +388,4 @@ function ReferencesBlockRenderer(props: ReferencesRenderProps) {
       </Dialog>
     </div>
   );
-}
+});

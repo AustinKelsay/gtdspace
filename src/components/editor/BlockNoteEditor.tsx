@@ -16,7 +16,7 @@ import { SingleSelectBlock } from './blocks/SingleSelectBlock';
 import { CheckboxBlock } from './blocks/CheckboxBlock';
 import { DateTimeSelectBlock } from './blocks/DateTimeSelectBlock';
 import { ReferencesBlock } from './blocks/ReferencesBlock';
-import { 
+import {
   AreasReferencesBlock,
   GoalsReferencesBlock,
   VisionReferencesBlock,
@@ -39,6 +39,7 @@ import { useReferencesInsertion } from '@/hooks/useReferencesInsertion';
 import { useHorizonReferencesInsertion } from '@/hooks/useHorizonReferencesInsertion';
 import { useHorizonListInsertion } from '@/hooks/useHorizonListInsertion';
 import './blocknote-theme.css';
+import { FilePathProvider } from './FilePathContext';
 
 export interface BlockNoteEditorProps {
   /** Content to edit (markdown string) */
@@ -121,10 +122,10 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
 
   // Add references insertion capabilities
   useReferencesInsertion(editor);
-  
+
   // Add horizon references insertion capabilities
   useHorizonReferencesInsertion(editor);
-  
+
   // Add horizon list insertion capabilities
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useHorizonListInsertion(editor as any);
@@ -135,6 +136,8 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   const ignoreNextChange = useRef(false);
   // Track the last processed content to avoid unnecessary updates
   const lastProcessedContent = useRef<string>('');
+  // Track when content changes originate from user typing (internal) vs external updates
+  const isInternalChange = useRef(false);
 
   // Handle initial content - only on mount
   useEffect(() => {
@@ -181,10 +184,10 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   const debouncedContentUpdate = useMemo(
     () => debounce(async (newContent: string) => {
       if (!editor || !initialContentLoaded.current) return;
-      
+
       // Skip if content hasn't meaningfully changed
       if (newContent === lastProcessedContent.current) return;
-      
+
       try {
         // Set flag to ignore the onChange event from content update
         ignoreNextChange.current = true;
@@ -210,7 +213,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
 
         editor.replaceBlocks(editor.document, processedBlocks);
         lastProcessedContent.current = newContent;
-        
+
         // Reset flag after update
         setTimeout(() => {
           ignoreNextChange.current = false;
@@ -229,11 +232,18 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
     if (!editor || !initialContentLoaded.current || content === previousContent.current) {
       return;
     }
+    
+    // Skip if this change originated from user typing (internal) to prevent typing interruption
+    if (isInternalChange.current) {
+      previousContent.current = content; // Still update the reference to prevent stale comparisons
+      return;
+    }
 
+    // Only process external updates (file changes, habit history, etc.)
     debouncedContentUpdate(content);
     previousContent.current = content;
   }, [content, editor, debouncedContentUpdate]);
-  
+
   // Cleanup debounced function on unmount
   useEffect(() => {
     return () => {
@@ -241,15 +251,9 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
     };
   }, [debouncedContentUpdate]);
 
-  // Set file path in window context for SingleSelectBlock
-  useEffect(() => {
-    if (filePath) {
-      (window as Window & { currentFilePath?: string }).currentFilePath = filePath;
-    }
-    return () => {
-      delete (window as Window & { currentFilePath?: string }).currentFilePath;
-    };
-  }, [filePath]);
+  // Removed legacy window-global propagation of filePath; use context instead
+
+  // Typing activity detection removed - no auto-save interference now
 
   // Handle content changes
   useEffect(() => {
@@ -265,13 +269,13 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         // Custom handling for our custom blocks
         const blocks = editor.document;
         let markdown = '';
-        
+
         // Convert blocks to markdown with custom handling
         for (const block of blocks) {
           const blockType = block.type;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const props = (block as any).props;
-          
+
           // Handle custom blocks that might be inside paragraphs
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           if (blockType === 'paragraph' && (block as any).content) {
@@ -347,7 +351,17 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
             }
           }
         }
+
+        // No typing activity emission - auto-save removed for smooth typing
         
+        // Mark this as an internal change (user typing) to prevent content update useEffect from triggering
+        isInternalChange.current = true;
+        
+        // Clear the internal change flag after a short delay to allow external updates
+        setTimeout(() => {
+          isInternalChange.current = false;
+        }, 500);
+
         onChange(markdown);
       } catch (error) {
         console.error('Error converting to markdown:', error);
@@ -358,14 +372,16 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   }, [editor, onChange]);
 
   return (
-    <div className={`w-full ${className} ${darkMode ? 'dark' : ''}`}>
-      <BlockNoteView
-        editor={editor}
-        theme={darkMode ? "dark" : "light"}
-        editable={!readOnly}
-        data-theming-css-variables={false}
-      />
-    </div>
+    <FilePathProvider filePath={filePath}>
+      <div className={`w-full ${className} ${darkMode ? 'dark' : ''}`}>
+        <BlockNoteView
+          editor={editor}
+          theme={darkMode ? "dark" : "light"}
+          editable={!readOnly}
+          data-theming-css-variables={false}
+        />
+      </div>
+    </FilePathProvider>
   );
 };
 

@@ -281,7 +281,7 @@ jobs:
   finalize-release:
     needs: [create-release, build-tauri]
     # Only run on main or staging branches for workflow_dispatch
-    if: (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'staging')))
+    if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' && (github.ref_name == 'main' || github.ref_name == 'staging'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -293,7 +293,7 @@ jobs:
 
       - name: Upload release assets and Publish
         uses: softprops/action-gh-release@v2
-        if: needs.create-release.outputs.version != ''
+        if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '')
         with:
           files: artifacts-download/**/*
           token: ${{ secrets.GITHUB_TOKEN }}

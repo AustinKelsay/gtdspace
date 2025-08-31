@@ -227,7 +227,7 @@ function toHorizonBlockRenderProps(
   };
 }
 
-function HorizonReferencesRenderer(props: HorizonReferencesProps) {
+const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(props: HorizonReferencesProps) {
   const { block, editor, horizonType, allowedHorizons, label } = props;
   const { references } = block.props;
 
@@ -236,8 +236,11 @@ function HorizonReferencesRenderer(props: HorizonReferencesProps) {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
 
-  // Parse references from comma-separated string
-  const parsedReferences = references ? references.split(',').filter(Boolean) : [];
+  // Parse references from comma-separated string - memoized
+  const parsedReferences = React.useMemo(() => 
+    references ? references.split(',').filter(Boolean) : [],
+    [references]
+  );
 
   // Load available horizon files
   const loadAvailableFiles = React.useCallback(async () => {
@@ -308,33 +311,7 @@ function HorizonReferencesRenderer(props: HorizonReferencesProps) {
     return groups;
   }, [filteredFiles]);
 
-  const handleAddReference = (file: HorizonFile) => {
-    if (parsedReferences.includes(file.path)) return;
-
-    const newReferences = [...parsedReferences, file.path];
-    const didUpdate = updateReferences(newReferences);
-    if (!didUpdate) {
-      console.error('Failed to add reference; update did not apply', {
-        blockId: block.id,
-        horizonType,
-        file
-      });
-    }
-  };
-
-  const handleRemoveReference = (path: string) => {
-    const newReferences = parsedReferences.filter(r => r !== path);
-    const didUpdate = updateReferences(newReferences);
-    if (!didUpdate) {
-      console.error('Failed to remove reference; update did not apply', {
-        blockId: block.id,
-        horizonType,
-        path
-      });
-    }
-  };
-
-  const updateReferences = (newReferences: string[]): boolean => {
+  const updateReferences = React.useCallback((newReferences: string[]): boolean => {
     const findAndUpdateBlock = () => {
       if (!editor.document) {
         console.error('Editor document is not available');
@@ -375,16 +352,42 @@ function HorizonReferencesRenderer(props: HorizonReferencesProps) {
       });
     }
     return didUpdate;
-  };
+  }, [block.id, editor, horizonType]);
 
-  const handleReferenceClick = (path: string) => {
+  const handleAddReference = React.useCallback((file: HorizonFile) => {
+    if (parsedReferences.includes(file.path)) return;
+
+    const newReferences = [...parsedReferences, file.path];
+    const didUpdate = updateReferences(newReferences);
+    if (!didUpdate) {
+      console.error('Failed to add reference; update did not apply', {
+        blockId: block.id,
+        horizonType,
+        file
+      });
+    }
+  }, [parsedReferences, block.id, horizonType, updateReferences]);
+
+  const handleRemoveReference = React.useCallback((path: string) => {
+    const newReferences = parsedReferences.filter(r => r !== path);
+    const didUpdate = updateReferences(newReferences);
+    if (!didUpdate) {
+      console.error('Failed to remove reference; update did not apply', {
+        blockId: block.id,
+        horizonType,
+        path
+      });
+    }
+  }, [parsedReferences, block.id, horizonType, updateReferences]);
+
+  const handleReferenceClick = React.useCallback((path: string) => {
     window.dispatchEvent(new CustomEvent('open-reference-file', {
       detail: { path }
     }));
-  };
+  }, []);
 
-  // Get display info for a reference path
-  const getReferenceInfo = (path: string): { name: string; horizon: string } => {
+  // Get display info for a reference path - memoized
+  const getReferenceInfo = React.useCallback((path: string): { name: string; horizon: string } => {
     const file = availableFiles.find(f => f.path === path);
     if (file) return { name: file.name, horizon: file.horizon };
 
@@ -398,7 +401,7 @@ function HorizonReferencesRenderer(props: HorizonReferencesProps) {
     else if (normalized.includes('/Purpose & Principles/')) horizon = 'purpose';
 
     return { name, horizon };
-  };
+  }, [availableFiles]);
 
   return (
     <div className="my-2">
@@ -528,7 +531,7 @@ function HorizonReferencesRenderer(props: HorizonReferencesProps) {
       </Dialog>
     </div>
   );
-}
+});
 
 // Define prop schema for each reference type
 const horizonReferencesPropSchema = {

@@ -30,7 +30,7 @@ interface DateTimeSelectComponentProps {
   };
 }
 
-const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) => {
+const DateTimeSelectComponent = React.memo<DateTimeSelectComponentProps>(function DateTimeSelectComponent(props) {
   const { type, value, label, optional } = props.block.props;
 
   // Determine if field is date-only (no time component allowed)
@@ -83,7 +83,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
     }
   }, [value, isValidDate, isDateOnlyField]);
 
-  const updateBlockValue = (newValue: string) => {
+  const updateBlockValue = React.useCallback((newValue: string) => {
     try {
       props.editor.updateBlock(props.block.id, {
         type: 'datetime',
@@ -95,9 +95,9 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
     } catch (error) {
       console.error('Error updating datetime block:', error);
     }
-  };
+  }, [props.editor, props.block.id, props.block.props]);
 
-  const handleDateChange = (newDate: Date | undefined) => {
+  const handleDateChange = React.useCallback((newDate: Date | undefined) => {
     if (!newDate) return;
 
     let isoString: string;
@@ -124,9 +124,9 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
     }
 
     updateBlockValue(isoString);
-  };
+  }, [isDateOnlyField, localTimeEnabled, timeValue, updateBlockValue]);
 
-  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTimeChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     // Skip time updates for date-only fields
     if (isDateOnlyField) return;
 
@@ -166,12 +166,12 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       );
       updateBlockValue(localDate.toISOString());
     }
-  };
+  }, [isDateOnlyField, localTimeEnabled, isValidDate, value, dateValue, updateBlockValue]);
 
-  const handleClear = () => {
+  const handleClear = React.useCallback(() => {
     updateBlockValue('');
     setOpen(false);
-  };
+  }, [updateBlockValue]);
 
   // Format display text based on type and value
   const displayText = React.useMemo(() => {
@@ -188,11 +188,11 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
     }
   }, [isValidDate, value, dateValue]);
 
-  const handleTimeToggle = (checked: boolean) => {
+  const handleTimeToggle = React.useCallback((checked: boolean) => {
     // Date-only fields cannot have time enabled
     if (isDateOnlyField) return;
     setLocalTimeEnabled(checked);
-  };
+  }, [isDateOnlyField]);
 
   const placeholderText = React.useMemo(() => {
     switch (type) {
@@ -361,7 +361,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       </Popover>
     </div>
   );
-};
+});
 
 // Define the datetime block spec
 export const DateTimeSelectBlock = createReactBlockSpec(

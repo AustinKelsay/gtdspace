@@ -534,8 +534,7 @@ impl OAuthCallbackServer {
                     port, e
                 );
                 #[allow(clippy::all)]
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                return Err(Box::new(std::io::Error::other(
                     format!("Failed to start OAuth callback server on port {}: {}. The port may already be in use.", port, e)
                 )));
             }
@@ -559,10 +558,7 @@ impl OAuthCallbackServer {
                 let _ = shutdown_tx.send(());
                 let _ = server_handle.await;
                 #[allow(clippy::all)]
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "OAuth callback timeout",
-                )));
+                return Err(Box::new(std::io::Error::other("OAuth callback timeout")));
             }
 
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;

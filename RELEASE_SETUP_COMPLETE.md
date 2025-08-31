@@ -81,7 +81,7 @@ Each release will generate:
 - macOS ARM: `GTDSpace_{{version}}_macos-aarch64.dmg`
 - Linux: `GTDSpace_{{version}}_linux-x64.AppImage` and `GTDSpace_{{version}}_linux-x64.deb`
 
-**Note**: Ensure the `VERSION` environment variable is set in your release pipeline to match the desired release version (e.g., `export VERSION=v0.1.1`) before packaging to ensure correct artifact naming.
+**Note**: The `VERSION` is automatically derived from the git tag or pipeline input as configured in `build.yml`. Ensure your pipeline provides the appropriate tag or input for correct artifact naming.
 
 ## Future Enhancements
 

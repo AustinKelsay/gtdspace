@@ -210,9 +210,9 @@ The GitHub Actions workflow automatically:
 2. Builds for all platforms
 3. Creates installers/bundles
 4. Creates a draft GitHub Release
-5. Attaches built artifacts as release assets (using `uploadReleaseAsset`)
+5. Attaches built artifacts as release assets (using the `Upload release assets and Publish` step)
 6. Also stores artifacts as workflow artifacts for backup
 
-No local setup needed for CI/CD builds - everything is handled in the workflow. The artifacts are automatically attached to the draft release via the `Upload release assets` step (using `softprops/action-gh-release@v2`) in `.github/workflows/build.yml`.
+No local setup needed for CI/CD builds - everything is handled in the workflow. The artifacts are automatically attached to the draft release via the `Upload release assets and Publish` step (using `softprops/action-gh-release@v2`) in `.github/workflows/build.yml`.
 
-If the release is missing artifacts, check the logs for the `Upload release assets` step in the `finalize-release` job.
+If the release is missing artifacts, check the logs for the `Upload release assets and Publish` step in the `finalize-release` job.

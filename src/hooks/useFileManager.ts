@@ -8,6 +8,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useSettings } from '@/hooks/useSettings';
 // Performance monitoring and caching removed during simplification
+import { serializeMultiselectsToMarkers } from '@/utils/multiselect-block-helpers';
 import type { 
   MarkdownFile, 
   FileOperationResult, 
@@ -204,9 +205,13 @@ export const useFileManager = () => {
       setState(prev => ({ ...prev, autoSaveStatus: 'saving' }));
       
       console.log('Saving file:', state.currentFile.path);
+
+      // Serialize multiselects from HTML to marker format before saving
+      const contentToSave = serializeMultiselectsToMarkers(state.fileContent);
+
       await invoke<string>('save_file', {
         path: state.currentFile.path,
-        content: state.fileContent,
+        content: contentToSave,
       });
       
       

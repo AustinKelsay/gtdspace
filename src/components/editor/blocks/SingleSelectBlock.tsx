@@ -17,6 +17,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { SingleSelectBlockType } from '@/utils/singleselect-block-helpers';
+import { useFilePath } from '@/components/editor/FilePathContext';
+import { emitMetadataChange } from '@/utils/content-event-bus';
 
 // Define status options for GTD
 const GTD_STATUS_OPTIONS = [
@@ -58,6 +60,199 @@ const HABIT_STATUS_OPTIONS = [
   { value: 'completed', label: 'Complete', group: 'Habit Status' },
 ];
 
+// Memoized renderer component for single select blocks
+const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
+  block: { id: string; props: { type: SingleSelectBlockType; value: string; label: string; placeholder: string; customOptionsJson: string } };
+  editor: { document: unknown; updateBlock: (block: unknown, update: { props: Record<string, unknown> }) => void };
+}) {
+  const { block } = props;
+  const { type, value, label, placeholder, customOptionsJson } = block.props;
+  const filePath = useFilePath();
+
+  // Define BlockNote block type
+  type BlockNoteBlock = {
+    id: string;
+    children?: BlockNoteBlock[];
+    type?: string;
+    props?: Record<string, unknown>;
+  };
+
+  // Helper to find a block in the current editor document by id, with optional fallback matcher
+  const findBlockInDocument = React.useCallback((targetId: string, fallbackMatcher?: (candidateBlock: BlockNoteBlock) => boolean) => {
+
+    const blocks = props.editor.document as BlockNoteBlock[];
+
+    const findById = (candidateBlocks: BlockNoteBlock[]): BlockNoteBlock | null => {
+      for (const candidate of candidateBlocks) {
+        if (candidate.id === targetId) return candidate;
+        if (candidate.children && candidate.children.length > 0) {
+          const found = findById(candidate.children);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    let targetBlock = findById(blocks);
+
+    if (!targetBlock && fallbackMatcher) {
+      const findByMatcher = (candidateBlocks: BlockNoteBlock[]): BlockNoteBlock | null => {
+        for (const candidate of candidateBlocks) {
+          if (fallbackMatcher(candidate)) return candidate;
+          if (candidate.children && candidate.children.length > 0) {
+            const found = findByMatcher(candidate.children);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      targetBlock = findByMatcher(blocks);
+    }
+
+    return targetBlock;
+  }, [props.editor.document]);
+
+  // Parse custom options from JSON - memoized
+  const customOptions = React.useMemo(() => {
+    try {
+      return customOptionsJson ? JSON.parse(customOptionsJson) : [];
+    } catch {
+      return [];
+    }
+  }, [customOptionsJson]);
+
+  // Get options based on type - memoized
+  const options = React.useMemo(() => {
+    switch (type) {
+      case 'status':
+        return GTD_STATUS_OPTIONS;
+      case 'effort':
+        return GTD_EFFORT_OPTIONS;
+      case 'project-status':
+        return GTD_PROJECT_STATUS_OPTIONS;
+      case 'habit-frequency':
+        return HABIT_FREQUENCY_OPTIONS;
+      case 'habit-status':
+        return HABIT_STATUS_OPTIONS;
+      case 'custom':
+        return customOptions || [];
+      default:
+        return [];
+    }
+  }, [type, customOptions]);
+
+  const handleChange = React.useCallback(async (newValue: string) => {
+    // If this is a habit status field, update the backend
+    if (type === 'habit-status') {
+      try {
+        // Get the current file path from explicit context
+        const currentPath = filePath || '';
+
+        if (currentPath) {
+          // Check if this is a habit file (case-insensitive and handle both forward and back slashes)
+          const lower = currentPath.toLowerCase();
+          const isHabitFile = lower.includes('/habits/') || lower.includes('\\habits\\');
+
+          if (isHabitFile) {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('update_habit_status', {
+              habitPath: currentPath,  // Use camelCase for Tauri 2.0
+              newStatus: newValue,   // Use camelCase for Tauri 2.0
+            });
+
+            // After marking as complete, backend immediately resets to "todo"
+            // Update the UI to reflect this
+            if (newValue === 'completed') {
+              // Give a brief moment to show the completion, then reset UI
+              setTimeout(() => {
+                newValue = 'todo';
+                const target = findBlockInDocument(
+                  block.id,
+                  (b) => b.type === 'singleselect' && (b.props as { type?: string })?.type === block.props.type
+                );
+                if (target) {
+                  props.editor.updateBlock(target, {
+                    props: {
+                      ...target.props,
+                      value: 'todo',
+                    },
+                  });
+                }
+              }, 500); // Brief delay to show completion
+            }
+
+            // Emit through centralized event bus instead of custom window events
+            const fileName = currentPath.split('/').pop() || '';
+            emitMetadataChange({
+              filePath: currentPath,
+              fileName,
+              content: '', // Content not directly changed
+              metadata: { habitStatus: newValue },
+              changedFields: { habitStatus: newValue }
+            });
+          }
+        }
+      } catch (error) {
+        console.error('[SingleSelectBlock] Failed to update habit status in backend:', error);
+      }
+    }
+
+    // Find and update the block in the current document
+    const findAndUpdateBlock = () => {
+      const targetBlock = findBlockInDocument(
+        block.id,
+        (b) => b.type === 'singleselect' &&
+          (b.props as { type?: string; label?: string })?.type === block.props.type &&
+          (b.props as { type?: string; label?: string })?.label === block.props.label
+      );
+
+      if (targetBlock) {
+        try {
+          props.editor.updateBlock(targetBlock, {
+            props: {
+              ...targetBlock.props,
+              value: newValue,
+            },
+          });
+          return true;
+        } catch (e) {
+          console.error('Failed to update found block:', e);
+          return false;
+        }
+      }
+      return false;
+    };
+
+    // Try the update
+    if (!findAndUpdateBlock()) {
+      console.warn('Could not find block to update, value may not persist');
+    }
+  }, [type, block.id, block.props, props.editor, filePath, findBlockInDocument]);
+
+  return (
+    <div className="inline-block min-w-[200px] align-middle mx-1">
+      {label && <label className="text-sm font-medium mb-1 block">{label}</label>}
+      <Select value={value || ''} onValueChange={handleChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder={placeholder || `Select ${type}...`} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {options.length > 0 && options[0].group && (
+              <SelectLabel>{options[0].group}</SelectLabel>
+            )}
+            {options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+});
+
 // Define prop schema with proper types
 const singleSelectPropSchema = {
   type: {
@@ -87,205 +282,7 @@ export const SingleSelectBlock = createReactBlockSpec(
     render: (props) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const block = props.block as any; // Type assertion needed for BlockNote v0.35
-      const { type, value, label, placeholder, customOptionsJson } = block.props;
-      
-      // Parse custom options from JSON
-      const customOptions = customOptionsJson ? JSON.parse(customOptionsJson) : [];
-      
-      const handleChange = async (newValue: string) => {
-        // If this is a habit status field, update the backend
-        if (type === 'habit-status') {
-          try {
-            // Get the current file path from the editor or tab context
-            // This assumes the editor has access to the file path
-            const filePath = (window as Window & { currentFilePath?: string }).currentFilePath || '';
-            
-            if (filePath) {
-              // Check if this is a habit file (case-insensitive and handle both forward and back slashes)
-              const isHabitFile = filePath.toLowerCase().includes('/habits/') || 
-                                 filePath.toLowerCase().includes('\\habits\\');
-              
-              if (isHabitFile) {
-                const { invoke } = await import('@tauri-apps/api/core');
-                await invoke('update_habit_status', {
-                  habitPath: filePath,  // Use camelCase for Tauri 2.0
-                  newStatus: newValue,   // Use camelCase for Tauri 2.0
-                });
-                
-                // After marking as complete, backend immediately resets to "todo"
-                // Update the UI to reflect this
-                if (newValue === 'completed') {
-                  // Give a brief moment to show the completion, then reset UI
-                  setTimeout(() => {
-                    newValue = 'todo';
-                    // Update the block to show "todo"
-                    const findAndUpdateBlock = () => {
-                      const blocks = props.editor.document;
-                      const findBlock = (blocks: Array<{id: string; children?: Array<unknown>; type?: string; props?: Record<string, unknown>}>, targetId: string): {id: string; children?: Array<unknown>; type?: string; props?: Record<string, unknown>} | null => {
-                        for (const block of blocks) {
-                          if (block.id === targetId) {
-                            return block;
-                          }
-                          if (block.children && block.children.length > 0) {
-                            const found = findBlock(block.children as Array<{id: string; children?: Array<unknown>; type?: string; props?: Record<string, unknown>}>, targetId);
-                            if (found) return found;
-                          }
-                        }
-                        return null;
-                      };
-                      
-                      let targetBlock = findBlock(blocks, block.id);
-                      if (!targetBlock) {
-                        const findByContent = (blocks: Array<{id: string; children?: Array<unknown>; type?: string; props?: Record<string, unknown>}>): {id: string; children?: Array<unknown>; type?: string; props?: Record<string, unknown>} | null => {
-                          for (const b of blocks) {
-                            if (b.type === 'singleselect' && 
-                                (b.props as { type?: string })?.type === block.props.type) {
-                              return b;
-                            }
-                            if (b.children && b.children.length > 0) {
-                              const found = findByContent(b.children as Array<{id: string; children?: Array<unknown>; type?: string; props?: Record<string, unknown>}>);
-                              if (found) return found;
-                            }
-                          }
-                          return null;
-                        };
-                        targetBlock = findByContent(blocks);
-                      }
-                      
-                      if (targetBlock) {
-                        props.editor.updateBlock(targetBlock, {
-                          props: {
-                            ...targetBlock.props,
-                            value: 'todo',
-                          },
-                        });
-                      }
-                    };
-                    findAndUpdateBlock();
-                  }, 500); // Brief delay to show completion
-                }
-                
-                // Emit custom event to notify the app that habit status was updated
-                const event = new CustomEvent('habit-status-updated', {
-                  detail: { habitPath: filePath }
-                });
-                window.dispatchEvent(event);
-              }
-            }
-          } catch (error) {
-            console.error('[SingleSelectBlock] Failed to update habit status in backend:', error);
-          }
-        }
-        
-        // Find and update the block in the current document
-        const findAndUpdateBlock = () => {
-          const blocks = props.editor.document;
-          
-          // Recursively search for the block with matching properties
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const findBlock = (blocks: any[], targetId: string): any => {
-            for (const block of blocks) {
-              if (block.id === targetId) {
-                return block;
-              }
-              if (block.children && block.children.length > 0) {
-                const found = findBlock(block.children, targetId);
-                if (found) return found;
-              }
-            }
-            return null;
-          };
-          
-          // Try to find the block by ID first
-          let targetBlock = findBlock(blocks, block.id);
-          
-          // If not found by ID, try to find by content and type
-          if (!targetBlock) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const findByContent = (blocks: any[]): any => {
-              for (const b of blocks) {
-                if (b.type === 'singleselect' && 
-                    (b.props as { type?: string; label?: string })?.type === block.props.type &&
-                    (b.props as { type?: string; label?: string })?.label === block.props.label) {
-                  return b;
-                }
-                if (b.children && b.children.length > 0) {
-                  const found = findByContent(b.children);
-                  if (found) return found;
-                }
-              }
-              return null;
-            };
-            targetBlock = findByContent(blocks);
-          }
-          
-          if (targetBlock) {
-            try {
-              props.editor.updateBlock(targetBlock, {
-                props: {
-                  ...targetBlock.props,
-                  value: newValue,
-                },
-              });
-              return true;
-            } catch (e) {
-              console.error('Failed to update found block:', e);
-              return false;
-            }
-          }
-          return false;
-        };
-        
-        // Try the update
-        if (!findAndUpdateBlock()) {
-          console.warn('Could not find block to update, value may not persist');
-        }
-      };
-
-      // Get options based on type
-      const getOptions = () => {
-        switch (type) {
-          case 'status':
-            return GTD_STATUS_OPTIONS;
-          case 'effort':
-            return GTD_EFFORT_OPTIONS;
-          case 'project-status':
-            return GTD_PROJECT_STATUS_OPTIONS;
-          case 'habit-frequency':
-            return HABIT_FREQUENCY_OPTIONS;
-          case 'habit-status':
-            return HABIT_STATUS_OPTIONS;
-          case 'custom':
-            return customOptions || [];
-          default:
-            return [];
-        }
-      };
-
-      const options = getOptions();
-
-      return (
-        <div className="inline-block min-w-[200px] align-middle mx-1">
-          {label && <label className="text-sm font-medium mb-1 block">{label}</label>}
-          <Select value={value || ''} onValueChange={handleChange}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder={placeholder || `Select ${type}...`} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {options.length > 0 && options[0].group && (
-                  <SelectLabel>{options[0].group}</SelectLabel>
-                )}
-                {options.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-      );
+      return <SingleSelectRenderer block={block} editor={props.editor} />;
     },
     parse: (element) => {
       // Check for new single select format
@@ -306,7 +303,7 @@ export const SingleSelectBlock = createReactBlockSpec(
       }
     },
     toExternalHTML: (props) => {
-      const block = props.block as {props: {type: string; value: string}};
+      const block = props.block as { props: { type: string; value: string } };
       const { type, value } = block.props;
       // Return the markdown format that can be parsed back
       const markdownFormat = `[!singleselect:${type}:${value || ''}]`;

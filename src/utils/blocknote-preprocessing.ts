@@ -139,25 +139,65 @@ export function preprocessMarkdownForBlockNote(markdown: string): string {
   return processedMarkdown;
 }
 
+// Cache for memoization
+const blockProcessingCache = new Map<string, { blocks: unknown[]; timestamp: number }>();
+const CACHE_DURATION = 5000; // 5 second cache to allow for reasonable updates
+
+// Create a hash of the content for efficient caching - focus on structural elements
+function createContentHash(markdown: string, blockCount: number): string {
+  // Extract only GTD field markers and structural elements for stable caching
+  const gtdFieldMarkers = markdown.match(/\[!(?:multiselect|singleselect|checkbox|datetime|references|areas-references|goals-references|vision-references|purpose-references|projects-list|areas-list|goals-list|visions-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list):[^\]]*\]/g) || [];
+  
+  // Create a structural signature based on:
+  // 1. Block count (structural changes)
+  // 2. GTD field markers (what we actually process)
+  // 3. Number of each type of marker (for changes in GTD fields)
+  const structuralElements = gtdFieldMarkers.join('|');
+  const gtdFieldCount = gtdFieldMarkers.length;
+  
+  // For empty content or no GTD fields, use a simple cache key
+  if (gtdFieldCount === 0) {
+    return `empty-${blockCount}`;
+  }
+  
+  // Create hash that's stable for text-only changes but changes for structural modifications
+  const structuralHash = btoa(structuralElements).slice(0, 12);
+  return `${blockCount}-${gtdFieldCount}-${structuralHash}`;
+}
+
 /**
  * Post-processes BlockNote blocks after markdown parsing to insert custom blocks
+ * Now memoized to prevent excessive re-processing during typing
  */
 export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string): unknown[] {
-  console.log('postProcessBlockNoteBlocks called');
-  console.log('Number of blocks:', blocks.length);
-  console.log('Markdown contains multiselect?', markdown.includes('data-multiselect'));
-  console.log('Markdown contains singleselect?', markdown.includes('data-singleselect'));
+  // Create cache key
+  const cacheKey = createContentHash(markdown, blocks.length);
+  const now = Date.now();
   
-  // Debug: Log all blocks to see what BlockNote parsed
-  (blocks as UnknownBlock[]).forEach((block, index) => {
-    console.log(`Block ${index}:`, {
-      type: block.type,
-      content: block.content,
-      props: block.props,
-      // Get text content if it's a paragraph
-      text: block.type === 'paragraph' ? getTextFromBlock(block) : undefined
-    });
-  });
+  // Check cache first
+  const cached = blockProcessingCache.get(cacheKey);
+  if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+    return cached.blocks;
+  }
+  
+  // Clean up old cache entries periodically
+  if (blockProcessingCache.size > 50) {
+    for (const [key, value] of blockProcessingCache.entries()) {
+      if (now - value.timestamp > CACHE_DURATION) {
+        blockProcessingCache.delete(key);
+      }
+    }
+  }
+  
+  // Only log when actually processing (not using cache)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('postProcessBlockNoteBlocks: Processing new content');
+  }
+  
+  // Only log block details in development and when actually processing
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Number of blocks:', blocks.length);
+  }
   
   // Pattern to match multiselect markers in markdown (e.g., [!multiselect:tags:urgent,important])
   const multiSelectMarkerPattern = /\[!multiselect:([^:]+):([^\]]+)\]/g;
@@ -402,14 +442,18 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
     }
   }
   
-  console.log('Found multiselect blocks in markdown:', multiSelectBlocks.length);
-  console.log('Found singleselect blocks in markdown:', singleSelectBlocks.length);
-  console.log('Found checkbox blocks in markdown:', checkboxBlocks.length);
-  console.log('Found datetime blocks in markdown:', dateTimeBlocks.length);
-  console.log('Found references blocks in markdown:', referencesBlocks.length);
+  // Log summary only in development
+  if (process.env.NODE_ENV === 'development') {
+    const totalCustomBlocks = multiSelectBlocks.length + singleSelectBlocks.length + 
+                              checkboxBlocks.length + dateTimeBlocks.length + referencesBlocks.length;
+    if (totalCustomBlocks > 0) {
+      console.log(`Found ${totalCustomBlocks} custom GTD blocks to process`);
+    }
+  }
   
   if (multiSelectBlocks.length === 0 && singleSelectBlocks.length === 0 && checkboxBlocks.length === 0 && dateTimeBlocks.length === 0 && referencesBlocks.length === 0) {
-    console.log('No custom blocks found, returning original blocks');
+    // Cache the result even if no processing needed
+    blockProcessingCache.set(cacheKey, { blocks, timestamp: now });
     return blocks;
   }
   
@@ -443,7 +487,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
             },
           });
           blockReplaced = true;
-          console.log('Replaced paragraph with multiselect block:', msBlock);
+          // Multiselect block replaced
           break; // Exit the inner loop once we've replaced the block
         }
       }
@@ -468,7 +512,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
                 },
               });
               blockReplaced = true;
-              console.log('Replaced habit-status singleselect with checkbox block:', { checked });
+              // Habit status converted to checkbox
             } else {
               // Keep as singleselect for other types
               processedBlocks.push({
@@ -482,7 +526,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
                 },
               });
               blockReplaced = true;
-              console.log('Replaced paragraph with singleselect block:', ssBlock);
+              // Singleselect block replaced
             }
             break; // Exit the inner loop once we've replaced the block
           }
@@ -504,7 +548,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
               },
             });
             blockReplaced = true;
-            console.log('Replaced paragraph with checkbox block:', cbBlock);
+            // Checkbox block replaced
             break; // Exit the inner loop once we've replaced the block
           }
         }
@@ -526,7 +570,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
               },
             });
             blockReplaced = true;
-            console.log('Replaced paragraph with datetime block:', dtBlock);
+            // DateTime block replaced
             break; // Exit the inner loop once we've replaced the block
           }
         }
@@ -547,7 +591,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
               },
             });
             blockReplaced = true;
-            console.log(`Replaced paragraph with ${refBlock.blockType || 'references'} block:`, refBlock);
+            // References block replaced
             break; // Exit the inner loop once we've replaced the block
           }
         }
@@ -568,7 +612,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
               },
             });
             blockReplaced = true;
-            console.log(`Replaced paragraph with ${listBlock.blockType} block:`, listBlock);
+            // List block replaced
             break; // Exit the inner loop once we've replaced the block
           }
         }
@@ -581,7 +625,11 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
     }
   }
   
-  return processedBlocks as unknown[];
+  // Cache the processed result
+  const result = processedBlocks as unknown[];
+  blockProcessingCache.set(cacheKey, { blocks: result, timestamp: now });
+  
+  return result;
 }
 
 /**

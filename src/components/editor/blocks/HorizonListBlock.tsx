@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { invoke } from '@tauri-apps/api/core';
+import debounce from 'lodash.debounce';
 import {
   List,
   FileText,
@@ -123,19 +124,18 @@ interface HorizonListRendererProps {
   compact?: boolean;
 }
 
-function HorizonListRenderer(props: HorizonListRendererProps) {
+const HorizonListRenderer = React.memo(function HorizonListRenderer(props: HorizonListRendererProps) {
   const { listType, label, compact = false } = props;
   const [items, setItems] = React.useState<ListItem[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isExpanded, setIsExpanded] = React.useState(true);
   const [lastRefreshTime, setLastRefreshTime] = React.useState<Date | null>(null);
 
-  // Get the current file path from the active tab
+  // Get the current file path from the active tab - memoized with no dependencies since it reads from localStorage
   const getCurrentFilePath = React.useCallback((): string | null => {
     // First try to get from the blocknote-specific key (most reliable)
     const blocknotePath = localStorage.getItem('blocknote-current-file');
     if (blocknotePath) {
-      console.log('HorizonList: Using blocknote-current-file path:', blocknotePath);
       return blocknotePath;
     }
     
@@ -147,13 +147,11 @@ function HorizonListRenderer(props: HorizonListRendererProps) {
         
         // Validate the structure before accessing nested properties
         if (!tabsData || typeof tabsData !== 'object') {
-          console.warn('HorizonList: Invalid tabs data structure');
           return null;
         }
         
         // Ensure openTabs is an array before trying to use find
         if (!Array.isArray(tabsData.openTabs)) {
-          console.warn('HorizonList: openTabs is not an array');
           return null;
         }
         
@@ -163,25 +161,22 @@ function HorizonListRenderer(props: HorizonListRendererProps) {
         );
         
         if (activeTab?.path && typeof activeTab.path === 'string') {
-          console.log('HorizonList: Using tab path as fallback:', activeTab.path);
           return activeTab.path;
         }
       } catch (e) {
-        console.error('HorizonList: Failed to parse tabs data:', e);
+        // Silent fail - this is a fallback
       }
     }
     
-    console.warn('HorizonList: No file path available from any source');
     return null;
   }, []);
 
-  // Load items that reference the current page
+  // Load items that reference the current page - debounced to prevent excessive calls
   const loadItems = React.useCallback(async () => {
     setIsLoading(true);
     try {
       const currentPath = getCurrentFilePath();
       if (!currentPath) {
-        console.warn('HorizonList: No current file path available');
         setItems([]);
         return;
       }
@@ -189,30 +184,19 @@ function HorizonListRenderer(props: HorizonListRendererProps) {
       // Get GTD space path
       const spacePath = localStorage.getItem('gtdspace-current-path');
       if (!spacePath) {
-        console.warn('HorizonList: No GTD space path found');
         setItems([]);
         return;
       }
-
-      // Debug logging
-      console.log('HorizonList: Loading items for', {
-        currentPath,
-        spacePath,
-        filterType: listType
-      });
       
       // Call backend to find reverse relationships
-      console.log('HorizonList: Calling find_reverse_relationships...');
       const relationships = await invoke<ReverseRelationship[]>('find_reverse_relationships', {
-        targetPath: currentPath,    // Use camelCase - Tauri auto-converts to snake_case
-        spacePath: spacePath,        // Use camelCase - Tauri auto-converts to snake_case
-        filterType: listType         // Use camelCase - Tauri auto-converts to snake_case
+        targetPath: currentPath,
+        spacePath: spacePath,
+        filterType: listType
       }).catch(error => {
         console.error('HorizonList: Backend call failed:', error);
-        throw error;
+        return [];
       });
-      
-      console.log('HorizonList: Found relationships:', relationships);
 
       // Transform relationships to list items
       const listItems: ListItem[] = relationships.map(rel => ({
@@ -232,16 +216,22 @@ function HorizonListRenderer(props: HorizonListRendererProps) {
     }
   }, [getCurrentFilePath, listType]);
 
+  // Debounced version to prevent excessive API calls
+  const debouncedLoadItems = React.useMemo(
+    () => debounce(loadItems, 300),
+    [loadItems]
+  );
+
   // Load items on mount and when list type changes
   React.useEffect(() => {
     loadItems();
-  }, [loadItems]);
+  }, [loadItems, listType]);
 
-  // Refresh when file references are updated
+  // Refresh when file references are updated - use debounced version
   React.useEffect(() => {
     const handleReferenceUpdate = () => {
-      // Small delay to allow the file to be saved
-      setTimeout(loadItems, 500);
+      // Use debounced version to prevent excessive updates
+      debouncedLoadItems();
     };
 
     window.addEventListener('reference-updated', handleReferenceUpdate);
@@ -251,7 +241,7 @@ function HorizonListRenderer(props: HorizonListRendererProps) {
       window.removeEventListener('reference-updated', handleReferenceUpdate);
       window.removeEventListener('file-saved', handleReferenceUpdate);
     };
-  }, [loadItems]);
+  }, [debouncedLoadItems]);
 
   const handleItemClick = (path: string) => {
     window.dispatchEvent(new CustomEvent('open-reference-file', {
@@ -401,7 +391,7 @@ function HorizonListRenderer(props: HorizonListRendererProps) {
       )}
     </div>
   );
-}
+});
 
 // Define prop schema for list blocks
 const horizonListPropSchema = {

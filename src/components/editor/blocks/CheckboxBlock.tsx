@@ -9,6 +9,140 @@ import { createReactBlockSpec } from '@blocknote/react';
 import { PropSchema } from '@blocknote/core';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { emitMetadataChange } from '@/utils/content-event-bus';
+import { useFilePath } from '../FilePathContext';
+
+// Memoized renderer component for checkbox blocks
+const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
+  block: { id: string; props: { type: string; checked: boolean; label: string } };
+  editor: { updateBlock: (block: unknown, update: { props: Record<string, unknown> }) => void };
+}) {
+  const { block } = props;
+  const { type, checked, label } = block.props;
+
+  // Error handling hook
+  const { withErrorHandling } = useErrorHandler();
+
+  // Current file path from context
+  const filePath = useFilePath();
+
+  // Local state for immediate UI feedback
+  const [localChecked, setLocalChecked] = React.useState(checked);
+
+  // Update local state when props change (from content reload)
+  React.useEffect(() => {
+    setLocalChecked(checked);
+  }, [checked]);
+
+  const handleChange = React.useCallback(async (newChecked: boolean | 'indeterminate') => {
+    const prevChecked = localChecked;
+    const checkedVal = newChecked === true;
+
+    // Immediately update local state for visual feedback
+    setLocalChecked(checkedVal);
+
+    // If this is a habit status checkbox, update the backend
+    if (type === 'habit-status') {
+      if (filePath) {
+        // Check if this is a habit file
+        const isHabitFile = filePath.toLowerCase().includes('/habits/') ||
+          filePath.toLowerCase().includes('\\habits\\');
+
+        if (isHabitFile) {
+          // Use proper error handling for Tauri invoke
+          const result = await withErrorHandling(
+            async () => {
+              const { invoke } = await import('@tauri-apps/api/core');
+
+              // Convert checkbox state to status values for backend
+              const statusValue = checkedVal ? 'completed' : 'todo';
+              await invoke('update_habit_status', {
+                habitPath: filePath,
+                newStatus: statusValue,
+              });
+
+              return { statusValue };
+            },
+            'Failed to update habit status'
+          );
+
+          if (result) {
+            // Show success toast
+            const { toast } = await import('@/hooks/use-toast');
+            const normalizedPath = filePath.replace(/\\/g, '/');
+            const habitName = normalizedPath.split('/').pop()?.replace(/\.(md|markdown)$/i, '') || 'Habit';
+            const statusLabel = checkedVal ? 'Completed' : 'To Do';
+
+            toast({
+              title: "Habit Recorded",
+              description: `${habitName} marked as ${statusLabel}`,
+            });
+
+            // Small delay to let the backend write the file
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Emit through centralized event bus instead of custom window events
+            const fileName = filePath.split('/').pop() || '';
+            emitMetadataChange({
+              filePath,
+              fileName,
+              content: '', // Content not directly changed
+              metadata: { habitStatus: result.statusValue },
+              changedFields: { habitStatus: result.statusValue }
+            });
+
+            // Still emit the content reload event for real-time UI update
+            const reloadEvent = new CustomEvent('habit-content-changed', {
+              detail: { filePath }
+            });
+            window.dispatchEvent(reloadEvent);
+          } else {
+            // Error handling failed, revert to previous state
+            setLocalChecked(prevChecked);
+          }
+        }
+      }
+    }
+  }, [localChecked, type, withErrorHandling, filePath]);
+
+  // Determine display label based on type and state - memoized
+  const displayLabel = React.useMemo(() => {
+    if (label) return label;
+    if (type === 'habit-status') {
+      return localChecked ? 'Complete' : 'To Do';
+    }
+    return '';
+  }, [label, type, localChecked]);
+
+  const handleLabelClick = React.useCallback(() => {
+    handleChange(!localChecked);
+  }, [handleChange, localChecked]);
+
+  return (
+    <div className="inline-flex items-center gap-2 align-middle mx-1 my-1">
+      <Checkbox
+        checked={localChecked}
+        onCheckedChange={handleChange}
+        className={cn(
+          "h-5 w-5",
+          localChecked && type === 'habit-status' && "bg-green-600 border-green-600"
+        )}
+      />
+      {displayLabel && (
+        <label
+          className={cn(
+            "text-sm select-none cursor-pointer",
+            localChecked && "text-muted-foreground line-through"
+          )}
+          onClick={handleLabelClick}
+        >
+          {displayLabel}
+        </label>
+      )}
+    </div>
+  );
+});
 
 // Define prop schema for checkbox block
 const checkboxPropSchema = {
@@ -33,115 +167,7 @@ export const CheckboxBlock = createReactBlockSpec(
     render: (props) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const block = props.block as any;
-      const { type, checked, label } = block.props;
-
-      // Local state for immediate UI feedback
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      const [localChecked, setLocalChecked] = React.useState(checked);
-
-      // Update local state when props change (from content reload)
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      React.useEffect(() => {
-        setLocalChecked(checked);
-      }, [checked]);
-
-      const handleChange = async (newChecked: boolean | 'indeterminate') => {
-        const prevChecked = localChecked;
-        const checkedVal = newChecked === true;
-
-        // Immediately update local state for visual feedback
-        setLocalChecked(checkedVal);
-
-        // If this is a habit status checkbox, update the backend
-        if (type === 'habit-status') {
-          try {
-            // Get the current file path from the editor or tab context
-            const filePath = (window as Window & { currentFilePath?: string }).currentFilePath || '';
-
-            if (filePath) {
-              // Check if this is a habit file
-              const isHabitFile = filePath.toLowerCase().includes('/habits/') ||
-                filePath.toLowerCase().includes('\\habits\\');
-
-              if (isHabitFile) {
-                const { invoke } = await import('@tauri-apps/api/core');
-                const { toast } = await import('@/hooks/use-toast');
-
-                // Convert checkbox state to status values for backend
-                const statusValue = checkedVal ? 'completed' : 'todo';
-                await invoke('update_habit_status', {
-                  habitPath: filePath,
-                  newStatus: statusValue,
-                });
-
-                // Normalize path once and derive habit name/status for toast
-                const normalizedPath = filePath.replace(/\\/g, '/');
-                const habitName = normalizedPath.split('/').pop()?.replace(/\.(md|markdown)$/i, '') || 'Habit';
-                const statusLabel = checkedVal ? 'Completed' : 'To Do';
-                
-                // Show a toast notification
-                toast({
-                  title: "Habit Recorded",
-                  description: `${habitName} marked as ${statusLabel}`,
-                });
-
-                // Small delay to let the backend write the file
-                await new Promise(resolve => setTimeout(resolve, 100));
-
-                // Emit event to reload the file content for real-time update
-                // This will cause the entire editor content to refresh with the latest state
-                const reloadEvent = new CustomEvent('habit-content-changed', {
-                  detail: { filePath }
-                });
-                window.dispatchEvent(reloadEvent);
-
-                // Emit custom event to notify the app that habit status was updated
-                const event = new CustomEvent('habit-status-updated', {
-                  detail: { habitPath: filePath }
-                });
-                window.dispatchEvent(event);
-              }
-            }
-          } catch (error) {
-            console.error('[CheckboxBlock] Failed to update habit status in backend:', error);
-            // Revert to previous state on failure
-            setLocalChecked(prevChecked);
-          }
-        }
-      };
-
-      // Determine display label based on type and state
-      const getDisplayLabel = () => {
-        if (label) return label;
-        if (type === 'habit-status') {
-          return localChecked ? 'Complete' : 'To Do';
-        }
-        return '';
-      };
-
-      return (
-        <div className="inline-flex items-center gap-2 align-middle mx-1 my-1">
-          <Checkbox
-            checked={localChecked}
-            onCheckedChange={handleChange}
-            className={cn(
-              "h-5 w-5",
-              localChecked && type === 'habit-status' && "bg-green-600 border-green-600"
-            )}
-          />
-          {getDisplayLabel() && (
-            <label
-              className={cn(
-                "text-sm select-none cursor-pointer",
-                localChecked && "text-muted-foreground line-through"
-              )}
-              onClick={() => handleChange(!localChecked)}
-            >
-              {getDisplayLabel()}
-            </label>
-          )}
-        </div>
-      );
+      return <CheckboxRenderer block={block} editor={props.editor} />;
     },
     parse: (element) => {
       // Parse checkbox block from HTML

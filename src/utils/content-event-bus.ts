@@ -28,6 +28,7 @@ class ContentEventBus {
   private listeners: Map<ContentEventType, Set<EventCallback>> = new Map();
   private fileMetadataCache: Map<string, FileMetadata> = new Map();
   private isEmitting = false;
+  private recentEvents = new Map<string, number>(); // Track recent events to prevent cascading
 
   /**
    * Subscribe to content events
@@ -46,12 +47,33 @@ class ContentEventBus {
   }
 
   /**
-   * Emit a content event
+   * Emit a content event with cascade prevention
    */
   emit(eventType: ContentEventType, event: ContentChangeEvent): void {
     // Prevent recursive emissions
     if (this.isEmitting && eventType === 'content:changed') {
       return;
+    }
+    
+    // Create unique key for this event to prevent cascading
+    const eventKey = `${eventType}:${event.filePath}`;
+    const now = Date.now();
+    
+    // Check if we've recently emitted the same event for the same file
+    const lastEmissionTime = this.recentEvents.get(eventKey);
+    if (lastEmissionTime && (now - lastEmissionTime) < 100) {
+      // Skip emission if we've emitted the same event within 100ms
+      return;
+    }
+    
+    // Store this emission time
+    this.recentEvents.set(eventKey, now);
+    
+    // Clean up old entries (older than 1 second)
+    for (const [key, time] of this.recentEvents.entries()) {
+      if (now - time > 1000) {
+        this.recentEvents.delete(key);
+      }
     }
     
     // Store metadata in cache
@@ -75,7 +97,8 @@ class ContentEventBus {
     }
     
     // Also emit to general content:changed for any content change
-    if (eventType !== 'content:changed' && eventType.startsWith('content:')) {
+    // But prevent cascading by checking if we're not already emitting content:changed
+    if (eventType !== 'content:changed' && eventType.startsWith('content:') && !wasEmitting) {
       this.emit('content:changed', event);
     }
     

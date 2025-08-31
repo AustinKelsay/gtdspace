@@ -392,6 +392,18 @@ Created: {}"#,
     )
 }
 
+/// Parameters for generating a project README with references
+pub struct ProjectReadmeParams<'a> {
+    pub name: &'a str,
+    pub description: &'a str,
+    pub due_date: Option<String>,
+    pub status: &'a str,
+    pub areas_refs: &'a str,
+    pub goals_refs: &'a str,
+    pub vision_refs: &'a str,
+    pub general_refs: &'a str,
+}
+
 /// Template for project README.md file
 pub fn generate_project_readme(
     name: &str,
@@ -399,21 +411,22 @@ pub fn generate_project_readme(
     due_date: Option<String>,
     status: &str,
 ) -> String {
-    generate_project_readme_with_refs(name, description, due_date, status, "", "", "", "")
+    let params = ProjectReadmeParams {
+        name,
+        description,
+        due_date,
+        status,
+        areas_refs: "",
+        goals_refs: "",
+        vision_refs: "",
+        general_refs: "",
+    };
+    generate_project_readme_with_refs(params)
 }
 
 /// Template for project README.md file with references
-pub fn generate_project_readme_with_refs(
-    name: &str,
-    description: &str,
-    due_date: Option<String>,
-    status: &str,
-    areas_refs: &str,
-    goals_refs: &str,
-    vision_refs: &str,
-    general_refs: &str,
-) -> String {
-    let due_date_section = match due_date {
+pub fn generate_project_readme_with_refs(params: ProjectReadmeParams) -> String {
+    let due_date_section = match params.due_date {
         Some(date) => format!("\n## Due Date\n[!datetime:due_date:{}]\n", date),
         None => String::new(),
     };
@@ -446,15 +459,15 @@ Actions for this project are stored as individual markdown files in this directo
 ## References
 [!references:{}]
 "#,
-        name,
-        description,
-        status,
+        params.name,
+        params.description,
+        params.status,
         due_date_section,
         Local::now().to_rfc3339(),
-        areas_refs,
-        goals_refs,
-        vision_refs,
-        general_refs
+        params.areas_refs,
+        params.goals_refs,
+        params.vision_refs,
+        params.general_refs
     )
 }
 

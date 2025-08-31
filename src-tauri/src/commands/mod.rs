@@ -43,7 +43,15 @@ use tokio::sync::Mutex as TokioMutex;
 
 // Import seed data module
 mod seed_data;
-use seed_data::*;
+use seed_data::{
+    ProjectReadmeParams, generate_action_template, generate_area_of_focus_template_with_refs,
+    generate_goal_template_with_refs, generate_project_readme,
+    generate_project_readme_with_refs, generate_vision_document_template_with_refs,
+    generate_weekly_review_habit, AREAS_OF_FOCUS_OVERVIEW_TEMPLATE,
+    CABINET_GTD_PRINCIPLES_TEMPLATE, CORE_VALUES_TEMPLATE, GOALS_OVERVIEW_TEMPLATE,
+    LIFE_MISSION_TEMPLATE, PURPOSE_PRINCIPLES_OVERVIEW_TEMPLATE,
+    SOMEDAY_LEARN_LANGUAGE_TEMPLATE, VISION_OVERVIEW_TEMPLATE, WELCOME_TEMPLATE,
+};
 
 // ===== REGEX PATTERNS FOR HABIT PARSING =====
 // Define regex patterns as static constants to avoid duplication and ensure consistency
@@ -2674,16 +2682,17 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     let cabinet_ref = format!("{}/Cabinet/GTD Quick Reference.md", &space_path);
 
     let readme_path = Path::new(&project1_path).join("README.md");
-    let readme_content = generate_project_readme_with_refs(
-        project_name,
-        "Create and launch consulting business for passive income generation",
-        Some(next_week.to_rfc3339()),
-        "in-progress",
-        &areas_ref,   // References Area
-        &goals_ref,   // References Goal
-        &vision_ref,  // References Vision
-        &cabinet_ref, // References Cabinet
-    );
+    let readme_params = ProjectReadmeParams {
+        name: project_name,
+        description: "Create and launch consulting business for passive income generation",
+        due_date: Some(next_week.to_rfc3339()),
+        status: "in-progress",
+        areas_refs: &areas_ref,   // References Area
+        goals_refs: &goals_ref,   // References Goal
+        vision_refs: &vision_ref,  // References Vision
+        general_refs: &cabinet_ref, // References Cabinet
+    };
+    let readme_content = generate_project_readme_with_refs(readme_params);
     let _ = fs::write(&readme_path, readme_content);
 
     // Just 2 simple actions

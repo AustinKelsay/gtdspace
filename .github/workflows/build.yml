@@ -25,8 +25,6 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     outputs:
-      release_id: ${{ steps.create-release.outputs.id }}
-      release_upload_url: ${{ steps.create-release.outputs.upload_url }}
       version: ${{ steps.get-version.outputs.version }}
     steps:
       - name: Checkout repository
@@ -282,8 +280,8 @@ jobs:
 
   finalize-release:
     needs: [create-release, build-tauri]
-    # Only run on main or staging branches for workflow_dispatch, and if release was created
-    if: needs.create-release.outputs.release_id != '' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'staging')))
+    # Only run on main or staging branches for workflow_dispatch
+    if: (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'staging')))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -293,27 +291,12 @@ jobs:
         with:
           path: artifacts-download
 
-      - name: Upload release assets
+      - name: Upload release assets and Publish
         uses: softprops/action-gh-release@v2
-        if: needs.create-release.outputs.release_id != ''
+        if: needs.create-release.outputs.version != ''
         with:
           files: artifacts-download/**/*
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ needs.create-release.outputs.version }}
-          # The release is already created as a draft, so we just update it
-          # with the assets.
-          draft: true
+          draft: false
           prerelease: false
-
-      - name: Publish release
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.repos.updateRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: '${{ needs.create-release.outputs.release_id }}',
-              draft: false
-            });
-            console.log('Release published successfully!');

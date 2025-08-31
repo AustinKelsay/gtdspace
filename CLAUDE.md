@@ -7,42 +7,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Start Development:** `npm run tauri:dev`  
 **Run Tests Before Commit:** `npm run type-check && npm run lint` (also run `cargo check && cargo clippy` in src-tauri/)  
 **Build Production:** `npm run tauri:build`  
-**Main Entry Points:** `src/App.tsx` (frontend), `src-tauri/src/main.rs` (backend)  
+**Main Entry Points:** `src/App.tsx` (frontend), `src-tauri/src/lib.rs` (backend setup)  
 **GTD Logic:** `src/hooks/useGTDSpace.ts`, `src-tauri/src/commands/mod.rs`
 
 ## Essential Commands
 
 ```bash
 # Development
-npm run tauri:dev      # Full dev environment (frontend + backend)
+npm run tauri:dev      # Full dev environment (frontend + backend with hot reload)
 npm run dev            # Frontend only on port 1420 (limited - no file operations)
 
 # Code Quality - ALWAYS RUN BEFORE COMMITTING
-npm run type-check     # TypeScript validation
-npm run lint           # ESLint check
+npm run type-check     # TypeScript validation (strict: false)
+npm run lint           # ESLint check (max-warnings: 0 - CI will fail on warnings)
 npm run lint:fix       # Auto-fix linting issues
 
 # Rust backend checks (run from src-tauri/)
 cd src-tauri && cargo check   # Fast compilation check
-cd src-tauri && cargo clippy  # Rust linting
-cd src-tauri && cargo fmt     # Format Rust code
+cd src-tauri && cargo clippy  # Rust linting (CI enforces -D warnings)
+cd src-tauri && cargo fmt     # Format Rust code (CI enforces --check)
 
 # Building & Release
 npm run tauri:build    # Production build
-npm run release:patch  # Full release process (0.1.0 → 0.1.1)
+npm run release:patch  # Full release process with safety checks (0.1.0 → 0.1.1)
 npm run release:minor  # Minor release (0.1.0 → 0.2.0)
 npm run release:major  # Major release (0.1.0 → 1.0.0)
+npm run icons:generate # Icon generation (automated in build)
 ```
+
+## Prerequisites
+
+- **Node.js**: v20+ required
+- **Rust**: Latest stable toolchain
+- **Platform-specific**: See `docs/build-setup.md`
 
 ## High-Level Architecture
 
 ### Tech Stack
 
-- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui
+- **Frontend**: React 18 + TypeScript (strict: false) + Vite + Tailwind CSS + shadcn/ui
 - **Editor**: BlockNote v0.35 (pinned) with custom GTD blocks
 - **Backend**: Rust + Tauri 2.x
-- **State Management**: Custom hooks pattern (no Redux)
+- **State Management**: Custom hooks pattern (no Redux/Zustand)
 - **File Watching**: Rust notify crate (500ms debounce)
+- **Async Runtime**: Tokio for backend operations
 
 ### Frontend-Backend Communication
 
@@ -85,42 +93,35 @@ The editor uses these custom markdown markers:
 
 ```markdown
 # Single Select
-
 [!singleselect:status:in-progress] # Action status: in-progress|waiting|completed
 [!singleselect:effort:medium] # Effort: small|medium|large|extra-large
 [!singleselect:project-status:waiting] # Project status
 [!singleselect:habit-frequency:daily] # Habit frequency
 
 # DateTime
-
 [!datetime:due_date:2025-01-20] # Date only
 [!datetime:focus_date:2025-01-20T14:30:00] # Date with time
 [!datetime:created_date_time:2025-01-17T10:00:00Z] # ISO 8601
 
 # References & Lists
-
 [!references:path1.md,path2.md] # Links to Cabinet/Someday
 [!areas-references:path1.md] # Links to Areas
 [!projects-list] # Dynamic list of referencing projects
 
 # Checkbox (Habits)
-
 [!checkbox:habit-status:false] # Todo/complete state
 ```
 
 ### Critical Event Flow
 
 1. **Project Creation**:
-
    - `useGTDSpace.createProject()` → `invoke('create_gtd_project')` → dispatches `gtd-project-created` event
    - `GTDWorkspaceSidebar` listens for event → reloads projects
 
 2. **Content Updates**:
-
    - Editor change → `useTabManager` → `content-event-bus` → UI components update
 
 3. **File Operations**:
-
    - UI action → Tauri command → File system → File watcher (500ms) → UI refresh
 
 4. **Data Migration**:
@@ -139,9 +140,10 @@ The editor uses these custom markdown markers:
 
 Key hooks and their responsibilities:
 
-- `useGTDSpace` - Workspace initialization, project/action CRUD
-- `useTabManager` - Multi-tab editing with auto-save
-- `useFileWatcher` - External change detection
+- `useGTDSpace` - Workspace initialization, project/action CRUD operations
+- `useTabManager` - Multi-tab editing with auto-save (2s debounce)
+- `useFileManager` - File system operations via Tauri
+- `useFileWatcher` - External change detection (500ms debounce)
 - `useCalendarData` - Aggregates all dated items (parallel reads)
 - `useHabitTracking` - Habit status updates and reset scheduling
 - `useErrorHandler` - Centralized error handling with toast notifications
@@ -156,6 +158,7 @@ GOOGLE_CLIENT_SECRET=your-client-secret
 ```
 
 - OAuth server runs on port 9898
+- Redirect URI must be `http://localhost:9898/callback`
 - Tokens stored in Tauri app data directory
 - Sync runs with 30-day past, 90-day future window
 
@@ -172,7 +175,7 @@ GOOGLE_CLIENT_SECRET=your-client-secret
 ### Adding a Tauri Command
 
 1. Implement in `src-tauri/src/commands/mod.rs`
-2. Add to command list in `src-tauri/src/main.rs`
+2. Add to command list in `src-tauri/src/lib.rs` (not main.rs)
 3. Create frontend wrapper with `withErrorHandling()`
 4. Test with both Tauri context and web-only mode
 
@@ -181,39 +184,36 @@ GOOGLE_CLIENT_SECRET=your-client-secret
 - **TypeScript**: Strict mode disabled - be careful with null checks
 - **File Size**: Max 10MB per file
 - **Open Tabs**: Max 10 simultaneous
-- **ESLint**: Max warnings: 0 (CI will fail)
+- **ESLint**: Max warnings: 0 (CI will fail on any warnings)
 - **BlockNote**: Version pinned at 0.35 for stability
-- **Rust**: Must pass `cargo check`, `cargo clippy`, and `cargo fmt`
-- **Timestamps**: `file.last_modified` may be seconds or milliseconds - always validate
+- **Rust**: Must pass `cargo check`, `cargo clippy -D warnings`, and `cargo fmt --check`
+- **Node Version**: Requires Node 20+
+- **Testing**: Limited test infrastructure - no unit test framework currently implemented
+
+## CI/CD Quality Gates
+
+GitHub Actions enforce these requirements:
+
+- **TypeScript**: `npm run type-check` must pass
+- **ESLint**: Zero warnings allowed (`max-warnings: 0`)
+- **Rust Format**: `cargo fmt --check` must pass
+- **Rust Linting**: `cargo clippy -D warnings` must pass
+- **Cross-platform**: Builds tested on Ubuntu, macOS, Windows
+- **Branch Protection**: main/develop/staging with workflow dispatch on main/staging only
+- **Release Safety**: Scripts include git status checks, version validation, and tag verification
+
+## Release Process Details
+
+The release scripts (`scripts/safe-release.js`) include safety checks:
+
+1. Verifies clean git status (no uncommitted changes)
+2. Ensures on correct branch (main/staging)
+3. Validates version bump type (patch/minor/major)
+4. Updates version in package.json and Cargo.toml
+5. Creates git tag only at HEAD
+6. Triggers GitHub Actions for multi-platform builds
 
 ## Known Issues
-
-### file.last_modified Validation
-
-- **Expected format**: ISO 8601 in UTC (trailing `Z`). Example valid: `2025-02-01T12:34:56Z`.
-- **Timezones**: Inputs with `±hh:mm` offsets are allowed but must be normalized to UTC (`Z`) before storing/returning.
-- **Precision**: Accept seconds or milliseconds.
-  - ISO 8601 with fractional seconds is allowed (e.g., `2025-02-01T12:34:56.789Z`).
-  - Numeric Unix epoch is allowed: 10-digit seconds or 13-digit milliseconds; normalize to ISO UTC on save.
-- **Validation rules**:
-  - Reject non-parseable values.
-  - Reject timestamps more than 5 minutes in the future.
-- **Handling/Fallback**:
-  - If parseable and within tolerance but not UTC, auto-normalize to UTC.
-  - If epoch length is 10 or 13, convert to ISO UTC; otherwise reject.
-  - On invalid input, reject the upload and return HTTP 400 with a field-specific error.
-- **Example error message**: `file.last_modified must be ISO 8601 UTC; received '2025-02-30T10:00:00'`
-- **Example 400 response**:
-
-```json
-{
-  "status": 400,
-  "error": "ValidationError",
-  "fields": {
-    "file.last_modified": "must be ISO 8601 UTC; received '2025-02-30T10:00:00'"
-  }
-}
-```
 
 ### Sidebar Not Updating
 
@@ -221,11 +221,16 @@ Projects may not appear immediately after creation. The event system (`gtd-proje
 
 ### Google Calendar Auth
 
-Check `.env` file, verify redirect URI is `http://localhost:9898/callback`, ensure port 9898 is free.
+If authentication fails:
+1. Check `.env` file exists with valid credentials
+2. Verify redirect URI is `http://localhost:9898/callback`
+3. Ensure port 9898 is free
+4. Check Google Cloud Console for OAuth consent screen configuration
 
-## CI/CD Notes
+### Large File Performance
 
-- GitHub Actions run on push to main/develop/staging
-- Workflow dispatch restricted to main/staging branches
-- Release workflow only pushes tags that point at HEAD
-- All Rust formatting must pass (`cargo fmt --check`)
+Files over 1MB may cause editor performance issues. The app uses 2-second debounced auto-save to mitigate.
+
+### Test Coverage
+
+No automated testing framework is currently implemented. Manual testing is required before releases.

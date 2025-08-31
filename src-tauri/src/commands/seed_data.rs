@@ -489,27 +489,25 @@ pub fn generate_action_template(
         name, status
     );
 
-    // Only add focus date section if provided
-    if let Some(date) = focus_date {
-        template.push_str(&format!(
-            r#"
+    // Always add focus date section (with value if provided, empty if not)
+    let focus_value = focus_date.unwrap_or_default();
+    template.push_str(&format!(
+        r#"
 ## Focus Date
 [!datetime:focus_date:{}]
 "#,
-            date
-        ));
-    }
+        focus_value
+    ));
 
-    // Only add due date section if provided
-    if let Some(date) = due_date {
-        template.push_str(&format!(
-            r#"
+    // Always add due date section (with value if provided, empty if not)
+    let due_value = due_date.unwrap_or_default();
+    template.push_str(&format!(
+        r#"
 ## Due Date
 [!datetime:due_date:{}]
 "#,
-            date
-        ));
-    }
+        due_value
+    ));
 
     template.push_str(&format!(
         r#"

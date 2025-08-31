@@ -306,14 +306,52 @@ export const useCalendarData = (
                 const createdHeaderMatch = content.match(/##\s*Created\s*\r?\n\s*(\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)?)/i);
                 if (createdHeaderMatch && createdHeaderMatch[1]) {
                   try {
-                    // Let Date constructor handle the parsing
                     const dateStr = createdHeaderMatch[1].trim();
-                    const parsed = new Date(dateStr + ' UTC'); // Assume UTC for consistency
-                    if (!isNaN(parsed.getTime())) {
-                      createdDateTime = parsed.toISOString();
-                    } else {
+                    
+                    // Parse date components explicitly for cross-browser consistency
+                    // Format: YYYY-MM-DD [HH:MM [AM/PM]]
+                    const dateTimeRegex = /^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{1,2}):(\d{2})(?:\s*(AM|PM))?)?$/i;
+                    const match = dateStr.match(dateTimeRegex);
+                    
+                    if (!match) {
+                      throw new Error('Invalid date format');
+                    }
+                    
+                    const year = parseInt(match[1], 10);
+                    const month = parseInt(match[2], 10);
+                    const day = parseInt(match[3], 10);
+                    let hour = match[4] ? parseInt(match[4], 10) : 0;
+                    const minute = match[5] ? parseInt(match[5], 10) : 0;
+                    const meridiem = match[6]?.toUpperCase();
+                    
+                    // Validate ranges
+                    if (year < 1900 || year > 2100 || 
+                        month < 1 || month > 12 || 
+                        day < 1 || day > 31 ||
+                        hour < 0 || hour > 23 ||
+                        minute < 0 || minute > 59) {
+                      throw new Error('Invalid date components');
+                    }
+                    
+                    // Convert 12-hour to 24-hour format if AM/PM is present
+                    if (meridiem) {
+                      if (hour < 1 || hour > 12) {
+                        throw new Error('Invalid hour for 12-hour format');
+                      }
+                      if (meridiem === 'PM' && hour !== 12) {
+                        hour += 12;
+                      } else if (meridiem === 'AM' && hour === 12) {
+                        hour = 0;
+                      }
+                    }
+                    
+                    // Create date using UTC to ensure consistency
+                    const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+                    if (isNaN(utcDate.getTime())) {
                       throw new Error('Invalid date');
                     }
+                    
+                    createdDateTime = utcDate.toISOString();
                   } catch {
                     // If parsing fails, use file.last_modified
                     createdDateTime = fileLastModifiedToISO(file.last_modified, habitName);

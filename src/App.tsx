@@ -28,8 +28,40 @@ import type { Theme, MarkdownFile, EditorMode, GTDProject } from '@/types';
 import './styles/globals.css';
 import { waitForTauriReady } from '@/utils/tauri-ready';
 
+/**
+ * Normalizes a file path by converting it to lowercase and replacing
+ * backslashes with forward slashes. This ensures consistent path comparisons
+ * across different operating systems (e.g., Windows vs. Unix-like).
+ * @param p The path to normalize.
+ * @returns The normalized path, or null/undefined if the input is null/undefined.
+ */
+function norm(p?: string | null): string | null | undefined {
+  return p?.toLowerCase().replace(/\\/g, '/');
+}
+
+/**
+ * Checks if a given path `p` is located under a directory `dir`.
+ * Paths are normalized before comparison to ensure cross-platform consistency.
+ * @param p The path to check.
+ * @param dir The directory path to check against.
+ * @returns True if `p` is under `dir`, false otherwise.
+ */
+function isUnder(p?: string | null, dir?: string | null): boolean {
+  const normalizedP = norm(p);
+  const normalizedDir = norm(dir);
+
+  if (!normalizedP || !normalizedDir) {
+    return false;
+  }
+
+  // Ensure the directory path ends with a slash for accurate "under" comparison
+  const dirWithTrailingSlash = normalizedDir.endsWith('/') ? normalizedDir : `${normalizedDir}/`;
+
+  return normalizedP.startsWith(dirWithTrailingSlash);
+}
+
 function isHabitPath(p?: string | null): boolean {
-  return !!p && p.toLowerCase().replace(/\\/g, '/').includes('/habits/');
+  return !!p && isUnder(p, '/habits/');
 }
 
 /**
@@ -218,7 +250,7 @@ export const App: React.FC = () => {
 
       case 'deleted': {
         // File deleted - close tab if open and refresh file list
-        const deletedTab = tabState.openTabs.find(tab => tab.file.path === latestEvent.file_path);
+        const deletedTab = tabState.openTabs.find(tab => norm(tab.file.path) === norm(latestEvent.file_path));
         if (deletedTab) {
           closeTab(deletedTab.id);
         }
@@ -230,7 +262,7 @@ export const App: React.FC = () => {
 
       case 'modified': {
         // File modified externally - show notification if tab is open
-        const modifiedTab = tabState.openTabs.find(tab => tab.file.path === latestEvent.file_path);
+        const modifiedTab = tabState.openTabs.find(tab => norm(tab.file.path) === norm(latestEvent.file_path));
         if (modifiedTab && !modifiedTab.hasUnsavedChanges) {
           // File was modified externally
         }
@@ -245,7 +277,7 @@ export const App: React.FC = () => {
   const shouldReloadProjects = (filePath: string): boolean => {
     if (!gtdSpace?.root_path) return false;
     const projectsPath = `${gtdSpace.root_path}/Projects/`;
-    return filePath.startsWith(projectsPath) && filePath.endsWith('.md');
+    return isUnder(filePath, projectsPath) && norm(filePath)?.endsWith('.md');
   };
 
   const keyboardHandlers = {
@@ -315,7 +347,7 @@ export const App: React.FC = () => {
 
     window.onTabFileSaved = async (filePath: string) => {
       // Only reload if the file is in the Projects directory
-      if (filePath.startsWith(projectsPath) && filePath.endsWith('.md')) {
+      if (isUnder(filePath, projectsPath) && norm(filePath)?.endsWith('.md')) {
         await loadProjects(gtdSpace.root_path);
       }
     };
@@ -376,11 +408,11 @@ export const App: React.FC = () => {
 
   React.useEffect(() => {
     // Only update current project when in a GTD space
-    if (gtdSpace?.root_path && fileState.currentFolder?.startsWith(gtdSpace.root_path)) {
+    if (gtdSpace?.root_path && isUnder(fileState.currentFolder, gtdSpace.root_path)) {
       // Check if we're in a specific project
-      if (fileState.currentFolder.includes('/Projects/') && gtdSpace?.projects) {
+      if (isUnder(fileState.currentFolder, `${gtdSpace.root_path}/Projects/`) && gtdSpace?.projects) {
         const projectPath = fileState.currentFolder;
-        const project = gtdSpace.projects.find(p => p.path === projectPath);
+        const project = gtdSpace.projects.find(p => norm(p.path) === norm(projectPath));
         setCurrentProject(project || null);
       } else {
         setCurrentProject(null);
@@ -499,7 +531,7 @@ export const App: React.FC = () => {
   React.useEffect(() => {
     const handleHabitStatusUpdate = (event: CustomEvent<{ habitPath: string }>) => {
       // Check if the updated habit is currently open in the editor
-      if (activeTab?.filePath === event.detail.habitPath) {
+      if (norm(activeTab?.filePath) === norm(event.detail.habitPath)) {
         // Reload the file content from disk
         invoke<string>('read_file', { path: event.detail.habitPath })
           .then(freshContent => {
@@ -521,7 +553,7 @@ export const App: React.FC = () => {
       const { filePath } = event.detail;
 
       // If the changed file is the currently active tab, reload its content
-      if (activeTab?.filePath === filePath) {
+      if (norm(activeTab?.filePath) === norm(filePath)) {
         invoke<string>('read_file', { path: filePath })
           .then(freshContent => {
             updateTabContent(activeTab.id, freshContent);

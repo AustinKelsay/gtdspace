@@ -193,12 +193,10 @@ async fn get_with_retries(
                             page_count,
                             attempt
                         );
-                        return Err(Box::new(std::io::Error::other(
-                            format!(
-                                "Failed to fetch events on page {}: HTTP status {}",
-                                page_count, status
-                            ),
-                        )));
+                        return Err(Box::new(std::io::Error::other(format!(
+                            "Failed to fetch events on page {}: HTTP status {}",
+                            page_count, status
+                        ))));
                     }
 
                     let backoff_ms = base_delay_ms.saturating_mul(1u64 << (attempt - 1));
@@ -272,10 +270,8 @@ async fn get_with_retries(
     }
 
     // Should be unreachable
-    Err(Box::new(std::io::Error::other(
-        format!(
-            "Failed to fetch events on page {} after retries (unexpected fallthrough)",
-            page_count
-        ),
-    )))
+    Err(Box::new(std::io::Error::other(format!(
+        "Failed to fetch events on page {} after retries (unexpected fallthrough)",
+        page_count
+    ))))
 }

@@ -205,6 +205,11 @@ export function useGTDSpace() {
       try {
         const result = await withErrorHandling(
           async () => {
+            // If contexts array is provided, use the first one as the primary context
+            const primaryContext = params.contexts && params.contexts.length > 0 
+              ? params.contexts[0] 
+              : undefined;
+            
             const actionPath = await invoke<string>('create_gtd_action', {
               projectPath: params.project_path,
               actionName: params.action_name,
@@ -212,6 +217,7 @@ export function useGTDSpace() {
               focusDate: params.focus_date || undefined,
               dueDate: params.due_date || undefined,
               effort: params.effort,
+              context: primaryContext,
             });
             
             return actionPath;
@@ -305,71 +311,74 @@ export function useGTDSpace() {
     async (spacePath: string) => {
       console.log('[useGTDSpace] loadProjectsInternal called for path:', spacePath);
       setIsLoading(true);
-      
-      const result = await withErrorHandling(
-        async () => {
-          let projects = await invoke<GTDProject[]>('list_gtd_projects', {
-            spacePath: spacePath,
-          });
-          
-          // Apply migrations to ensure backward compatibility
-          projects = migrateGTDObjects(projects);
-          
-          // Calculate total actions
-          const totalActions = projects.reduce((sum, project) => sum + (project.action_count || 0), 0);
-          
-          // Update space state with loaded projects - use functional update to preserve other state
-          console.log('[useGTDSpace] Updating GTDSpace state with', projects.length, 'projects');
-          setGTDSpace(prev => {
-            // If no previous state, we need to initialize it
-            if (!prev) {
-              console.log('[useGTDSpace] No previous state - initializing with projects');
-              return {
-                root_path: spacePath,
+      let result: GTDProject[] | undefined;
+      try {
+        result = await withErrorHandling(
+          async () => {
+            let projects = await invoke<GTDProject[]>('list_gtd_projects', {
+              spacePath: spacePath,
+            });
+            
+            // Apply migrations to ensure backward compatibility
+            projects = migrateGTDObjects(projects);
+            
+            // Calculate total actions
+            const totalActions = projects.reduce((sum, project) => sum + (project.action_count || 0), 0);
+            
+            // Update space state with loaded projects - use functional update to preserve other state
+            console.log('[useGTDSpace] Updating GTDSpace state with', projects.length, 'projects');
+            setGTDSpace(prev => {
+              // If no previous state, we need to initialize it
+              if (!prev) {
+                console.log('[useGTDSpace] No previous state - initializing with projects');
+                return {
+                  root_path: spacePath,
+                  is_initialized: true,
+                  isGTDSpace: true,
+                  projects,
+                  total_actions: totalActions,
+                };
+              }
+              
+              // If the path doesn't match, skip update (wrong space)
+              if (prev.root_path !== spacePath) {
+                console.log('[useGTDSpace] Skipping state update - path mismatch');
+                return prev;
+              }
+              
+              // Check if the data has actually changed
+              const projectsChanged = 
+                prev.projects?.length !== projects.length ||
+                prev.total_actions !== totalActions ||
+                JSON.stringify(prev.projects) !== JSON.stringify(projects);
+              
+              if (!projectsChanged) {
+                console.log('[useGTDSpace] Skipping state update - data unchanged');
+                return prev;
+              }
+              
+              console.log('[useGTDSpace] Previous state:', prev);
+              const newState = {
+                ...prev,
+                // Don't update root_path - it's already set and updating it causes re-renders
                 is_initialized: true,
                 isGTDSpace: true,
                 projects,
                 total_actions: totalActions,
               };
-            }
+              console.log('[useGTDSpace] New state:', newState);
+              return newState;
+            });
             
-            // If the path doesn't match, skip update (wrong space)
-            if (prev.root_path !== spacePath) {
-              console.log('[useGTDSpace] Skipping state update - path mismatch');
-              return prev;
-            }
-            
-            // Check if the data has actually changed
-            const projectsChanged = 
-              prev.projects?.length !== projects.length ||
-              prev.total_actions !== totalActions ||
-              JSON.stringify(prev.projects) !== JSON.stringify(projects);
-            
-            if (!projectsChanged) {
-              console.log('[useGTDSpace] Skipping state update - data unchanged');
-              return prev;
-            }
-            
-            console.log('[useGTDSpace] Previous state:', prev);
-            const newState = {
-              ...prev,
-              // Don't update root_path - it's already set and updating it causes re-renders
-              is_initialized: true,
-              isGTDSpace: true,
-              projects,
-              total_actions: totalActions,
-            };
-            console.log('[useGTDSpace] New state:', newState);
-            return newState;
-          });
-          
-          return projects;
-        },
-        'Failed to load projects',
-        'gtd'
-      );
+            return projects;
+          },
+          'Failed to load projects',
+          'gtd'
+        );
+      } finally {
+        setIsLoading(false);
+      }
       
-      setIsLoading(false);
       console.log('[useGTDSpace] loadProjectsInternal completed, returning', result?.length || 0, 'projects');
       return result || [];
     },

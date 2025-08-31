@@ -261,7 +261,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                       : ((singleselectStatus?.[1] || 'todo') as 'todo' | 'completed'),
                     path: file.path,
                     last_updated: lastUpdatedTime || new Date().toISOString(),
-                    created_date_time: createdDateTime
+                    created_date_time: createdDateTime || lastUpdatedTime || new Date().toISOString()
                   };
                 } catch (error) {
                   return null;

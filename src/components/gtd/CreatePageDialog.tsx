@@ -101,7 +101,103 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
           const title = fileName.replace('.md', '');
           let initialContent = `# ${title}\n\n`;
 
-          if (directoryName === 'Someday Maybe') {
+          // Use horizon-specific templates
+          if (directoryName === 'Areas of Focus') {
+            initialContent = `# ${title}
+
+## Description
+[What is this area about? What standards do you maintain here?]
+
+## Standards to Maintain
+- [Standard 1]
+- [Standard 2]
+- [Standard 3]
+
+## Horizon Alignment
+[!goals-references:]
+
+[!vision-references:]
+
+[!purpose-references:]
+
+## Active Projects
+[!projects-list]
+
+## References
+[!references:]
+`;
+          } else if (directoryName === 'Goals') {
+            initialContent = `# ${title}
+
+**Target:** [!datetime:due_date:]
+
+## Successful Outcome
+[What does success look like? Be specific and measurable.]
+
+## Aligned With
+[!vision-references:]
+
+[!purpose-references:]
+
+## Related Items
+[!projects-areas-list]
+
+## Milestones
+- [ ] [First milestone]
+- [ ] [Second milestone]
+- [ ] [Third milestone]
+
+## References
+[!references:]
+`;
+          } else if (directoryName === 'Vision') {
+            initialContent = `# ${title}
+
+**Living My Purpose**
+[!purpose-references:]
+
+## The Picture of Success
+
+*Describe your vision for this area of life...*
+
+## Key Elements
+- [Element 1]
+- [Element 2]
+- [Element 3]
+
+## Supporting Elements
+[!goals-areas-list]
+
+## Active Projects
+[!projects-list]
+
+## References
+[!references:]
+`;
+          } else if (directoryName === 'Purpose & Principles') {
+            initialContent = `# ${title}
+
+## Core Purpose
+[What is your fundamental reason or mission in this area?]
+
+## Guiding Principles
+1. **[Principle 1]** - [Description]
+2. **[Principle 2]** - [Description]
+3. **[Principle 3]** - [Description]
+
+## This Means I:
+- **Create**: [What you bring into existence]
+- **Serve**: [Who you help and how]
+- **Learn**: [What you explore and master]
+- **Share**: [What you teach and give]
+
+## Supported By
+[!visions-goals-list]
+
+## References
+[!references:]
+`;
+          } else if (directoryName === 'Someday Maybe') {
             initialContent += `## Idea\n\n[Describe your idea here]\n\n## Why it matters\n\n[Why is this worth considering?]\n\n## Next steps when ready\n\n- [ ] First step\n- [ ] Second step\n`;
           } else if (directoryName === 'Cabinet') {
             initialContent += `## Reference\n\n[Add your reference material here]\n\n## Key Points\n\n- \n\n## Notes\n\n`;

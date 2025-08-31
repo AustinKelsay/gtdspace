@@ -450,7 +450,9 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       if (!blockReplaced) {
         for (const ssBlock of singleSelectBlocks) {
           // Only match on exact text, not partial matches or labels
-          if (ssBlock.text && blockText.includes(ssBlock.text)) {
+          const normalizedBlockText = (blockText ?? '').trim();
+          const normalizedSSText = (ssBlock.text ?? '').trim();
+          if (normalizedSSText.length > 0 && normalizedBlockText === normalizedSSText) {
             // Special handling for habit-status: convert to checkbox block
             if (ssBlock.type === 'habit-status') {
               // Convert old habit status to checkbox

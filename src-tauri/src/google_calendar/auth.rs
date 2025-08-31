@@ -82,7 +82,7 @@ impl GoogleAuthManager {
             Err(e) => println!("[GoogleAuth] Failed to obtain token: {}", e),
         }
 
-        token_result?;
+        token_result.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
         // The authentication flow will automatically open the browser via the InstalledFlowAuthenticator
         println!("[GoogleAuth] Authentication flow completed");

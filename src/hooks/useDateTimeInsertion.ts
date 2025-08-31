@@ -58,7 +58,7 @@ export function useDateTimeInsertion(editor: any) {
       }
 
       // Cmd+Alt+T (Mac) or Ctrl+Alt+T (Windows/Linux) for Focus Date with Time field
-      if (modKey && e.altKey && e.key === 't') {
+      if (modKey && e.altKey && e.key.toLowerCase() === 't') {
         e.preventDefault();
         // Focus date typically includes time by default
         const initialValue = new Date().toISOString();
@@ -67,7 +67,7 @@ export function useDateTimeInsertion(editor: any) {
       }
 
       // Cmd+Alt+C (Mac) or Ctrl+Alt+C (Windows/Linux) for Created Date field
-      if (modKey && e.altKey && e.key === 'c') {
+      if (modKey && e.altKey && e.key.toLowerCase() === 'c') {
         e.preventDefault();
         const now = new Date().toISOString();
         const block = createDateTimeBlock('created_date_time', 'Created', now);

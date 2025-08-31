@@ -45,10 +45,12 @@ export const CheckboxBlock = createReactBlockSpec(
         setLocalChecked(checked);
       }, [checked]);
 
-      const handleChange = async (newChecked: boolean) => {
+      const handleChange = async (newChecked: boolean | 'indeterminate') => {
+        const prevChecked = localChecked;
+        const checkedVal = newChecked === true;
 
         // Immediately update local state for visual feedback
-        setLocalChecked(newChecked);
+        setLocalChecked(checkedVal);
 
         // If this is a habit status checkbox, update the backend
         if (type === 'habit-status') {
@@ -66,17 +68,18 @@ export const CheckboxBlock = createReactBlockSpec(
                 const { toast } = await import('@/hooks/use-toast');
 
                 // Convert checkbox state to status values for backend
-                const statusValue = newChecked ? 'completed' : 'todo';
+                const statusValue = checkedVal ? 'completed' : 'todo';
                 await invoke('update_habit_status', {
                   habitPath: filePath,
                   newStatus: statusValue,
                 });
 
-                // Show a toast notification
                 // Normalize path once and derive habit name/status for toast
                 const normalizedPath = filePath.replace(/\\/g, '/');
                 const habitName = normalizedPath.split('/').pop()?.replace(/\.(md|markdown)$/i, '') || 'Habit';
-                const statusLabel = newChecked ? 'Completed' : 'To Do';
+                const statusLabel = checkedVal ? 'Completed' : 'To Do';
+                
+                // Show a toast notification
                 toast({
                   title: "Habit Recorded",
                   description: `${habitName} marked as ${statusLabel}`,
@@ -101,6 +104,8 @@ export const CheckboxBlock = createReactBlockSpec(
             }
           } catch (error) {
             console.error('[CheckboxBlock] Failed to update habit status in backend:', error);
+            // Revert to previous state on failure
+            setLocalChecked(prevChecked);
           }
         }
       };

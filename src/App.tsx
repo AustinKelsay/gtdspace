@@ -28,6 +28,10 @@ import type { Theme, MarkdownFile, EditorMode, GTDProject } from '@/types';
 import './styles/globals.css';
 import { waitForTauriReady } from '@/utils/tauri-ready';
 
+function isHabitPath(p?: string | null): boolean {
+  return !!p && p.toLowerCase().replace(/\\/g, '/').includes('/habits/');
+}
+
 /**
  * Main application component - Simplified version
  * 
@@ -327,22 +331,22 @@ export const App: React.FC = () => {
     tabState.openTabs.forEach(tab => {
       closeTab(tab.id);
     });
-    
+
     // Mark that we're handling a workspace change to prevent loops
     hasInitializedWorkspace.current = true;
-    
+
     // Initialize the new GTD space
     await initializeGTDSpace(path);
-    
+
     // Load the folder without saving to settings to avoid triggering side effects
     await loadFolder(path, { saveToSettings: false });
-    
+
     // Save the workspace path to settings after everything is loaded
     await setLastFolder(path);
   }, [tabState.openTabs, closeTab, initializeGTDSpace, loadFolder, setLastFolder]);
 
   // === VIEW STATE ===
-  
+
   const [showSettings, setShowSettings] = React.useState(false);
 
   // === SIDEBAR STATE ===
@@ -421,7 +425,7 @@ export const App: React.FC = () => {
     // Run only once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  
+
   // Separate effect for workspace initialization after settings load
   React.useEffect(() => {
     const initWorkspace = async () => {
@@ -429,15 +433,15 @@ export const App: React.FC = () => {
       if (isLoadingSettings) {
         return;
       }
-      
+
       // Only initialize once
       if (hasInitializedWorkspace.current || gtdSpace?.root_path) {
         setIsAppInitializing(false); // App is initialized if we already have a workspace
         return;
       }
-      
+
       hasInitializedWorkspace.current = true;
-      
+
       try {
         // Check if settings has a last_folder saved
         if (settings.last_folder && settings.last_folder !== '') {
@@ -462,7 +466,7 @@ export const App: React.FC = () => {
         setIsAppInitializing(false); // Always stop showing loading state
       }
     };
-    
+
     initWorkspace();
   }, [isLoadingSettings, settings.last_folder, gtdSpace?.root_path, handleFolderLoad, checkGTDSpace, loadProjects, initializeDefaultSpaceIfNeeded]);
 
@@ -507,7 +511,7 @@ export const App: React.FC = () => {
       }
 
       // Also refresh the sidebar to show updated status
-      if (event.detail.habitPath.toLowerCase().includes('/habits/')) {
+      if (isHabitPath(event.detail.habitPath)) {
         refreshGTDSpace();
       }
     };
@@ -543,7 +547,7 @@ export const App: React.FC = () => {
   const loadProjectsRef = React.useRef(loadProjects);
   const updateTabContentRef = React.useRef(updateTabContent);
   const activeTabRef = React.useRef(activeTab);
-  
+
   React.useEffect(() => {
     checkGTDSpaceRef.current = checkGTDSpace;
     loadProjectsRef.current = loadProjects;
@@ -577,7 +581,7 @@ export const App: React.FC = () => {
 
           // Also refresh the current tab if it's a habit
           const currentTab = activeTabRef.current;
-          if (currentTab?.filePath?.toLowerCase().includes('/habits/')) {
+          if (isHabitPath(currentTab?.filePath)) {
             // Reload the file content from disk
             try {
               const freshContent = await invoke<string>('read_file', { path: currentTab.filePath });

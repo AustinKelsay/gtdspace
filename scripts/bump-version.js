@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const repoRoot = path.join(__dirname, '..');
 
 function readFile(filePath) {
   return fs.readFileSync(filePath, 'utf8');
@@ -68,7 +69,7 @@ function main() {
     process.exit(1);
   }
 
-  const packageJsonPath = path.join(__dirname, '..', 'package.json');
+  const packageJsonPath = path.join(repoRoot, 'package.json');
   const packageJson = JSON.parse(readFile(packageJsonPath));
   const currentVersion = packageJson.version;
   const newVersion = bumpVersion(currentVersion, versionType);
@@ -85,7 +86,6 @@ function main() {
 
   try {
     console.log('⟳ Syncing package-lock.json...');
-    const repoRoot = path.join(__dirname, '..');
     execSync('npm install --package-lock-only', { stdio: 'inherit', cwd: repoRoot });
     console.log('✓ Synced package-lock.json');
   } catch (error) {
@@ -94,7 +94,7 @@ function main() {
     console.warn('   Run "npm install" manually after the version bump to sync.');
   }
 
-  const cargoTomlPath = path.join(__dirname, '..', 'src-tauri', 'Cargo.toml');
+  const cargoTomlPath = path.join(repoRoot, 'src-tauri', 'Cargo.toml');
   let cargoToml = readFile(cargoTomlPath);
   const packageSectionRegex = /(\[package\][\s\S]*?^\s*version\s*=\s*")[^"]+(")/m;
   if (!packageSectionRegex.test(cargoToml)) {
@@ -105,7 +105,7 @@ function main() {
   writeFile(cargoTomlPath, cargoToml);
   console.log(`✓ Updated src-tauri/Cargo.toml to version ${newVersion}`);
 
-  const tauriConfPath = path.join(__dirname, '..', 'src-tauri', 'tauri.conf.json');
+  const tauriConfPath = path.join(repoRoot, 'src-tauri', 'tauri.conf.json');
   const tauriConf = JSON.parse(readFile(tauriConfPath));
   tauriConf.version = newVersion;
   if (tauriConf.package && tauriConf.package.version) {
@@ -119,7 +119,7 @@ function main() {
 
   // Pre-check if tag already exists before staging files and committing
   try {
-    execSync(`git rev-parse --verify refs/tags/${tagName}`, { stdio: 'ignore' });
+    execSync(`git rev-parse --verify refs/tags/${tagName}`, { cwd: repoRoot, stdio: 'ignore' });
     // If the command succeeds, the tag exists.
     console.error(`❌ Error: Git tag '${tagName}' already exists. Aborting.`);
     process.exit(1);
@@ -128,7 +128,6 @@ function main() {
   }
 
   try {
-    const repoRoot = path.join(__dirname, '..');
     const filesToAdd = [
       'package.json',
       'src-tauri/Cargo.toml',
@@ -151,7 +150,7 @@ function main() {
     execFileSync('git', ['add', ...validatedRelativeFiles], { stdio: 'inherit', cwd: repoRoot });
     let preCommitHash = null;
     try {
-      preCommitHash = execSync('git rev-parse --verify HEAD', { encoding: 'utf8', stdio: 'pipe' }).trim();
+      preCommitHash = execSync('git rev-parse --verify HEAD', { cwd: repoRoot, encoding: 'utf8', stdio: 'pipe' }).trim();
     } catch {
       // No previous commit in the repository (fresh repo)
     }

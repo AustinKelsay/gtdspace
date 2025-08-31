@@ -144,6 +144,9 @@ I've mastered [skills/knowledge]. I'm exploring [new areas]. I contribute by [te
 ## Supporting Elements
 [!goals-areas-list]
 
+## Active Projects
+[!projects-list]
+
 ## References
 [!references:]
 "#,
@@ -396,7 +399,7 @@ pub fn generate_project_readme(
     due_date: Option<String>,
     status: &str,
 ) -> String {
-    generate_project_readme_with_refs(name, description, due_date, status, "", "", "")
+    generate_project_readme_with_refs(name, description, due_date, status, "", "", "", "")
 }
 
 /// Template for project README.md file with references
@@ -407,6 +410,7 @@ pub fn generate_project_readme_with_refs(
     status: &str,
     areas_refs: &str,
     goals_refs: &str,
+    vision_refs: &str,
     general_refs: &str,
 ) -> String {
     let due_date_section = match due_date {
@@ -431,6 +435,8 @@ pub fn generate_project_readme_with_refs(
 
 [!goals-references:{}]
 
+[!vision-references:{}]
+
 ## Actions
 Actions for this project are stored as individual markdown files in this directory.
 
@@ -447,6 +453,7 @@ Actions for this project are stored as individual markdown files in this directo
         Local::now().to_rfc3339(),
         areas_refs,
         goals_refs,
+        vision_refs,
         general_refs
     )
 }
@@ -458,6 +465,7 @@ pub fn generate_action_template(
     focus_date: Option<String>,
     due_date: Option<String>,
     effort: &str,
+    context: Option<String>,
 ) -> String {
     let mut template = format!(
         r#"# {}
@@ -494,7 +502,22 @@ pub fn generate_action_template(
         r#"
 ## Effort
 [!singleselect:effort:{}]
+"#,
+        effort
+    ));
 
+    // Add context field if provided, default to "anywhere" if not
+    let context_value = context.unwrap_or_else(|| "anywhere".to_string());
+    template.push_str(&format!(
+        r#"
+## Context
+[!singleselect:context:{}]
+"#,
+        context_value
+    ));
+
+    template.push_str(&format!(
+        r#"
 ## References
 [!references:]
 
@@ -505,7 +528,6 @@ pub fn generate_action_template(
 ## Created
 [!datetime:created_date_time:{}]
 "#,
-        effort,
         Local::now().to_rfc3339()
     ));
 

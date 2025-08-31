@@ -2670,6 +2670,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     // Update with references to BOTH Area and Goal
     let areas_ref = format!("{}/Areas of Focus/Professional Excellence.md", &space_path);
     let goals_ref = format!("{}/Goals/Build Financial Freedom.md", &space_path);
+    let vision_ref = format!("{}/Vision/10 Year Vision.md", &space_path);
     let cabinet_ref = format!("{}/Cabinet/GTD Quick Reference.md", &space_path);
 
     let readme_path = Path::new(&project1_path).join("README.md");
@@ -2680,6 +2681,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         "in-progress",
         &areas_ref,   // References Area
         &goals_ref,   // References Goal
+        &vision_ref,  // References Vision
         &cabinet_ref, // References Cabinet
     );
     let _ = fs::write(&readme_path, readme_content);
@@ -2692,6 +2694,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         None,
         Some(chrono::Local::now().to_rfc3339()),
         "medium".to_string(),
+        None, // No context specified
     );
 
     let _ = create_gtd_action(
@@ -2701,6 +2704,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         Some(next_week.to_rfc3339()),
         None,
         "large".to_string(),
+        None, // No context specified
     );
 
     // That's it - just ONE project with maximum connections!
@@ -2971,6 +2975,7 @@ pub fn create_gtd_action(
     due_date: Option<String>,
     focus_date: Option<String>,
     effort: String,
+    context: Option<String>,
 ) -> Result<String, String> {
     log::info!(
         "Creating GTD action: {} in project: {}",
@@ -3007,6 +3012,17 @@ pub fn create_gtd_action(
         _ => "medium",
     };
 
+    // Map context to single select values if provided
+    let context_value = context.map(|c| match c.as_str() {
+        "Home" => "home".to_string(),
+        "Office" => "office".to_string(),
+        "Computer" => "computer".to_string(),
+        "Phone" => "phone".to_string(),
+        "Errands" => "errands".to_string(),
+        "Anywhere" => "anywhere".to_string(),
+        _ => c.to_lowercase().replace(' ', "-"),
+    });
+
     // Create action file with template using single select and datetime fields
     let action_content = generate_action_template(
         &action_name,
@@ -3014,6 +3030,7 @@ pub fn create_gtd_action(
         focus_date,
         due_date,
         effort_value,
+        context_value,
     );
 
     match fs::write(&action_path, action_content) {

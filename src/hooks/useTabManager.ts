@@ -5,8 +5,9 @@
  * @phase 2 - Tab management and multi-file state
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import debounce from 'lodash.debounce';
 // Memory leak prevention removed during simplification
 import type { 
   MarkdownFile, 
@@ -43,6 +44,9 @@ export const useTabManager = () => {
     maxTabs: 10,
     recentlyClosed: [],
   });
+
+  // Store for debounced metadata processing
+  const metadataProcessingRef = useRef<Map<string, ReturnType<typeof debounce>>>(new Map());
 
   // === UTILITY FUNCTIONS ===
 
@@ -299,6 +303,13 @@ export const useTabManager = () => {
     const tab = tabState.openTabs.find(t => t.id === tabId);
     if (!tab) return false;
 
+    // Clean up debounced function for this tab
+    const debouncedFn = metadataProcessingRef.current.get(tabId);
+    if (debouncedFn) {
+      debouncedFn.cancel();
+      metadataProcessingRef.current.delete(tabId);
+    }
+
     // If tab has unsaved changes, we should ask for confirmation
     // For now, we'll just close it (confirmation can be added later)
     if (tab.hasUnsavedChanges) {
@@ -337,44 +348,64 @@ export const useTabManager = () => {
   }, [tabState.openTabs]);
 
   /**
-   * Update content for a specific tab and emit change events
+   * Process metadata changes with debouncing to avoid performance issues
    */
-  const updateTabContent = useCallback((tabId: string, content: string) => {
-    // Get the current tab to compare metadata
-    const currentTab = tabState.openTabs.find(t => t.id === tabId);
+  const processMetadataDebounced = useCallback((tabId: string, filePath: string, fileName: string, oldContent: string, newContent: string) => {
+    // Skip for special tabs
+    if (filePath === '::calendar::') {
+      return;
+    }
     
-    if (currentTab) {
-      // Skip updating content for special tabs
-      if (currentTab.file.path === '::calendar::') {
-        return;
-      }
-      // Extract metadata from old and new content
-      const oldMetadata = extractMetadata(currentTab.content);
-      const newMetadata = extractMetadata(content);
-      const metadataChanges = getMetadataChanges(oldMetadata, newMetadata);
-      
-      // Emit content change event
-      emitContentChange({
-        filePath: currentTab.file.path,
-        fileName: currentTab.file.name,
-        content,
-        metadata: newMetadata,
-        changedFields: metadataChanges
-      });
-      
-      // If metadata changed, emit specific metadata change event
-      if (Object.keys(metadataChanges).length > 0) {
-        console.log('[TabManager] Metadata changed:', metadataChanges, 'for file:', currentTab.file.path);
-        emitMetadataChange({
-          filePath: currentTab.file.path,
-          fileName: currentTab.file.name,
-          content,
+    // Get or create debounced function for this tab
+    let debouncedFn = metadataProcessingRef.current.get(tabId);
+    if (!debouncedFn) {
+      debouncedFn = debounce((oldC: string, newC: string) => {
+        // Extract metadata from old and new content
+        const oldMetadata = extractMetadata(oldC);
+        const newMetadata = extractMetadata(newC);
+        const metadataChanges = getMetadataChanges(oldMetadata, newMetadata);
+        
+        // Emit content change event
+        emitContentChange({
+          filePath,
+          fileName,
+          content: newC,
           metadata: newMetadata,
           changedFields: metadataChanges
         });
-      }
+        
+        // If metadata changed, emit specific metadata change event
+        if (Object.keys(metadataChanges).length > 0) {
+          console.log('[TabManager] Metadata changed:', metadataChanges, 'for file:', filePath);
+          emitMetadataChange({
+            filePath,
+            fileName,
+            content: newC,
+            metadata: newMetadata,
+            changedFields: metadataChanges
+          });
+        }
+      }, 500); // 500ms debounce for metadata processing
+      
+      metadataProcessingRef.current.set(tabId, debouncedFn);
     }
     
+    debouncedFn(oldContent, newContent);
+  }, []);
+
+  /**
+   * Update content for a specific tab (immediate UI update, debounced metadata processing)
+   */
+  const updateTabContent = useCallback((tabId: string, content: string) => {
+    // Get the current tab to process metadata
+    const currentTab = tabState.openTabs.find(t => t.id === tabId);
+    
+    if (currentTab) {
+      // Process metadata changes with debouncing
+      processMetadataDebounced(tabId, currentTab.file.path, currentTab.file.name, currentTab.content, content);
+    }
+    
+    // Update tab content immediately for UI responsiveness
     setTabState(prev => ({
       ...prev,
       openTabs: prev.openTabs.map(tab => 
@@ -387,7 +418,7 @@ export const useTabManager = () => {
           : tab
       ),
     }));
-  }, [tabState.openTabs]);
+  }, [tabState.openTabs, processMetadataDebounced]);
 
 
   /**
@@ -612,6 +643,10 @@ export const useTabManager = () => {
    * Close all tabs
    */
   const closeAllTabs = useCallback(async () => {
+    // Cancel all debounced functions
+    metadataProcessingRef.current.forEach(fn => fn.cancel());
+    metadataProcessingRef.current.clear();
+    
     for (const tab of tabState.openTabs) {
       await closeTab(tab.id);
     }

@@ -193,8 +193,7 @@ async fn get_with_retries(
                             page_count,
                             attempt
                         );
-                        return Err(Box::new(std::io::Error::new(
-                            std::io::ErrorKind::Other,
+                        return Err(Box::new(std::io::Error::other(
                             format!(
                                 "Failed to fetch events on page {}: HTTP status {}",
                                 page_count, status
@@ -273,8 +272,7 @@ async fn get_with_retries(
     }
 
     // Should be unreachable
-    Err(Box::new(std::io::Error::new(
-        std::io::ErrorKind::Other,
+    Err(Box::new(std::io::Error::other(
         format!(
             "Failed to fetch events on page {} after retries (unexpected fallthrough)",
             page_count

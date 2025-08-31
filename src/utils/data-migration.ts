@@ -86,7 +86,7 @@ export function needsMigration(content: string): boolean {
     content.includes('[!multiselect:status:') ||
     content.includes('[!multiselect:project-status:') ||
     // Check for old status values
-    /\[!singleselect:(?:status|project-status):(?:not-started|active|planning|on-hold|waiting-for|cancelled|done)\]/i.test(content)
+    /\[!singleselect:(?:status|project-status):(?:not-started|active|planning|on-hold|waiting-for|cancelled|done|complete)\]/i.test(content)
   );
 }
 

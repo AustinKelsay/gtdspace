@@ -71,17 +71,21 @@ These accomplishments will require multiple projects to complete. They provide f
 /// Template for individual Goal pages with references
 pub fn generate_goal_template_with_refs(
     name: &str,
-    target_date: &str,
+    target_date: Option<&str>,
     outcome: &str,
     vision_refs: &str,
     purpose_refs: &str,
 ) -> String {
+    let target_section = if let Some(date) = target_date {
+        format!("**Target:** [!datetime:due_date:{}]\n\n", date)
+    } else {
+        String::new()
+    };
+    
     format!(
         r#"# {}
 
-**Target:** [!datetime:due_date:{}]
-
-## Successful Outcome
+{}## Successful Outcome
 {}
 
 ## Aligned With
@@ -95,7 +99,7 @@ pub fn generate_goal_template_with_refs(
 ## References
 [!references:]
 "#,
-        name, target_date, outcome, vision_refs, purpose_refs
+        name, target_section, outcome, vision_refs, purpose_refs
     )
 }
 
@@ -455,18 +459,40 @@ pub fn generate_action_template(
     due_date: Option<String>,
     effort: &str,
 ) -> String {
-    format!(
+    let mut template = format!(
         r#"# {}
 
 ## Status
 [!singleselect:status:{}]
+"#,
+        name,
+        status
+    );
 
+    // Only add focus date section if provided
+    if let Some(date) = focus_date {
+        template.push_str(&format!(
+            r#"
 ## Focus Date
 [!datetime:focus_date:{}]
+"#,
+            date
+        ));
+    }
 
+    // Only add due date section if provided
+    if let Some(date) = due_date {
+        template.push_str(&format!(
+            r#"
 ## Due Date
 [!datetime:due_date:{}]
+"#,
+            date
+        ));
+    }
 
+    template.push_str(&format!(
+        r#"
 ## Effort
 [!singleselect:effort:{}]
 
@@ -477,13 +503,12 @@ pub fn generate_action_template(
 <!-- Add any additional notes or details about this action here -->
 
 ---
+## Created
 [!datetime:created_date_time:{}]
 "#,
-        name,
-        status,
-        focus_date.as_deref().unwrap_or(""),
-        due_date.as_deref().unwrap_or(""),
         effort,
         Local::now().to_rfc3339()
-    )
+    ));
+
+    template
 }

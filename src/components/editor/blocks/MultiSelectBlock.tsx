@@ -32,7 +32,7 @@ type EditorBlockNode = {
 // Define prop schema with proper types
 const multiSelectPropSchema = {
   type: {
-    default: 'status' as MultiSelectBlockType,
+    default: 'tags' as MultiSelectBlockType,
   },
   value: {
     default: '',  // Store as comma-separated string

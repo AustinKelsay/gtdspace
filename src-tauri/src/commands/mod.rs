@@ -2426,7 +2426,7 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                 if !file_path.exists() {
                     let content = generate_goal_template_with_refs(
                         goal_name,
-                        &format!("{}-12-31", next_year),
+                        Some(&format!("{}-12-31", next_year)),
                         "Generate $10K/month passive income through multiple revenue streams",
                         &vision_ref,   // References Vision
                         &purpose_refs, // References BOTH Purpose documents

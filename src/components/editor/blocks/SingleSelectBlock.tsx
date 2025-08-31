@@ -55,7 +55,7 @@ const HABIT_FREQUENCY_OPTIONS = [
 // Define habit status options
 const HABIT_STATUS_OPTIONS = [
   { value: 'todo', label: 'To Do', group: 'Habit Status' },
-  { value: 'complete', label: 'Complete', group: 'Habit Status' },
+  { value: 'completed', label: 'Complete', group: 'Habit Status' },
 ];
 
 // Define prop schema with proper types
@@ -107,16 +107,14 @@ export const SingleSelectBlock = createReactBlockSpec(
               
               if (isHabitFile) {
                 const { invoke } = await import('@tauri-apps/api/core');
-                // Normalize 'complete' to 'completed' before sending to backend
-                const normalizedStatus = newValue === 'complete' ? 'completed' : newValue;
                 await invoke('update_habit_status', {
                   habitPath: filePath,  // Use camelCase for Tauri 2.0
-                  newStatus: normalizedStatus,   // Use camelCase for Tauri 2.0
+                  newStatus: newValue,   // Use camelCase for Tauri 2.0
                 });
                 
                 // After marking as complete, backend immediately resets to "todo"
                 // Update the UI to reflect this
-                if (newValue === 'complete') {
+                if (newValue === 'completed') {
                   // Give a brief moment to show the completion, then reset UI
                   setTimeout(() => {
                     newValue = 'todo';

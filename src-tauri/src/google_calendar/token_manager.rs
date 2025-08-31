@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tauri::Manager;
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredTokens {
     pub access_token: String,
@@ -12,17 +11,13 @@ pub struct StoredTokens {
 }
 
 /// Helper function to retry file reads on Windows with transient failures
-#[allow(clippy::all)]
 fn read_to_string_retry(
     path: &std::path::Path,
     attempts: u32,
     delay_ms: u64,
 ) -> std::io::Result<String> {
     if attempts == 0 {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "attempts must be > 0",
-        ));
+        return Err(std::io::Error::other("attempts must be > 0"));
     }
     for attempt in 1..=attempts {
         match std::fs::read_to_string(path) {
@@ -51,10 +46,7 @@ fn read_to_string_retry(
             }
         }
     }
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        "exhausted attempts without success",
-    ))
+    Err(std::io::Error::other("exhausted attempts without success"))
 }
 
 pub struct TokenManager {

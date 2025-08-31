@@ -6,7 +6,6 @@ name: Build and Release
     tags:
       - "v*"
   workflow_dispatch:
-    branches: [main, staging]
     inputs:
       version:
         description: "Version to release (e.g., v0.1.0)"
@@ -20,6 +19,8 @@ concurrency:
 
 jobs:
   create-release:
+    # Only run on main or staging branches for workflow_dispatch
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'staging'))
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -75,6 +76,8 @@ jobs:
             - Google Calendar integration requires setting up OAuth credentials
 
   build-tauri:
+    # Only run on main or staging branches for workflow_dispatch
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'staging'))
     needs: create-release
     permissions:
       contents: write
@@ -279,7 +282,8 @@ jobs:
 
   finalize-release:
     needs: [create-release, build-tauri]
-    if: needs.create-release.outputs.release_id != ''
+    # Only run on main or staging branches for workflow_dispatch, and if release was created
+    if: needs.create-release.outputs.release_id != '' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'staging')))
     runs-on: ubuntu-latest
     permissions:
       contents: write

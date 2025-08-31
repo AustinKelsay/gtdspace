@@ -180,6 +180,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   const dateTimeHTMLPattern = /<div\s+data-datetime='([^']+)'\s+class="datetime-block">([^<]+)<\/div>/g;
   
   // Pattern to match references markers in markdown (e.g., [!references:path1.md,path2.md])
+  // Note: Specifically look for [! prefix to avoid matching regular markdown lists
   const referencesMarkerPattern = /\[!references:([^\]]*)\]/g;
   // Pattern to match horizon references markers
   const areasReferencesPattern = /\[!areas-references:([^\]]*)\]/g;
@@ -525,13 +526,10 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       // Check if this paragraph contains our references markers or HTML
       if (!blockReplaced) {
         for (const refBlock of referencesBlocks) {
+          // Only match if the text explicitly contains our custom syntax with [! prefix
+          // Don't match on generic words like 'References' or 'Areas' to avoid false positives
           if (blockText.includes(refBlock.text) || 
-              blockText.includes(`[!${refBlock.blockType || 'references'}:`) ||
-              (refBlock.blockType === 'references' && blockText.includes('References')) ||
-              (refBlock.blockType === 'areas-references' && blockText.includes('Areas')) ||
-              (refBlock.blockType === 'goals-references' && blockText.includes('Goals')) ||
-              (refBlock.blockType === 'vision-references' && blockText.includes('Vision')) ||
-              (refBlock.blockType === 'purpose-references' && blockText.includes('Purpose'))) {
+              blockText.includes(`[!${refBlock.blockType || 'references'}:`)) {
             // Replace this paragraph with a references block
             processedBlocks.push({
               type: (refBlock.blockType || 'references') as ReferencesBlock['type'],
@@ -549,12 +547,10 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       // Check if this paragraph contains our list markers
       if (!blockReplaced) {
         for (const listBlock of listBlocks) {
+          // Only match if the text explicitly contains our custom syntax with [! prefix
+          // Don't match on generic phrases to avoid false positives with regular content
           if (blockText.includes(listBlock.text) || 
-              blockText.includes(`[!${listBlock.blockType}]`) ||
-              (listBlock.blockType === 'projects-list' && blockText.includes('Active Projects')) ||
-              (listBlock.blockType === 'areas-list' && blockText.includes('Related Areas')) ||
-              (listBlock.blockType === 'goals-list' && blockText.includes('Related Goals')) ||
-              (listBlock.blockType === 'visions-list' && blockText.includes('Related Visions'))) {
+              blockText.includes(`[!${listBlock.blockType}]`)) {
             // Replace this paragraph with a list block
             processedBlocks.push({
               type: listBlock.blockType as ListBlock['type'],

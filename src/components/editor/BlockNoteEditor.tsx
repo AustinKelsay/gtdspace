@@ -5,11 +5,12 @@
  * @phase 2 - Block-based WYSIWYG editor like Notion
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
+import debounce from 'lodash.debounce';
 import { MultiSelectBlock } from './blocks/MultiSelectBlock';
 import { SingleSelectBlock } from './blocks/SingleSelectBlock';
 import { CheckboxBlock } from './blocks/CheckboxBlock';
@@ -132,6 +133,10 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   const initialContentLoaded = useRef(false);
   // Track if we should ignore the next onChange event
   const ignoreNextChange = useRef(false);
+  // Track the last processed content to avoid unnecessary updates
+  const lastProcessedContent = useRef<string>('');
+  // Store cursor position
+  const cursorPositionRef = useRef<{ block: string } | null>(null);
 
   // Handle initial content - only on mount
   useEffect(() => {
@@ -173,24 +178,57 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   // Track previous content to detect external updates
   const previousContent = useRef(content);
 
-  // Handle content updates after initial load (for real-time updates like habit history)
-  useEffect(() => {
-    const updateContent = async () => {
-      // Skip if editor not ready or content hasn't changed
-      if (!editor || !initialContentLoaded.current || content === previousContent.current) {
-        return;
+  // Save cursor position before updates
+  const saveCursorPosition = useCallback(() => {
+    if (!editor) return;
+    try {
+      const selection = editor.getTextCursorPosition();
+      if (selection) {
+        cursorPositionRef.current = {
+          block: selection.block.id
+        };
       }
+    } catch (e) {
+      // Cursor position might not be available
+    }
+  }, [editor]);
 
+  // Restore cursor position after updates
+  const restoreCursorPosition = useCallback(() => {
+    if (!editor || !cursorPositionRef.current) return;
+    try {
+      const { block } = cursorPositionRef.current;
+      const targetBlock = editor.document.find(b => b.id === block);
+      if (targetBlock) {
+        editor.setTextCursorPosition(targetBlock, 'end');
+      }
+    } catch (e) {
+      // Cursor restoration might fail
+    }
+  }, [editor]);
+
+  // Debounced content update to avoid rapid replacements
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const debouncedContentUpdate = useCallback(
+    debounce(async (newContent: string) => {
+      if (!editor || !initialContentLoaded.current) return;
+      
+      // Skip if content hasn't meaningfully changed
+      if (newContent === lastProcessedContent.current) return;
+      
       try {
+        // Save cursor position
+        saveCursorPosition();
+        
         // Set flag to ignore the onChange event from content update
         ignoreNextChange.current = true;
 
         // Parse and update blocks
-        const parsedBlocks = await editor.tryParseMarkdownToBlocks(content);
-        const processedBlocks = postProcessBlockNoteBlocks(parsedBlocks as unknown[], content) as typeof parsedBlocks;
+        const parsedBlocks = await editor.tryParseMarkdownToBlocks(newContent);
+        const processedBlocks = postProcessBlockNoteBlocks(parsedBlocks as unknown[], newContent) as typeof parsedBlocks;
 
         // Check if this is a habit file to add special animation
-        const isHabitFile = content.includes('## History') && content.includes('[!checkbox:habit-status:');
+        const isHabitFile = newContent.includes('## History') && newContent.includes('[!checkbox:habit-status:');
 
         if (isHabitFile) {
           // Add a subtle animation by briefly highlighting the editor
@@ -205,20 +243,31 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         }
 
         editor.replaceBlocks(editor.document, processedBlocks);
-        previousContent.current = content;
-
-        // Reset the flag after a short delay
+        lastProcessedContent.current = newContent;
+        
+        // Restore cursor position
         setTimeout(() => {
+          restoreCursorPosition();
           ignoreNextChange.current = false;
-        }, 100);
+        }, 50);
       } catch (error) {
         console.error('Error updating content:', error);
-        previousContent.current = content; // Update even on error to prevent infinite retries
+        lastProcessedContent.current = newContent; // Update even on error to prevent infinite retries
       }
-    };
+    }, 300), // 300ms debounce for external updates
+    [editor, saveCursorPosition, restoreCursorPosition]
+  );
 
-    updateContent();
-  }, [content, editor]);
+  // Handle content updates after initial load (for real-time updates like habit history)
+  useEffect(() => {
+    // Skip if editor not ready or content hasn't changed
+    if (!editor || !initialContentLoaded.current || content === previousContent.current) {
+      return;
+    }
+
+    debouncedContentUpdate(content);
+    previousContent.current = content;
+  }, [content, editor, debouncedContentUpdate]);
 
   // Set file path in window context for SingleSelectBlock
   useEffect(() => {

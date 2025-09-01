@@ -1,4 +1,5 @@
 import React from 'react';
+import '@/utils/resize-observer-fix';
 import { invoke } from '@tauri-apps/api/core';
 import { PanelLeftClose, PanelLeft, FolderOpen, Folder, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';

@@ -4,6 +4,10 @@
  * @created 2025-01-XX
  */
 
+// Canonical token sets for validation
+const STATUS_TOKENS = ['in-progress', 'waiting', 'completed'] as const;
+const EFFORT_TOKENS = ['small', 'medium', 'large', 'extra-large'] as const;
+
 /**
  * Escapes special characters for safe inclusion in HTML attributes
  * @param str - The string to escape
@@ -112,7 +116,9 @@ export function generateProjectReadmeWithSingleSelect(
   dueDate: string | null,
   createdDateTime: string
 ): string {
-  const statusMarkup = generateSingleSelectMarkup('project-status', 'Status', 'in-progress');
+  // Always use valid default for project status
+  const validStatus = 'in-progress'; // Already a valid token from PROJECT_STATUS_TOKENS
+  const statusMarkup = generateSingleSelectMarkup('project-status', 'Status', validStatus);
   
   // Escape createdDateTime to prevent angle bracket injection
   const escapedCreatedDateTime = escapePlain(createdDateTime);
@@ -165,8 +171,16 @@ export function generateActionFileWithSingleSelect(
   createdDateTime: string
 ): string {
   // Properly normalize status and effort slugs using the normalizeSlug function
-  const normalizedStatus = normalizeSlug(status);
-  const normalizedEffort = normalizeSlug(effort);
+  let normalizedStatus = normalizeSlug(status);
+  let normalizedEffort = normalizeSlug(effort);
+  
+  // Validate normalized values against canonical token sets
+  if (!STATUS_TOKENS.includes(normalizedStatus as typeof STATUS_TOKENS[number])) {
+    normalizedStatus = 'in-progress'; // Default to in-progress if invalid
+  }
+  if (!EFFORT_TOKENS.includes(normalizedEffort as typeof EFFORT_TOKENS[number])) {
+    normalizedEffort = 'medium'; // Default to medium if invalid
+  }
   
   const statusMarkup = generateSingleSelectMarkup('status', 'Status', normalizedStatus);
   const effortMarkup = generateSingleSelectMarkup('effort', 'Effort', normalizedEffort);

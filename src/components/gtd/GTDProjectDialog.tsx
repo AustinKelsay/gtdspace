@@ -144,7 +144,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">Desired Outcome</Label>
             <Textarea
               id="description"
               placeholder="What is the desired outcome of this project?"

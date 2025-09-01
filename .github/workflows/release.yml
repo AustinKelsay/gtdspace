@@ -59,6 +59,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate Icons
+        run: npm run icons:generate
+
       - name: Run safe release script
         run: npm run release:${{ github.event.inputs.type }}
         env:

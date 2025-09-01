@@ -112,14 +112,18 @@ export const GTDTagSelector: React.FC<GTDTagSelectorProps> = ({
   // but propagate normalized values without '@' to callers.
   const displayValue = React.useMemo(() => {
     if (type !== 'contexts' && type !== 'all') return value;
-    const contextSet = new Set(GTD_CONTEXTS.map(o => o.value)); // includes values like '@computer'
+    // Include both predefined contexts and custom context options
+    const allContextOptions = type === 'contexts' 
+      ? [...GTD_CONTEXTS, ...customOptions.filter(o => o.group === 'Contexts' || o.value.startsWith('@'))]
+      : GTD_CONTEXTS;
+    const contextSet = new Set(allContextOptions.map(o => o.value)); // includes values like '@computer'
     return (value || []).map(v => {
       // Normalize only if this is a context tag (with/without @)
       const hasAt = v.startsWith('@');
       const normalized = hasAt ? v : `@${v}`;
       return contextSet.has(normalized) ? normalized : v; // leave non-contexts untouched
     });
-  }, [type, value]);
+  }, [type, value, customOptions]);
 
   const handleChange = React.useCallback((newValue: string[]) => {
     if (!onValueChange) return;

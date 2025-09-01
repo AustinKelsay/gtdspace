@@ -18,9 +18,9 @@ This command will:
 ### Other Version Types
 
 ```bash
-npm run release:minor  # 0.1.0 → 0.2.0 (auto-push)
-npm run release:major  # 0.1.0 → 1.0.0 (auto-push)
-npm run release:patch  # 0.1.0 → 0.1.1 (auto-push)
+npm run release:minor  # 0.1.0 → 0.2.0
+npm run release:major  # 0.1.0 → 1.0.0
+npm run release:patch  # 0.1.0 → 0.1.1
 
 # Or manually bump version only (no auto-push):
 npm run version:minor  # Then manually: git push --follow-tags

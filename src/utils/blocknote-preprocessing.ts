@@ -226,17 +226,17 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   }
   
   // Pattern to match multiselect markers in markdown (e.g., [!multiselect:tags:urgent,important])
-  const multiSelectMarkerPattern = /\[!multiselect:([^:]+):([^\]]+)\]/g;
+  const multiSelectMarkerPattern = /\[!multiselect:([^:]+):([^\]]*)\]/g;
   // Pattern to match HTML multiselect blocks (legacy support)
   const multiSelectHTMLPattern = /<div\s+data-multiselect='([^']+)'\s+class="multiselect-block">([^<]+)<\/div>/g;
   
   // Pattern to match singleselect markers in markdown (e.g., [!singleselect:status:in-progress])
-  const singleSelectMarkerPattern = /\[!singleselect:([^:]+):([^\]]+)\]/g;
+  const singleSelectMarkerPattern = /\[!singleselect:([^:]+):([^\]]*)\]/g;
   // Pattern to match HTML singleselect blocks
   const singleSelectHTMLPattern = /<div\s+data-singleselect='([^']+)'\s+class="singleselect-block">([^<]+)<\/div>/g;
   
   // Pattern to match checkbox markers in markdown (e.g., [!checkbox:habit-status:true])
-  const checkboxMarkerPattern = /\[!checkbox:([^:]+):([^\]]+)\]/g;
+  const checkboxMarkerPattern = /\[!checkbox:([^:]+):([^\]]*)\]/g;
   // Pattern to match HTML checkbox blocks
   const checkboxHTMLPattern = /<div\s+data-checkbox='([^']+)'\s+class="checkbox-block">([^<]+)<\/div>/g;
   
@@ -563,7 +563,9 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       if (!blockReplaced) {
         for (const cbBlock of checkboxBlocks) {
           // Only match on exact text, not partial matches or labels
-          if (cbBlock.text && blockText.includes(cbBlock.text)) {
+          const normalizedCBText = (cbBlock.text ?? '').trim();
+          const normalizedBlockText = (blockText ?? '').trim();
+          if (normalizedCBText.length > 0 && normalizedBlockText === normalizedCBText) {
             // Replace this paragraph with a checkbox block
             processedBlocks.push({
               type: 'checkbox',

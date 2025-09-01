@@ -523,7 +523,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   const handleHabitToggle = async (habit: GTDHabit) => {
     const newStatus = habit.status === 'completed' ? 'todo' : 'completed';
     await updateHabitStatus(
-      `${currentFolder}/Habits/${habit.name}.md`,
+      `${gtdSpace.root_path}/Habits/${habit.name}.md`,
       newStatus
     );
   };

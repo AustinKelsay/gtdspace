@@ -269,13 +269,13 @@ const MultiSelect = React.forwardRef<
     )
 
     return (
-      <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+      <PopoverPrimitive.Root open={open} onOpenChange={setOpen} modal={false}>
         <PopoverPrimitive.Trigger ref={ref} asChild disabled={disabled} {...props}>
           {triggerContent}
         </PopoverPrimitive.Trigger>
-        <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Portal container={typeof document !== 'undefined' ? document.body : undefined}>
           <PopoverPrimitive.Content
-            className="w-full p-0 z-50"
+            className="z-[9999] w-full p-0 fixed pointer-events-auto"
             align="start"
             sideOffset={4}
             style={{
@@ -283,7 +283,7 @@ const MultiSelect = React.forwardRef<
               maxWidth: "var(--radix-popover-trigger-width)",
             }}
           >
-            <div className="rounded-md border bg-popover text-popover-foreground shadow-md outline-none animate-in fade-in-0 zoom-in-95">
+            <div className="rounded-md border bg-popover text-popover-foreground shadow-md outline-none animate-in fade-in-0 zoom-in-95 pointer-events-auto">
               <div className="flex items-center border-b px-3">
                 <input
                   ref={inputRef}
@@ -294,7 +294,7 @@ const MultiSelect = React.forwardRef<
                   onKeyDown={handleKeyDown}
                 />
               </div>
-              <ScrollArea className="max-h-60">
+              <ScrollArea className="max-h-[300px]">
                 <div className="p-1">
                   {filteredOptions.length > 0 && (
                     <>

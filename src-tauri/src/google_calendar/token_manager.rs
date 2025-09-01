@@ -81,9 +81,10 @@ impl TokenManager {
         let json = serde_json::to_string_pretty(tokens)?;
 
         // Create a temporary file in the same directory as the target file
-        let parent_dir = self.storage_path.parent().ok_or_else(|| {
-            std::io::Error::other("Invalid storage path")
-        })?;
+        let parent_dir = self
+            .storage_path
+            .parent()
+            .ok_or_else(|| std::io::Error::other("Invalid storage path"))?;
         let mut temp_file = tempfile::NamedTempFile::new_in(parent_dir)?;
 
         // Write to temp file

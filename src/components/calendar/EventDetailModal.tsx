@@ -27,29 +27,29 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 }) => {
   if (!event) return null;
 
-  const formatEventTime = (date: string | undefined, time: string | undefined) => {
-    if (!date && !time) return 'No time specified';
+  const formatEventTime = (dateTime: string | null | undefined) => {
+    if (!dateTime) return 'No time specified';
 
-    if (time) {
-      // Parse the time and format it nicely
-      try {
-        const dateTime = new Date(`${date || '2024-01-01'}T${time}`);
-        return format(dateTime, 'h:mm a');
-      } catch {
-        return time;
+    try {
+      const dateObj = new Date(dateTime);
+      
+      // Check if the input contains a time component
+      // Look for 'T' followed by time, and ensure it's not just midnight (00:00:00)
+      const hasTimeComponent = dateTime.includes('T') && 
+        !dateTime.endsWith('T00:00:00') && 
+        !dateTime.endsWith('T00:00:00Z') &&
+        !dateTime.endsWith('T00:00:00.000Z');
+      
+      if (hasTimeComponent) {
+        // Format with both date and time
+        return format(dateObj, 'PPP p'); // e.g., "April 29, 2023 at 2:30 PM"
+      } else {
+        // Format date only
+        return format(dateObj, 'PPP'); // e.g., "April 29, 2023"
       }
+    } catch {
+      return dateTime;
     }
-
-    if (date) {
-      try {
-        const dateObj = new Date(date);
-        return format(dateObj, 'PPP');
-      } catch {
-        return date;
-      }
-    }
-
-    return 'No time specified';
   };
 
   const getEventTypeColor = (type: string) => {
@@ -106,9 +106,9 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
               <div className="flex items-center gap-2 text-sm">
                 <Calendar className="w-4 h-4 text-muted-foreground" />
                 <span>
-                  {event.focusDate ? formatEventTime(event.focusDate, undefined) : null}
+                  {event.focusDate ? formatEventTime(event.focusDate) : null}
                   {event.focusDate && event.dueDate ? ' - ' : null}
-                  {event.dueDate ? formatEventTime(event.dueDate, undefined) : null}
+                  {event.dueDate ? formatEventTime(event.dueDate) : null}
                 </span>
               </div>
             )}

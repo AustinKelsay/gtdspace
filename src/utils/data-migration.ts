@@ -120,10 +120,30 @@ export function migrateGTDObject<T extends Record<string, any>>(obj: T): T {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const migrated: any = { ...obj };
   
-  // Migrate created_date to created_date_time
-  if ('created_date' in migrated && !('created_date_time' in migrated)) {
-    migrated.created_date_time = migrated.created_date;
+  // Migrate snake_case to camelCase for date fields
+  if ('created_date' in migrated) {
+    migrated.createdDateTime = migrated.created_date;
     delete migrated.created_date;
+  }
+  if ('created_date_time' in migrated) {
+    migrated.createdDateTime = migrated.created_date_time;
+    delete migrated.created_date_time;
+  }
+  if ('due_date' in migrated) {
+    migrated.dueDate = migrated.due_date;
+    delete migrated.due_date;
+  }
+  if ('focus_date' in migrated) {
+    migrated.focusDate = migrated.focus_date;
+    delete migrated.focus_date;
+  }
+  if ('focus_date_time' in migrated) {
+    migrated.focusDate = migrated.focus_date_time;
+    delete migrated.focus_date_time;
+  }
+  if ('end_date' in migrated) {
+    migrated.endDate = migrated.end_date;
+    delete migrated.end_date;
   }
   
   // Ensure status is a single value, not an array

@@ -24,14 +24,29 @@ export interface GoogleCalendarSyncStatus {
   error?: string;
 }
 
-export type CalendarItemStatus =
+// GTD task/project statuses
+export type GtdTaskStatus = 
   | 'in-progress'
   | 'completed'
   | 'todo'
+  | 'waiting';
+
+// Google Calendar event statuses
+export type GoogleEventStatus = 
   | 'confirmed'
   | 'tentative'
-  | 'cancelled'
-  | 'needsAction';
+  | 'cancelled';
+
+// Google Calendar attendee response statuses
+export type AttendeeResponseStatus = 
+  | 'needsAction'
+  | 'declined'
+  | 'tentative'
+  | 'accepted';
+
+// Combined type for backward compatibility
+// TODO: Refactor to use separate fields for GTD vs Google status
+export type CalendarItemStatus = GtdTaskStatus | GoogleEventStatus;
 
 export interface ExtendedCalendarItem {
   id: string;

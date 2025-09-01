@@ -84,8 +84,8 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
         project_path: projectPath,
         action_name: actionName.trim(),
         status,
-        focus_date: focusDateTime,
-        due_date: dueDateTime,
+        focusDate: focusDateTime,
+        dueDate: dueDateTime,
         effort,
         contexts: contexts.length > 0 ? contexts : undefined,
       };

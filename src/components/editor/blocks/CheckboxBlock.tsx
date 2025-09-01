@@ -68,13 +68,15 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
           const result = await withErrorHandling(
             async () => {
               // Convert checkbox state to status values for backend
-              const statusValue = checkedVal ? 'completed' : 'todo';
+              const statusValue = checkedVal ? 'complete' : 'todo';
 
               // Gracefully bail out if not in Tauri/browser-only envs
               try {
                 if (!isTauriContext()) {
-                  console.warn('[CheckboxBlock] Not in Tauri context; skipping backend update');
-                  return { statusValue };
+                  console.warn('[CheckboxBlock] Not in Tauri context; reverting UI/doc and skipping backend update');
+                  setLocalChecked(prevChecked);
+                  try { props.editor.updateBlock(block, { props: { checked: prevChecked } }); } catch { /* ignore error */ }
+                  return null; // signal "not applied"
                 }
 
                 const core = await import('@tauri-apps/api/core');
@@ -83,8 +85,10 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
                   | undefined;
 
                 if (typeof invoke !== 'function') {
-                  console.warn('[CheckboxBlock] Tauri invoke unavailable; skipping backend update');
-                  return { statusValue };
+                  console.warn('[CheckboxBlock] Tauri invoke unavailable; reverting UI/doc and skipping backend update');
+                  setLocalChecked(prevChecked);
+                  try { props.editor.updateBlock(block, { props: { checked: prevChecked } }); } catch { /* ignore error */ }
+                  return null;
                 }
 
                 await invoke('update_habit_status', {
@@ -94,9 +98,10 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
 
                 return { statusValue };
               } catch (e) {
-                console.warn('[CheckboxBlock] Failed to call backend; skipping update', e);
-                // Return consistent shape so callers won’t break
-                return { statusValue };
+                console.warn('[CheckboxBlock] Failed to call backend; reverting UI/doc and skipping update', e);
+                setLocalChecked(prevChecked);
+                try { props.editor.updateBlock(block, { props: { checked: prevChecked } }); } catch { /* ignore error */ }
+                return null;
               }
             },
             'Failed to update habit status'
@@ -133,13 +138,9 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
             });
             window.dispatchEvent(reloadEvent);
           } else {
-            // Error handling failed, revert to previous state (UI + document)
+            // Revert already performed in the failure/early-return branches above
             setLocalChecked(prevChecked);
-            try {
-              props.editor.updateBlock(block, { props: { checked: prevChecked } });
-            } catch (e) {
-              console.error('[CheckboxBlock] Failed to revert block props:', e);
-            }
+            try { props.editor.updateBlock(block, { props: { checked: prevChecked } }); } catch { /* ignore error */ }
           }
         }
       }

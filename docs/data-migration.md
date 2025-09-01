@@ -77,7 +77,7 @@ Migration is applied in these hooks:
 ### `needsMigration(content: string): boolean`
 
 Checks if content needs migration by looking for:
-- Old `[!datetime:created_date:` fields
+- Old `[!datetime:created_date:` fields. To avoid false positives with `created_date_time`, this check should use a regular expression with a negative lookahead. For example: `const regex = /\[!datetime:created_date:(?!_time)/;`. This is more robust than `content.includes('[!datetime:created_date:')`.
 - Multiselect status fields
 - Old status tokens
 

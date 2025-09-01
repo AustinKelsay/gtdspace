@@ -437,13 +437,13 @@ export interface GTDProject {
   /** Project description */
   description: string;
   /** Optional due date (ISO format: YYYY-MM-DD) */
-  due_date?: string | null;
+  dueDate?: string | null;
   /** Project status */
   status: GTDProjectStatus;
   /** Full path to project folder */
   path: string;
   /** Date project was created */
-  created_date_time: string;
+  createdDateTime: string;
   /** Number of actions in the project */
   action_count?: number;
 }
@@ -459,15 +459,15 @@ export interface GTDAction {
   /** Action status */
   status: GTDActionStatus;
   /** Optional focus date (ISO format: YYYY-MM-DDTHH:mm:ss) */
-  focus_date?: string | null;
+  focusDate?: string | null;
   /** Optional due date (ISO format: YYYY-MM-DD) */
-  due_date?: string | null;
+  dueDate?: string | null;
   /** Effort estimation */
   effort: GTDActionEffort;
   /** Optional notes */
   notes?: string;
   /** Date action was created */
-  created_date_time: string;
+  createdDateTime: string;
   /** Project this action belongs to */
   project_path: string;
 }
@@ -511,7 +511,7 @@ export interface GTDProjectCreate {
   /** Project description */
   description: string;
   /** Optional due date (ISO format: YYYY-MM-DD) */
-  due_date?: string | null;
+  dueDate?: string | null;
   /** Project status */
   status?: GTDProjectStatus;
 }
@@ -527,9 +527,9 @@ export interface GTDActionCreate {
   /** Initial status */
   status: GTDActionStatus;
   /** Optional focus date (ISO format: YYYY-MM-DDTHH:mm:ss) */
-  focus_date?: string | null;
+  focusDate?: string | null;
   /** Optional due date (ISO format: YYYY-MM-DD) */
-  due_date?: string | null;
+  dueDate?: string | null;
   /** Effort estimate */
   effort: GTDActionEffort;
   /** GTD contexts where this action can be performed */
@@ -568,5 +568,5 @@ export interface GTDHabit {
   /** Last update time */
   last_updated?: string;
   /** Date habit was created */
-  created_date_time: string;
+  createdDateTime: string;
 }

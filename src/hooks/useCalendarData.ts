@@ -16,9 +16,9 @@ export interface CalendarItem {
   type: 'project' | 'action' | 'habit' | 'google-event';
   source?: 'gtd' | 'google';
   status?: string;
-  due_date?: string;
-  focus_date?: string;
-  end_date?: string; // For Google events
+  dueDate?: string;
+  focusDate?: string;
+  endDate?: string; // For Google events
   projectName?: string;
   frequency?: string; // For habits
   createdDateTime?: string; // For habits
@@ -208,8 +208,8 @@ export const useCalendarData = (
                   path: file.path,
                   type: 'project',
                   status: status,
-                  due_date: dueDate,
-                  focus_date: undefined,
+                  dueDate: dueDate,
+                  focusDate: undefined,
                   projectName: undefined
                 });
               }
@@ -252,8 +252,8 @@ export const useCalendarData = (
                   path: file.path,
                   type: 'action',
                   status: status,
-                  due_date: dueDate,
-                  focus_date: finalFocusDate,
+                  dueDate: dueDate,
+                  focusDate: finalFocusDate,
                   projectName: projectName,
                   effort: effort
                 });
@@ -407,8 +407,8 @@ export const useCalendarData = (
                   path: file.path,
                   type: 'habit',
                   status: habitStatus,
-                  due_date: undefined,
-                  focus_date: focusDate, // Can include time if specified
+                  dueDate: undefined,
+                  focusDate: focusDate, // Can include time if specified
                   projectName: undefined,
                   frequency: frequency,
                   createdDateTime: createdDateTime
@@ -425,7 +425,7 @@ export const useCalendarData = (
       if (gtdSpace?.projects) {
         let gtdProjectIndex = 0;
         for (const project of gtdSpace.projects) {
-          if (project.due_date && !allItems.some(item => 
+          if (project.dueDate && !allItems.some(item => 
             item.type === 'project' && item.name === project.name
           )) {
             console.log(`[CalendarData] Adding project from gtdSpace: ${project.name}`);
@@ -435,8 +435,8 @@ export const useCalendarData = (
               path: project.path,
               type: 'project',
               status: project.status || 'in-progress',
-              due_date: project.due_date,
-              focus_date: undefined,
+              dueDate: project.dueDate,
+              focusDate: undefined,
               projectName: undefined
             });
             gtdProjectIndex++;
@@ -455,9 +455,9 @@ export const useCalendarData = (
           type: 'google-event',
           source: 'google',
           status: 'confirmed',
-          due_date: event.end || event.start, // Use end time, fallback to start
-          focus_date: event.start,
-          end_date: event.end, // Add end_date for duration calculation
+          dueDate: event.end || event.start, // Use end time, fallback to start
+          focusDate: event.start,
+          endDate: event.end, // Add end_date for duration calculation
           googleEventId: event.id,
           attendees: event.attendees,
           location: event.location,
@@ -470,8 +470,8 @@ export const useCalendarData = (
           ts: new Date().toISOString(),
           event: 'add_google_event',
           name: calendarItem.name,
-          focus_date: calendarItem.focus_date,
-          end_date: calendarItem.end_date,
+          focusDate: calendarItem.focusDate,
+          endDate: calendarItem.endDate,
           source: 'CalendarData'
         });
         allItems.push(calendarItem);

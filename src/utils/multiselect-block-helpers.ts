@@ -61,7 +61,15 @@ export function serializeMultiselectsToMarkers(markdown: string): string {
             
             const data = JSON.parse(jsonStr);
             const type = data.type || 'tags';
-            const value = (data.value || []).join(',');
+            // Normalize value: handle arrays, strings, and other types
+            let value = '';
+            if (Array.isArray(data.value)) {
+              value = data.value.join(',');
+            } else if (typeof data.value === 'string') {
+              value = data.value;
+            } else if (data.value != null) {
+              value = String(data.value);
+            }
             const newMarker = `[!multiselect:${type}:${value}]`;
             
             // Replace the element with a text node containing the marker
@@ -113,7 +121,15 @@ function serializeMultiselectsToMarkersRegex(markdown: string): string {
       
       const data = JSON.parse(jsonStr);
       const type = data.type || 'tags';
-      const value = (data.value || []).join(',');
+      // Normalize value: handle arrays, strings, and other types
+      let value = '';
+      if (Array.isArray(data.value)) {
+        value = data.value.join(',');
+      } else if (typeof data.value === 'string') {
+        value = data.value;
+      } else if (data.value != null) {
+        value = String(data.value);
+      }
       const newMarker = `[!multiselect:${type}:${value}]`;
 
       // Replace the HTML with the marker

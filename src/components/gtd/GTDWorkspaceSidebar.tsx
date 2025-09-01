@@ -149,6 +149,25 @@ const GTD_SECTIONS: GTDSection[] = [
   }
 ];
 
+// Helper function to normalize status values to canonical tokens
+const normalizeStatus = (status: string | undefined): string => {
+  if (!status) return 'in-progress';
+  
+  const statusMappings: Record<string, string> = {
+    'not-started': 'in-progress',
+    'active': 'in-progress',
+    'planning': 'in-progress',
+    'on-hold': 'waiting',
+    'waiting-for': 'waiting',
+    'cancelled': 'completed',
+    'done': 'completed',
+    'complete': 'completed',
+  };
+  
+  const normalized = status.trim().toLowerCase().replace(/\s+/g, '-');
+  return statusMappings[normalized] || normalized;
+};
+
 export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   currentFolder,
   onFolderSelect,
@@ -288,11 +307,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         try {
           const content = await invoke<string>('read_file', { path: action.path });
           // Extract status from the markdown content
-          // Look for [!singleselect:status:xxx] pattern
-          const match = content.match(/\[!singleselect:status:(in-progress|waiting|completed?|done)\]/i);
-          const raw = (match?.[1] ?? 'in-progress').trim().toLowerCase();
-          // Normalize to the canonical set used by the UI
-          const normalized = (raw === 'done' || raw === 'complete') ? 'completed' : raw;
+          // Look for [!singleselect:status:xxx] pattern - capture any token
+          const match = content.match(/\[!singleselect:status:(\S+?)\]/i);
+          const rawStatus = match?.[1] || 'in-progress';
+          const normalized = normalizeStatus(rawStatus);
 
           // Extract due date from the markdown content
           // Look for [!datetime:due_date:xxx] pattern
@@ -749,10 +767,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         const optimistic: GTDProject = {
           name: projectName,
           description: '',
-          due_date: undefined,
+          dueDate: undefined,
           status: 'in-progress',
           path: projectPath,
-          created_date_time: new Date().toISOString(),
+          createdDateTime: new Date().toISOString(),
           action_count: 0,
         };
         setPendingProjects(prev => (prev.some(p => p.path === optimistic.path) ? prev : [...prev, optimistic]));
@@ -862,23 +880,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     );
   };
 
-  // Helper function to normalize status values consistently
-  const normalizeStatus = (status: string | undefined | null): string => {
-    if (!status) return 'in-progress';
-    
-    const raw = status.trim().toLowerCase().replace(/[\s_]+/g, '-');
-    
-    // Map various status variations to canonical values
-    if (raw === 'done' || raw === 'completed') return 'completed';
-    if (raw === 'in-progress' || raw === 'inprogress') return 'in-progress';
-    if (raw === 'waiting-for' || raw === 'on-hold') return 'waiting';
-    
-    return raw;
-  };
-
   const getProjectStatusColor = (statusInput: string) => {
-    const normalizedStatus = normalizeStatus(statusInput);
-    switch (normalizedStatus) {
+    switch (statusInput) {
       case 'completed': return 'text-green-600 dark:text-green-500';
       case 'waiting': return 'text-purple-600 dark:text-purple-500';
       case 'in-progress': return 'text-blue-600 dark:text-blue-500';
@@ -887,8 +890,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   };
 
   const getProjectStatusIcon = (statusInput: string) => {
-    const normalizedStatus = normalizeStatus(statusInput);
-    switch (normalizedStatus) {
+    switch (statusInput) {
       case 'completed': return CheckCircle2;
       case 'waiting': return CircleDot; // Filled circle (dot in center) for waiting
       case 'in-progress': return Circle; // Outline circle for in-progress
@@ -897,8 +899,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   };
 
   const getActionStatusColor = (status: string) => {
-    const normalizedStatus = normalizeStatus(status);
-    switch (normalizedStatus) {
+    switch (status) {
       case 'completed': return 'text-green-600 dark:text-green-500';
       case 'waiting': return 'text-purple-600 dark:text-purple-500';
       case 'in-progress': return 'text-blue-600 dark:text-blue-500';
@@ -907,8 +908,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   };
 
   const getActionStatusIcon = (status: string) => {
-    const normalizedStatus = normalizeStatus(status);
-    switch (normalizedStatus) {
+    switch (status) {
       case 'completed': return CheckCircle2;
       case 'waiting': return CircleDot;
       case 'in-progress': return Circle;
@@ -1485,7 +1485,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                         <div className="text-xs text-muted-foreground flex items-center gap-1">
                                           <span className="truncate">{project.action_count || 0} actions</span>
                                           {(() => {
-                                            const dueStr = projectMetadata[project.path]?.due_date ?? project.due_date ?? '';
+                                            const dueStr = projectMetadata[project.path]?.due_date ?? project.dueDate ?? '';
                                             if (!dueStr || dueStr.trim() === '') return null;
                                             const date = parseLocalDateString(dueStr);
                                             return date ? (

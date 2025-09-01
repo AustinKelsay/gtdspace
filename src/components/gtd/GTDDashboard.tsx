@@ -253,19 +253,17 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     }
                   }
 
-                  // Normalize status values: convert 'complete' to 'completed'
                   const rawStatus = checkboxStatus
                     ? (checkboxStatus[1] === 'true' ? 'completed' : 'todo')
                     : (singleselectStatus?.[1] || 'todo');
-                  const status = rawStatus === 'complete' ? 'completed' : rawStatus;
                   
                   return {
                     name: file.name.replace('.md', ''),
                     frequency: (frequencyMatch?.[1] || 'daily') as GTDHabit['frequency'],
-                    status: (status === 'completed' || status === 'todo') ? status : 'todo',
+                    status: (rawStatus === 'completed' || rawStatus === 'todo') ? rawStatus : 'todo',
                     path: file.path,
                     last_updated: lastUpdatedTime || new Date().toISOString(),
-                    created_date_time: createdDateTime || lastUpdatedTime || new Date().toISOString()
+                    createdDateTime: createdDateTime || lastUpdatedTime || new Date().toISOString()
                   };
                 } catch (error) {
                   return null;
@@ -350,12 +348,11 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
             await Promise.all(files.map(async (file) => {
               try {
                 const content = await invoke<string>('read_file', { path: file.path });
-                const statusMatch = content.match(/\[!singleselect:status:(in-progress|waiting|completed?|done)\]/i);
+                const statusMatch = content.match(/\[!singleselect:status:(in-progress|waiting|completed)\]/i);
                 const raw = (statusMatch?.[1] || 'in-progress').toLowerCase();
-                const normalized = (raw === 'done' || raw === 'complete') ? 'completed' : raw;
-                if (normalized === 'in-progress') inProgress++;
-                else if (normalized === 'waiting') waiting++;
-                else if (normalized === 'completed') completed++;
+                if (raw === 'in-progress') inProgress++;
+                else if (raw === 'waiting') waiting++;
+                else if (raw === 'completed') completed++;
                 
 
                 const dueMatch = content.match(/\[!datetime:due_date:([^\]]*)\]/i);
@@ -434,7 +431,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
       stats.totalActions += project.action_count || 0;
 
       // Check for overdue projects using robust parsing
-      const dueDateParsed = parseProjectDueDate((project as unknown as { due_date?: string }).due_date);
+      const dueDateParsed = parseProjectDueDate((project as unknown as { dueDate?: string }).dueDate);
       if (dueDateParsed && !primaryStatus.includes('completed')) {
         if (dueDateParsed < now) {
           stats.overdueProjects++;
@@ -452,8 +449,8 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
     // Sort upcoming deadlines by date
     stats.upcomingDeadlines.sort((a, b) => {
-      const dateA = new Date(a.due_date!).getTime();
-      const dateB = new Date(b.due_date!).getTime();
+      const dateA = new Date(a.dueDate!).getTime();
+      const dateB = new Date(b.dueDate!).getTime();
       return dateA - dateB;
     });
 
@@ -933,7 +930,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                                   {project.action_count || 0} actions
                                 </span>
                                 {(() => {
-                                  const d = parseProjectDueDate((project as unknown as { due_date?: string }).due_date); return d ? (
+                                  const d = parseProjectDueDate((project as unknown as { dueDate?: string }).dueDate); return d ? (
                                     <span className={cn(
                                       "flex items-center gap-1",
                                       d < new Date() ? "text-destructive" : "text-orange-600"
@@ -1046,7 +1043,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                         <div className="space-y-2">
                           {gtdSpace.projects
                             ?.filter(p => {
-                              const due = parseProjectDueDate((p as unknown as { due_date?: string }).due_date);
+                              const due = parseProjectDueDate((p as unknown as { dueDate?: string }).dueDate);
                               const statusStr = p.status || '';
                               return due && due < new Date() && !statusStr.includes('completed');
                             })
@@ -1072,7 +1069,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                                 <div className="flex items-center justify-between">
                                   <span className="font-medium">{project.name}</span>
                                   <Badge variant="destructive" className="text-xs">
-                                    {(() => { const d = parseProjectDueDate((project as unknown as { due_date?: string }).due_date); return d ? formatDate(d.toISOString()) : 'Due date'; })()}
+                                    {(() => { const d = parseProjectDueDate((project as unknown as { dueDate?: string }).dueDate); return d ? formatDate(d.toISOString()) : 'Due date'; })()}
                                   </Badge>
                                 </div>
                                 <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
@@ -1111,9 +1108,9 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                             >
                               <div className="flex items-center justify-between">
                                 <span className="font-medium">{project.name}</span>
-                                {project.due_date && project.due_date.includes('T') && (
+                                {project.dueDate && project.dueDate.includes('T') && (
                                   <Badge variant="outline" className="text-xs">
-                                    {formatTime(project.due_date)}
+                                    {formatTime(project.dueDate)}
                                   </Badge>
                                 )}
                               </div>
@@ -1162,7 +1159,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                                 <div className="flex items-center justify-between">
                                   <span className="font-medium">{project.name}</span>
                                   <Badge variant="outline" className="text-xs">
-                                    {formatDate(project.due_date!)}
+                                    {formatDate(project.dueDate!)}
                                   </Badge>
                                 </div>
                                 <p className="text-sm text-muted-foreground mt-1">{project.description}</p>

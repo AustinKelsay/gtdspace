@@ -148,7 +148,7 @@ export function useGTDSpace() {
               spacePath: params.space_path,
               projectName: params.project_name,
               description: params.description,
-              dueDate: params.due_date || undefined,
+              dueDate: params.dueDate || undefined,
               status: params.status || 'in-progress',
             });
             
@@ -156,10 +156,10 @@ export function useGTDSpace() {
             const newProject: GTDProject = {
               name: params.project_name,
               description: params.description,
-              due_date: params.due_date,
+              dueDate: params.dueDate,
               status: params.status || 'in-progress',
               path: projectPath,
-              created_date_time: new Date().toISOString(),
+              createdDateTime: new Date().toISOString(),
               action_count: 0,
             };
             
@@ -214,8 +214,8 @@ export function useGTDSpace() {
               projectPath: params.project_path,
               actionName: params.action_name,
               status: params.status,
-              focusDate: params.focus_date || undefined,
-              dueDate: params.due_date || undefined,
+              focusDate: params.focusDate || undefined,
+              dueDate: params.dueDate || undefined,
               effort: params.effort,
               contexts: contextsArray,
             });

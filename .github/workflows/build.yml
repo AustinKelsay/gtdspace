@@ -16,7 +16,6 @@ name: Build and Release
           - info
           - warning
           - debug
-    branches: [main, staging]
 
 # Cancel in-progress runs when a new run is triggered
 concurrency:

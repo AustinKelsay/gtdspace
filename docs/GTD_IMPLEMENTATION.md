@@ -126,8 +126,8 @@ Actions are concrete next steps that move projects forward.
 
 ## Status
 
-Display: In Progress | Waiting | Completed
 Canonical tokens: `in-progress` | `waiting` | `completed`
+Note: The UI should map display labels (e.g., "In Progress") to/from these canonical tokens.
 
 ## Focus Date
 
@@ -214,8 +214,8 @@ create_gtd_project(
 create_gtd_action(
     project_path: String,
     action_name: String,
-    // Must be one of: "In Progress", "Waiting", "Completed",
-    // or canonical tokens: "in-progress", "waiting", "completed"
+    // Must be one of the canonical tokens: "in-progress", "waiting", "completed".
+    // The UI is responsible for mapping display labels (e.g., "In Progress") to these tokens.
     status: String,
     focus_date: Option<String>,
     due_date: Option<String>,

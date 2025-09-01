@@ -61,10 +61,10 @@ export const GTDProjectList: React.FC<GTDProjectListProps> = ({
                 {project.description}
               </p>
               <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                {project.due_date && (
+                {project.dueDate && (
                   <div className="flex items-center gap-1">
                     <Calendar className="h-3 w-3" />
-                    {new Date(project.due_date).toLocaleDateString()}
+                    {new Date(project.dueDate).toLocaleDateString()}
                   </div>
                 )}
                 <div>

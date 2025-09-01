@@ -3005,18 +3005,16 @@ pub fn create_gtd_action(
         return Err(format!("Action '{}' already exists", action_name));
     }
 
-    // Validate and map status to canonical token
-    let status_value = match status.as_str() {
-        "In Progress" | "in-progress" => "in-progress",
-        "Waiting" | "waiting" => "waiting",
-        "Completed" | "completed" => "completed",
-        _ => {
-            return Err(format!(
-                "Invalid status '{}'. Must be one of: In Progress, Waiting, Completed",
-                status
-            ));
-        }
-    };
+    // Validate status
+    let status_value = status.as_str();
+    let valid_statuses = ["in-progress", "waiting", "completed"];
+    if !valid_statuses.contains(&status_value) {
+        return Err(format!(
+            "Invalid status '{}'. Must be one of: {}",
+            status,
+            valid_statuses.join(", ")
+        ));
+    }
 
     let effort_value = match effort.as_str() {
         "Small" => "small",

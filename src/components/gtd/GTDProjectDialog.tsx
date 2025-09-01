@@ -78,7 +78,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
         space_path: spacePath,
         project_name: projectName.trim(),
         description: description.trim(),
-        due_date: dueDateTime,
+        dueDate: dueDateTime,
         status: status,
       };
 

@@ -13,6 +13,7 @@ import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { emitMetadataChange } from '@/utils/content-event-bus';
 import { useFilePath } from '../FilePathContext';
 import { isTauriContext } from '@/utils/tauri-ready';
+import { toast } from '@/hooks/use-toast';
 
 // Memoized renderer component for checkbox blocks
 const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
@@ -103,7 +104,6 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
 
           if (result) {
             // Show success toast
-            const { toast } = await import('@/hooks/use-toast');
             const normalizedPath = filePath.replace(/\\/g, '/');
             const habitName = normalizedPath.split('/').pop()?.replace(/\.(md|markdown)$/i, '') || 'Habit';
             const statusLabel = checkedVal ? 'Completed' : 'To Do';

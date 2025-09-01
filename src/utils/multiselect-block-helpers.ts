@@ -141,9 +141,16 @@ export function deserializeMarkersToMultiselects(markdown: string): string {
   
   while ((match = multiSelectMarkerPattern.exec(markdown)) !== null) {
     try {
-      const type = match[1];
+      // Validate and sanitize type
+      const rawType = (match[1] || '').trim();
+      const allowed = new Set(['tags', 'contexts', 'categories', 'custom']);
+      const type = allowed.has(rawType) ? rawType : 'tags';
+      
+      // Parse and trim values
       const valueStr = match[2] || '';
-      const values = valueStr ? valueStr.split(',').filter(v => v.trim()) : [];
+      const values = valueStr
+        ? valueStr.split(',').map(v => v.trim()).filter(Boolean)
+        : [];
       
       // Create the HTML format that the editor expects
       const data = {
@@ -151,11 +158,22 @@ export function deserializeMarkersToMultiselects(markdown: string): string {
         value: values
       };
       
-      // Escape quotes in JSON string for HTML attribute
-      const jsonStr = JSON.stringify(data)
-        .replace(/"/g, '\\"')
-        .replace(/'/g, '&#39;');  // Also escape single quotes to prevent breaking the HTML attribute
-      const htmlBlock = `<div data-multiselect='${jsonStr}' class="multiselect-block">${type}: ${values.join(', ')}</div>`;
+      // Escape JSON for HTML attribute and escape special chars
+      const jsonStr = JSON.stringify(data).replace(/"/g, '\\"');
+      const attrSafe = jsonStr
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/'/g, '&#39;');
+      
+      // Escape inner text
+      const text = `${type}: ${values.join(', ')}`;
+      const safeInner = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      
+      const htmlBlock = `<div data-multiselect='${attrSafe}' class="multiselect-block">${safeInner}</div>`;
       
       // Replace the marker with HTML block
       processedMarkdown = processedMarkdown.replace(match[0], htmlBlock);
@@ -164,7 +182,7 @@ export function deserializeMarkersToMultiselects(markdown: string): string {
     }
   }
   
-  return processedMarkdown;
+  return sanitizeHtml(processedMarkdown);
 }
 
 /**

@@ -513,7 +513,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   function parseProjectDueDate(value?: string | null): Date | null {
     if (!value) return null;
     let raw = value.trim();
-    const block = raw.match(/\[!datetime:due_date:([^\]]+)\]/i);
+    const block = raw.match(/\[!datetime:due_date:([^\]]*)\]/i);
     if (block) raw = block[1].trim();
     const d = new Date(raw);
     if (!isNaN(d.getTime())) return d;

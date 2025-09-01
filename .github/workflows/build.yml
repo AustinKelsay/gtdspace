@@ -7,10 +7,16 @@ name: Build and Release
       - "v*"
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version to release (e.g., v0.1.0)"
-        required: false
-        type: string
+      logLevel:
+        description: "Log level"
+        required: true
+        default: "warning"
+        type: choice
+        options:
+          - info
+          - warning
+          - debug
+    branches: [main, staging]
 
 # Cancel in-progress runs when a new run is triggered
 concurrency:
@@ -266,6 +272,12 @@ jobs:
             echo "Found Deb: $DEB_FILE"
             cp "$DEB_FILE" \
               "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}.deb"
+          fi
+
+          # Fail if neither artifact was produced
+          if [ -z "$APPIMAGE_FILE" ] && [ -z "$DEB_FILE" ]; then
+            echo "No artifacts produced" >&2
+            exit 1
           fi
 
           echo "Artifacts prepared:"

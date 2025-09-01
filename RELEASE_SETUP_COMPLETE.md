@@ -17,7 +17,7 @@ Your GTD Space build and release process is now fully configured! Here's what wa
 - ✅ `tauri.bundle.active` set to `true` (was false - would have prevented builds!)
 - ✅ Added platform-specific bundle configurations
 - ✅ Updated bundle identifier and metadata
-- ✅ Bundle configuration is nested under the "tauri" key (correct for Tauri v2)
+- ✅ Bundle configuration is defined at the top-level `bundle` key (correct for Tauri v2)
 
 ### 4. Icon Setup
 - Created icon generation scripts (Node script)

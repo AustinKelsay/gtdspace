@@ -104,7 +104,7 @@ export function dateTimeBlockToMarkdown(
   type: DateTimeFieldType,
   value: string
 ): string {
-  const hasTime = value?.includes('T');
+  const hasTime = value.includes('T');
   let fieldType: string;
   let outValue = value;
   
@@ -119,6 +119,9 @@ export function dateTimeBlockToMarkdown(
     fieldType = 'created_date_time';
   } else if ((type as string).endsWith('_time')) {
     fieldType = String(type);
+  } else if (type === 'custom') {
+    // Preserve custom types exactly as they are
+    fieldType = type;
   } else {
     fieldType = hasTime ? `${type}_time` : type;
   }

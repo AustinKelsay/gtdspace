@@ -28,7 +28,7 @@ export function migrateMarkdownContent(content: string): string {
   
   // Migration 1b: Rename focus_date_time to focus_date (newer convention)
   migrated = migrated.replace(
-    /\[!datetime:focus_date_time:([^\]]*)\]/g,
+    /\[!datetime:focus_date_time:([^\]]*)\]/gi,
     '[!datetime:focus_date:$1]'
   );
   

@@ -2,6 +2,7 @@ name: Release
 
 on:
   workflow_dispatch:
+    branches: [main, staging]
     inputs:
       type:
         description: "The type of release to create (patch, minor, or major)"

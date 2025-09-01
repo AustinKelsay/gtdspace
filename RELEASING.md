@@ -12,7 +12,7 @@ This command will automatically:
 
 1. Bump the patch version
 2. Create a git commit and tag
-3. Push the commit and tag to GitHub
+3. Instructs you to push the commit and tag to GitHub. You will need to run `git push && git push --tags` manually.
 4. Trigger the GitHub Actions build and release process
 
 ### Other Version Types

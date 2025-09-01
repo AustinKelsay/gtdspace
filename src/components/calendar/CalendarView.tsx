@@ -30,6 +30,13 @@ import type { GoogleCalendarSyncStatus, CalendarItemStatus } from '@/types/googl
 import { cn } from '@/lib/utils';
 import { EventDetailModal } from './EventDetailModal';
 
+// Helper to detect if a date has a time component
+const hasTimeComponent = (d: string | Date): boolean => {
+  if (typeof d === 'string') return /T\d{2}:\d{2}/.test(d) && !d.endsWith('T00:00:00');
+  if (d instanceof Date) return (d.getHours() + d.getMinutes() + d.getSeconds() + d.getMilliseconds()) !== 0;
+  return false;
+};
+
 interface CalendarViewProps {
   onFileSelect: (file: MarkdownFile) => void;
   spacePath: string;
@@ -359,7 +366,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             // Format time from the Date object to get local time, not UTC
             let formattedTime: string | undefined;
             // Check if this has a time component (not just a date)
-            if (startDate.includes('T') && !startDate.endsWith('T00:00:00')) {
+            if (hasTimeComponent(startDate)) {
               const hours = date.getHours();
               const minutes = date.getMinutes();
               const period = hours >= 12 ? 'PM' : 'AM';
@@ -374,7 +381,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               duration = Math.round((end.getTime() - date.getTime()) / (1000 * 60)); // Duration in minutes
 
               // Format end time from Date object for local time
-              if (endDate && typeof endDate === 'string' && endDate.includes('T') && !endDate.endsWith('T00:00:00')) {
+              if (endDate && hasTimeComponent(endDate)) {
                 const endHours = end.getHours();
                 const endMinutes = end.getMinutes();
                 const endPeriod = endHours >= 12 ? 'PM' : 'AM';
@@ -413,7 +420,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         // Extract time from focus_date if available
         let timeString: string | undefined;
         let formattedTime: string | undefined;
-        if (item.focus_date && item.focus_date.includes('T') && !item.focus_date.endsWith('T00:00:00')) {
+        if (item.focus_date && hasTimeComponent(item.focus_date)) {
           // Parse the date to get local time
           const focusDate = parseISO(item.focus_date);
           if (isValid(focusDate)) {
@@ -458,7 +465,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             // Format time from the Date object to get local time, not UTC
             let formattedTime: string | undefined;
             // Check if this has a time component (not just a date)
-            if (item.due_date.includes('T') && !item.due_date.endsWith('T00:00:00')) {
+            if (item.due_date && hasTimeComponent(item.due_date)) {
               const hours = dueDate.getHours();
               const minutes = dueDate.getMinutes();
               const period = hours >= 12 ? 'PM' : 'AM';
@@ -485,7 +492,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             // Format time from the Date object to get local time, not UTC
             let formattedTime: string | undefined;
             // Check if this has a time component (not just a date)
-            if (item.focus_date.includes('T') && !item.focus_date.endsWith('T00:00:00')) {
+            if (item.focus_date && hasTimeComponent(item.focus_date)) {
               const hours = focusDate.getHours();
               const minutes = focusDate.getMinutes();
               const period = hours >= 12 ? 'PM' : 'AM';

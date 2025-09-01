@@ -17,12 +17,18 @@ This command will automatically:
 
 ### Other Version Types
 
-These commands automatically bump the version, create a commit and tag, and push to the remote:
+These commands bump the version and create a local commit and tag:
 
 ```bash
 npm run release:minor  # 0.1.0 → 0.2.0
 npm run release:major  # 0.1.0 → 1.0.0
 npm run release:patch  # 0.1.0 → 0.1.1
+```
+
+Then push commits and tags:
+
+```bash
+git push && git push --tags
 ```
 
 Alternatively, to only bump the version and create a local commit and tag without automatically pushing, use the `version:*` commands. You will need to push manually afterward.

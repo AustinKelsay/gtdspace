@@ -57,7 +57,7 @@ const HABIT_FREQUENCY_OPTIONS = [
 // Define habit status options
 const HABIT_STATUS_OPTIONS = [
   { value: 'todo', label: 'To Do', group: 'Habit Status' },
-  { value: 'completed', label: 'Complete', group: 'Habit Status' },
+  { value: 'complete', label: 'Complete', group: 'Habit Status' },
 ];
 
 // Memoized renderer component for single select blocks
@@ -169,7 +169,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
 
                 // After marking as complete, backend immediately resets to "todo"
                 // Update the UI to reflect this
-                if (selectedValue === 'completed') {
+                if (selectedValue === 'complete') {
                   // Give a brief moment to show the completion, then reset UI
                   setTimeout(() => {
                     const target = findBlockInDocument(

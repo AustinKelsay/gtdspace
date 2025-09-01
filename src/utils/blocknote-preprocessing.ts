@@ -71,7 +71,7 @@ interface ReferencesBlock {
 
 interface ListBlock {
   type: 'projects-list' | 'areas-list' | 'goals-list' | 'visions-list' | 
-        'projects-areas-list' | 'goals-areas-list' | 'visions-goals-list';
+        'projects-and-areas-list' | 'goals-and-areas-list' | 'visions-and-goals-list';
   props: {
     listType: string;
     currentPath?: string;
@@ -265,6 +265,10 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   const projectsAreasListPattern = /\[!projects-areas-list\]/g;
   const goalsAreasListPattern = /\[!goals-areas-list\]/g;
   const visionsGoalsListPattern = /\[!visions-goals-list\]/g;
+  // New patterns with "and" for compatibility
+  const projectsAndAreasListPattern = /\[!projects-and-areas-list\]/g;
+  const goalsAndAreasListPattern = /\[!goals-and-areas-list\]/g;
+  const visionsAndGoalsListPattern = /\[!visions-and-goals-list\]/g;
   // Pattern to match HTML references blocks
   const referencesHTMLPattern = /<div\s+data-references='([^']+)'\s+class="references-block">([^<]+)<\/div>/g;
   
@@ -453,6 +457,19 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   
   while ((match = visionsGoalsListPattern.exec(markdown)) !== null) {
     listBlocks.push({ text: match[0], listType: 'visions', blockType: 'visions-goals-list' });
+  }
+  
+  // New patterns with "and" for compatibility
+  while ((match = projectsAndAreasListPattern.exec(markdown)) !== null) {
+    listBlocks.push({ text: match[0], listType: 'projects', blockType: 'projects-and-areas-list' });
+  }
+  
+  while ((match = goalsAndAreasListPattern.exec(markdown)) !== null) {
+    listBlocks.push({ text: match[0], listType: 'goals', blockType: 'goals-and-areas-list' });
+  }
+  
+  while ((match = visionsAndGoalsListPattern.exec(markdown)) !== null) {
+    listBlocks.push({ text: match[0], listType: 'visions', blockType: 'visions-and-goals-list' });
   }
   
   // Check for references HTML syntax

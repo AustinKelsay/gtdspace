@@ -236,12 +236,15 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
 
-  // Parse references from comma-separated string - memoized with trimming and deduplication
+  // Parse references from comma-separated string - memoized with normalization, trimming and deduplication
   const parsedReferences = React.useMemo(() => {
     if (!references) return [];
-    const trimmed = references.split(',').map(ref => ref.trim()).filter(Boolean);
+    // Normalize paths to forward slashes, trim, and filter empty strings
+    const normalized = references.split(',')
+      .map(ref => ref.replace(/\\/g, '/').trim())
+      .filter(Boolean);
     // Remove duplicates while preserving order
-    return Array.from(new Set(trimmed));
+    return Array.from(new Set(normalized));
   }, [references]);
 
   // Load available horizon files
@@ -357,9 +360,12 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
   }, [block.id, editor, horizonType]);
 
   const handleAddReference = React.useCallback((file: HorizonFile) => {
-    if (parsedReferences.includes(file.path)) return;
+    // Normalize path to use forward slashes
+    const canonicalPath = file.path.replace(/\\/g, '/');
+    
+    if (parsedReferences.includes(canonicalPath)) return;
 
-    const newReferences = [...parsedReferences, file.path];
+    const newReferences = [...parsedReferences, canonicalPath];
     const didUpdate = updateReferences(newReferences);
     if (!didUpdate) {
       console.error('Failed to add reference; update did not apply', {

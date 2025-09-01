@@ -160,10 +160,10 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
       }
       
       console.log('[GTDDashboard] Loading data for path:', gtdSpace.root_path);
-      loadedPathRef.current = gtdSpace.root_path;
 
-      // Use Promise.allSettled to load all data in parallel
-      await Promise.allSettled([
+      try {
+        // Use Promise.allSettled to load all data in parallel
+        await Promise.allSettled([
         // Load projects
         (async () => {
           try {
@@ -307,6 +307,16 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           }
         })()
       ]);
+        
+        // Only mark as loaded after successful completion
+        loadedPathRef.current = gtdSpace.root_path;
+        console.log('[GTDDashboard] Successfully loaded data for path:', gtdSpace.root_path);
+      } catch (error) {
+        // Don't set loadedPathRef.current on failure so it can be retried
+        console.error('[GTDDashboard] Failed to load data:', error);
+        // Explicitly clear to ensure retry on next attempt
+        loadedPathRef.current = null;
+      }
     };
 
     loadAllData();

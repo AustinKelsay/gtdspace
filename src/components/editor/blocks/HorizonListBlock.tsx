@@ -569,7 +569,9 @@ export const ProjectsAndAreasListBlock = createReactBlockSpec(
     },
     parse: (element) => {
       const textContent = element.textContent || '';
-      if (textContent.includes('[!projects-and-areas-list]')) {
+      // Check for both new and legacy tokens for backward compatibility
+      if (textContent.includes('[!projects-and-areas-list]') || 
+          textContent.includes('[!projects-areas-list]')) {
         // Return a value that represents the combined nature
         return { listType: 'projects-areas' };
       }
@@ -612,7 +614,9 @@ export const GoalsAndAreasListBlock = createReactBlockSpec(
     },
     parse: (element) => {
       const textContent = element.textContent || '';
-      if (textContent.includes('[!goals-and-areas-list]')) {
+      // Check for both new and legacy tokens for backward compatibility
+      if (textContent.includes('[!goals-and-areas-list]') || 
+          textContent.includes('[!goals-areas-list]')) {
         // Return a value that represents the combined nature
         return { listType: 'goals-areas' };
       }
@@ -655,7 +659,9 @@ export const VisionsAndGoalsListBlock = createReactBlockSpec(
     },
     parse: (element) => {
       const textContent = element.textContent || '';
-      if (textContent.includes('[!visions-and-goals-list]')) {
+      // Check for both new and legacy tokens for backward compatibility
+      if (textContent.includes('[!visions-and-goals-list]') || 
+          textContent.includes('[!visions-goals-list]')) {
         // Return a value that represents the combined nature
         return { listType: 'visions-goals' };
       }

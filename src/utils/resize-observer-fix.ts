@@ -24,16 +24,21 @@ if (typeof window !== 'undefined') {
   };
 
   // Also handle unhandled promise rejections related to ResizeObserver
-  window.addEventListener('error', (e) => {
-    if (e.message && e.message.includes('ResizeObserver loop')) {
+  window.addEventListener('error', (e: ErrorEvent) => {
+    const msg = typeof e.message === 'string' ? e.message : '';
+    if (msg.includes('ResizeObserver loop')) {
       e.stopPropagation();
       e.preventDefault();
     }
   });
 
   // Handle unhandled promise rejections for ResizeObserver errors
-  window.addEventListener('unhandledrejection', (e) => {
-    if (e.reason && typeof e.reason.message === 'string' && e.reason.message.includes('ResizeObserver loop')) {
+  window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
+    const r = e.reason as unknown;
+    const msg =
+      (r && typeof r === 'object' && 'message' in (r as Record<string, unknown>) && String((r as { message: unknown }).message)) ||
+      (typeof r === 'string' ? r : '');
+    if (msg.includes('ResizeObserver loop')) {
       e.preventDefault();
       e.stopPropagation();
       if (typeof e.stopImmediatePropagation === 'function') {

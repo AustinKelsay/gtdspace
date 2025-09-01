@@ -55,6 +55,26 @@ function escapePlain(str: string): string {
 }
 
 /**
+ * Escapes special characters for safe inclusion in Markdown inline text
+ * This prevents headings/formatting from breaking when interpolating user-provided text
+ * @param str - The string to escape
+ * @returns Escaped string safe for Markdown inline contexts
+ */
+function escapeMarkdownInline(str: string): string {
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/\*/g, '\\*')
+    .replace(/_/g, '\\_')
+    .replace(/`/g, '\\`')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)')
+    .replace(/\|/g, '\\|')
+    .replace(/#/g, '\\#');
+}
+
+/**
  * Generates HTML markup for a multiselect field that BlockNote can parse
  */
 export function generateMultiSelectMarkup(
@@ -210,8 +230,10 @@ export function generateActionFileWithSingleSelect(
   
   // Escape createdDateTime to prevent angle bracket injection
   const escapedCreatedDateTime = escapePlain(createdDateTime);
+  // Escape actionName for safe Markdown embedding
+  const escapedActionName = escapeMarkdownInline(actionName);
   
-  return `# ${actionName}
+  return `# ${escapedActionName}
 
 ${statusMarkup}
 

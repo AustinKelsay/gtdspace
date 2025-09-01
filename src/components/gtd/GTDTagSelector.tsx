@@ -131,10 +131,20 @@ export const GTDTagSelector: React.FC<GTDTagSelectorProps> = ({
       onValueChange(newValue);
       return;
     }
-    // For contexts and 'all' type, propagate values without '@' for storage/markers
-    const withoutAt = newValue.map(v => (v.startsWith('@') ? v.slice(1) : v));
+    // Strip '@' only for values that are recognized contexts
+    const options = getOptions();
+    const contextSet = new Set(
+      options
+        .filter(o => o.group === 'Contexts' || o.value.startsWith('@'))
+        .map(o => (o.value.startsWith('@') ? o.value : `@${o.value}`))
+    );
+    const withoutAt = newValue.map(v => {
+      const normalized = v.startsWith('@') ? v : `@${v}`;
+      return contextSet.has(normalized) ? normalized.slice(1) : v;
+    });
     onValueChange(withoutAt);
-  }, [onValueChange, type]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onValueChange, type, customOptions]);
 
   // For display options, contexts options include '@' values already
   return (

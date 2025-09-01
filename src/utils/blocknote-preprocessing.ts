@@ -183,9 +183,11 @@ function createContentHash(markdown: string, blockCount: number): string {
   const structuralElements = gtdFieldMarkers.join('|');
   const gtdFieldCount = gtdFieldMarkers.length;
   
-  // For empty content or no GTD fields, use a simple cache key
+  // For empty content or no GTD fields, include content hash to detect changes
   if (gtdFieldCount === 0) {
-    return `empty-${blockCount}`;
+    // Include a lightweight content hash to detect changes in non-GTD content
+    const contentHash = toBase64(markdown.trim()).slice(0, 8);
+    return `empty-${blockCount}-${contentHash}`;
   }
   
   // Create hash that's stable for text-only changes but changes for structural modifications

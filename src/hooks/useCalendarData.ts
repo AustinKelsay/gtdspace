@@ -179,8 +179,11 @@ export const useCalendarData = (
       if (files) {
         for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
           const file = files[fileIndex];
+          // Normalize path for cross-platform compatibility (Windows uses backslashes)
+          const normalizedPath = file.path.replace(/\\/g, '/');
+          
           // Check if it's a project README
-          if (file.path.includes('/Projects/') && file.path.endsWith('README.md')) {
+          if (normalizedPath.includes('/Projects/') && normalizedPath.endsWith('README.md')) {
             try {
               let content = await invoke<string>('read_file', { path: file.path });
               
@@ -216,7 +219,7 @@ export const useCalendarData = (
           }
           
           // Check if it's an action file (in Projects but not README)
-          if (file.path.includes('/Projects/') && !file.path.includes('README') && file.path.endsWith('.md')) {
+          if (normalizedPath.includes('/Projects/') && !normalizedPath.includes('README') && normalizedPath.endsWith('.md')) {
             try {
               let content = await invoke<string>('read_file', { path: file.path });
               
@@ -261,7 +264,7 @@ export const useCalendarData = (
           }
           
           // Check if it's a habit file
-          if (file.path.includes('/Habits/') && file.path.endsWith('.md')) {
+          if (normalizedPath.includes('/Habits/') && normalizedPath.endsWith('.md')) {
             try {
               let content = await invoke<string>('read_file', { path: file.path });
               

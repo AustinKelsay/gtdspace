@@ -143,6 +143,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
 
   const handleChange = React.useCallback(async (newValue: string) => {
     const selectedValue = newValue; // Use immutable copy to avoid mutation issues
+    const previousValue = block.props.value; // Capture previous value for reverting on failure
 
     // If this is a habit status field, update the backend
     if (type === 'habit-status') {
@@ -156,53 +157,101 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
           const isHabitFile = lower.includes('/habits/') || lower.includes('\\habits\\');
 
           if (isHabitFile) {
-            const { invoke } = await import('@tauri-apps/api/core');
-            await invoke('update_habit_status', {
-              habitPath: currentPath,
-              newStatus: selectedValue,
-            });
+            // Check if Tauri is available before attempting import
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+              try {
+                const { invoke } = await import('@tauri-apps/api/core');
+                await invoke('update_habit_status', {
+                  habitPath: currentPath,
+                  newStatus: selectedValue,
+                });
 
-            // After marking as complete, backend immediately resets to "todo"
-            // Update the UI to reflect this
-            if (selectedValue === 'completed') {
-              // Give a brief moment to show the completion, then reset UI
-              setTimeout(() => {
-                const target = findBlockInDocument(
-                  block.id,
-                  (b) => b.type === 'singleselect' && (b.props as { type?: string })?.type === block.props.type
-                );
-                if (target) {
-                  props.editor.updateBlock(target, {
-                    props: {
-                      ...target.props,
-                      value: 'todo',
-                    },
-                  });
+                // After marking as complete, backend immediately resets to "todo"
+                // Update the UI to reflect this
+                if (selectedValue === 'completed') {
+                  // Give a brief moment to show the completion, then reset UI
+                  setTimeout(() => {
+                    const target = findBlockInDocument(
+                      block.id,
+                      (b) => b.type === 'singleselect' && (b.props as { type?: string })?.type === block.props.type
+                    );
+                    if (target) {
+                      props.editor.updateBlock(target, {
+                        props: {
+                          ...target.props,
+                          value: 'todo',
+                        },
+                      });
 
-                  // Emit reset event so consumers see the persisted state
-                  const normalizedForName = currentPath.replace(/\\/g, '/');
-                  const fileName = normalizedForName.split('/').pop() || '';
-                  emitMetadataChange({
-                    filePath: currentPath,
-                    fileName,
-                    content: '',
-                    metadata: { habitStatus: 'todo' },
-                    changedFields: { habitStatus: 'todo' }
-                  });
+                      // Emit reset event so consumers see the persisted state
+                      const normalizedForName = currentPath.replace(/\\/g, '/');
+                      const fileName = normalizedForName.split('/').pop() || '';
+                      emitMetadataChange({
+                        filePath: currentPath,
+                        fileName,
+                        content: '',
+                        metadata: { habitStatus: 'todo' },
+                        changedFields: { habitStatus: 'todo' }
+                      });
+                    }
+                  }, 500); // Brief delay to show completion
                 }
-              }, 500); // Brief delay to show completion
-            }
 
-            // Emit initial status change event
-            const normalizedForName = currentPath.replace(/\\/g, '/');
-            const fileName = normalizedForName.split('/').pop() || '';
-            emitMetadataChange({
-              filePath: currentPath,
-              fileName,
-              content: '', // Content not directly changed
-              metadata: { habitStatus: selectedValue },
-              changedFields: { habitStatus: selectedValue }
-            });
+                // Emit initial status change event
+                const normalizedForName = currentPath.replace(/\\/g, '/');
+                const fileName = normalizedForName.split('/').pop() || '';
+                emitMetadataChange({
+                  filePath: currentPath,
+                  fileName,
+                  content: '', // Content not directly changed
+                  metadata: { habitStatus: selectedValue },
+                  changedFields: { habitStatus: selectedValue }
+                });
+              } catch (invokeError) {
+                // Tauri invoke failed - revert UI to previous value
+                console.error('[SingleSelectBlock] Tauri invoke failed:', invokeError);
+                props.editor.updateBlock(block, {
+                  props: {
+                    ...block.props,
+                    value: previousValue,
+                  },
+                });
+                
+                // Emit revert event so consumers see the persisted state
+                const normalizedForName = currentPath.replace(/\\/g, '/');
+                const fileName = normalizedForName.split('/').pop() || '';
+                emitMetadataChange({
+                  filePath: currentPath,
+                  fileName,
+                  content: '',
+                  metadata: { habitStatus: previousValue },
+                  changedFields: { habitStatus: previousValue }
+                });
+                return; // Exit early on failure
+              }
+            } else {
+              // Tauri not available (browser/dev mode) - revert UI to previous value
+              console.warn('[SingleSelectBlock] Tauri not available, reverting habit status change');
+              props.editor.updateBlock(block, {
+                props: {
+                  ...block.props,
+                  value: previousValue,
+                },
+              });
+              
+              // Emit revert event so consumers see the persisted state
+              const normalizedForName = currentPath.replace(/\\/g, '/');
+              const fileName = normalizedForName.split('/').pop() || '';
+              emitMetadataChange({
+                filePath: currentPath,
+                fileName,
+                content: '',
+                metadata: { habitStatus: previousValue },
+                changedFields: { habitStatus: previousValue }
+              });
+              return; // Exit early when Tauri is not available
+            }
           }
         }
       } catch (error) {
@@ -240,7 +289,8 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
     if (!findAndUpdateBlock()) {
       console.warn('Could not find block to update, value may not persist');
     }
-  }, [type, block.id, block.props, props.editor, filePath, findBlockInDocument]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, block.id, block.props.value, block.props.type, block.props.label, props.editor, filePath, findBlockInDocument]);
 
   return (
     <div className="inline-block min-w-[200px] align-middle mx-1">
@@ -254,7 +304,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
             {options.length > 0 && options[0].group && (
               <SelectLabel>{options[0].group}</SelectLabel>
             )}
-            {options.map((option) => (
+            {options.map((option: { value: string; label: string; group?: string }) => (
               <SelectItem key={option.value} value={option.value}>
                 {option.label}
               </SelectItem>

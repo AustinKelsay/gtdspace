@@ -124,8 +124,13 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
             });
             window.dispatchEvent(reloadEvent);
           } else {
-            // Error handling failed, revert to previous state
+            // Error handling failed, revert to previous state (UI + document)
             setLocalChecked(prevChecked);
+            try {
+              props.editor.updateBlock(block, { props: { checked: prevChecked } });
+            } catch (e) {
+              console.error('[CheckboxBlock] Failed to revert block props:', e);
+            }
           }
         }
       }

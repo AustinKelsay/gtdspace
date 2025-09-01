@@ -141,7 +141,7 @@ The editor uses these custom markdown markers:
 Key hooks and their responsibilities:
 
 - `useGTDSpace` - Workspace initialization, project/action CRUD operations
-- `useTabManager` - Multi-tab editing with auto-save (2s debounce)
+- `useTabManager` - Multi-tab editing with manual save and debounced metadata emission (2s debounce)
 - `useFileManager` - File system operations via Tauri
 - `useFileWatcher` - External change detection (500ms debounce)
 - `useCalendarData` - Aggregates all dated items (parallel reads)

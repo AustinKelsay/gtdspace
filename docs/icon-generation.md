@@ -20,10 +20,10 @@ GTD Space requires application icons in multiple formats for different platforms
 
 The GitHub Actions workflow handles icon generation automatically:
 
-1. Uses the NPM script (`npm run icons:generate`) to generate all formats
-2. Leverages Tauri CLI for cross-platform icon generation
-3. Creates PNG, ICO, and ICNS files as needed
-4. Automatically cleans up unnecessary files
+1. Run `npm run icons:generate` to generate all formats
+2. Use Tauri CLI for cross-platform icon generation
+3. Generate PNG, ICO, and ICNS files as needed
+4. Clean up unnecessary files
 
 ## Local Generation
 

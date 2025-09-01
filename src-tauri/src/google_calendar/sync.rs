@@ -42,8 +42,7 @@ impl CalendarSyncManager {
         time_max: Option<DateTime<Utc>>,
     ) -> Result<Vec<GoogleCalendarEvent>, Box<dyn std::error::Error>> {
         if self.is_syncing.swap(true, Ordering::SeqCst) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            return Err(std::io::Error::other(
                 "Google Calendar sync already in progress",
             )
             .into());

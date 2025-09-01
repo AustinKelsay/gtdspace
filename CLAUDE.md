@@ -132,7 +132,7 @@ The editor uses these custom markdown markers:
 ### Performance Patterns
 
 - **Parallel Operations**: File reads run concurrently in `useCalendarData`
-- **Debouncing**: Auto-save (2s), file watcher (500ms), habit scheduler (1min)
+- **Debouncing**: Manual save (debounced, 2s for metadata), file watcher (500ms), habit scheduler (1min)
 - **Calendar Optimization**: Only generates dates in current view window
 - **Regex Caching**: Metadata patterns pre-compiled for performance
 
@@ -141,7 +141,7 @@ The editor uses these custom markdown markers:
 Key hooks and their responsibilities:
 
 - `useGTDSpace` - Workspace initialization, project/action CRUD operations
-- `useTabManager` - Multi-tab editing with manual save and debounced metadata emission (2s debounce)
+- `useTabManager` - Multi-tab editing with manual save (debounced, 2s for metadata)
 - `useFileManager` - File system operations via Tauri
 - `useFileWatcher` - External change detection (500ms debounce)
 - `useCalendarData` - Aggregates all dated items (parallel reads)
@@ -229,7 +229,7 @@ If authentication fails:
 
 ### Large File Performance
 
-Files over 1MB may cause editor performance issues. The app uses 2-second debounced auto-save to mitigate.
+Files over 1MB may cause editor performance issues. The app uses manual save (debounced, 2s for metadata) to mitigate.
 
 ### Test Coverage
 

@@ -193,7 +193,7 @@ export const useCalendarData = (
                 // Note: Migration is applied for display only, not saved to disk
               }
               
-              const projectName = file.path.split('/Projects/')[1]?.split('/')[0] || '';
+              const projectName = normalizedPath.split('/Projects/')[1]?.split('/')[0] || '';
               
               // Parse dates from project README
               const dueDate = parseDateTimeField(content, 'due_date');
@@ -229,9 +229,9 @@ export const useCalendarData = (
                 // Note: Migration is applied for display only, not saved to disk
               }
               
-              const pathParts = file.path.split('/');
-              const projectName = file.path.split('/Projects/')[1]?.split('/')[0] || '';
-              const actionName = pathParts[pathParts.length - 1].replace('.md', '');
+              const pathParts = normalizedPath.split('/');
+              const projectName = normalizedPath.split('/Projects/')[1]?.split('/')[0] || '';
+              const actionName = pathParts[pathParts.length - 1].replace('.md', '') || '';
               
               // Parse focus date field (can include time)
               // Try both field names for backward compatibility
@@ -274,7 +274,7 @@ export const useCalendarData = (
                 // Note: Migration is applied for display only, not saved to disk
               }
               
-              const habitName = file.path.split('/').pop()?.replace('.md', '') || '';
+              const habitName = normalizedPath.split('/').pop()?.replace('.md', '') || '';
               
               // Parse habit fields
               const habitStatus = parseCheckboxField(content, 'habit-status') ? 'completed' : 'todo';

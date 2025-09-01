@@ -253,12 +253,16 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     }
                   }
 
+                  // Normalize status values: convert 'complete' to 'completed'
+                  const rawStatus = checkboxStatus
+                    ? (checkboxStatus[1] === 'true' ? 'completed' : 'todo')
+                    : (singleselectStatus?.[1] || 'todo');
+                  const status = rawStatus === 'complete' ? 'completed' : rawStatus;
+                  
                   return {
                     name: file.name.replace('.md', ''),
                     frequency: (frequencyMatch?.[1] || 'daily') as GTDHabit['frequency'],
-                    status: checkboxStatus
-                      ? (checkboxStatus[1] === 'true' ? 'completed' : 'todo')
-                      : ((singleselectStatus?.[1] || 'todo') as 'todo' | 'completed'),
+                    status: (status === 'completed' || status === 'todo') ? status : 'todo',
                     path: file.path,
                     last_updated: lastUpdatedTime || new Date().toISOString(),
                     created_date_time: createdDateTime || lastUpdatedTime || new Date().toISOString()

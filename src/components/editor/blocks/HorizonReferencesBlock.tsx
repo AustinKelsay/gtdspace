@@ -236,11 +236,28 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
 
-  // Parse references from comma-separated string - memoized with normalization, trimming and deduplication
+  // Parse references - supports both JSON array and legacy CSV format
   const parsedReferences = React.useMemo(() => {
     if (!references) return [];
+    
+    let refs: string[] = [];
+    
+    // Try to parse as JSON first
+    try {
+      const parsed = JSON.parse(references);
+      if (Array.isArray(parsed)) {
+        refs = parsed;
+      } else {
+        // Not an array, fall back to CSV
+        refs = references.split(',');
+      }
+    } catch {
+      // JSON parse failed, use legacy CSV format
+      refs = references.split(',');
+    }
+    
     // Normalize paths to forward slashes, trim, and filter empty strings
-    const normalized = references.split(',')
+    const normalized = refs
       .map(ref => ref.replace(/\\/g, '/').trim())
       .filter(Boolean);
     // Remove duplicates while preserving order
@@ -334,7 +351,7 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
       if (node.id === block.id) {
         editor.updateBlock(block.id, {
           type: `${horizonType}-references`,
-          props: { references: newReferences.join(',') }
+          props: { references: JSON.stringify(newReferences) }
         });
         return true;
       }

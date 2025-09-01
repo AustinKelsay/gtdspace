@@ -174,7 +174,7 @@ function toBase64(str: string): string {
 // Create a hash of the content for efficient caching - focus on structural elements
 function createContentHash(markdown: string, blockCount: number): string {
   // Extract only GTD field markers and structural elements for stable caching
-  const gtdFieldMarkers = markdown.match(/\[!(?:multiselect|singleselect|checkbox|datetime|references|areas-references|goals-references|vision-references|purpose-references|projects-list|areas-list|goals-list|visions-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list):[^\]]*\]/g) || [];
+  const gtdFieldMarkers = markdown.match(/\[!(?:multiselect|singleselect|checkbox|datetime|references|areas-references|goals-references|vision-references|purpose-references|projects-list|areas-list|goals-list|visions-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(?::[^\]]*)?\]/g) || [];
   
   // Create a structural signature based on:
   // 1. Block count (structural changes)

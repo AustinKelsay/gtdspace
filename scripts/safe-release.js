@@ -289,4 +289,9 @@ async function main() {
 }
 
 const isDirectRun = typeof process.argv[1] === 'string' && path.resolve(process.argv[1]) === __filename;
-if (isDirectRun) main();
+if (isDirectRun) {
+  Promise.resolve(main()).catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

@@ -149,177 +149,177 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
       previousLoadedPath: loadedPathRef.current,
       willLoad: gtdSpace?.root_path && loadedPathRef.current !== gtdSpace.root_path
     });
-    
+
     const loadAllData = async () => {
       if (!gtdSpace?.root_path) return;
-      
+
       // Skip if we already loaded data for this path
       if (loadedPathRef.current === gtdSpace.root_path) {
         console.log('[GTDDashboard] Skipping data load - already loaded for this path');
         return;
       }
-      
+
       console.log('[GTDDashboard] Loading data for path:', gtdSpace.root_path);
 
       try {
         // Use Promise.allSettled to load all data in parallel
         await Promise.allSettled([
-        // Load projects
-        (async () => {
-          try {
-            console.log('[GTDDashboard] Calling loadProjects');
-            await loadProjects(gtdSpace.root_path);
-            console.log('[GTDDashboard] loadProjects completed');
-          } catch (error) {
-            console.log('[GTDDashboard] loadProjects error:', error);
-            // Error already handled by loadProjects
-          }
-        })(),
+          // Load projects
+          (async () => {
+            try {
+              console.log('[GTDDashboard] Calling loadProjects');
+              await loadProjects(gtdSpace.root_path);
+              console.log('[GTDDashboard] loadProjects completed');
+            } catch (error) {
+              console.log('[GTDDashboard] loadProjects error:', error);
+              // Error already handled by loadProjects
+            }
+          })(),
 
-        // Load habits
-        (async () => {
-          try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            const habitsPath = `${gtdSpace.root_path}/Habits`;
-            const habitFiles = await invoke<MarkdownFile[]>('list_markdown_files', {
-              path: habitsPath
-            });
+          // Load habits
+          (async () => {
+            try {
+              const { invoke } = await import('@tauri-apps/api/core');
+              const habitsPath = `${gtdSpace.root_path}/Habits`;
+              const habitFiles = await invoke<MarkdownFile[]>('list_markdown_files', {
+                path: habitsPath
+              });
 
-            const loadedHabits: GTDHabit[] = await Promise.all(
-              habitFiles.map(async (file) => {
-                try {
-                  const content = await invoke<string>('read_file', { path: file.path });
-                  const frequencyMatch = content.match(/\[!singleselect:habit-frequency:([^\]]+)\]/);
-                  const checkboxStatus = content.match(/\[!checkbox:habit-status:(true|false)\]/);
-                  const singleselectStatus = content.match(/\[!singleselect:habit-status:([^\]]+)\]/);
+              const loadedHabits: GTDHabit[] = await Promise.all(
+                habitFiles.map(async (file) => {
+                  try {
+                    const content = await invoke<string>('read_file', { path: file.path });
+                    const frequencyMatch = content.match(/\[!singleselect:habit-frequency:([^\]]+)\]/);
+                    const checkboxStatus = content.match(/\[!checkbox:habit-status:(true|false)\]/);
+                    const singleselectStatus = content.match(/\[!singleselect:habit-status:([^\]]+)\]/);
 
-                  let createdDateTime: string | undefined;
-                  
-                  // Step 1: Try to parse from [!datetime:created_date_time:...] block
-                  const createdBlock = content.match(/\[!datetime:created_date_time:([^\]]+)\]/i);
-                  if (createdBlock && createdBlock[1]) {
-                    const raw = createdBlock[1].trim();
-                    if (raw) {
-                      const parsed = new Date(raw);
-                      if (!isNaN(parsed.getTime())) {
-                        createdDateTime = parsed.toISOString();
+                    let createdDateTime: string | undefined;
+
+                    // Step 1: Try to parse from [!datetime:created_date_time:...] block
+                    const createdBlock = content.match(/\[!datetime:created_date_time:([^\]]+)\]/i);
+                    if (createdBlock && createdBlock[1]) {
+                      const raw = createdBlock[1].trim();
+                      if (raw) {
+                        const parsed = new Date(raw);
+                        if (!isNaN(parsed.getTime())) {
+                          createdDateTime = parsed.toISOString();
+                        }
                       }
                     }
-                  }
-                  
-                  // Step 2: If not found, try to parse from ## Created header
-                  if (!createdDateTime) {
-                    const hdr = content.match(
-                      /##\s*Created\s*(?:\r?\n|\s+)\s*([0-9]{4})-([0-9]{2})-([0-9]{2})(?:\s+([0-9]{1,2}):([0-9]{2})(?:\s*(AM|PM))?)?/i
-                    );
-                    if (hdr) {
-                      const y  = parseInt(hdr[1], 10),
-                            mo = parseInt(hdr[2], 10),
-                            d  = parseInt(hdr[3], 10);
-                      let hh = hdr[4] ? parseInt(hdr[4], 10) : 0;
-                      const mm  = hdr[5] ? parseInt(hdr[5], 10) : 0;
-                      const mer = (hdr[6] || '').toUpperCase();
-                      
-                      // Adjust hours for AM/PM
-                      if (mer === 'PM' && hh < 12) hh += 12;
-                      if (mer === 'AM' && hh === 12) hh = 0;
-                      
-                      // Validate and construct date
-                      if (
-                        mo >= 1 && mo <= 12 &&
-                        d  >= 1 && d  <= 31 &&
-                        hh >= 0 && hh <= 23 &&
-                        mm >= 0 && mm <= 59
-                      ) {
-                        createdDateTime = new Date(Date.UTC(y, mo - 1, d, hh, mm)).toISOString();
+
+                    // Step 2: If not found, try to parse from ## Created header
+                    if (!createdDateTime) {
+                      const hdr = content.match(
+                        /##\s*Created\s*(?:\r?\n|\s+)\s*([0-9]{4})-([0-9]{2})-([0-9]{2})(?:\s+([0-9]{1,2}):([0-9]{2})(?:\s*(AM|PM))?)?/i
+                      );
+                      if (hdr) {
+                        const y = parseInt(hdr[1], 10),
+                          mo = parseInt(hdr[2], 10),
+                          d = parseInt(hdr[3], 10);
+                        let hh = hdr[4] ? parseInt(hdr[4], 10) : 0;
+                        const mm = hdr[5] ? parseInt(hdr[5], 10) : 0;
+                        const mer = (hdr[6] || '').toUpperCase();
+
+                        // Adjust hours for AM/PM
+                        if (mer === 'PM' && hh < 12) hh += 12;
+                        if (mer === 'AM' && hh === 12) hh = 0;
+
+                        // Validate and construct date
+                        if (
+                          mo >= 1 && mo <= 12 &&
+                          d >= 1 && d <= 31 &&
+                          hh >= 0 && hh <= 23 &&
+                          mm >= 0 && mm <= 59
+                        ) {
+                          createdDateTime = new Date(Date.UTC(y, mo - 1, d, hh, mm)).toISOString();
+                        }
                       }
                     }
-                  }
 
-                  // Step 3: If still not found, try to use file.last_modified
-                  if (!createdDateTime && file.last_modified != null) {
-                    const lastModTimestamp = Number(file.last_modified);
-                    if (Number.isFinite(lastModTimestamp) && lastModTimestamp > 0) {
-                      // Convert seconds to milliseconds if needed
-                      const timestampMs = lastModTimestamp < 1e12 ? lastModTimestamp * 1000 : lastModTimestamp;
-                      const lastModDate = new Date(timestampMs);
-                      if (!isNaN(lastModDate.getTime())) {
-                        createdDateTime = lastModDate.toISOString();
+                    // Step 3: If still not found, try to use file.last_modified
+                    if (!createdDateTime && file.last_modified != null) {
+                      const lastModTimestamp = Number(file.last_modified);
+                      if (Number.isFinite(lastModTimestamp) && lastModTimestamp > 0) {
+                        // Convert seconds to milliseconds if needed
+                        const timestampMs = lastModTimestamp < 1e12 ? lastModTimestamp * 1000 : lastModTimestamp;
+                        const lastModDate = new Date(timestampMs);
+                        if (!isNaN(lastModDate.getTime())) {
+                          createdDateTime = lastModDate.toISOString();
+                        }
                       }
                     }
-                  }
 
-                  // Validate and normalize last_modified for last_updated field
-                  let lastUpdatedTime: string | undefined;
-                  if (file.last_modified != null) {
-                    const lastModTimestamp = Number(file.last_modified);
-                    if (Number.isFinite(lastModTimestamp) && lastModTimestamp > 0) {
-                      // Convert seconds to milliseconds if needed
-                      const timestampMs = lastModTimestamp < 1e12 ? lastModTimestamp * 1000 : lastModTimestamp;
-                      const lastModDate = new Date(timestampMs);
-                      if (!isNaN(lastModDate.getTime())) {
-                        lastUpdatedTime = lastModDate.toISOString();
+                    // Validate and normalize last_modified for last_updated field
+                    let lastUpdatedTime: string | undefined;
+                    if (file.last_modified != null) {
+                      const lastModTimestamp = Number(file.last_modified);
+                      if (Number.isFinite(lastModTimestamp) && lastModTimestamp > 0) {
+                        // Convert seconds to milliseconds if needed
+                        const timestampMs = lastModTimestamp < 1e12 ? lastModTimestamp * 1000 : lastModTimestamp;
+                        const lastModDate = new Date(timestampMs);
+                        if (!isNaN(lastModDate.getTime())) {
+                          lastUpdatedTime = lastModDate.toISOString();
+                        }
                       }
                     }
+
+                    const rawStatus = checkboxStatus
+                      ? (checkboxStatus[1] === 'true' ? 'completed' : 'todo')
+                      : (singleselectStatus?.[1] || 'todo');
+
+                    return {
+                      name: file.name.replace('.md', ''),
+                      frequency: (frequencyMatch?.[1] || 'daily') as GTDHabit['frequency'],
+                      status: (rawStatus === 'completed' || rawStatus === 'todo') ? rawStatus : 'todo',
+                      path: file.path,
+                      last_updated: lastUpdatedTime || new Date().toISOString(),
+                      createdDateTime: createdDateTime || lastUpdatedTime || new Date().toISOString()
+                    };
+                  } catch (error) {
+                    return null;
                   }
+                })
+              );
+              setHabits(loadedHabits.filter((h): h is GTDHabit => h !== null));
+            } catch (error) {
+              setHabits([]);
+            }
+          })(),
 
-                  const rawStatus = checkboxStatus
-                    ? (checkboxStatus[1] === 'true' ? 'completed' : 'todo')
-                    : (singleselectStatus?.[1] || 'todo');
-                  
-                  return {
-                    name: file.name.replace('.md', ''),
-                    frequency: (frequencyMatch?.[1] || 'daily') as GTDHabit['frequency'],
-                    status: (rawStatus === 'completed' || rawStatus === 'todo') ? rawStatus : 'todo',
-                    path: file.path,
-                    last_updated: lastUpdatedTime || new Date().toISOString(),
-                    createdDateTime: createdDateTime || lastUpdatedTime || new Date().toISOString()
-                  };
-                } catch (error) {
-                  return null;
-                }
-              })
-            );
-            setHabits(loadedHabits.filter((h): h is GTDHabit => h !== null));
-          } catch (error) {
-            setHabits([]);
-          }
-        })(),
+          // Load horizon counts
+          (async () => {
+            try {
+              const { invoke } = await import('@tauri-apps/api/core');
+              const horizons = [
+                'Purpose & Principles',
+                'Vision',
+                'Goals',
+                'Areas of Focus',
+                'Someday Maybe',
+                'Cabinet'
+              ];
 
-        // Load horizon counts
-        (async () => {
-          try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            const horizons = [
-              'Purpose & Principles',
-              'Vision',
-              'Goals',
-              'Areas of Focus',
-              'Someday Maybe',
-              'Cabinet'
-            ];
+              const counts: Record<string, number> = {};
+              await Promise.all(
+                horizons.map(async (horizon) => {
+                  try {
+                    const horizonPath = `${gtdSpace.root_path}/${horizon}`;
+                    const files = await invoke<MarkdownFile[]>('list_markdown_files', {
+                      path: horizonPath
+                    });
+                    counts[horizon] = files.length;
+                  } catch (error) {
+                    counts[horizon] = 0;
+                  }
+                })
+              );
+              setHorizonFileCounts(counts);
+            } catch (error) {
+              // Failed to load horizon counts
+            }
+          })()
+        ]);
 
-            const counts: Record<string, number> = {};
-            await Promise.all(
-              horizons.map(async (horizon) => {
-                try {
-                  const horizonPath = `${gtdSpace.root_path}/${horizon}`;
-                  const files = await invoke<MarkdownFile[]>('list_markdown_files', {
-                    path: horizonPath
-                  });
-                  counts[horizon] = files.length;
-                } catch (error) {
-                  counts[horizon] = 0;
-                }
-              })
-            );
-            setHorizonFileCounts(counts);
-          } catch (error) {
-            // Failed to load horizon counts
-          }
-        })()
-      ]);
-        
         // Only mark as loaded after successful completion
         loadedPathRef.current = gtdSpace.root_path;
         console.log('[GTDDashboard] Successfully loaded data for path:', gtdSpace.root_path);
@@ -340,7 +340,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     console.log('[GTDDashboard] Action summary effect triggered', {
       projectCount: gtdSpace?.projects?.length || 0
     });
-    
+
     const loadActions = async () => {
       if (!gtdSpace?.projects || gtdSpace.projects.length === 0) {
         setActionSummary({ total: 0, inProgress: 0, completed: 0, waiting: 0, upcomingDue: 0 });
@@ -361,7 +361,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                 // Match any status value, including legacy ones
                 const statusMatch = content.match(/\[!singleselect:status:([^\]]+)\]/i);
                 const raw = (statusMatch?.[1] || 'in-progress').toLowerCase().trim();
-                
+
                 // Map legacy values to canonical ones
                 if (raw === 'in-progress' || raw === 'active' || raw === 'planning' || raw === 'not-started') {
                   inProgress++;
@@ -376,7 +376,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                   // Default unmapped values to in-progress
                   inProgress++;
                 }
-                
+
 
                 const dueMatch = content.match(/\[!datetime:due_date:([^\]]*)\]/i);
                 const dueStr = dueMatch?.[1]?.trim();
@@ -484,7 +484,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
         // Return Infinity for invalid dates so they sort to the end
         return isNaN(parsed) ? Infinity : parsed;
       };
-      
+
       const dateA = parseDateSafe(a.dueDate!);
       const dateB = parseDateSafe(b.dueDate!);
       return dateA - dateB;
@@ -1144,11 +1144,19 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                             >
                               <div className="flex items-center justify-between">
                                 <span className="font-medium">{project.name}</span>
-                                {project.dueDate && project.dueDate.includes('T') && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {formatTime(project.dueDate)}
-                                  </Badge>
-                                )}
+                                {project.dueDate && project.dueDate.includes('T') && (() => {
+                                  const raw = project.dueDate as string;
+                                  // Extract ISO from block syntax like "[!datetime:...ISO...]" or "[!datetime:due_date:...ISO...]"
+                                  const match = raw.match(/\[!datetime:(?:[^:\]]*:)?([^\]]+)\]/i);
+                                  const normalized = match && match[1] ? match[1].trim() : raw;
+                                  const parsed = new Date(normalized);
+                                  if (isNaN(parsed.getTime())) return null;
+                                  return (
+                                    <Badge variant="outline" className="text-xs">
+                                      {formatTime(parsed.toISOString())}
+                                    </Badge>
+                                  );
+                                })()}
                               </div>
                               <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
                               <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">

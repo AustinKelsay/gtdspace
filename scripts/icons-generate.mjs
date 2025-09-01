@@ -2,13 +2,20 @@
 /* eslint-env node */
 
 import { execFileSync } from 'child_process';
-import { existsSync, readdirSync, lstatSync, unlinkSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, lstatSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, '..');
 const iconsDir = join(projectRoot, 'src-tauri', 'icons');
+
+// Ensure the icons directory exists
+if (!existsSync(iconsDir)) {
+  console.log(`Creating missing icons directory: ${iconsDir}`);
+  mkdirSync(iconsDir, { recursive: true });
+}
+
 const iconPath = join(iconsDir, 'icon.png');
 
 // Files we want to keep

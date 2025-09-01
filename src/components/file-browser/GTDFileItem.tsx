@@ -39,6 +39,7 @@ import { Label } from '@/components/ui/label';
 import { invoke } from '@tauri-apps/api/core';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import type { FileItemProps } from '@/types';
+import { mapStatusValue } from '@/utils/singleselect-block-helpers'; // Import the shared normalizer
 
 interface GTDMetadata {
   type: 'project' | 'action' | 'regular';
@@ -73,23 +74,6 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
   const [gtdMetadata, setGtdMetadata] = useState<GTDMetadata>({ type: 'regular' });
   const { withErrorHandling } = useErrorHandler();
 
-  const normalizeStatus = (status: string | undefined): string | undefined => {
-    if (!status) return undefined;
-    const statusMappings: Record<string, string> = {
-        'not-started': 'in-progress',
-        'active': 'in-progress',
-        'planning': 'in-progress',
-        'on-hold': 'waiting',
-        'waiting-for': 'waiting',
-        'cancelled': 'cancelled',
-        'canceled': 'cancelled', // Map US spelling to UK spelling
-        'done': 'completed',
-        'complete': 'completed',
-    };
-    const normalized = status.toLowerCase().trim().replace(/\s+/g, '-');
-    return statusMappings[normalized] || normalized;
-  }
-
   // === GTD DETECTION ===
   
   useEffect(() => {
@@ -106,7 +90,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
             const metadata = parseProjectMetadata(content);
             setGtdMetadata({
               type: 'project',
-              status: normalizeStatus(metadata.status),
+              status: metadata.status ? mapStatusValue(metadata.status) : undefined,
               dueDate: metadata.dueDate,
               description: metadata.description
             });
@@ -127,7 +111,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
             const metadata = parseActionMetadata(content);
             setGtdMetadata({
               type: 'action',
-              status: normalizeStatus(metadata.status),
+              status: metadata.status ? mapStatusValue(metadata.status) : undefined,
               dueDate: metadata.dueDate,
               effort: metadata.effort
             });

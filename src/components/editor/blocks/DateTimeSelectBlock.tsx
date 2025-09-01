@@ -109,13 +109,17 @@ const DateTimeSelectComponent = React.memo<DateTimeSelectComponentProps>(functio
       isoString = `${year}-${month}-${day}`;
     } else {
       // Parse time value and create local date with time
-      const [hours, minutes] = timeValue.split(':').map(Number);
+      const parts = (timeValue || '').split(':');
+      let hours = Number(parts[0]);
+      let minutes = Number(parts[1]);
+      hours = isNaN(hours) ? 0 : hours;
+      minutes = isNaN(minutes) ? 0 : minutes;
       const localDate = new Date(
         newDate.getFullYear(),
         newDate.getMonth(),
         newDate.getDate(),
-        hours || 0,
-        minutes || 0,
+        hours,
+        minutes,
         0,
         0
       );
@@ -289,9 +293,13 @@ const DateTimeSelectComponent = React.memo<DateTimeSelectComponentProps>(functio
             let isoString: string;
             if (localTimeEnabled) {
               // Add time to existing date using local time
-              const [hours, minutes] = timeValue.split(':').map(Number);
+              const parts = (timeValue || '').split(':');
+              let hours = Number(parts[0]);
+              let minutes = Number(parts[1]);
+              hours = isNaN(hours) ? 0 : hours;
+              minutes = isNaN(minutes) ? 0 : minutes;
               const localDate = new Date(dateValue);
-              localDate.setHours(hours || 0, minutes || 0, 0, 0);
+              localDate.setHours(hours, minutes, 0, 0);
               isoString = localDate.toISOString();
             } else {
               // Remove time from existing date - construct date string from local parts

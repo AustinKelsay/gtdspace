@@ -57,12 +57,7 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 
 ### Pre-built Releases
 
-Download the latest version for your platform from the [Releases page](https://github.com/austinkelsay/gtdspace/releases):
-
-- **Windows**: `.msi` installer
-- **macOS Intel**: `.dmg` for Intel-based Macs
-- **macOS Apple Silicon**: `.dmg` for M1/M2/M3 Macs
-- **Linux**: `.AppImage` (universal) or `.deb` (Debian/Ubuntu)
+Releases coming soon — download links will appear here once the first release is published.
 
 ## Quick Start
 

@@ -68,13 +68,14 @@ export function serializeMultiselectsToMarkers(markdown: string): string {
             const allowed = new Set(['tags', 'contexts', 'categories', 'custom']);
             const type = allowed.has(rawType) ? rawType : 'tags';
             // Normalize value: handle arrays, strings, and other types
+            // URL-encode values to preserve special characters
             let value = '';
             if (Array.isArray(data.value)) {
-              value = data.value.join(',');
+              value = data.value.map(v => encodeURIComponent(String(v))).join(',');
             } else if (typeof data.value === 'string') {
-              value = data.value;
+              value = encodeURIComponent(data.value);
             } else if (data.value != null) {
-              value = String(data.value);
+              value = encodeURIComponent(String(data.value));
             }
             const newMarker = `[!multiselect:${type}:${value}]`;
             
@@ -134,13 +135,14 @@ function serializeMultiselectsToMarkersRegex(markdown: string): string {
       const allowed = new Set(['tags', 'contexts', 'categories', 'custom']);
       const type = allowed.has(rawType) ? rawType : 'tags';
       // Normalize value: handle arrays, strings, and other types
+      // URL-encode values to preserve special characters (mirror DOMParser logic)
       let value = '';
       if (Array.isArray(data.value)) {
-        value = data.value.join(',');
+        value = data.value.map(v => encodeURIComponent(String(v))).join(',');
       } else if (typeof data.value === 'string') {
-        value = data.value;
+        value = encodeURIComponent(data.value);
       } else if (data.value != null) {
-        value = String(data.value);
+        value = encodeURIComponent(String(data.value));
       }
       const newMarker = `[!multiselect:${type}:${value}]`;
 
@@ -174,10 +176,17 @@ export function deserializeMarkersToMultiselects(markdown: string): string {
       const allowed = new Set(['tags', 'contexts', 'categories', 'custom']);
       const type = allowed.has(rawType) ? rawType : 'tags';
       
-      // Parse and trim values
+      // Parse and trim values, decode URL encoding
       const valueStr = match[2] || '';
       const values = valueStr
-        ? valueStr.split(',').map(v => v.trim()).filter(Boolean)
+        ? valueStr.split(',').map(v => {
+            try {
+              return decodeURIComponent(v.trim());
+            } catch {
+              // If decoding fails, use the raw value
+              return v.trim();
+            }
+          }).filter(Boolean)
         : [];
       
       // Create the HTML format that the editor expects

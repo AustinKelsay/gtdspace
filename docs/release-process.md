@@ -45,7 +45,7 @@ npm run release:minor
 npm run release:major
 ```
 
-There are no further steps; the push is handled automatically.
+There are no further steps; the version bump, commit, tag, and push to remote are all handled automatically by the `safe-release.js` script.
 
 #### Semi-Automated Release (Manual Push)
 

@@ -34,6 +34,7 @@ export interface MultiSelectProps {
  * Renders a single option item with consistent styling and behavior
  */
 interface OptionItemProps {
+  id?: string
   option: Option
   isSelected: boolean
   isActive: boolean
@@ -42,9 +43,10 @@ interface OptionItemProps {
   onMouseEnter: () => void
 }
 
-function OptionItem({ option, isSelected, isActive, isDisabled, onSelect, onMouseEnter }: OptionItemProps) {
+function OptionItem({ id, option, isSelected, isActive, isDisabled, onSelect, onMouseEnter }: OptionItemProps) {
   return (
     <div
+      id={id}
       role="option"
       aria-selected={isSelected}
       aria-disabled={isDisabled || undefined}
@@ -280,12 +282,9 @@ const MultiSelect = React.forwardRef<
         </PopoverPrimitive.Trigger>
         <PopoverPrimitive.Portal container={typeof document !== 'undefined' ? document.body : undefined}>
           <PopoverPrimitive.Content
-            id={listboxId}
             className="z-[70] p-0"
             align="start"
             sideOffset={4}
-            role="listbox"
-            aria-multiselectable="true"
             style={{
               minWidth: "var(--radix-popover-trigger-width)",
               maxWidth: "var(--radix-popover-trigger-width)",
@@ -297,6 +296,7 @@ const MultiSelect = React.forwardRef<
                   ref={inputRef}
                   className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Filter options"
+                  aria-controls={listboxId}
                   placeholder={searchPlaceholder}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -318,8 +318,14 @@ const MultiSelect = React.forwardRef<
                     </>
                   )}
 
-                  {groupedOptions.ungrouped.length > 0 && (
-                    <div className="py-1">
+                  <div
+                    id={listboxId}
+                    role="listbox"
+                    aria-multiselectable="true"
+                    aria-activedescendant={activeIndex >= 0 ? `option-${selectableOptions[activeIndex]?.value}` : undefined}
+                  >
+                    {groupedOptions.ungrouped.length > 0 && (
+                      <div className="py-1">
                       {groupedOptions.ungrouped.map((option, _index) => {
                         const optionIndex = selectableOptions.findIndex(
                           o => o.value === option.value
@@ -329,6 +335,7 @@ const MultiSelect = React.forwardRef<
                         return (
                           <OptionItem
                             key={option.value}
+                            id={`option-${option.value}`}
                             option={option}
                             isSelected={value.includes(option.value)}
                             isActive={isActive}
@@ -341,12 +348,12 @@ const MultiSelect = React.forwardRef<
                     </div>
                   )}
 
-                  {Object.entries(groupedOptions.groups).map(([group, groupOptions]) => (
-                    <div key={group}>
-                      <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">
-                        {group}
-                      </div>
-                      <div className="py-1">
+                    {Object.entries(groupedOptions.groups).map(([group, groupOptions]) => (
+                      <div key={group} role="group" aria-label={group}>
+                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">
+                          {group}
+                        </div>
+                        <div className="py-1">
                         {groupOptions.map((option) => {
                           const optionIndex = selectableOptions.findIndex(
                             o => o.value === option.value
@@ -356,6 +363,7 @@ const MultiSelect = React.forwardRef<
                           return (
                             <OptionItem
                               key={option.value}
+                              id={`option-${option.value}`}
                               option={option}
                               isSelected={value.includes(option.value)}
                               isActive={isActive}
@@ -365,9 +373,10 @@ const MultiSelect = React.forwardRef<
                             />
                           )
                         })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
 
                   {filteredOptions.length === 0 && (
                     <div className="py-6 text-center text-sm text-muted-foreground">

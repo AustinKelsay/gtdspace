@@ -47,14 +47,15 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
       const fieldMap: Record<string, string> = {
         'due_date': 'dueDate',
         'focus_date': 'focusDate',
-        'focus_date_time': 'focusDate', // Backward compatibility for new focus field
+        'due_date_time': 'dueDate', // Alias for due_date to normalize !datetime:due_date_time:...
+        'focus_date_time': 'focusDate', // Maps to focusDate, intentionally dropping time component for simplicity/backward compatibility
         // Support both old and new field names for backward compatibility
         'created_date': 'createdDateTime', // Map old field to new camelCase name
         'created_date_time': 'createdDateTime',
         'modified_date': 'modifiedDate',
         'modified_date_time': 'modifiedDateTime',
         'completed_date': 'completedDate',
-        'completed_date_time': 'completedDate' // Both variants map to same camelCase field
+        'completed_date_time': 'completedDate' // Maps to completedDate, intentionally dropping time component for simplicity/backward compatibility
       };
       const field = fieldMap[match[1]] || match[1];
       return { key: field, value: match[2] };

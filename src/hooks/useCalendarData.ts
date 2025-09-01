@@ -195,7 +195,15 @@ export const useCalendarData = (
                 // Note: Migration is applied for display only, not saved to disk
               }
               
-              const projectName = normalizedPath.split('/Projects/')[1]?.split('/')[0] || '';
+              // Extract project name using case-insensitive search but preserving original casing
+              const projectsIndex = normalizedPathLower.indexOf('/projects/');
+              let projectName = '';
+              if (projectsIndex !== -1) {
+                const startIndex = projectsIndex + '/projects/'.length;
+                const pathAfterProjects = normalizedPath.slice(startIndex);
+                const segments = pathAfterProjects.split('/');
+                projectName = segments[0] || '';
+              }
               
               // Parse dates from project README
               const dueDate = parseDateTimeField(content, 'due_date');

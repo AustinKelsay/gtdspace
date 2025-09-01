@@ -14,7 +14,7 @@ Your GTD Space build and release process is now fully configured! Here's what wa
 - **NPM scripts**: `version:major`, `version:minor`, `version:patch`, `release`
 
 ### 3. Tauri Configuration Fixed
-- ✅ `tauri.bundle.active` set to `true` (was false - would have prevented builds!)
+- ✅ `bundle.active` set to `true` (was false - would have prevented builds!)
 - ✅ Added platform-specific bundle configurations
 - ✅ Updated bundle identifier and metadata
 - ✅ Bundle configuration is defined at the top-level `bundle` key (correct for Tauri v2)
@@ -49,15 +49,16 @@ git push origin feature/release-process
 Merge your `feature/release-process` branch into `staging`. Target `staging` because the CI workflow is configured to run integration and release checks on this branch, ensuring stability before a final merge to `main`.
 
 ### 3. Create Your First Release
-After merging to `staging`:
-```bash
-git checkout staging
-git pull
-# This example runs a patch release. Use minor or major as needed.
-# See docs/release-process.md for more details.
-npm run release:patch
-```
-This command will bump the version, create a commit, and tag it. The `release.yml` workflow is triggered manually from the GitHub Actions tab on the `staging` branch, which will then build and release the new version.
+
+To create a new release (patch, minor, or major), you should **trigger the Release workflow directly from the GitHub Actions tab** on the `staging` branch.
+
+1.  **Navigate to the Actions tab** in your GitHub repository.
+2.  Select the **"Release" workflow** from the left sidebar.
+3.  Click on **"Run workflow"** dropdown on the right.
+4.  Choose the `staging` branch.
+5.  Select the desired release type (patch, minor, or major) and click "Run workflow".
+
+**Important Tip:** Do NOT run `npm run release:patch`, `npm run release:minor`, or `npm run release:major` locally. These commands are intended for manual, non-workflow-driven releases and will conflict with the automated GitHub Actions workflow, potentially causing double version bumps and inconsistencies. The GitHub Actions workflow is the single source of truth for version bumps, commits, tags, and pushes.
 
 ### 4. Monitor the Build
 - Go to [GitHub Actions](https://github.com/AustinKelsay/gtdspace/actions) to watch the build progress

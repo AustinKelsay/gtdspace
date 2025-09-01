@@ -60,7 +60,7 @@ export const mapStatusValue = (status: string): string => {
     'active': 'in-progress',
     'planning': 'in-progress',
     'on-hold': 'waiting',
-    'cancelled': 'cancelled',  // Keep cancelled as its own status
+    'cancelled': 'completed',  // Remap cancelled/canceled to completed
     'done': 'completed',
     'complete': 'completed',
     'todo': 'in-progress',

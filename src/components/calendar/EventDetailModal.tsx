@@ -105,16 +105,24 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
           {/* Dates */}
           <div className="space-y-2">
-            {(event.focusDate || event.dueDate) && (
-              <div className="flex items-center gap-2 text-sm">
-                <Calendar className="w-4 h-4 text-muted-foreground" />
-                <span>
-                  {event.focusDate ? formatEventTime(event.focusDate) : null}
-                  {event.focusDate && event.dueDate ? ' - ' : null}
-                  {event.dueDate ? formatEventTime(event.dueDate) : null}
-                </span>
-              </div>
-            )}
+            {/* Derive local variables to handle both camelCase and snake_case */}
+            {(() => {
+              const focusDate = event.focusDate ?? (event as unknown as Record<string, unknown>).focus_date as string | undefined;
+              const dueDate = event.dueDate ?? (event as unknown as Record<string, unknown>).due_date as string | undefined;
+
+              if (!focusDate && !dueDate) return null;
+
+              return (
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <span>
+                    {focusDate ? formatEventTime(focusDate) : null}
+                    {focusDate && dueDate ? ' - ' : null}
+                    {dueDate ? formatEventTime(dueDate) : null}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Project Name (for actions) */}

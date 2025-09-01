@@ -10,6 +10,19 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 
+// Helper function to sanitize option values for use as IDs
+const sanitizeOptionId = (value: string, index: number): string => {
+  // Normalize to lower-case, replace non-alphanumeric with hyphens, collapse, trim
+  const sanitized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-') // Replace non-alphanumeric (excluding hyphen) with hyphen
+    .replace(/-+/g, '-') // Collapse consecutive hyphens
+    .replace(/^-|-$/g, ''); // Trim leading/trailing hyphens
+
+  // Prepend stable prefix and append index for uniqueness
+  return `option-${sanitized}-${index}`;
+};
+
 export interface Option {
   value: string
   label: string
@@ -174,6 +187,15 @@ const MultiSelect = React.forwardRef<
       return opts
     }, [groupedOptions])
 
+    // Clamp activeIndex when selectableOptions changes
+    React.useEffect(() => {
+      if (selectableOptions.length === 0) {
+        setActiveIndex(-1)
+      } else if (activeIndex >= selectableOptions.length) {
+        setActiveIndex(selectableOptions.length - 1)
+      }
+    }, [selectableOptions.length, activeIndex])
+
     // Keyboard navigation
     React.useEffect(() => {
       if (!open) {
@@ -322,7 +344,7 @@ const MultiSelect = React.forwardRef<
                     id={listboxId}
                     role="listbox"
                     aria-multiselectable="true"
-                    aria-activedescendant={activeIndex >= 0 ? `option-${selectableOptions[activeIndex]?.value}` : undefined}
+                    aria-activedescendant={activeIndex >= 0 && activeIndex < selectableOptions.length ? sanitizeOptionId(selectableOptions[activeIndex].value, activeIndex) : undefined}
                   >
                     {groupedOptions.ungrouped.length > 0 && (
                       <div className="py-1">
@@ -335,7 +357,7 @@ const MultiSelect = React.forwardRef<
                         return (
                           <OptionItem
                             key={option.value}
-                            id={`option-${option.value}`}
+                            id={sanitizeOptionId(option.value, optionIndex)}
                             option={option}
                             isSelected={value.includes(option.value)}
                             isActive={isActive}
@@ -363,7 +385,7 @@ const MultiSelect = React.forwardRef<
                           return (
                             <OptionItem
                               key={option.value}
-                              id={`option-${option.value}`}
+                              id={sanitizeOptionId(option.value, optionIndex)}
                               option={option}
                               isSelected={value.includes(option.value)}
                               isActive={isActive}

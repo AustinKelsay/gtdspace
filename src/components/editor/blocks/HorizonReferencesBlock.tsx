@@ -239,9 +239,9 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
   // Parse references - supports both JSON array and legacy CSV format
   const parsedReferences = React.useMemo(() => {
     if (!references) return [];
-    
+
     let refs: string[] = [];
-    
+
     // Try to parse as JSON first
     try {
       const parsed = JSON.parse(references);
@@ -255,7 +255,7 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
       // JSON parse failed, use legacy CSV format
       refs = references.split(',');
     }
-    
+
     // Normalize paths to forward slashes, trim, and filter empty strings
     const normalized = refs
       .map(ref => ref.replace(/\\/g, '/').trim())
@@ -334,52 +334,132 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
   }, [filteredFiles]);
 
   const updateReferences = React.useCallback((newReferences: string[]): boolean => {
-    const findAndUpdateBlock = () => {
-      if (!editor.document) {
-        console.error('Editor document is not available');
-        return false;
+    // Normalize a references string (JSON array or CSV) for stable comparisons
+    function normalizeRefsString(input: string | undefined): string {
+      if (!input) return '';
+      try {
+        const parsed = JSON.parse(input);
+        if (Array.isArray(parsed)) {
+          return parsed.map((s) => String(s).replace(/\\/g, '/').trim()).filter(Boolean).sort().join(',');
+        }
+      } catch {
+        // not JSON, treat as CSV
       }
-      const blocks = editor.document as unknown as EditorBlockNode[];
+      return input.split(',').map((s) => s.replace(/\\/g, '/').trim()).filter(Boolean).sort().join(',');
+    }
 
-      for (const docBlock of blocks) {
-        if (updateBlockRecursive(docBlock)) return true;
-      }
-      return false;
-    };
+    const previousRefsNormalized = normalizeRefsString(block.props.references);
+    const targetType = `${horizonType}-references`;
 
-    const updateBlockRecursive = (node: EditorBlockNode): boolean => {
-      if (node.id === block.id) {
-        editor.updateBlock(block.id, {
-          type: `${horizonType}-references`,
+    const tryUpdateById = (id: string): boolean => {
+      try {
+        editor.updateBlock(id, {
+          type: targetType,
           props: { references: JSON.stringify(newReferences) }
         });
         return true;
+      } catch (err) {
+        console.error('HorizonReferences: updateBlock failed for id', id, err);
+        return false;
       }
-
-      if (node.children) {
-        for (const child of node.children) {
-          if (updateBlockRecursive(child)) return true;
-        }
-      }
-
-      return false;
     };
 
-    const didUpdate = findAndUpdateBlock();
-    if (!didUpdate) {
-      console.error('Failed to update references: target block not found', {
-        blockId: block.id,
-        horizonType,
-        newReferences
-      });
+    // First try the current block id
+    if (tryUpdateById(block.id)) return true;
+
+    // If that failed, search the current document for a block of the same type
+    // whose references equal the previous references of this renderer.
+    try {
+      const doc = (editor.document as unknown as EditorBlockNode[]) || [];
+      let foundId: string | null = null;
+
+      const visit = (node: EditorBlockNode) => {
+        if (foundId) return; // already found
+        if (node.type === targetType) {
+          const nodeNorm = normalizeRefsString(String((node.props?.references ?? '')));
+          if (nodeNorm === previousRefsNormalized) {
+            foundId = node.id;
+            return;
+          }
+        }
+        if (node.children) {
+          for (const child of node.children) visit(child);
+        }
+      };
+
+      for (const n of doc) visit(n);
+      if (foundId && tryUpdateById(foundId)) return true;
+    } catch (searchErr) {
+      console.error('HorizonReferences: error while searching for matching block', searchErr);
     }
-    return didUpdate;
-  }, [block.id, editor, horizonType]);
+
+    console.error('Failed to update references: target block not found', {
+      blockId: block.id,
+      horizonType,
+      newReferences
+    });
+    // Last-resort: retry a few times with small delays; first try exact id again,
+    // then by matching previous refs, then any first block of target type.
+    const scheduleRetries = (delaysMs: number[]) => {
+      delaysMs.forEach((delay) => {
+        setTimeout(() => {
+          try {
+            // 1) try current id
+            if (tryUpdateById(block.id)) return;
+
+            // 2) try matching by previous refs
+            try {
+              const doc = (editor.document as unknown as EditorBlockNode[]) || [];
+              let matchedId: string | null = null;
+              const visit = (node: EditorBlockNode) => {
+                if (matchedId) return;
+                if (node.type === targetType) {
+                  const nodeNorm = normalizeRefsString(String((node.props?.references ?? '')));
+                  if (nodeNorm === previousRefsNormalized) {
+                    matchedId = node.id;
+                    return;
+                  }
+                }
+                if (node.children) for (const c of node.children) visit(c);
+              };
+              for (const n of doc) visit(n);
+              if (matchedId && tryUpdateById(matchedId)) return;
+            } catch (searchErr) {
+              console.error('HorizonReferences: retry search failed', searchErr);
+            }
+
+            // 3) fallback: pick first block of target type
+            try {
+              const doc = (editor.document as unknown as EditorBlockNode[]) || [];
+              let firstId: string | null = null;
+              const findFirst = (node: EditorBlockNode) => {
+                if (firstId) return;
+                if (node.type === targetType) {
+                  firstId = node.id;
+                  return;
+                }
+                if (node.children) for (const c of node.children) findFirst(c);
+              };
+              for (const n of doc) findFirst(n);
+              if (firstId) tryUpdateById(firstId);
+            } catch (fallbackErr) {
+              console.error('HorizonReferences: fallback retry failed', fallbackErr);
+            }
+          } catch (delayedErr) {
+            console.error('HorizonReferences: delayed retry tick failed', delayedErr);
+          }
+        }, delay);
+      });
+    };
+
+    scheduleRetries([32, 96, 256]);
+    return false;
+  }, [block.id, editor, horizonType, block.props.references]);
 
   const handleAddReference = React.useCallback((file: HorizonFile) => {
     // Normalize path to use forward slashes
     const canonicalPath = file.path.replace(/\\/g, '/');
-    
+
     if (parsedReferences.includes(canonicalPath)) return;
 
     const newReferences = [...parsedReferences, canonicalPath];
@@ -584,10 +664,14 @@ export const AreasReferencesBlock = createReactBlockSpec(
         />
       );
     },
-    toExternalHTML: () => null,
+    toExternalHTML: () => {
+      // For blocks with no content, return null to skip HTML serialization
+      // The actual markdown conversion happens in the editor's markdown exporter
+      return null;
+    },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      const match = textContent.match(/\[!areas-references:([^\]]*)\]/);
+      const textContent = (element.textContent || '').replace(/\]\]$/, ']');
+      const match = textContent.match(/\[!areas-references:([^\]]*)\]\]?/);
       if (match) {
         return { references: match[1] || '' };
       }
@@ -615,10 +699,14 @@ export const GoalsReferencesBlock = createReactBlockSpec(
         />
       );
     },
-    toExternalHTML: () => null,
+    toExternalHTML: () => {
+      // For blocks with no content, return null to skip HTML serialization
+      // The actual markdown conversion happens in the editor's markdown exporter
+      return null;
+    },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      const match = textContent.match(/\[!goals-references:([^\]]*)\]/);
+      const textContent = (element.textContent || '').replace(/\]\]$/, ']');
+      const match = textContent.match(/\[!goals-references:([^\]]*)\]\]?/);
       if (match) {
         return { references: match[1] || '' };
       }
@@ -646,10 +734,14 @@ export const VisionReferencesBlock = createReactBlockSpec(
         />
       );
     },
-    toExternalHTML: () => null,
+    toExternalHTML: () => {
+      // For blocks with no content, return null to skip HTML serialization
+      // The actual markdown conversion happens in the editor's markdown exporter
+      return null;
+    },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      const match = textContent.match(/\[!vision-references:([^\]]*)\]/);
+      const textContent = (element.textContent || '').replace(/\]\]$/, ']');
+      const match = textContent.match(/\[!vision-references:([^\]]*)\]\]?/);
       if (match) {
         return { references: match[1] || '' };
       }
@@ -677,10 +769,14 @@ export const PurposeReferencesBlock = createReactBlockSpec(
         />
       );
     },
-    toExternalHTML: () => null,
+    toExternalHTML: () => {
+      // For blocks with no content, return null to skip HTML serialization
+      // The actual markdown conversion happens in the editor's markdown exporter
+      return null;
+    },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      const match = textContent.match(/\[!purpose-references:([^\]]*)\]/);
+      const textContent = (element.textContent || '').replace(/\]\]$/, ']');
+      const match = textContent.match(/\[!purpose-references:([^\]]*)\]\]?/);
       if (match) {
         return { references: match[1] || '' };
       }

@@ -145,6 +145,14 @@ export function migrateGTDObject<T extends Record<string, any>>(obj: T): T {
     migrated.endDate = migrated.end_date;
     delete migrated.end_date;
   }
+  if ('completed_date' in migrated) {
+    migrated.completedDate = migrated.completed_date;
+    delete migrated.completed_date;
+  }
+  if ('modified_date' in migrated) {
+    migrated.modifiedDate = migrated.modified_date;
+    delete migrated.modified_date;
+  }
   
   // Ensure status is a single value, not an array
   if ('status' in migrated && Array.isArray(migrated.status)) {

@@ -189,6 +189,9 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
 
       // Skip if content hasn't meaningfully changed
       if (newContent === lastProcessedContent.current) return;
+      // Critical: If the incoming content equals what we last emitted,
+      // it's an echo of our own edit. Do NOT re-parse/replace or block IDs will churn.
+      if (newContent === lastEmittedMarkdownRef.current) return;
 
       try {
         // Set flag to ignore the onChange event from content update
@@ -231,11 +234,11 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   // REMOVED: Content update useEffect that was causing typing interruptions
   // This was triggering block reprocessing during normal typing after the isInternalChange flag reset
   // External updates (habits, file changes) are now handled through specific events only
-  
+
   // Handle habit content updates explicitly - these are real external changes that need processing
   useEffect(() => {
     if (!editor || !filePath) return;
-    
+
     const handleHabitContentChanged = async (event: CustomEvent<{ filePath: string }>) => {
       // Only process if this is for the current file
       if (event.detail.filePath === filePath && initialContentLoaded.current) {
@@ -244,17 +247,17 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
           let inTauriContext = false;
           try {
             const tauriReady = await import('@/utils/tauri-ready');
-            inTauriContext = tauriReady.isTauriContext ? tauriReady.isTauriContext() : false;
+            inTauriContext = tauriReady.checkTauriContextAsync ? await tauriReady.checkTauriContextAsync() : false;
           } catch (importError) {
             console.warn('Could not import tauri-ready module:', importError);
             return; // Bail early if we can't check Tauri context
           }
-          
+
           if (!inTauriContext) {
             console.warn('Habit content update skipped - not in Tauri context');
             return;
           }
-          
+
           // Only import invoke if we're definitely in Tauri context
           let freshContent: string;
           try {
@@ -269,7 +272,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
             console.error('Failed to invoke Tauri read_text_file:', invokeError);
             return; // Exit without throwing to prevent event handler crash
           }
-          
+
           // Use the fresh content for the update
           debouncedContentUpdate(freshContent);
         } catch (error) {
@@ -279,9 +282,9 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         }
       }
     };
-    
+
     window.addEventListener('habit-content-changed', handleHabitContentChanged as EventListener);
-    
+
     return () => {
       window.removeEventListener('habit-content-changed', handleHabitContentChanged as EventListener);
     };
@@ -310,93 +313,129 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
 
       try {
         // Custom handling for our custom blocks
-        const blocks = editor.document;
-        let markdown = '';
+        const blocks = editor.document as unknown[];
 
-        // Convert blocks to markdown with custom handling
+        // Helper: get full plain text of a paragraph block
+        function getParagraphPlainText(block: unknown): string {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const b = block as any;
+          if (!b?.content) return '';
+          if (typeof b.content === 'string') return b.content as string;
+          if (Array.isArray(b.content)) {
+            return b.content
+              .map((item: unknown) => {
+                if (typeof item === 'string') return item as string;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const i = item as any;
+                return typeof i?.text === 'string' ? (i.text as string) : '';
+              })
+              .join('');
+          }
+          return '';
+        }
+
+        // Batch standard blocks to preserve lists/spacing
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let standardBuffer: any[] = [];
+        const markdownParts: string[] = [];
+
+        const flushStandardBuffer = async () => {
+          if (standardBuffer.length === 0) return;
+          try {
+            const groupMarkdown = await editor.blocksToMarkdownLossy(standardBuffer);
+            markdownParts.push(groupMarkdown);
+          } catch (groupError) {
+            console.warn('Error converting standard block group:', groupError);
+          }
+          standardBuffer = [];
+        };
+
+        const isCustomBlockType = (type: string): boolean => {
+          return (
+            type === 'references' ||
+            type === 'areas-references' ||
+            type === 'goals-references' ||
+            type === 'vision-references' ||
+            type === 'purpose-references' ||
+            type === 'singleselect' ||
+            type === 'datetime' ||
+            type === 'checkbox' ||
+            type === 'multiselect'
+          );
+        };
+
         for (const block of blocks) {
-          const blockType = block.type;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const props = (block as any).props;
+          const blockType: string = (block as any)?.type;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const props = (block as any)?.props ?? {};
 
-          // Handle custom blocks that might be inside paragraphs
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          if (blockType === 'paragraph' && (block as any).content) {
-            // Check if this paragraph contains our custom syntax
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const textContent = (block as any).content?.[0]?.text || '';
-            if (textContent.match(/^\[!references:/)) {
-              markdown += textContent + '\n\n';
-            } else if (textContent.match(/^\[!areas-references:/)) {
-              markdown += textContent + '\n\n';
-            } else if (textContent.match(/^\[!goals-references:/)) {
-              markdown += textContent + '\n\n';
-            } else if (textContent.match(/^\[!vision-references:/)) {
-              markdown += textContent + '\n\n';
-            } else if (textContent.match(/^\[!purpose-references:/)) {
-              markdown += textContent + '\n\n';
-            } else if (textContent.match(/^\[!singleselect:/)) {
-              markdown += textContent + '\n\n';
-            } else if (textContent.match(/^\[!datetime:/)) {
-              markdown += textContent + '\n\n';
-            } else if (textContent.match(/^\[!checkbox:/)) {
-              markdown += textContent + '\n\n';
-            } else if (textContent.match(/^\[!multiselect:/)) {
-              markdown += textContent + '\n\n';
-            } else {
-              // Regular paragraph - use default conversion
-              try {
-                const blockMarkdown = await editor.blocksToMarkdownLossy([block]);
-                markdown += blockMarkdown;
-              } catch (blockError) {
-                console.warn('Error converting paragraph:', blockError);
-              }
+          // Paragraph that contains EXACTLY a marker should export as raw marker
+          if (blockType === 'paragraph') {
+            const fullText = getParagraphPlainText(block).trim();
+            const isMarker = (
+              /^\[!references:[^\]]*\]$/.test(fullText) ||
+              /^\[!areas-references:[^\]]*\]$/.test(fullText) ||
+              /^\[!goals-references:[^\]]*\]$/.test(fullText) ||
+              /^\[!vision-references:[^\]]*\]$/.test(fullText) ||
+              /^\[!purpose-references:[^\]]*\]$/.test(fullText) ||
+              /^\[!singleselect:[^\]]*\]$/.test(fullText) ||
+              /^\[!datetime:[^\]]*\]$/.test(fullText) ||
+              /^\[!checkbox:[^\]]*\]$/.test(fullText) ||
+              /^\[!multiselect:[^\]]*\]$/.test(fullText)
+            );
+
+            if (isMarker) {
+              await flushStandardBuffer();
+              markdownParts.push(fullText + '\n\n');
+              continue;
             }
-          } else if (blockType === 'references') {
-            const references = props?.references || '';
-            markdown += `[!references:${references}]\n\n`;
-          } else if (blockType === 'areas-references') {
-            const references = props?.references || '';
-            markdown += `[!areas-references:${references}]\n\n`;
-          } else if (blockType === 'goals-references') {
-            const references = props?.references || '';
-            markdown += `[!goals-references:${references}]\n\n`;
-          } else if (blockType === 'vision-references') {
-            const references = props?.references || '';
-            markdown += `[!vision-references:${references}]\n\n`;
-          } else if (blockType === 'purpose-references') {
-            const references = props?.references || '';
-            markdown += `[!purpose-references:${references}]\n\n`;
-          } else if (blockType === 'singleselect') {
-            const type = props?.type || '';
-            const value = props?.value || '';
-            markdown += `[!singleselect:${type}:${value}]\n\n`;
-          } else if (blockType === 'datetime') {
-            const type = props?.type || '';
-            const value = props?.value || '';
-            markdown += `[!datetime:${type}:${value}]\n\n`;
-          } else if (blockType === 'checkbox') {
-            const type = props?.type || '';
-            const checked = props?.checked || false;
-            markdown += `[!checkbox:${type}:${checked}]\n\n`;
-          } else if (blockType === 'multiselect') {
-            const type = props?.type || '';
-            const value = props?.value || '';
-            markdown += `[!multiselect:${type}:${value}]\n\n`;
+          }
+
+
+          if (isCustomBlockType(blockType)) {
+            await flushStandardBuffer();
+            if (blockType === 'references') {
+              const references = props?.references || '';
+              markdownParts.push(`[!references:${references}]\n\n`);
+            } else if (blockType === 'areas-references') {
+              const references = props?.references || '';
+              markdownParts.push(`[!areas-references:${references}]\n\n`);
+            } else if (blockType === 'goals-references') {
+              const references = props?.references || '';
+              markdownParts.push(`[!goals-references:${references}]\n\n`);
+            } else if (blockType === 'vision-references') {
+              const references = props?.references || '';
+              markdownParts.push(`[!vision-references:${references}]\n\n`);
+            } else if (blockType === 'purpose-references') {
+              const references = props?.references || '';
+              markdownParts.push(`[!purpose-references:${references}]\n\n`);
+            } else if (blockType === 'singleselect') {
+              const type = props?.type || '';
+              const value = props?.value || '';
+              markdownParts.push(`[!singleselect:${type}:${value}]\n\n`);
+            } else if (blockType === 'datetime') {
+              const type = props?.type || '';
+              const value = props?.value || '';
+              markdownParts.push(`[!datetime:${type}:${value}]\n\n`);
+            } else if (blockType === 'checkbox') {
+              const type = props?.type || '';
+              const checked = props?.checked || false;
+              markdownParts.push(`[!checkbox:${type}:${checked}]\n\n`);
+            } else if (blockType === 'multiselect') {
+              const type = props?.type || '';
+              const value = props?.value || '';
+              markdownParts.push(`[!multiselect:${type}:${value}]\n\n`);
+            }
           } else {
-            // Use default markdown conversion for standard blocks
-            try {
-              const blockMarkdown = await editor.blocksToMarkdownLossy([block]);
-              markdown += blockMarkdown;
-            } catch (blockError) {
-              console.warn('Error converting block:', blockType, blockError);
-              // Skip blocks that fail to convert
-            }
+            // Collect standard blocks to convert together
+            standardBuffer.push(block);
           }
         }
 
-        // No typing activity emission - auto-save removed for smooth typing
-        // No content update useEffect - typing won't trigger block reprocessing
+        await flushStandardBuffer();
+
+        const markdown = markdownParts.join('');
 
         if (markdown === lastEmittedMarkdownRef.current) {
           return;

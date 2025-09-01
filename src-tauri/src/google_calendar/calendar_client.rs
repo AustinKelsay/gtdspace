@@ -74,6 +74,12 @@ pub async fn fetch_calendar_events(
 
     // Loop through all pages
     loop {
+        // Safety limit to prevent infinite loops (Google Calendar API has a max of 2500 events per query)
+        if page_count >= 10 {
+            println!("[CalendarClient] Warning: Reached maximum page limit, stopping pagination");
+            break;
+        }
+
         page_count += 1;
         println!("[CalendarClient] Fetching page {}...", page_count);
 
@@ -134,9 +140,11 @@ pub async fn fetch_calendar_events(
             }
         }
 
-        // Safety limit to prevent infinite loops (Google Calendar API has a max of 2500 events per query)
-        if page_count > 10 {
-            println!("[CalendarClient] Warning: Reached maximum page limit, stopping pagination");
+        // Secondary guard: stop if we've reached the maximum number of pages
+        if page_count >= 10 {
+            println!(
+                "[CalendarClient] Warning: Reached maximum page limit after fetch, stopping pagination"
+            );
             break;
         }
     }

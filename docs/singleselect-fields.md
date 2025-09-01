@@ -37,10 +37,22 @@ You can manually insert single-select fields using keyboard shortcuts:
 3. When saved, the selected value is preserved in the markdown using the marker syntax
 4. This ensures fields cannot be accidentally overwritten with plain text
 
-## Legacy MultiSelect Support
-The system still supports multi-select fields for backwards compatibility:
-- `[!multiselect:tags:value1,value2]` - For tags and categories
-- These are primarily used for legacy content and specific use cases where multiple selections are needed
+## Legacy MultiSelect Support and Migration
+
+The system continues to support `[!multiselect:tags:value1,value2]` for tags and categories, primarily for legacy content and specific use cases where multiple selections are genuinely needed.
+
+**Important: Dropped Legacy MultiSelect Markers**
+Please be aware that legacy `!multiselect:status`, `!multiselect:effort`, and `!multiselect:project-status` markers are **no longer supported**. They are skipped (not migrated or preserved) when files are loaded.
+
+**Example of Dropped Input:**
+If your markdown contains:
+```
+[!multiselect:status:in-progress,waiting]
+```
+This marker will be ignored and removed when the file is loaded in the editor.
+
+**Recommended Migration:**
+Users with existing content using these legacy multi-select markers for status, effort, or project-status must manually migrate this data. Convert them to the new single-select format (e.g., `[!singleselect:status:in-progress]`) or manually re-enter the information using the appropriate single-select fields.
 
 ## Real-time Updates
 - Status changes are immediately reflected in the sidebar

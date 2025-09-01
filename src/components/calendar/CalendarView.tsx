@@ -23,7 +23,7 @@ import {
   isMonday, isTuesday, isWednesday,
   isThursday, isFriday, setHours
 } from 'date-fns';
-import { isTauriContext } from '@/utils/tauri-ready';
+import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { useCalendarData } from '@/hooks/useCalendarData';
 import type { MarkdownFile, GTDSpace } from '@/types';
 import type { GoogleCalendarSyncStatus, CalendarItemStatus } from '@/types/google-calendar';
@@ -31,9 +31,20 @@ import { cn } from '@/lib/utils';
 import { EventDetailModal } from './EventDetailModal';
 
 // Helper to detect if a date has a time component
+// - For strings: return false when the time portion is zero (e.g., "T00:00:00", with optional fractional seconds and timezone)
+// - For Date objects: treat ISO strings ending with zero time as no time component before checking local time parts
 const hasTimeComponent = (d: string | Date): boolean => {
-  if (typeof d === 'string') return /T\d{2}:\d{2}/.test(d) && !d.endsWith('T00:00:00');
-  if (d instanceof Date) return (d.getHours() + d.getMinutes() + d.getSeconds() + d.getMilliseconds()) !== 0;
+  const zeroTimeStringRegex = /T00:00:00(?:\.0+)?(?:Z|[+-]\d{2}:\d{2})?/;
+  if (typeof d === 'string') {
+    if (!/T\d{2}:\d{2}/.test(d)) return false;
+    if (zeroTimeStringRegex.test(d)) return false;
+    return true;
+  }
+  if (d instanceof Date) {
+    const iso = d.toISOString();
+    if (/T00:00:00(?:\.0+)?Z$/.test(iso)) return false;
+    return (d.getHours() + d.getMinutes() + d.getSeconds() + d.getMilliseconds()) !== 0;
+  }
   return false;
 };
 
@@ -67,7 +78,8 @@ interface CalendarEvent {
 
 // Lazy-load Tauri invoke only in Tauri context
 async function getTauriInvoke(): Promise<(<T>(cmd: string, args?: unknown) => Promise<T>) | null> {
-  if (!isTauriContext()) return null;
+  const inTauriContext = await checkTauriContextAsync();
+  if (!inTauriContext) return null;
   const core = await import('@tauri-apps/api/core');
   return core.invoke as <T>(cmd: string, args?: unknown) => Promise<T>;
 }

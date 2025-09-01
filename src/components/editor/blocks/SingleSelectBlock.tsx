@@ -158,9 +158,11 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
 
           if (isHabitFile) {
             // Check if Tauri is available before attempting import
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            if (typeof window !== 'undefined' && (window as any).__TAURI__) {
-              try {
+            try {
+              const { checkTauriContextAsync } = await import('@/utils/tauri-ready');
+              const inTauriContext = await checkTauriContextAsync();
+              
+              if (inTauriContext) {
                 const { invoke } = await import('@tauri-apps/api/core');
                 await invoke('update_habit_status', {
                   habitPath: currentPath,
@@ -208,9 +210,9 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                   metadata: { habitStatus: selectedValue },
                   changedFields: { habitStatus: selectedValue }
                 });
-              } catch (invokeError) {
-                // Tauri invoke failed - revert UI to previous value
-                console.error('[SingleSelectBlock] Tauri invoke failed:', invokeError);
+              } else {
+                // Tauri not available (browser/dev mode) - revert UI to previous value
+                console.warn('[SingleSelectBlock] Tauri not available, reverting habit status change');
                 props.editor.updateBlock(block, {
                   props: {
                     ...block.props,
@@ -218,7 +220,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                   },
                 });
                 
-                // Emit revert event so consumers see the persisted state
+                // Emit revert event
                 const normalizedForName = currentPath.replace(/\\/g, '/');
                 const fileName = normalizedForName.split('/').pop() || '';
                 emitMetadataChange({
@@ -228,11 +230,10 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                   metadata: { habitStatus: previousValue },
                   changedFields: { habitStatus: previousValue }
                 });
-                return; // Exit early on failure
               }
-            } else {
-              // Tauri not available (browser/dev mode) - revert UI to previous value
-              console.warn('[SingleSelectBlock] Tauri not available, reverting habit status change');
+            } catch (error) {
+              // Tauri check or invoke failed - revert UI to previous value
+              console.error('[SingleSelectBlock] Error checking Tauri or invoking:', error);
               props.editor.updateBlock(block, {
                 props: {
                   ...block.props,
@@ -250,7 +251,6 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                 metadata: { habitStatus: previousValue },
                 changedFields: { habitStatus: previousValue }
               });
-              return; // Exit early when Tauri is not available
             }
           }
         }
@@ -370,8 +370,8 @@ export const SingleSelectBlock = createReactBlockSpec(
       const { type, value } = block.props;
       // Return the markdown format that can be parsed back
       const markdownFormat = `[!singleselect:${type}:${value || ''}]`;
-      // Wrap in a paragraph to ensure it's preserved in the markdown
-      return <p>{markdownFormat}</p>;
+      // Return raw string; let the caller wrap if needed
+      return markdownFormat;
     },
   }
 );

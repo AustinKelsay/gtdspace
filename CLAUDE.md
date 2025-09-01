@@ -234,3 +234,12 @@ Files over 1MB may cause editor performance issues. The app uses manual save (de
 ### Test Coverage
 
 No automated testing framework is currently implemented. Manual testing is required before releases.
+
+### BlockNote Formatting Limitations
+
+Due to BlockNote's `blocksToMarkdownLossy` conversion, some rich text formatting is lost when saving:
+- Text colors and highlighting are not preserved
+- Advanced text styling may be simplified
+- Complex nested structures may be flattened
+
+This is a known limitation of converting rich text to markdown format. The app prioritizes markdown compatibility over full formatting preservation.

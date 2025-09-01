@@ -58,9 +58,21 @@ class ContentEventBus {
     
     const now = Date.now();
     
-    // Store metadata in cache
-    if (event.metadata) {
-      this.fileMetadataCache.set(event.filePath, event.metadata);
+    // Store metadata in cache (skip on deletions and clone defensively)
+    if (event.metadata && eventType !== 'file:deleted') {
+      let clonedMetadata: FileMetadata;
+      try {
+        if (typeof structuredClone !== 'undefined') {
+          clonedMetadata = structuredClone(event.metadata);
+        } else {
+          // Fallback deep clone
+          clonedMetadata = JSON.parse(JSON.stringify(event.metadata)) as FileMetadata;
+        }
+      } catch {
+        // Safety fallback
+        clonedMetadata = JSON.parse(JSON.stringify(event.metadata)) as FileMetadata;
+      }
+      this.fileMetadataCache.set(event.filePath, clonedMetadata);
     }
     
     // Apply deduplication early for content:changed events (before notifying listeners)

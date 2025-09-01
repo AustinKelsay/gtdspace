@@ -47,6 +47,7 @@ import {
   RefreshCw,
   Folder,
   MoreHorizontal,
+  XCircle,
   Trash2
 } from 'lucide-react';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
@@ -152,7 +153,7 @@ const GTD_SECTIONS: GTDSection[] = [
 // Helper function to normalize status values to canonical tokens
 const normalizeStatus = (status: string | undefined): string => {
   if (!status) return 'in-progress';
-  
+
   const statusMappings: Record<string, string> = {
     'not-started': 'in-progress',
     'active': 'in-progress',
@@ -164,7 +165,7 @@ const normalizeStatus = (status: string | undefined): string => {
     'complete': 'completed',
     'canceled': 'cancelled', // Map US spelling to canonical UK spelling
   };
-  
+
   const normalized = status.trim().toLowerCase().replace(/\s+/g, '-');
   return statusMappings[normalized] || normalized;
 };
@@ -882,37 +883,45 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   };
 
   const getProjectStatusColor = (statusInput: string) => {
-    switch (statusInput) {
+    const status = normalizeStatus(statusInput);
+    switch (status) {
       case 'completed': return 'text-green-600 dark:text-green-500';
       case 'waiting': return 'text-purple-600 dark:text-purple-500';
       case 'in-progress': return 'text-blue-600 dark:text-blue-500';
+      case 'cancelled': return 'text-red-600 dark:text-red-500';
       default: return 'text-gray-600 dark:text-gray-400';
     }
   };
 
   const getProjectStatusIcon = (statusInput: string) => {
-    switch (statusInput) {
+    const status = normalizeStatus(statusInput);
+    switch (status) {
       case 'completed': return CheckCircle2;
       case 'waiting': return CircleDot; // Filled circle (dot in center) for waiting
       case 'in-progress': return Circle; // Outline circle for in-progress
+      case 'cancelled': return XCircle;
       default: return Circle;
     }
   };
 
-  const getActionStatusColor = (status: string) => {
+  const getActionStatusColor = (statusInput: string) => {
+    const status = normalizeStatus(statusInput);
     switch (status) {
       case 'completed': return 'text-green-600 dark:text-green-500';
       case 'waiting': return 'text-purple-600 dark:text-purple-500';
       case 'in-progress': return 'text-blue-600 dark:text-blue-500';
+      case 'cancelled': return 'text-red-600 dark:text-red-500';
       default: return 'text-gray-600 dark:text-gray-400';
     }
   };
 
-  const getActionStatusIcon = (status: string) => {
+  const getActionStatusIcon = (statusInput: string) => {
+    const status = normalizeStatus(statusInput);
     switch (status) {
       case 'completed': return CheckCircle2;
       case 'waiting': return CircleDot;
       case 'in-progress': return Circle;
+      case 'cancelled': return XCircle;
       default: return Circle;
     }
   };
@@ -1158,7 +1167,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   }
 
   return (
-    <Card className={`flex flex-col h-full border-r ${className}`}>
+    <Card className={`flex flex-col h-full border-r overflow-hidden ${className}`}>
       {/* Header */}
       <div className="p-3 border-b">
         <div className="flex items-center justify-between mb-2">
@@ -1264,8 +1273,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                   <div className="space-y-1 pl-2">
                     {searchResults.projects.map((project) => {
                       const currentStatus = projectMetadata[project.path]?.status || project.status || 'in-progress';
+                      const normalizedStatus = normalizeStatus(currentStatus);
                       const currentTitle = projectMetadata[project.path]?.title || project.name;
-                      const StatusIcon = getProjectStatusIcon(currentStatus);
+                      const StatusIcon = getProjectStatusIcon(normalizedStatus);
 
                       return (
                         <div
@@ -1273,7 +1283,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                           className="group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer"
                           onClick={() => handleProjectClick(project)}
                         >
-                          <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(currentStatus)}`} />
+                          <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(normalizedStatus)}`} />
                           <span className="text-sm truncate">{currentTitle}</span>
                         </div>
                       );
@@ -1298,8 +1308,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                         <div className="text-xs text-muted-foreground mb-1">{project}</div>
                         {actions.map((action) => {
                           const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress';
+                          const normalizedStatus = normalizeStatus(currentStatus);
                           const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
-                          const StatusIcon = getActionStatusIcon(currentStatus);
+                          const StatusIcon = getActionStatusIcon(normalizedStatus);
 
                           return (
                             <div
@@ -1307,7 +1318,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                               className="group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer"
                               onClick={() => onFileSelect(action)}
                             >
-                              <StatusIcon className={`h-3 w-3 flex-shrink-0 ${getActionStatusColor(currentStatus)}`} />
+                              <StatusIcon className={`h-3 w-3 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
                               <span className="text-sm truncate">{currentTitle}</span>
                             </div>
                           );
@@ -1449,8 +1460,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                               const isProjectExpanded = expandedProjects.includes(project.path);
                               const actions = projectActions[project.path] || [];
                               const currentStatus = projectMetadata[project.path]?.status || project.status || 'in-progress';
+                              const normalizedStatus = normalizeStatus(currentStatus);
                               const currentTitle = projectMetadata[project.path]?.title || project.name;
-                              const StatusIcon = getProjectStatusIcon(currentStatus);
+                              const StatusIcon = getProjectStatusIcon(normalizedStatus);
 
                               return (
                                 <div key={project.path}>
@@ -1480,7 +1492,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                       >
                                         <ChevronRight className={`h-3 w-3 transition-transform ${isProjectExpanded ? 'rotate-90' : ''}`} />
                                       </Button>
-                                      <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(currentStatus)}`} />
+                                      <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(normalizedStatus)}`} />
                                       <div className="flex-1 min-w-0 ml-1">
                                         <div className="font-medium text-sm truncate">{currentTitle}</div>
                                         <div className="text-xs text-muted-foreground flex items-center gap-1">
@@ -1568,6 +1580,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                           .filter(action => !action.name.toLowerCase().includes('readme'))
                                           .map((action) => {
                                             const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress';
+                                            const normalizedStatus = normalizeStatus(currentStatus);
                                             const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
                                             const currentPath = actionMetadata[action.path]?.currentPath || action.path;
 
@@ -1590,7 +1603,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                     }
                                                   }}
                                                 >
-                                                  <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(currentStatus)}`} />
+                                                  <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
                                                   <span className="truncate flex-1">{currentTitle}</span>
                                                   {actionMetadata[action.path]?.due_date && actionMetadata[action.path].due_date.trim() !== '' && (() => {
                                                     const date = new Date(actionMetadata[action.path].due_date);

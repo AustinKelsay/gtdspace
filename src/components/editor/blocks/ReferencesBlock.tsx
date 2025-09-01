@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import { isTauriContext } from '@/utils/tauri-ready';
+import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import {
   FileText,
   Plus,
@@ -132,7 +132,8 @@ const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(prop
       }
 
       // Guard Tauri-only APIs for web/dev builds
-      if (!isTauriContext()) {
+      const inTauriContext = await checkTauriContextAsync();
+      if (!inTauriContext) {
         console.warn('[ReferencesBlock] Not in Tauri context; skipping filesystem listing');
         setAvailableFiles([]);
         return;

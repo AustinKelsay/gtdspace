@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { emitMetadataChange } from '@/utils/content-event-bus';
 import { useFilePath } from '../FilePathContext';
-import { isTauriContext } from '@/utils/tauri-ready';
+import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { toast } from '@/hooks/use-toast';
 
 // Memoized renderer component for checkbox blocks
@@ -68,11 +68,12 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
           const result = await withErrorHandling(
             async () => {
               // Convert checkbox state to status values for backend
-              const statusValue = checkedVal ? 'complete' : 'todo';
+              const statusValue = checkedVal ? 'completed' : 'todo';
 
               // Gracefully bail out if not in Tauri/browser-only envs
               try {
-                if (!isTauriContext()) {
+                const inTauriContext = await checkTauriContextAsync();
+                if (!inTauriContext) {
                   console.warn('[CheckboxBlock] Not in Tauri context; reverting UI/doc and skipping backend update');
                   setLocalChecked(prevChecked);
                   try { props.editor.updateBlock(block, { props: { checked: prevChecked } }); } catch { /* ignore error */ }

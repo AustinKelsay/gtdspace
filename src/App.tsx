@@ -601,6 +601,11 @@ export const App: React.FC = () => {
     // Function to check and reset habits
     const checkHabits = async () => {
       try {
+        // Guard against missing required state
+        if (!currentSpacePath || currentSpacePath.trim() === '') {
+          return; // Skip invocation if no valid space path
+        }
+        
         // Always run the check - the backend will determine if any habits need resetting
         // This ensures we catch all frequency intervals properly
         const resetHabits = (await invoke<string[]>('check_and_reset_habits', {
@@ -633,6 +638,11 @@ export const App: React.FC = () => {
     // Check for missed resets on startup
     const checkMissedResets = async () => {
       try {
+        // Guard against missing required state
+        if (!currentSpacePath || currentSpacePath.trim() === '') {
+          return; // Skip invocation if no valid space path
+        }
+        
         const resetHabits = (await invoke<string[]>('check_and_reset_habits', {
           spacePath: currentSpacePath,
         })) ?? [];

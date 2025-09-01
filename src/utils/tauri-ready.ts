@@ -9,29 +9,91 @@ const isDebugLoggingEnabled = import.meta.env.DEV || import.meta.env.VITE_DEBUG 
  * Wait for Tauri to be ready
  */
 export const waitForTauriReady = async (): Promise<void> => {
-  // Simply check if we're in Tauri context
-  // If not, this might be a dev environment without Tauri
-  if (!isTauriContext()) {
+  // Check if we're in Tauri context using the async method
+  const inTauriContext = await checkTauriContextAsync();
+  if (!inTauriContext) {
     console.warn('Not in Tauri context, skipping Tauri initialization');
   }
   // Return immediately - Tauri should already be ready when the app loads
   return Promise.resolve();
 };
 
+// Cache the Tauri context check result
+let tauriContextCache: boolean | null = null;
+let tauriCheckPromise: Promise<boolean> | null = null;
+
 /**
- * Check if running in Tauri context
+ * Check if running in Tauri context (synchronous - uses cached result)
+ * On first call, returns false and triggers async check in background
+ * Subsequent calls return the cached result
  */
 export const isTauriContext = (): boolean => {
-  if (isDebugLoggingEnabled) {
-    console.log('[isTauriContext] Checking Tauri context...');
-    console.log('[isTauriContext] window defined?', typeof window !== 'undefined');
-    console.log('[isTauriContext] window.__TAURI__ exists?', typeof window !== 'undefined' && '__TAURI__' in window);
-    if (typeof window !== 'undefined') {
-      console.log('[isTauriContext] window.__TAURI__ value:', (window as unknown as { __TAURI__?: unknown }).__TAURI__);
-      console.log('[isTauriContext] window keys:', Object.keys(window).filter(k => k.includes('TAURI')));
-    }
+  // If we have a cached result, return it
+  if (tauriContextCache !== null) {
+    return tauriContextCache;
   }
-  return typeof window !== 'undefined' && '__TAURI__' in window;
+
+  // Start async check if not already in progress
+  if (!tauriCheckPromise) {
+    checkTauriContextAsync();
+  }
+
+  // Return false on first call (safe default)
+  return false;
+};
+
+/**
+ * Check if running in Tauri context (asynchronous - always checks)
+ * Use this for initial checks where you can wait for the result
+ */
+export const checkTauriContextAsync = async (): Promise<boolean> => {
+  // If already checking, wait for that result
+  if (tauriCheckPromise) {
+    return tauriCheckPromise;
+  }
+
+  // Create the check promise
+  tauriCheckPromise = (async () => {
+    try {
+      // Try to import and invoke a simple command
+      // This works in Tauri 2.x where window.__TAURI__ doesn't exist
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('ping');
+      
+      if (isDebugLoggingEnabled) {
+        console.log('[checkTauriContextAsync] Successfully invoked ping - in Tauri context');
+      }
+      
+      tauriContextCache = true;
+      return true;
+    } catch (error) {
+      if (isDebugLoggingEnabled) {
+        console.log('[checkTauriContextAsync] Failed to invoke ping - not in Tauri context', error);
+      }
+      
+      tauriContextCache = false;
+      return false;
+    }
+  })();
+
+  return tauriCheckPromise;
+};
+
+/**
+ * Get the cached Tauri context status (for debugging)
+ * Returns null if not yet checked, true/false if checked
+ */
+export const getTauriContextStatus = (): boolean | null => {
+  return tauriContextCache;
+};
+
+/**
+ * Reset the Tauri context cache (useful for testing)
+ * Forces the next check to re-detect Tauri context
+ */
+export const resetTauriContext = (): void => {
+  tauriContextCache = null;
+  tauriCheckPromise = null;
 };
 
 /**
@@ -46,7 +108,7 @@ export const openDialogWithTimeout = async (options: {
   console.log('[openDialogWithTimeout] Starting with options:', options);
   
   // Check but don't fail - let's see what happens
-  const inTauri = isTauriContext();
+  const inTauri = await checkTauriContextAsync();
   if (!inTauri) {
     console.warn('[openDialogWithTimeout] WARNING: Not detecting Tauri context, but trying anyway...');
     // Don't throw - let's try to import and use the dialog anyway

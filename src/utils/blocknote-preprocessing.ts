@@ -253,12 +253,12 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   
   // Pattern to match references markers in markdown (e.g., [!references:path1.md,path2.md])
   // Note: Specifically look for [! prefix to avoid matching regular markdown lists
-  const referencesMarkerPattern = /\[!references:([^\]]*)\]/g;
+  const referencesMarkerPattern = /\[!references:([^\]]*)\]\]?/g;
   // Pattern to match horizon references markers
-  const areasReferencesPattern = /\[!areas-references:([^\]]*)\]/g;
-  const goalsReferencesPattern = /\[!goals-references:([^\]]*)\]/g;
-  const visionReferencesPattern = /\[!vision-references:([^\]]*)\]/g;
-  const purposeReferencesPattern = /\[!purpose-references:([^\]]*)\]/g;
+  const areasReferencesPattern = /\[!areas-references:([^\]]*)\]\]?/g;
+  const goalsReferencesPattern = /\[!goals-references:([^\]]*)\]\]?/g;
+  const visionReferencesPattern = /\[!vision-references:([^\]]*)\]\]?/g;
+  const purposeReferencesPattern = /\[!purpose-references:([^\]]*)\]\]?/g;
   // Pattern to match list markers in markdown (e.g., [!projects-list])
   const projectsListPattern = /\[!projects-list\]/g;
   const areasListPattern = /\[!areas-list\]/g;
@@ -516,6 +516,62 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
     // Check if this block contains multiselect or singleselect markers or HTML
     if (isParagraphBlock(block) && block.content) {
       const blockText = getTextFromBlock(block);
+
+      // New: If this paragraph is composed only of our custom markers (possibly multiple),
+      // split them into individual custom blocks to prevent them rendering as plain text.
+      const markerTokenRegex = /\[!(references|areas-references|goals-references|vision-references|purpose-references|multiselect|singleselect|checkbox|datetime|projects-list|areas-list|goals-list|visions-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(:[^\]]*)?\](?:\])?/g;
+      const leftoverAfterRemoval = blockText.replace(markerTokenRegex, '');
+      const leftoverSanitized = leftoverAfterRemoval.replace(/[\s\u200B-\u200D\uFEFF]/g, '').trim();
+      const onlyMarkers = blockText.trim().length > 0 && leftoverSanitized === '';
+      if (onlyMarkers) {
+        const matches = [...blockText.matchAll(markerTokenRegex)];
+        for (const m of matches) {
+          const full = m[0];
+          const kind = m[1];
+          const rest = (m[2] || '').replace(/^:/, '');
+          // Parse per marker kind
+          if (kind === 'references' || kind === 'areas-references' || kind === 'goals-references' || kind === 'vision-references' || kind === 'purpose-references') {
+            processedBlocks.push({
+              type: kind as ReferencesBlock['type'],
+              // Accept both JSON array and legacy CSV preserved in markdown
+              props: { references: rest || '' },
+            });
+          } else if (kind === 'singleselect') {
+            const [type, value = ''] = rest.split(':');
+            processedBlocks.push({
+              type: 'singleselect',
+              props: { type: type || '', value, label: '', placeholder: '', customOptionsJson: '[]' },
+            });
+          } else if (kind === 'multiselect') {
+            const [type, value = ''] = rest.split(':');
+            processedBlocks.push({
+              type: 'multiselect',
+              props: { type: type || '', value, label: '', placeholder: '', maxCount: 0, customOptionsJson: '[]' },
+            });
+          } else if (kind === 'datetime') {
+            const [type, value = ''] = rest.split(':');
+            processedBlocks.push({
+              type: 'datetime',
+              props: { type: type || '', value, label: '', optional: true },
+            });
+          } else if (kind === 'checkbox') {
+            const [type, checkedRaw = 'false'] = rest.split(':');
+            processedBlocks.push({
+              type: 'checkbox',
+              props: { type: type || '', checked: checkedRaw === 'true', label: '' },
+            });
+          } else if (kind === 'projects-list' || kind === 'areas-list' || kind === 'goals-list' || kind === 'visions-list' || kind === 'projects-areas-list' || kind === 'goals-areas-list' || kind === 'visions-goals-list' || kind === 'projects-and-areas-list' || kind === 'goals-and-areas-list' || kind === 'visions-and-goals-list') {
+            processedBlocks.push({
+              type: kind as ListBlock['type'],
+              props: { listType: kind.replace('-list', '').replace(/-/g, ' ') },
+            });
+          } else {
+            // If we encounter an unknown marker, preserve as paragraph text token for safety
+            processedBlocks.push(block);
+          }
+        }
+        blockReplaced = true;
+      }
       
       // Check if this paragraph contains our multiselect markers or HTML
       for (const msBlock of multiSelectBlocks) {

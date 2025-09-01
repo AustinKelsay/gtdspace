@@ -21,7 +21,19 @@ Examples:
 - `[!multiselect:tags:urgent,home]`
 - `[!multiselect:contexts:work,deep]`
 
-The legacy syntax for `status`, `effort`, and `project-status` is still parsed for older files but should not be used for new content.
+**Important Note on Legacy MultiSelect Markers:**
+
+The legacy `!multiselect:status`, `!multiselect:effort`, and `!multiselect:project-status` markers are **no longer parsed, migrated, or preserved**. When a file containing these markers is loaded, they will be skipped and effectively dropped from the document.
+
+**Example of Dropped Input:**
+If your markdown contains:
+```
+[!multiselect:status:in-progress,waiting]
+```
+This marker will be ignored and removed when the file is loaded in the editor.
+
+**Recommended Migration:**
+To preserve this information, you must manually convert these to the new single-select format or recreate the options. For example, `[!multiselect:status:in-progress,waiting]` should be manually converted to `[!singleselect:status:in-progress]` (if only one status is desired) or the information should be re-entered using the appropriate single-select fields.
 
 ## Manual Insertion
 You can manually insert multiselect fields for `contexts` using a keyboard shortcut:

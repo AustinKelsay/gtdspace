@@ -240,7 +240,15 @@ export const useCalendarData = (
               }
               
               const pathParts = normalizedPath.split('/');
-              const projectName = normalizedPath.split('/Projects/')[1]?.split('/')[0] || '';
+              // Find project name using case-insensitive lookup but preserve original casing
+              const projectsIndex = normalizedPathLower.indexOf('/projects/');
+              let projectName = '';
+              if (projectsIndex !== -1) {
+                const startIndex = projectsIndex + '/projects/'.length;
+                const pathAfterProjects = normalizedPath.slice(startIndex);
+                const segments = pathAfterProjects.split('/');
+                projectName = segments[0] || '';
+              }
               const actionName = pathParts[pathParts.length - 1].replace('.md', '') || '';
               
               // Parse focus date field (can include time)

@@ -2,6 +2,7 @@ import React from 'react';
 import '@/utils/resize-observer-fix';
 // Use guarded Tauri detection and dynamic invoke to avoid web/runtime crashes
 import { waitForTauriReady, isTauriContext } from '@/utils/tauri-ready';
+import { invoke } from '@tauri-apps/api/core';
 import { PanelLeftClose, PanelLeft, FolderOpen, Folder, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -444,7 +445,10 @@ export const App: React.FC = () => {
         await waitForTauriReady();
 
         // Check permissions on app start (guarded)
-        await safeInvoke<{ status: string }>('check_permissions');
+        await withErrorHandling(
+          async () => await invoke<{ status: string }>('check_permissions'),
+          'Failed to check permissions'
+        );
 
         // Clear tab state if no folder is selected (fresh start)
         if (!fileState.currentFolder) {
@@ -517,8 +521,12 @@ export const App: React.FC = () => {
     // Check for Tauri environment after component mount
     const checkTauri = async () => {
       // In Tauri 2.x, check if we can invoke commands
-      const result = await safeInvoke('ping');
-      setIsTauriEnvironment(result !== null);
+      try {
+        await invoke('ping');
+        setIsTauriEnvironment(true);
+      } catch {
+        setIsTauriEnvironment(false);
+      }
     };
 
     checkTauri();
@@ -530,7 +538,7 @@ export const App: React.FC = () => {
       // Check if the updated habit is currently open in the editor
       if (norm(activeTab?.filePath) === norm(event.detail.habitPath)) {
         // Reload the file content from disk
-        safeInvoke<string>('read_file', { path: event.detail.habitPath })
+        invoke<string>('read_file', { path: event.detail.habitPath })
           .then(freshContent => {
             if (freshContent != null) updateTabContent(activeTab.id, freshContent);
           })
@@ -551,7 +559,7 @@ export const App: React.FC = () => {
 
       // If the changed file is the currently active tab, reload its content
       if (norm(activeTab?.filePath) === norm(filePath)) {
-        safeInvoke<string>('read_file', { path: filePath })
+        invoke<string>('read_file', { path: filePath })
           .then(freshContent => {
             if (freshContent != null) updateTabContent(activeTab.id, freshContent);
           })
@@ -595,7 +603,7 @@ export const App: React.FC = () => {
       try {
         // Always run the check - the backend will determine if any habits need resetting
         // This ensures we catch all frequency intervals properly
-        const resetHabits = (await safeInvoke<string[]>('check_and_reset_habits', {
+        const resetHabits = (await invoke<string[]>('check_and_reset_habits', {
           spacePath: currentSpacePath,
         })) ?? [];
 
@@ -610,7 +618,7 @@ export const App: React.FC = () => {
           if (isHabitPath(currentTab?.filePath)) {
             // Reload the file content from disk
             try {
-              const freshContent = await safeInvoke<string>('read_file', { path: currentTab.filePath });
+              const freshContent = await invoke<string>('read_file', { path: currentTab.filePath });
               if (freshContent != null) updateTabContentRef.current(currentTab.id, freshContent);
             } catch (error) {
               console.error('Failed to refresh habit tab:', error);
@@ -625,7 +633,7 @@ export const App: React.FC = () => {
     // Check for missed resets on startup
     const checkMissedResets = async () => {
       try {
-        const resetHabits = (await safeInvoke<string[]>('check_and_reset_habits', {
+        const resetHabits = (await invoke<string[]>('check_and_reset_habits', {
           spacePath: currentSpacePath,
         })) ?? [];
 

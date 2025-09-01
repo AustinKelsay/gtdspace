@@ -10,8 +10,7 @@
 import {
   serializeMultiselectsToMarkers,
   deserializeMarkersToMultiselects,
-  createMultiSelectBlock,
-  type MultiSelectBlockType
+  createMultiSelectBlock
 } from './multiselect-block-helpers';
 
 // Test helpers

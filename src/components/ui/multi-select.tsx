@@ -275,7 +275,7 @@ const MultiSelect = React.forwardRef<
         </PopoverPrimitive.Trigger>
         <PopoverPrimitive.Portal container={typeof document !== 'undefined' ? document.body : undefined}>
           <PopoverPrimitive.Content
-            className="z-[9999] w-full p-0 fixed pointer-events-auto"
+            className="z-[70] p-0"
             align="start"
             sideOffset={4}
             style={{

@@ -8,24 +8,33 @@
 npm run release
 ```
 
-This command will:
+This command will automatically:
 
 1. Bump the patch version
-2. Create a git commit and tag locally
-3. Manually push the commit and tags to GitHub: `git push && git push --tags`
-4. GitHub Actions will then trigger builds for all platforms
+2. Create a git commit and tag
+3. Push the commit and tag to GitHub
+4. Trigger the GitHub Actions build and release process
 
 ### Other Version Types
+
+These commands automatically bump the version, create a commit and tag, and push to the remote:
 
 ```bash
 npm run release:minor  # 0.1.0 → 0.2.0
 npm run release:major  # 0.1.0 → 1.0.0
 npm run release:patch  # 0.1.0 → 0.1.1
+```
 
-# Or manually bump version only (no auto-push):
-npm run version:minor  # Then manually: git push --follow-tags
-npm run version:major  # Then manually: git push --follow-tags
-npm run version:patch  # Then manually: git push --follow-tags
+Alternatively, to only bump the version and create a local commit and tag without automatically pushing, use the `version:*` commands. You will need to push manually afterward.
+
+```bash
+# Bump version, create local commit and tag only (no auto-push):
+npm run version:minor
+npm run version:major
+npm run version:patch
+
+# Then, push the changes manually:
+git push --follow-tags
 ```
 
 ## 📦 What Happens Next?

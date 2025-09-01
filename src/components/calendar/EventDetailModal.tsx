@@ -102,13 +102,13 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
           {/* Dates */}
           <div className="space-y-2">
-            {(event.focus_date || event.due_date) && (
+            {(event.focusDate || event.dueDate) && (
               <div className="flex items-center gap-2 text-sm">
                 <Calendar className="w-4 h-4 text-muted-foreground" />
                 <span>
-                  {event.focus_date ? formatEventTime(event.focus_date, undefined) : null}
-                  {event.focus_date && event.due_date ? ' - ' : null}
-                  {event.due_date ? formatEventTime(event.due_date, undefined) : null}
+                  {event.focusDate ? formatEventTime(event.focusDate, undefined) : null}
+                  {event.focusDate && event.dueDate ? ' - ' : null}
+                  {event.dueDate ? formatEventTime(event.dueDate, undefined) : null}
                 </span>
               </div>
             )}

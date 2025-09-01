@@ -26,32 +26,42 @@ Before creating a release:
 
 ## Creating a Release
 
-### Method 1: Using npm scripts (Recommended)
+### Method 1: Using Automated Scripts (Recommended)
 
-We have convenient npm scripts that handle version bumping, tagging, and pushing:
+We provide two sets of scripts for releases: fully automated and semi-automated.
+
+#### Fully Automated Release
+
+These commands handle the entire release process for you: they run safety checks, bump the version, create a commit and tag, and push everything to the remote repository to trigger the CI/CD pipeline.
 
 ```bash
-# For a patch release (0.1.0 → 0.1.1)
-npm run version:patch
+# For a patch release (e.g., 0.1.0 → 0.1.1)
+npm run release
 
-# For a minor release (0.1.0 → 0.2.0)
-npm run version:minor
+# For a minor release (e.g., 0.1.0 → 0.2.0)
+npm run release:minor
 
-# For a major release (0.1.0 → 1.0.0)
-npm run version:major
-
-# For a specific version
-npm run version:bump 1.2.3
-
-# Then push the changes and tag
-git push
-git push --tags
+# For a major release (e.g., 0.1.0 → 1.0.0)
+npm run release:major
 ```
 
-Or use the all-in-one command for a patch release:
+There are no further steps; the push is handled automatically.
+
+#### Semi-Automated Release (Manual Push)
+
+If you want more control, you can use the `version:*` scripts. These will bump the version and create a local Git commit and tag, but they will **not** push to the remote repository. You must do that manually.
 
 ```bash
-npm run release
+# Choose ONE of the following to bump the version:
+npm run version:patch
+npm run version:minor
+npm run version:major
+
+# Or for a specific version:
+npm run version:bump 1.2.3
+
+# Then, push the commit and tags manually to trigger the release:
+git push --follow-tags
 ```
 
 ### Method 2: Manual Process

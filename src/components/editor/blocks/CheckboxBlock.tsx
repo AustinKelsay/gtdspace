@@ -43,8 +43,17 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
     // Immediately update local state for visual feedback
     setLocalChecked(checkedVal);
 
-    // Update the BlockNote document's block props
-    props.editor.updateBlock(block, { props: { checked: checkedVal } });
+    // Update the BlockNote document's block props with error handling
+    try {
+      props.editor.updateBlock(block, { props: { checked: checkedVal } });
+    } catch (error) {
+      // Log the error and revert local state to maintain consistency
+      console.error('[CheckboxBlock] Failed to update block:', error);
+      setLocalChecked(prevChecked);
+      // Optionally rethrow if higher-level logic expects it
+      // throw error;
+      return; // Exit early on error
+    }
 
     // If this is a habit status checkbox, update the backend
     if (type === 'habit-status') {

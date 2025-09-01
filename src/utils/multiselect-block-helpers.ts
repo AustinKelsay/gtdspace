@@ -83,11 +83,13 @@ export function serializeMultiselectsToMarkers(markdown: string): string {
     } catch (e) {
       // Fallback to regex if DOMParser fails
       console.warn('DOMParser failed, falling back to regex:', e);
-      return serializeMultiselectsToMarkersRegex(markdown);
+      const result = serializeMultiselectsToMarkersRegex(markdown);
+      return sanitizeHtml(result);
     }
   } else {
     // Use regex fallback for non-browser environments
-    return serializeMultiselectsToMarkersRegex(markdown);
+    const result = serializeMultiselectsToMarkersRegex(markdown);
+    return sanitizeHtml(result);
   }
   
   return processedMarkdown;
@@ -120,7 +122,8 @@ function serializeMultiselectsToMarkersRegex(markdown: string): string {
       console.error('Error parsing multiselect HTML:', e, 'HTML:', match[0]);
     }
   }
-  return processedMarkdown;
+  // Sanitize the output before returning
+  return sanitizeHtml(processedMarkdown);
 }
 
 /**

@@ -206,6 +206,7 @@ create_gtd_project(
     project_name: String,
     description: String,
     due_date: Option<String>,
+    // Must be one of: "in-progress", "waiting", "completed"
     status: Option<String>
 ) -> Result<String, String>
 
@@ -213,6 +214,8 @@ create_gtd_project(
 create_gtd_action(
     project_path: String,
     action_name: String,
+    // Must be one of: "In Progress", "Waiting", "Completed",
+    // or canonical tokens: "in-progress", "waiting", "completed"
     status: String,
     focus_date: Option<String>,
     due_date: Option<String>,

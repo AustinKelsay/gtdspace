@@ -220,12 +220,12 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   }
   
   // Only log when actually processing (not using cache)
-  if (import.meta.env.DEV) {
+  if (import.meta?.env?.DEV) {
     console.log('postProcessBlockNoteBlocks: Processing new content');
   }
   
   // Only log block details in development and when actually processing
-  if (import.meta.env.DEV) {
+  if (import.meta?.env?.DEV) {
     console.log('Number of blocks:', blocks.length);
   }
   
@@ -490,7 +490,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   }
   
   // Log summary only in development
-  if (import.meta.env.DEV) {
+  if (import.meta?.env?.DEV) {
     const totalCustomBlocks = multiSelectBlocks.length + singleSelectBlocks.length + 
                               checkboxBlocks.length + dateTimeBlocks.length + referencesBlocks.length;
     if (totalCustomBlocks > 0) {

@@ -26,7 +26,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { useCalendarData } from '@/hooks/useCalendarData';
 import type { MarkdownFile, GTDSpace } from '@/types';
-import type { GoogleCalendarSyncStatus } from '@/types/google-calendar';
+import type { GoogleCalendarSyncStatus, CalendarItemStatus } from '@/types/google-calendar';
 import { cn } from '@/lib/utils';
 import { EventDetailModal } from './EventDetailModal';
 
@@ -350,11 +350,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       if (item.type === 'google-event') {
         const startDate = item.focus_date || item.due_date;
         const endDate = item.end_date || item.due_date;  // Use end_date or fallback to due_date
-        
+
         if (startDate) {
           const date = typeof startDate === 'string' ? parseISO(startDate) : startDate;
           const end = endDate ? (typeof endDate === 'string' ? parseISO(endDate) : endDate) : null;
-          
+
           if (isValid(date)) {
             // Format time from the Date object to get local time, not UTC
             let formattedTime: string | undefined;
@@ -366,13 +366,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
               formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
             }
-            
+
             // Calculate duration in minutes if we have an end time
             let duration: number | undefined;
             let endTimeFormatted: string | undefined;
             if (end && isValid(end)) {
               duration = Math.round((end.getTime() - date.getTime()) / (1000 * 60)); // Duration in minutes
-              
+
               // Format end time from Date object for local time
               if (endDate && typeof endDate === 'string' && endDate.includes('T') && !endDate.endsWith('T00:00:00')) {
                 const endHours = end.getHours();
@@ -492,18 +492,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
               formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
             }
-            
+
             // Calculate duration based on effort for actions with focus dates
             let duration: number | undefined;
             let endDate: Date | undefined;
             let endTimeFormatted: string | undefined;
-            
+
             if (item.type === 'action' && item.effort) {
               duration = getEffortDuration(item.effort);
-              
+
               // Calculate end date/time based on duration
               endDate = new Date(focusDate.getTime() + duration * 60 * 1000);
-              
+
               // Format end time from Date object for local time
               const endHours = endDate.getHours();
               const endMinutes = endDate.getMinutes();
@@ -511,7 +511,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               const displayEndHours = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours;
               endTimeFormatted = `${displayEndHours}:${endMinutes.toString().padStart(2, '0')} ${endPeriod}`;
             }
-            
+
             events.push({
               id: `${item.path}-focus`,
               title: item.name,
@@ -587,11 +587,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         if (!a.time && b.time) return 1;
         if (a.time && b.time) return a.time.localeCompare(b.time);
         // Then by type: habits, actions, projects, google-events
-        const typeOrder: Record<string, number> = { 
-          'habit': 0, 
-          'action': 1, 
+        const typeOrder: Record<string, number> = {
+          'habit': 0,
+          'action': 1,
           'project': 2,
-          'google-event': 3 
+          'google-event': 3
         };
         return (typeOrder[a.type] || 99) - (typeOrder[b.type] || 99);
       });
@@ -960,18 +960,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                         const eventStartHour = event.date.getHours();
                         const eventEndHour = event.endDate ? event.endDate.getHours() : eventStartHour;
                         const eventEndMinute = event.endDate ? event.endDate.getMinutes() : event.date.getMinutes();
-                        
+
                         // Check if this event starts in this hour or spans across this hour
                         if (eventStartHour === hour) {
                           return true; // Event starts in this hour
                         }
-                        
+
                         // Check if event spans across this hour (for multi-hour events)
                         if (event.duration && eventStartHour < hour) {
                           const endHour = eventEndMinute > 0 ? eventEndHour : eventEndHour - 1;
                           return hour <= endHour;
                         }
-                        
+
                         return false;
                       });
 
@@ -987,7 +987,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           {(() => {
                             // Only render events that start in this hour (not spanning ones)
                             const startingEvents = hourEvents.filter(ev => ev.date.getHours() === hour);
-                            
+
                             // Group events by minute within this hour for side-by-side layout
                             const groupsByMinute = new Map<number, typeof startingEvents>();
                             for (const ev of startingEvents) {
@@ -1006,17 +1006,17 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                     // Calculate event height based on duration
                                     let eventHeight = 'auto';
                                     const minuteOffset = (min / 60) * 80; // Convert minutes to pixels
-                                    
+
                                     if (event.duration) {
                                       // Each hour slot is 80px (h-20), calculate height based on duration
                                       const heightInPixels = (event.duration / 60) * 80;
                                       eventHeight = `${Math.max(20, heightInPixels)}px`; // Min height of 20px
                                     }
-                                    
+
                                     // Calculate left position for side-by-side events
                                     const width = group.length > 1 ? `${100 / group.length}%` : '100%';
                                     const left = group.length > 1 ? `${(100 / group.length) * index}%` : '0';
-                                    
+
                                     return (
                                       <div
                                         key={event.id}
@@ -1200,12 +1200,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           name: selectedEvent.title,
           path: selectedEvent.path,
           type: selectedEvent.type,
-          status: selectedEvent.status,
+          status: selectedEvent.status as CalendarItemStatus,
           projectName: selectedEvent.projectName,
           frequency: selectedEvent.type === 'habit' ? 'daily' : undefined,
           // Map dates to ExtendedCalendarItem fields
-          focus_date: (selectedEvent.eventType === 'focus' || selectedEvent.type === 'google-event') ? selectedEvent.date.toISOString() : undefined,
-          due_date: (selectedEvent.eventType === 'due' || selectedEvent.type === 'google-event') ? selectedEvent.date.toISOString() : undefined,
+          focusDate: (selectedEvent.eventType === 'focus' || selectedEvent.type === 'google-event') ? selectedEvent.date.toISOString() : undefined,
+          dueDate: (selectedEvent.eventType === 'due' || selectedEvent.type === 'google-event') ? selectedEvent.date.toISOString() : undefined,
           // Google-specific optional fields
           attendees: selectedEvent.attendees,
           location: selectedEvent.location,

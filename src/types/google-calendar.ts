@@ -24,16 +24,25 @@ export interface GoogleCalendarSyncStatus {
   error?: string;
 }
 
+export type CalendarItemStatus =
+  | 'in-progress'
+  | 'completed'
+  | 'todo'
+  | 'confirmed'
+  | 'tentative'
+  | 'cancelled'
+  | 'needsAction';
+
 export interface ExtendedCalendarItem {
   id: string;
   name: string;
   path: string;
   type: 'project' | 'action' | 'habit' | 'google-event';
   source?: 'gtd' | 'google';
-  status?: string;
-  due_date?: string;
-  focus_date?: string;
-  end_date?: string;  // Add end date for Google events
+  status?: CalendarItemStatus;
+  dueDate?: string;
+  focusDate?: string;
+  endDate?: string;  // Add end date for Google events
   projectName?: string;
   frequency?: string;
   createdDateTime?: string;

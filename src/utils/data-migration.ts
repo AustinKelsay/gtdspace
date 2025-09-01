@@ -14,9 +14,9 @@ export function migrateMarkdownContent(content: string): string {
   let migrated = content;
   
   // Migration 1: Rename created_date to created_date_time
-  // Handle both [!datetime:created_date:...] and plain text patterns
+  // Handle both [!datetime:created_date:...] and plain text patterns (including empty values)
   migrated = migrated.replace(
-    /\[!datetime:created_date:([^\]]+)\]/g,
+    /\[!datetime:created_date:([^\]]*)\]/gi,
     '[!datetime:created_date_time:$1]'
   );
   

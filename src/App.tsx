@@ -1,7 +1,7 @@
 import React from 'react';
 import '@/utils/resize-observer-fix';
 // Use guarded Tauri detection and dynamic invoke to avoid web/runtime crashes
-import { waitForTauriReady, isTauriContext } from '@/utils/tauri-ready';
+import { waitForTauriReady } from '@/utils/tauri-ready';
 import { invoke } from '@tauri-apps/api/core';
 import { PanelLeftClose, PanelLeft, FolderOpen, Folder, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';

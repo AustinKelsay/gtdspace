@@ -305,6 +305,25 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   useEffect(() => {
     if (!editor) return;
 
+    // Helper: get full plain text of a paragraph block
+    const getParagraphPlainText = (block: unknown): string => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const b = block as any;
+      if (!b?.content) return '';
+      if (typeof b.content === 'string') return b.content as string;
+      if (Array.isArray(b.content)) {
+        return b.content
+          .map((item: unknown) => {
+            if (typeof item === 'string') return item as string;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const i = item as any;
+            return typeof i?.text === 'string' ? (i.text as string) : '';
+          })
+          .join('');
+      }
+      return '';
+    };
+
     const handleUpdate = async () => {
       // Skip onChange if we're loading initial content
       if (ignoreNextChange.current) {
@@ -314,25 +333,6 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       try {
         // Custom handling for our custom blocks
         const blocks = editor.document as unknown[];
-
-        // Helper: get full plain text of a paragraph block
-        function getParagraphPlainText(block: unknown): string {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const b = block as any;
-          if (!b?.content) return '';
-          if (typeof b.content === 'string') return b.content as string;
-          if (Array.isArray(b.content)) {
-            return b.content
-              .map((item: unknown) => {
-                if (typeof item === 'string') return item as string;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const i = item as any;
-                return typeof i?.text === 'string' ? (i.text as string) : '';
-              })
-              .join('');
-          }
-          return '';
-        }
 
         // Batch standard blocks to preserve lists/spacing
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

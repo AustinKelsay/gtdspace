@@ -526,7 +526,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       if (onlyMarkers) {
         const matches = [...blockText.matchAll(markerTokenRegex)];
         for (const m of matches) {
-          const full = m[0];
+          // m[0] is the full match but we don't need it
           const kind = m[1];
           const rest = (m[2] || '').replace(/^:/, '');
           // Parse per marker kind

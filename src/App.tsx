@@ -63,7 +63,7 @@ function isUnder(p?: string | null, dir?: string | null): boolean {
 
 function isHabitPath(p?: string | null): boolean {
   const normalized = p?.replace(/\\/g, '/');
-  return !!normalized && normalized.includes('/habits/');
+  return !!normalized && normalized.toLowerCase().includes('/habits/');
 }
 
 /**

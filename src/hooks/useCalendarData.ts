@@ -181,9 +181,11 @@ export const useCalendarData = (
           const file = files[fileIndex];
           // Normalize path for cross-platform compatibility (Windows uses backslashes)
           const normalizedPath = file.path.replace(/\\/g, '/');
+          // Create lowercase version for case-insensitive comparisons
+          const normalizedPathLower = normalizedPath.toLowerCase();
           
-          // Check if it's a project README
-          if (normalizedPath.includes('/Projects/') && normalizedPath.endsWith('README.md')) {
+          // Check if it's a project README (case-insensitive check)
+          if (normalizedPathLower.includes('/projects/') && normalizedPathLower.endsWith('readme.md')) {
             try {
               let content = await invoke<string>('read_file', { path: file.path });
               
@@ -218,8 +220,8 @@ export const useCalendarData = (
             }
           }
           
-          // Check if it's an action file (in Projects but not README)
-          if (normalizedPath.includes('/Projects/') && !normalizedPath.includes('README') && normalizedPath.endsWith('.md')) {
+          // Check if it's an action file (in Projects but not README) - case-insensitive check
+          if (normalizedPathLower.includes('/projects/') && !normalizedPathLower.includes('readme') && normalizedPathLower.endsWith('.md')) {
             try {
               let content = await invoke<string>('read_file', { path: file.path });
               
@@ -263,8 +265,8 @@ export const useCalendarData = (
             }
           }
           
-          // Check if it's a habit file
-          if (normalizedPath.includes('/Habits/') && normalizedPath.endsWith('.md')) {
+          // Check if it's a habit file - case-insensitive check
+          if (normalizedPathLower.includes('/habits/') && normalizedPathLower.endsWith('.md')) {
             try {
               let content = await invoke<string>('read_file', { path: file.path });
               

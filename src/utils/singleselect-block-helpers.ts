@@ -37,27 +37,43 @@ export const convertToSingleValue = (multiValue: string[] | string): string => {
   return multiValue || '';
 };
 
+// Normalize status strings to canonical form
+const normalizeStatusString = (status: string): string => {
+  const normalized = status.trim().toLowerCase().replace(/\s+/g, '-');
+  // Map both spellings of canceled/cancelled to canonical "cancelled"
+  if (normalized === 'canceled') {
+    return 'cancelled';
+  }
+  return normalized;
+};
+
 // Map status values for consistency
 export const mapStatusValue = (status: string): string => {
+  // Normalize the input status first
+  const normalized = normalizeStatusString(status);
+  
   const statusMap: Record<string, string> = {
-    'Not Started': 'in-progress',  // Map old "Not Started" to new default "in-progress"
-    'In Progress': 'in-progress',
-    'Waiting': 'waiting',
-    'Completed': 'completed',
-    'Active': 'in-progress',
-    'Planning': 'in-progress',
-    'On Hold': 'waiting',
-    'Cancelled': 'completed',  // Map cancelled to completed as we only have 3 states
+    'not-started': 'in-progress',  // Map old "Not Started" to new default "in-progress"
+    'in-progress': 'in-progress',
+    'waiting': 'waiting',
+    'completed': 'completed',
+    'active': 'in-progress',
+    'planning': 'in-progress',
+    'on-hold': 'waiting',
+    'cancelled': 'cancelled',  // Keep cancelled as its own status
+    'done': 'completed',
+    'complete': 'completed',
+    'todo': 'in-progress',
   };
   
-  const mapped = statusMap[status];
+  const mapped = statusMap[normalized];
   if (mapped) {
     return mapped;
   }
   
   // Log unmapped values for diagnostics
   if (import.meta.env.DEV) {
-    console.warn(`[SingleSelect] Unmapped status value encountered: "${status}", defaulting to "in-progress"`);
+    console.warn(`[SingleSelect] Unmapped status value encountered: "${status}" (normalized: "${normalized}"), defaulting to "in-progress"`);
   }
   
   // Always return safe default for unknown values

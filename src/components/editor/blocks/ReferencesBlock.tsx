@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import { invoke } from '@tauri-apps/api/core';
+import { isTauriContext } from '@/utils/tauri-ready';
 import {
   FileText,
   Plus,
@@ -104,7 +104,7 @@ const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(prop
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
 
-  const parsedReferences = React.useMemo(() => 
+  const parsedReferences = React.useMemo(() =>
     references ? references.split(',').filter(Boolean) : [],
     [references]
   );
@@ -130,6 +130,17 @@ const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(prop
       if (import.meta.env.DEV) {
         console.log('ReferencesBlock: Loading from paths:', { cabinetPath, somedayPath });
       }
+
+      // Guard Tauri-only APIs for web/dev builds
+      if (!isTauriContext()) {
+        console.warn('[ReferencesBlock] Not in Tauri context; skipping filesystem listing');
+        setAvailableFiles([]);
+        return;
+      }
+
+      // Dynamically import Tauri core only when in Tauri context
+      const core = await import('@tauri-apps/api/core');
+      const invoke = core.invoke as <T>(cmd: string, args: unknown) => Promise<T>;
 
       let cabinetFiles: MarkdownFile[] = [];
       let somedayFiles: MarkdownFile[] = [];

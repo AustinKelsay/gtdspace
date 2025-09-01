@@ -130,25 +130,25 @@ const DateTimeSelectComponent = React.memo<DateTimeSelectComponentProps>(functio
     if (isDateOnlyField) return;
 
     const newTime = e.target.value;
-    
+
     // Validate time format
     if (!newTime) {
       setTimeValue('');
       return;
     }
-    
+
     // Check time format (HH:MM)
     const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
     if (!timeRegex.test(newTime)) {
       console.warn('Invalid time format:', newTime);
       return; // Don't update if invalid format
     }
-    
+
     setTimeValue(newTime);
 
     if (isValidDate && localTimeEnabled) {
       const [hours, minutes] = newTime.split(':').map(Number);
-      
+
       // Additional validation for parsed values
       if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
         console.warn('Invalid time values:', { hours, minutes });
@@ -198,14 +198,14 @@ const DateTimeSelectComponent = React.memo<DateTimeSelectComponentProps>(functio
       return '';
     }
 
-    if (value.includes('T')) {
+    if (!isDateOnlyField && value.includes('T')) {
       return format(dateValue, 'MMM dd, yyyy h:mm a');
     } else {
       // Parse as local date to avoid TZ shift
       const localOnly = parse(value, 'yyyy-MM-dd', new Date());
       return format(localOnly, 'MMM dd, yyyy');
     }
-  }, [isValidDate, value, dateValue]);
+  }, [isValidDate, value, dateValue, isDateOnlyField]);
 
   const handleTimeToggle = React.useCallback((checked: boolean) => {
     // Date-only fields cannot have time enabled

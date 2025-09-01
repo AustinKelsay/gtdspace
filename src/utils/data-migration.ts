@@ -73,7 +73,7 @@ export function migrateMarkdownContent(content: string): string {
     'planning': 'in-progress',
     'on-hold': 'waiting',
     'waiting-for': 'waiting',
-    'cancelled': 'completed', // Map cancelled to completed since we only have 3 states
+    'cancelled': 'cancelled', // Keep cancelled as its own status
     'done': 'completed',
     'complete': 'completed', // Map complete to completed
   };
@@ -159,7 +159,7 @@ export function migrateGTDObject<T extends Record<string, any>>(obj: T): T {
       'planning': 'in-progress',
       'on-hold': 'waiting',
       'waiting-for': 'waiting',
-      'cancelled': 'completed',
+      'cancelled': 'cancelled',
       'done': 'completed',
       'complete': 'completed',
     };

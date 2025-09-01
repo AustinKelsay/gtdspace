@@ -159,9 +159,10 @@ const normalizeStatus = (status: string | undefined): string => {
     'planning': 'in-progress',
     'on-hold': 'waiting',
     'waiting-for': 'waiting',
-    'cancelled': 'completed',
+    'cancelled': 'cancelled',
     'done': 'completed',
     'complete': 'completed',
+    'canceled': 'cancelled', // Map US spelling to canonical UK spelling
   };
   
   const normalized = status.trim().toLowerCase().replace(/\s+/g, '-');

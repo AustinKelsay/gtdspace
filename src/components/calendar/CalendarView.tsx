@@ -23,7 +23,7 @@ import {
   isMonday, isTuesday, isWednesday,
   isThursday, isFriday, setHours
 } from 'date-fns';
-import { invoke } from '@tauri-apps/api/core';
+import { isTauriContext } from '@/utils/tauri-ready';
 import { useCalendarData } from '@/hooks/useCalendarData';
 import type { MarkdownFile, GTDSpace } from '@/types';
 import type { GoogleCalendarSyncStatus, CalendarItemStatus } from '@/types/google-calendar';
@@ -63,6 +63,13 @@ interface CalendarEvent {
   attendees?: string[];
   meetingLink?: string;
   description?: string;
+}
+
+// Lazy-load Tauri invoke only in Tauri context
+async function getTauriInvoke(): Promise<(<T>(cmd: string, args?: unknown) => Promise<T>) | null> {
+  if (!isTauriContext()) return null;
+  const core = await import('@tauri-apps/api/core');
+  return core.invoke as <T>(cmd: string, args?: unknown) => Promise<T>;
 }
 
 
@@ -278,6 +285,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     const loadGoogleStatus = async () => {
       console.log('[CalendarView] Loading Google Calendar status...');
       try {
+        const invoke = await getTauriInvoke();
+        if (!invoke) {
+          console.warn('[CalendarView] Not in Tauri context; skipping status load');
+          return;
+        }
         const status = await invoke<GoogleCalendarSyncStatus>('google_calendar_get_status');
         console.log('[CalendarView] Google Calendar status:', status);
         setGoogleSyncStatus(status);
@@ -292,6 +304,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const handleGoogleSync = async () => {
     setIsSyncing(true);
     try {
+      const invoke = await getTauriInvoke();
+      if (!invoke) {
+        console.warn('[CalendarView] Not in Tauri context; skipping Google Calendar sync');
+        setIsSyncing(false);
+        return;
+      }
       await invoke('google_calendar_sync');
       // Refresh calendar data after sync
       refresh();

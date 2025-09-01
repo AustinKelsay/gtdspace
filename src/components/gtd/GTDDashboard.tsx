@@ -193,19 +193,22 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                   const checkboxStatus = content.match(/\[!checkbox:habit-status:(true|false)\]/);
                   const singleselectStatus = content.match(/\[!singleselect:habit-status:([^\]]+)\]/);
 
-                  let createdDateTime: string;
+                  let createdDateTime: string | undefined;
+                  
+                  // Step 1: Try to parse from [!datetime:created_date_time:...] block
                   const createdBlock = content.match(/\[!datetime:created_date_time:([^\]]+)\]/i);
-                  if (createdBlock) {
+                  if (createdBlock && createdBlock[1]) {
                     const raw = createdBlock[1].trim();
-                    const parsed = new Date(raw);
-                    if (!isNaN(parsed.getTime())) {
-                      createdDateTime = parsed.toISOString();
-                    } else {
-                      // Fallback for invalid date string
-                      createdDateTime = new Date().toISOString();
+                    if (raw) {
+                      const parsed = new Date(raw);
+                      if (!isNaN(parsed.getTime())) {
+                        createdDateTime = parsed.toISOString();
+                      }
                     }
-                  } else {
-                    // Fallback to parse from ## Created header
+                  }
+                  
+                  // Step 2: If not found, try to parse from ## Created header
+                  if (!createdDateTime) {
                     const hdr = content.match(
                       /##\s*Created\s*(?:\r?\n|\s+)\s*([0-9]{4})-([0-9]{2})-([0-9]{2})(?:\s+([0-9]{1,2}):([0-9]{2})(?:\s*(AM|PM))?)?/i
                     );
@@ -229,17 +232,11 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                         mm >= 0 && mm <= 59
                       ) {
                         createdDateTime = new Date(Date.UTC(y, mo - 1, d, hh, mm)).toISOString();
-                      } else {
-                        // Fallback for invalid date from header
-                        createdDateTime = new Date().toISOString();
                       }
-                    } else {
-                      // Fallback for missing created_date_time block and header
-                      createdDateTime = new Date().toISOString();
                     }
                   }
 
-                  // Final fallback: use file last_modified timestamp if no created date found
+                  // Step 3: If still not found, try to use file.last_modified
                   if (!createdDateTime && file.last_modified != null) {
                     const lastModTimestamp = Number(file.last_modified);
                     if (Number.isFinite(lastModTimestamp) && lastModTimestamp > 0) {
@@ -370,8 +367,11 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                   inProgress++;
                 } else if (raw === 'waiting' || raw === 'on-hold' || raw === 'waiting-for') {
                   waiting++;
-                } else if (raw === 'completed' || raw === 'done' || raw === 'complete' || raw === 'cancelled') {
+                } else if (raw === 'completed' || raw === 'done' || raw === 'complete') {
                   completed++;
+                } else if (raw === 'cancelled' || raw === 'canceled') {
+                  // Cancelled is excluded from completed count
+                  // Not counted in any bucket - effectively ignored
                 } else {
                   // Default unmapped values to in-progress
                   inProgress++;

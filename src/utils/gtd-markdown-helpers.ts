@@ -278,7 +278,8 @@ export function mapLegacyStatus(status: string): string {
     'Active': 'in-progress',  // Map old project status to new
     'Planning': 'in-progress',
     'On Hold': 'waiting',
-    'Cancelled': 'completed',  // Map cancelled to completed as it's a terminal state
+    'Cancelled': 'cancelled',  // Keep cancelled as its own status
+    'Canceled': 'cancelled',  // Map US spelling to UK spelling
   };
   
   return statusMap[status] || status.toLowerCase().replace(/\s+/g, '-');

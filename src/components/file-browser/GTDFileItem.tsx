@@ -81,7 +81,8 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
         'planning': 'in-progress',
         'on-hold': 'waiting',
         'waiting-for': 'waiting',
-        'cancelled': 'completed',
+        'cancelled': 'cancelled',
+        'canceled': 'cancelled', // Map US spelling to UK spelling
         'done': 'completed',
         'complete': 'completed',
     };

@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://accounts.google.com https://www.googleapis.com https://www.google.com https://oauth2.googleapis.com http://localhost:1420 ws://localhost:1420 http://localhost:9898 ws://localhost:9898 http://127.0.0.1:1420 ws://127.0.0.1:1420 http://127.0.0.1:9898 ws://127.0.0.1:9898; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "csp": "default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: 'self' https://accounts.google.com https://www.googleapis.com https://www.google.com https://oauth2.googleapis.com http://localhost:1420 ws://localhost:1420 http://localhost:9898 ws://localhost:9898 http://127.0.0.1:1420 ws://127.0.0.1:1420 http://127.0.0.1:9898 ws://127.0.0.1:9898; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
       "dangerousDisableAssetCspModification": false,
       "freezePrototype": true,
       "capabilities": [

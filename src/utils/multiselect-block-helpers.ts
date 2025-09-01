@@ -57,6 +57,9 @@ export function serializeMultiselectsToMarkers(markdown: string): string {
             const jsonStr = dataAttribute
               .replace(/&#39;/g, "'")
               .replace(/&quot;/g, '"')
+              .replace(/&amp;/g, '&')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
               .replace(/\\"/g, '"');
             
             const data = JSON.parse(jsonStr);
@@ -120,6 +123,9 @@ function serializeMultiselectsToMarkersRegex(markdown: string): string {
       jsonStr = jsonStr
         .replace(/&#39;/g, "'")
         .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
         .replace(/\\"/g, '"');
       
       const data = JSON.parse(jsonStr);

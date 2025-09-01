@@ -31,22 +31,25 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
     if (!dateTime) return 'No time specified';
 
     try {
-      const dateObj = new Date(dateTime);
+      // Check if it's a date-only format (YYYY-MM-DD)
+      const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dateTime);
       
-      // Check if the input contains a time component
-      // Look for 'T' followed by time, and ensure it's not just midnight (00:00:00)
-      const hasTimeComponent = dateTime.includes('T') && 
-        !dateTime.endsWith('T00:00:00') && 
-        !dateTime.endsWith('T00:00:00Z') &&
-        !dateTime.endsWith('T00:00:00.000Z');
-      
-      if (hasTimeComponent) {
-        // Format with both date and time
-        return format(dateObj, 'PPP p'); // e.g., "April 29, 2023 at 2:30 PM"
-      } else {
-        // Format date only
-        return format(dateObj, 'PPP'); // e.g., "April 29, 2023"
+      if (isDateOnly) {
+        // Parse as local date to avoid timezone issues
+        const [year, month, day] = dateTime.split('-').map(Number);
+        const d = new Date(year, month - 1, day);
+        return format(d, 'PPP'); // Date only
       }
+      
+      // Parse as full datetime
+      const d = new Date(dateTime);
+      
+      // Check if it has an explicit time component (not just midnight)
+      const hasExplicitTime = /T\d{2}:\d{2}/.test(dateTime);
+      const isMidnight = /T00:00(:00(\.\d{3})?)?(Z|[+-]\d{2}:\d{2})?$/.test(dateTime);
+      
+      // Show time if explicitly set and not midnight
+      return hasExplicitTime && !isMidnight ? format(d, 'PPP p') : format(d, 'PPP');
     } catch {
       return dateTime;
     }

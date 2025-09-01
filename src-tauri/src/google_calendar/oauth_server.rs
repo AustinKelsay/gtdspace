@@ -29,7 +29,7 @@ impl OAuthCallbackServer {
     pub async fn start_and_wait_for_code_with_state(
         &self,
         expected_state: Option<String>,
-    ) -> Result<String, Box<dyn std::error::Error>> {
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // Clear any stale code from previous runs
         {
             let mut code_guard = self.received_code.lock().await;
@@ -568,7 +568,9 @@ impl OAuthCallbackServer {
     }
 
     #[allow(dead_code)]
-    pub async fn start_and_wait_for_code(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn start_and_wait_for_code(
+        &self,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         self.start_and_wait_for_code_with_state(None).await
     }
 }
@@ -584,8 +586,4 @@ pub async fn run_oauth_server(
     server
         .start_and_wait_for_code_with_state(expected_state)
         .await
-        .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-            // Create a new error that preserves the original error's message and is Send + Sync
-            Box::new(std::io::Error::other(e.to_string()))
-        })
 }

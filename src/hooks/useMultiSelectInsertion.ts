@@ -52,7 +52,8 @@ export function useMultiSelectInsertion(editor: any) {
 
   useHotkeys('mod+shift+c', handleInsertContext, {
     enableOnContentEditable: true,
-  });
+    enableOnFormTags: true,
+  }, [editor]);
 
   // Function to manually insert multiselect blocks
   const insertMultiSelect = (type: 'contexts' | 'tags' | 'categories') => {

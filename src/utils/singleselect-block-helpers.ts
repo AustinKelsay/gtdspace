@@ -50,7 +50,18 @@ export const mapStatusValue = (status: string): string => {
     'Cancelled': 'completed',  // Map cancelled to completed as we only have 3 states
   };
   
-  return statusMap[status] || status.toLowerCase().replace(/\s+/g, '-');
+  const mapped = statusMap[status];
+  if (mapped) {
+    return mapped;
+  }
+  
+  // Log unmapped values for diagnostics
+  if (import.meta.env.DEV) {
+    console.warn(`[SingleSelect] Unmapped status value encountered: "${status}", defaulting to "in-progress"`);
+  }
+  
+  // Always return safe default for unknown values
+  return 'in-progress';
 };
 
 // Map effort values for consistency

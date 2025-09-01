@@ -255,7 +255,7 @@ Planned enhancements to the release process:
 
 ## Additional Resources
 
-- [Tauri Publishing Guide](https://tauri.app/v1/guides/distribution/publishing)
+- [Tauri Publishing Guide](https://v2.tauri.app/distribute/)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [Semantic Versioning](https://semver.org/)
 - [Conventional Commits](https://www.conventionalcommits.org/)

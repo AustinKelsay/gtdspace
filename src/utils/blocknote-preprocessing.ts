@@ -174,7 +174,7 @@ function toBase64(str: string): string {
 // Create a hash of the content for efficient caching - focus on structural elements
 function createContentHash(markdown: string, blockCount: number): string {
   // Extract only GTD field markers and structural elements for stable caching
-  const gtdFieldMarkers = markdown.match(/\[!(?:multiselect|singleselect|checkbox|datetime|references|areas-references|goals-references|vision-references|purpose-references|projects-list|areas-list|goals-list|visions-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list):[^\]]*\]/g) || [];
+  const gtdFieldMarkers = markdown.match(/\[!(?:multiselect|singleselect|checkbox|datetime|references|areas-references|goals-references|vision-references|purpose-references|projects-list|areas-list|goals-list|visions-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list):[^\]]*\]/g) || [];
   
   // Create a structural signature based on:
   // 1. Block count (structural changes)
@@ -609,10 +609,12 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       // Check if this paragraph contains our references markers or HTML
       if (!blockReplaced) {
         for (const refBlock of referencesBlocks) {
-          // Only match if the text explicitly contains our exact custom syntax
+          // Only match if the text exactly equals our custom syntax
           // refBlock.text should be the full match like "[!references:...]"
-          // We should only match on the exact text, not on partial matches
-          if (refBlock.text && blockText.includes(refBlock.text)) {
+          // Use exact match to prevent partial replacements
+          const normalizedRefText = (refBlock.text ?? '').trim();
+          const normalizedBlockText = (blockText ?? '').trim();
+          if (normalizedRefText.length > 0 && normalizedBlockText === normalizedRefText) {
             // Replace this paragraph with a references block
             processedBlocks.push({
               type: (refBlock.blockType || 'references') as ReferencesBlock['type'],
@@ -633,7 +635,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
           // Only match if the text explicitly contains our exact custom syntax
           // listBlock.text should be the full match like "[!projects-list]"
           // We should only match on the exact text, not on partial matches
-          if (listBlock.text && blockText.includes(listBlock.text)) {
+          if (listBlock.text && blockText.trim() === listBlock.text.trim()) {
             // Replace this paragraph with a list block
             processedBlocks.push({
               type: listBlock.blockType as ListBlock['type'],

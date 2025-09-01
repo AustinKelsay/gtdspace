@@ -56,26 +56,7 @@ class ContentEventBus {
       return;
     }
     
-    // Create unique key for this event to prevent cascading
-    const eventKey = `${eventType}:${event.filePath}`;
     const now = Date.now();
-    
-    // Check if we've recently emitted the same event for the same file
-    const lastEmissionTime = this.recentEvents.get(eventKey);
-    if (lastEmissionTime && (now - lastEmissionTime) < 100) {
-      // Skip emission if we've emitted the same event within 100ms
-      return;
-    }
-    
-    // Store this emission time
-    this.recentEvents.set(eventKey, now);
-    
-    // Clean up old entries (older than 1 second)
-    for (const [key, time] of this.recentEvents.entries()) {
-      if (now - time > 1000) {
-        this.recentEvents.delete(key);
-      }
-    }
     
     // Store metadata in cache
     if (event.metadata) {
@@ -97,6 +78,26 @@ class ContentEventBus {
       });
     }
     
+    // Apply deduplication only for cascaded content:changed events
+    if (eventType === 'content:changed') {
+      const eventKey = `${eventType}:${event.filePath}`;
+      const lastEmissionTime = this.recentEvents.get(eventKey);
+      if (lastEmissionTime && (now - lastEmissionTime) < 100) {
+        // Skip emission if we've emitted the same event within 100ms
+        this.isEmitting = wasEmitting;
+        return;
+      }
+      // Store this emission time
+      this.recentEvents.set(eventKey, now);
+    }
+    
+    // Clean up old entries (older than 1 second)
+    for (const [key, time] of this.recentEvents.entries()) {
+      if (now - time > 1000) {
+        this.recentEvents.delete(key);
+      }
+    }
+    
     // Also emit to general content:changed for any content change
     // Track pending cascades per file to avoid dropping concurrent events
     if (eventType !== 'content:changed' && eventType.startsWith('content:')) {
@@ -106,15 +107,15 @@ class ContentEventBus {
         // Create an immutable snapshot of the event to prevent mutation
         let eventSnapshot: ContentChangeEvent;
         try {
-          // Try structuredClone first (most efficient)
+          // Try structuredClone first (most efficient for deep cloning)
           if (typeof structuredClone !== 'undefined') {
             eventSnapshot = structuredClone(event);
           } else {
-            // Fallback to JSON parse/stringify
-            eventSnapshot = JSON.parse(JSON.stringify(event));
+            // Fallback to shallow copy to preserve types
+            eventSnapshot = { ...event };
           }
         } catch {
-          // Last resort: manual shallow copy
+          // If structuredClone throws, use shallow copy
           eventSnapshot = { ...event };
         }
         // Use queueMicrotask for minimal delay while ensuring async execution

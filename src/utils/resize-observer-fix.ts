@@ -30,6 +30,17 @@ if (typeof window !== 'undefined') {
       e.preventDefault();
     }
   });
+
+  // Handle unhandled promise rejections for ResizeObserver errors
+  window.addEventListener('unhandledrejection', (e) => {
+    if (e.reason && typeof e.reason.message === 'string' && e.reason.message.includes('ResizeObserver loop')) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === 'function') {
+        e.stopImmediatePropagation();
+      }
+    }
+  });
 }
 
 export {};

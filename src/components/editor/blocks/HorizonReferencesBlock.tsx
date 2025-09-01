@@ -236,11 +236,13 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
 
-  // Parse references from comma-separated string - memoized
-  const parsedReferences = React.useMemo(() => 
-    references ? references.split(',').filter(Boolean) : [],
-    [references]
-  );
+  // Parse references from comma-separated string - memoized with trimming and deduplication
+  const parsedReferences = React.useMemo(() => {
+    if (!references) return [];
+    const trimmed = references.split(',').map(ref => ref.trim()).filter(Boolean);
+    // Remove duplicates while preserving order
+    return Array.from(new Set(trimmed));
+  }, [references]);
 
   // Load available horizon files
   const loadAvailableFiles = React.useCallback(async () => {

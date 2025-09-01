@@ -104,8 +104,10 @@ export function needsMigration(content: string): boolean {
     // Check for multiselect status fields (should be singleselect)
     content.includes('[!multiselect:status:') ||
     content.includes('[!multiselect:project-status:') ||
-    // Check for old status values
-    /\[!singleselect:(?:status|project-status):(?:not-started|active|planning|on-hold|waiting-for|cancelled|done|complete)\]/i.test(content)
+    // Check for multiselect effort field (should be singleselect)
+    content.includes('[!multiselect:effort:') ||
+    // Check for old status values (excluding 'completed' which is canonical)
+    /\[!singleselect:(?:status|project-status):(?:not-started|active|planning|on-hold|waiting-for|cancelled|done)\]/i.test(content)
   );
 }
 

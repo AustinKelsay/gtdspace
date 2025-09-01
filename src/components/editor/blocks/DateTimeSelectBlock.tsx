@@ -130,10 +130,30 @@ const DateTimeSelectComponent = React.memo<DateTimeSelectComponentProps>(functio
     if (isDateOnlyField) return;
 
     const newTime = e.target.value;
+    
+    // Validate time format
+    if (!newTime) {
+      setTimeValue('');
+      return;
+    }
+    
+    // Check time format (HH:MM)
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
+    if (!timeRegex.test(newTime)) {
+      console.warn('Invalid time format:', newTime);
+      return; // Don't update if invalid format
+    }
+    
     setTimeValue(newTime);
 
     if (isValidDate && localTimeEnabled) {
       const [hours, minutes] = newTime.split(':').map(Number);
+      
+      // Additional validation for parsed values
+      if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        console.warn('Invalid time values:', { hours, minutes });
+        return;
+      }
 
       // If the raw value is date-only, parse it properly to avoid timezone shifts
       let year: number, month: number, day: number;

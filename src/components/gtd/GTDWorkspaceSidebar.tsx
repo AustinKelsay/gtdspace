@@ -869,7 +869,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     const raw = status.trim().toLowerCase().replace(/[\s_]+/g, '-');
     
     // Map various status variations to canonical values
-    if (raw === 'done' || raw === 'complete' || raw === 'completed') return 'completed';
+    if (raw === 'done' || raw === 'completed') return 'completed';
     if (raw === 'in-progress' || raw === 'inprogress') return 'in-progress';
     if (raw === 'waiting-for' || raw === 'on-hold') return 'waiting';
     

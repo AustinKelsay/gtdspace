@@ -338,7 +338,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                 const content = await invoke<string>('read_file', { path: file.path });
                 const statusMatch = content.match(/\[!singleselect:status:(in-progress|waiting|completed?|done)\]/i);
                 const raw = (statusMatch?.[1] || 'in-progress').toLowerCase();
-                const normalized = (raw === 'done' || raw.startsWith('complete')) ? 'completed' : raw;
+                const normalized = (raw === 'done' || raw === 'complete') ? 'completed' : raw;
                 if (normalized === 'in-progress') inProgress++;
                 else if (normalized === 'waiting') waiting++;
                 else if (normalized === 'completed') completed++;

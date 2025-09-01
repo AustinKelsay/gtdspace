@@ -154,8 +154,10 @@ function toBase64(str: string): string {
   }
   
   // Fallback to Buffer for Node.js environments
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(input, 'utf-8').toString('base64');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (typeof globalThis !== 'undefined' && typeof (globalThis as any).Buffer !== 'undefined') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (globalThis as any).Buffer.from(input, 'utf-8').toString('base64');
   }
   
   // If neither is available, use a simple hash alternative
@@ -528,7 +530,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
             // Special handling for habit-status: convert to checkbox block
             if (ssBlock.type === 'habit-status') {
               // Convert old habit status to checkbox
-              const checked = ssBlock.value === 'completed' || ssBlock.value === 'complete' || ssBlock.value === 'true';
+              const checked = ssBlock.value === 'completed' || ssBlock.value === 'true';
               processedBlocks.push({
                 type: 'checkbox',
                 props: {

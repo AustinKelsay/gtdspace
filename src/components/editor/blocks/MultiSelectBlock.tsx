@@ -157,13 +157,13 @@ const MultiSelectRenderer = React.memo(function MultiSelectRenderer(props: {
     }
   }, [block.id, block.props, editor]);
 
-  // Use GTDTagSelector for context and category types
-  if (type === 'contexts' || type === 'categories') {
+  // Use GTDTagSelector for context and category types (case-insensitive)
+  if (normalizedType === 'contexts' || normalizedType === 'categories') {
     return (
       <div className="inline-block min-w-[200px] align-middle mx-1">
         {label && <label className="text-sm font-medium mb-1 block">{label}</label>}
         <GTDTagSelector
-          type={type}
+          type={normalizedType as 'contexts' | 'categories'}
           value={parsedValue}
           onValueChange={handleChange}
           placeholder={placeholder}

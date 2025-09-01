@@ -32,9 +32,9 @@ Your GTD Space build and release process is now fully configured! Here's what wa
 
 ## Current Status
 
-✅ **Ready to create your first release!**
+✅ **Ready to create your first release! (pipeline not yet tested)**
 
-The temporary icon files have been created, so you can build immediately. The GitHub Actions workflow will generate properly sized icons automatically.
+The temporary icon files have been created, and the GitHub Actions workflow is configured to generate properly sized icons automatically. However, the end-to-end release pipeline has not yet been fully tested.
 
 ## Next Steps
 

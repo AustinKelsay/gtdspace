@@ -103,9 +103,23 @@ class ContentEventBus {
       const cascadeKey = `content:changed:${event.filePath}`;
       if (!this.pendingCascades.get(cascadeKey)) {
         this.pendingCascades.set(cascadeKey, true);
+        // Create an immutable snapshot of the event to prevent mutation
+        let eventSnapshot: ContentChangeEvent;
+        try {
+          // Try structuredClone first (most efficient)
+          if (typeof structuredClone !== 'undefined') {
+            eventSnapshot = structuredClone(event);
+          } else {
+            // Fallback to JSON parse/stringify
+            eventSnapshot = JSON.parse(JSON.stringify(event));
+          }
+        } catch {
+          // Last resort: manual shallow copy
+          eventSnapshot = { ...event };
+        }
         // Use queueMicrotask for minimal delay while ensuring async execution
         queueMicrotask(() => {
-          this.emit('content:changed', event);
+          this.emit('content:changed', eventSnapshot);
           this.pendingCascades.delete(cascadeKey);
         });
       }

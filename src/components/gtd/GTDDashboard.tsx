@@ -194,7 +194,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                   const singleselectStatus = content.match(/\[!singleselect:habit-status:([^\]]+)\]/);
 
                   let createdDateTime: string;
-                  const createdBlock = content.match(/[!datetime:created_date_time:([^]]+)]/i);
+                  const createdBlock = content.match(/\[!datetime:created_date_time:([^\]]+)\]/i);
                   if (createdBlock) {
                     const raw = createdBlock[1].trim();
                     const parsed = new Date(raw);
@@ -216,21 +216,12 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                       let hh = hdr[4] ? parseInt(hdr[4], 10) : 0;
                       const mm  = hdr[5] ? parseInt(hdr[5], 10) : 0;
                       const mer = (hdr[6] || '').toUpperCase();
-                      // Construct date from parsed components
-                      const parsedDate = new Date(y, mo - 1, d, hh, mm);
-                      if (!isNaN(parsedDate.getTime())) {
-                        createdDateTime = parsedDate.toISOString();
-                      } else {
-                        // Fallback for invalid date from header
-                        createdDateTime = new Date().toISOString();
-                      }
-                    } else {
-                      // Fallback for missing created_date_time block and header
-                      createdDateTime = new Date().toISOString();
-                    }
-                  }
+                      
+                      // Adjust hours for AM/PM
                       if (mer === 'PM' && hh < 12) hh += 12;
                       if (mer === 'AM' && hh === 12) hh = 0;
+                      
+                      // Validate and construct date
                       if (
                         mo >= 1 && mo <= 12 &&
                         d  >= 1 && d  <= 31 &&
@@ -238,7 +229,13 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                         mm >= 0 && mm <= 59
                       ) {
                         createdDateTime = new Date(Date.UTC(y, mo - 1, d, hh, mm)).toISOString();
+                      } else {
+                        // Fallback for invalid date from header
+                        createdDateTime = new Date().toISOString();
                       }
+                    } else {
+                      // Fallback for missing created_date_time block and header
+                      createdDateTime = new Date().toISOString();
                     }
                   }
 
@@ -364,11 +361,21 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
             await Promise.all(files.map(async (file) => {
               try {
                 const content = await invoke<string>('read_file', { path: file.path });
-                const statusMatch = content.match(/\[!singleselect:status:(in-progress|waiting|completed)\]/i);
-                const raw = (statusMatch?.[1] || 'in-progress').toLowerCase();
-                if (raw === 'in-progress') inProgress++;
-                else if (raw === 'waiting') waiting++;
-                else if (raw === 'completed') completed++;
+                // Match any status value, including legacy ones
+                const statusMatch = content.match(/\[!singleselect:status:([^\]]+)\]/i);
+                const raw = (statusMatch?.[1] || 'in-progress').toLowerCase().trim();
+                
+                // Map legacy values to canonical ones
+                if (raw === 'in-progress' || raw === 'active' || raw === 'planning' || raw === 'not-started') {
+                  inProgress++;
+                } else if (raw === 'waiting' || raw === 'on-hold' || raw === 'waiting-for') {
+                  waiting++;
+                } else if (raw === 'completed' || raw === 'done' || raw === 'complete' || raw === 'cancelled') {
+                  completed++;
+                } else {
+                  // Default unmapped values to in-progress
+                  inProgress++;
+                }
                 
 
                 const dueMatch = content.match(/\[!datetime:due_date:([^\]]*)\]/i);
@@ -465,8 +472,21 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
     // Sort upcoming deadlines by date
     stats.upcomingDeadlines.sort((a, b) => {
-      const dateA = new Date(a.dueDate!).getTime();
-      const dateB = new Date(b.dueDate!).getTime();
+      // Safely parse dates, handling block strings
+      const parseDateSafe = (dateStr: string): number => {
+        let str = dateStr;
+        // Check if it's a block string and extract the value
+        if (str.startsWith('[!datetime:')) {
+          const match = str.match(/\[!datetime:due_date:([^\]]*)\]/i);
+          str = match?.[1] || '';
+        }
+        const parsed = Date.parse(str);
+        // Return Infinity for invalid dates so they sort to the end
+        return isNaN(parsed) ? Infinity : parsed;
+      };
+      
+      const dateA = parseDateSafe(a.dueDate!);
+      const dateB = parseDateSafe(b.dueDate!);
       return dateA - dateB;
     });
 
@@ -1175,7 +1195,16 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                                 <div className="flex items-center justify-between">
                                   <span className="font-medium">{project.name}</span>
                                   <Badge variant="outline" className="text-xs">
-                                    {formatDate(project.dueDate!)}
+                                    {(() => {
+                                      let dateStr = project.dueDate!;
+                                      // Check if it's a block string and extract the value
+                                      if (dateStr.startsWith('[!datetime:')) {
+                                        const match = dateStr.match(/\[!datetime:due_date:([^\]]*)\]/i);
+                                        dateStr = match?.[1] || '';
+                                      }
+                                      // Only format if we have a valid date string
+                                      return dateStr ? formatDate(dateStr) : 'No date';
+                                    })()}
                                   </Badge>
                                 </div>
                                 <p className="text-sm text-muted-foreground mt-1">{project.description}</p>

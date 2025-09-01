@@ -589,7 +589,7 @@ pub async fn run_oauth_server(
             // This preserves the error message for debugging
             Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("OAuth server error: {}", e)
+                format!("OAuth server error: {}", e),
             ))
         })
 }

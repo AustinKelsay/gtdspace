@@ -240,22 +240,42 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       // Only process if this is for the current file
       if (event.detail.filePath === filePath && initialContentLoaded.current) {
         try {
-          // Check if we're in Tauri context before using Tauri APIs
-          const { isTauriContext } = await import('@/utils/tauri-ready');
-          if (!isTauriContext()) {
+          // First, safely check if we're in Tauri context
+          let inTauriContext = false;
+          try {
+            const tauriReady = await import('@/utils/tauri-ready');
+            inTauriContext = tauriReady.isTauriContext ? tauriReady.isTauriContext() : false;
+          } catch (importError) {
+            console.warn('Could not import tauri-ready module:', importError);
+            return; // Bail early if we can't check Tauri context
+          }
+          
+          if (!inTauriContext) {
             console.warn('Habit content update skipped - not in Tauri context');
             return;
           }
           
-          // Read fresh content from disk instead of using potentially stale prop
-          // This avoids stale closure issues where 'content' might be outdated
-          const { invoke } = await import('@tauri-apps/api/core');
-          const freshContent = await invoke<string>('read_text_file', { path: filePath });
+          // Only import invoke if we're definitely in Tauri context
+          let freshContent: string;
+          try {
+            const tauriCore = await import('@tauri-apps/api/core');
+            if (!tauriCore.invoke) {
+              console.error('Tauri invoke not available');
+              return;
+            }
+            // Read fresh content from disk instead of using potentially stale prop
+            freshContent = await tauriCore.invoke<string>('read_text_file', { path: filePath });
+          } catch (invokeError) {
+            console.error('Failed to invoke Tauri read_text_file:', invokeError);
+            return; // Exit without throwing to prevent event handler crash
+          }
           
           // Use the fresh content for the update
           debouncedContentUpdate(freshContent);
         } catch (error) {
-          console.error('Failed to read habit content for update:', error);
+          // This catch is for any unexpected errors
+          console.error('Unexpected error in habit content update handler:', error);
+          // Don't throw - return gracefully to prevent event handler crash
         }
       }
     };

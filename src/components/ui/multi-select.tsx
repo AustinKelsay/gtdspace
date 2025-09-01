@@ -45,6 +45,9 @@ interface OptionItemProps {
 function OptionItem({ option, isSelected, isActive, isDisabled, onSelect, onMouseEnter }: OptionItemProps) {
   return (
     <div
+      role="option"
+      aria-selected={isSelected}
+      aria-disabled={isDisabled || undefined}
       className={cn(
         "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
         isDisabled && "pointer-events-none opacity-50",
@@ -87,6 +90,7 @@ const MultiSelect = React.forwardRef<
     const [search, setSearch] = React.useState("")
     const [activeIndex, setActiveIndex] = React.useState(-1)
     const inputRef = React.useRef<HTMLInputElement>(null)
+    const listboxId = React.useId()
 
     const selected = React.useMemo(
       () => options.filter((option) => value.includes(option.value)),
@@ -234,7 +238,8 @@ const MultiSelect = React.forwardRef<
     ) : (
       <Button
         variant="outline"
-        role="combobox"
+        aria-haspopup="listbox"
+        aria-controls={listboxId}
         aria-expanded={open}
         className={cn("w-full justify-between", className)}
         disabled={disabled}
@@ -275,9 +280,12 @@ const MultiSelect = React.forwardRef<
         </PopoverPrimitive.Trigger>
         <PopoverPrimitive.Portal container={typeof document !== 'undefined' ? document.body : undefined}>
           <PopoverPrimitive.Content
+            id={listboxId}
             className="z-[70] p-0"
             align="start"
             sideOffset={4}
+            role="listbox"
+            aria-multiselectable="true"
             style={{
               minWidth: "var(--radix-popover-trigger-width)",
               maxWidth: "var(--radix-popover-trigger-width)",
@@ -288,6 +296,7 @@ const MultiSelect = React.forwardRef<
                 <input
                   ref={inputRef}
                   className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Filter options"
                   placeholder={searchPlaceholder}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}

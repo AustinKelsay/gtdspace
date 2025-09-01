@@ -192,7 +192,9 @@ function createContentHash(markdown: string, blockCount: number): string {
   
   // Create hash that's stable for text-only changes but changes for structural modifications
   const structuralHash = toBase64(structuralElements).slice(0, 12);
-  return `${blockCount}-${gtdFieldCount}-${structuralHash}`;
+  // Append a short content hash to detect non-GTD text changes
+  const contentHash = toBase64(markdown.trim()).slice(0, 8);
+  return `${blockCount}-${gtdFieldCount}-${structuralHash}-${contentHash}`;
 }
 
 /**

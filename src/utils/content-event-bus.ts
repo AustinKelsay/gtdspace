@@ -63,6 +63,18 @@ class ContentEventBus {
       this.fileMetadataCache.set(event.filePath, event.metadata);
     }
     
+    // Apply deduplication early for content:changed events (before notifying listeners)
+    if (eventType === 'content:changed') {
+      const eventKey = `${eventType}:${event.filePath}`;
+      const lastEmissionTime = this.recentEvents.get(eventKey);
+      if (lastEmissionTime && (now - lastEmissionTime) < 100) {
+        // Skip emission if we've emitted the same event within 100ms
+        return;
+      }
+      // Store this emission time immediately to gate rapid cascades
+      this.recentEvents.set(eventKey, now);
+    }
+    
     const wasEmitting = this.isEmitting;
     this.isEmitting = true;
     
@@ -76,19 +88,6 @@ class ContentEventBus {
           console.error(`Error in content event listener:`, error);
         }
       });
-    }
-    
-    // Apply deduplication only for cascaded content:changed events
-    if (eventType === 'content:changed') {
-      const eventKey = `${eventType}:${event.filePath}`;
-      const lastEmissionTime = this.recentEvents.get(eventKey);
-      if (lastEmissionTime && (now - lastEmissionTime) < 100) {
-        // Skip emission if we've emitted the same event within 100ms
-        this.isEmitting = wasEmitting;
-        return;
-      }
-      // Store this emission time
-      this.recentEvents.set(eventKey, now);
     }
     
     // Clean up old entries (older than 1 second)

@@ -193,13 +193,16 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                   const checkboxStatus = content.match(/\[!checkbox:habit-status:(true|false)\]/);
                   const singleselectStatus = content.match(/\[!singleselect:habit-status:([^\]]+)\]/);
 
-                  let createdDateTime: string | undefined = undefined;
-                  const createdBlock = content.match(/\[!datetime:created_date_time:([^\]]+)\]/i);
+                  let createdDateTime: string;
+                  const createdBlock = content.match(/[!datetime:created_date_time:([^]]+)]/i);
                   if (createdBlock) {
                     const raw = createdBlock[1].trim();
                     const parsed = new Date(raw);
                     if (!isNaN(parsed.getTime())) {
                       createdDateTime = parsed.toISOString();
+                    } else {
+                      // Fallback for invalid date string
+                      createdDateTime = new Date().toISOString();
                     }
                   } else {
                     // Fallback to parse from ## Created header
@@ -213,6 +216,19 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                       let hh = hdr[4] ? parseInt(hdr[4], 10) : 0;
                       const mm  = hdr[5] ? parseInt(hdr[5], 10) : 0;
                       const mer = (hdr[6] || '').toUpperCase();
+                      // Construct date from parsed components
+                      const parsedDate = new Date(y, mo - 1, d, hh, mm);
+                      if (!isNaN(parsedDate.getTime())) {
+                        createdDateTime = parsedDate.toISOString();
+                      } else {
+                        // Fallback for invalid date from header
+                        createdDateTime = new Date().toISOString();
+                      }
+                    } else {
+                      // Fallback for missing created_date_time block and header
+                      createdDateTime = new Date().toISOString();
+                    }
+                  }
                       if (mer === 'PM' && hh < 12) hh += 12;
                       if (mer === 'AM' && hh === 12) hh = 0;
                       if (

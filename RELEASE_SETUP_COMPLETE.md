@@ -46,16 +46,18 @@ git push origin feature/release-process
 ```
 
 ### 2. Create a Pull Request
-Merge your `feature/release-process` branch into `main`.
+Merge your `feature/release-process` branch into `staging`. Target `staging` because the CI workflow is configured to run integration and release checks on this branch, ensuring stability before a final merge to `main`.
 
 ### 3. Create Your First Release
-After merging to main:
+After merging to `staging`:
 ```bash
-git checkout main
+git checkout staging
 git pull
-npm run release  # Creates v0.1.1 and tags locally (does not push)
-git push && git push --tags  # trigger CI/CD
+# This example runs a patch release. Use minor or major as needed.
+# See docs/release-process.md for more details.
+npm run release:patch
 ```
+This command will bump the version, create a commit, and tag it. The `release.yml` workflow is triggered manually from the GitHub Actions tab on the `staging` branch, which will then build and release the new version.
 
 ### 4. Monitor the Build
 - Go to [GitHub Actions](https://github.com/AustinKelsay/gtdspace/actions) to watch the build progress

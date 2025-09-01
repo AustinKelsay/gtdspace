@@ -11,6 +11,12 @@ interface GTDProjectListProps {
   onCreateAction: (project: GTDProject) => void;
 }
 
+// Parse date-only string (YYYY-MM-DD) as local date to avoid timezone issues
+const parseLocalDate = (dateStr: string): Date => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 export const GTDProjectList: React.FC<GTDProjectListProps> = ({
   projects,
   onSelectProject,
@@ -64,7 +70,7 @@ export const GTDProjectList: React.FC<GTDProjectListProps> = ({
                 {project.dueDate && (
                   <div className="flex items-center gap-1">
                     <Calendar className="h-3 w-3" />
-                    {new Date(project.dueDate).toLocaleDateString()}
+                    {parseLocalDate(project.dueDate).toLocaleDateString()}
                   </div>
                 )}
                 <div>

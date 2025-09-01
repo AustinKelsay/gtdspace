@@ -307,9 +307,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         try {
           const content = await invoke<string>('read_file', { path: action.path });
           // Extract status from the markdown content
-          // Look for [!singleselect:status:xxx] pattern - capture any token
-          const match = content.match(/\[!singleselect:status:(\S+?)\]/i);
-          const rawStatus = match?.[1] || 'in-progress';
+          // Look for [!singleselect:status:xxx] pattern - capture everything up to ]
+          const match = content.match(/\[!singleselect:status:([^\]]+?)\]/i);
+          const rawStatus = match?.[1]?.trim() || 'in-progress';
           const normalized = normalizeStatus(rawStatus);
 
           // Extract due date from the markdown content

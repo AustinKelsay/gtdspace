@@ -60,7 +60,10 @@ export function serializeMultiselectsToMarkers(markdown: string): string {
               .replace(/\\"/g, '"');
             
             const data = JSON.parse(jsonStr);
-            const type = data.type || 'tags';
+            // Validate and sanitize type with allowlist
+            const rawType = typeof data.type === 'string' ? data.type.trim() : '';
+            const allowed = new Set(['tags', 'contexts', 'categories', 'custom']);
+            const type = allowed.has(rawType) ? rawType : 'tags';
             // Normalize value: handle arrays, strings, and other types
             let value = '';
             if (Array.isArray(data.value)) {
@@ -120,7 +123,10 @@ function serializeMultiselectsToMarkersRegex(markdown: string): string {
         .replace(/\\"/g, '"');
       
       const data = JSON.parse(jsonStr);
-      const type = data.type || 'tags';
+      // Validate and sanitize type with allowlist
+      const rawType = typeof data.type === 'string' ? data.type.trim() : '';
+      const allowed = new Set(['tags', 'contexts', 'categories', 'custom']);
+      const type = allowed.has(rawType) ? rawType : 'tags';
       // Normalize value: handle arrays, strings, and other types
       let value = '';
       if (Array.isArray(data.value)) {

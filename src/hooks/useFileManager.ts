@@ -174,7 +174,14 @@ export const useFileManager = () => {
       const rawContent = await invoke<string>('read_file', { path: file.path });
       
       // Convert multiselect markers back to HTML format for the editor
-      const content = deserializeMarkersToMultiselects(rawContent);
+      let content: string;
+      try {
+        content = deserializeMarkersToMultiselects(rawContent);
+      } catch (error) {
+        console.warn('Failed to deserialize multiselect markers:', error);
+        // Fall back to using raw content if deserialization fails
+        content = typeof rawContent === 'string' ? rawContent : String(rawContent);
+      }
       
       setState(prev => ({
         ...prev,

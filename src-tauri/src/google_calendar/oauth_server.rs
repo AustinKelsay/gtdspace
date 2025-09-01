@@ -587,9 +587,9 @@ pub async fn run_oauth_server(
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
             // Convert the error to a string to satisfy Send + Sync bounds
             // This preserves the error message for debugging
-            Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("OAuth server error: {}", e),
-            ))
+            Box::new(std::io::Error::other(format!(
+                "OAuth server error: {}",
+                e
+            )))
         })
 }

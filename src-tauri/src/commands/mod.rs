@@ -2291,20 +2291,23 @@ pub fn find_reverse_relationships(
                                                 .trim_start_matches('[')
                                                 .trim_end_matches(']')
                                                 .split(',')
-                                                .map(|p| p.trim().trim_matches('"').replace('\\', "/"))
+                                                .map(|p| {
+                                                    p.trim().trim_matches('"').replace('\\', "/")
+                                                })
                                                 .filter(|p| !p.is_empty())
                                                 .map(|p| p.to_string())
                                                 .collect()
                                         }
                                     } else {
                                         // CSV format: path1,path2
-                                        refs_str.split(',')
+                                        refs_str
+                                            .split(',')
                                             .map(|p| p.trim().replace('\\', "/"))
                                             .filter(|p| !p.is_empty())
                                             .map(|p| p.to_string())
                                             .collect()
                                     };
-                                    
+
                                     // Check if any path matches the target
                                     for path in paths {
                                         if path == target_normalized {
@@ -3827,9 +3830,13 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
         if in_history_section {
             // Look for list items (history entries) or old table format
             // Skip the descriptive text line
-            if line.starts_with("*Track your habit completions") || line.starts_with("*Track your habit") {
+            if line.starts_with("*Track your habit completions")
+                || line.starts_with("*Track your habit")
+            {
                 continue; // Skip this line, not a history entry
-            } else if line.starts_with("- ") || (line.starts_with("|") && !line.contains("Date") && !line.contains("---")) {
+            } else if line.starts_with("- ")
+                || (line.starts_with("|") && !line.contains("Date") && !line.contains("---"))
+            {
                 last_history_line_idx = Some(i);
             } else if line.starts_with("##") {
                 // Hit another section, stop looking
@@ -3864,10 +3871,10 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
                 break;
             }
         }
-        
+
         // Build the new content
         let mut new_lines = lines[..insert_idx].to_vec();
-        
+
         // If we didn't find descriptive text, add it
         if !found_descriptive_text && insert_idx > idx {
             // Insert after the History header but before the entry
@@ -3878,11 +3885,11 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
         } else {
             // Just add the entry
             if insert_idx > 0 && !lines[insert_idx - 1].is_empty() {
-                new_lines.push("");  // Add blank line if needed
+                new_lines.push(""); // Add blank line if needed
             }
             new_lines.push(entry);
         }
-        
+
         if insert_idx < lines.len() {
             new_lines.extend_from_slice(&lines[insert_idx..]);
         }
@@ -4027,7 +4034,7 @@ fn should_reset_habit(content: &str, frequency: &str, _current_status: &str) -> 
         log::debug!("[HABIT-RESET] No last action time found, not resetting");
         return false; // Can't determine, don't reset
     };
-    
+
     log::debug!(
         "[HABIT-RESET] Last action: {:?}, frequency: {}",
         last_action,

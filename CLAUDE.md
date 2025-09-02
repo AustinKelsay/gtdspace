@@ -132,7 +132,7 @@ The editor uses these custom markdown markers:
 ### Performance Patterns
 
 - **Parallel Operations**: File reads run concurrently in `useCalendarData`
-- **Debouncing**: Manual save (debounced, 2s for metadata), file watcher (500ms), habit scheduler (1min)
+- **Debouncing**: Manual save (debounced, 500ms for metadata), file watcher (500ms), habit scheduler (1min)
 - **Calendar Optimization**: Only generates dates in current view window
 - **Regex Caching**: Metadata patterns pre-compiled for performance
 

@@ -73,11 +73,11 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
     const result = await withErrorHandling(
       async () => {
         const habitPath = await invoke<string>('create_gtd_habit', {
-          space_path: spacePath,
-          habit_name: habitName.trim(),
+          spacePath: spacePath,
+          habitName: habitName.trim(),
           frequency: frequency,
-          _status: 'todo', // Always start habits as 'todo'
-          focus_time: focusTime.trim() || null, // Optional focus time
+          status: 'todo', // Always start habits as 'todo'
+          focusTime: focusTime.trim() || null, // Optional focus time
         });
         return habitPath;
       },

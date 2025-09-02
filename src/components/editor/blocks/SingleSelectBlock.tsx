@@ -25,6 +25,7 @@ const GTD_STATUS_OPTIONS = [
   { value: 'in-progress', label: 'In Progress', group: 'Status' },
   { value: 'waiting', label: 'Waiting', group: 'Status' },
   { value: 'completed', label: 'Completed', group: 'Status' },
+  { value: 'cancelled', label: 'Cancelled', group: 'Status' },
 ];
 
 // Define effort options for GTD
@@ -40,6 +41,7 @@ const GTD_PROJECT_STATUS_OPTIONS = [
   { value: 'in-progress', label: 'In Progress', group: 'Project Status' },
   { value: 'waiting', label: 'Waiting', group: 'Project Status' },
   { value: 'completed', label: 'Completed', group: 'Project Status' },
+  { value: 'cancelled', label: 'Cancelled', group: 'Project Status' },
 ];
 
 // Define habit frequency options

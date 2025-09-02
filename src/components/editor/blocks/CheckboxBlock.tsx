@@ -18,7 +18,7 @@ import { toast } from '@/hooks/use-toast';
 // Memoized renderer component for checkbox blocks
 const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
   block: { id: string; props: { type: string; checked: boolean; label: string } };
-  editor: { updateBlock: (block: unknown, update: { props: Record<string, unknown> }) => void };
+  editor: { document: unknown; updateBlock: (block: unknown, update: { props: Record<string, unknown> }) => void };
 }) {
   const { block } = props;
   const { type, checked, label } = block.props;
@@ -37,6 +37,32 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
     setLocalChecked(checked);
   }, [checked]);
 
+  // Define BlockNote block type
+  type BlockNoteBlock = {
+    id: string;
+    children?: BlockNoteBlock[];
+    type?: string;
+    props?: Record<string, unknown>;
+  };
+
+  // Helper to find a block in the current editor document by id
+  const findBlockInDocument = React.useCallback((targetId: string): BlockNoteBlock | null => {
+    const blocks = props.editor.document as BlockNoteBlock[];
+
+    const findById = (candidateBlocks: BlockNoteBlock[]): BlockNoteBlock | null => {
+      for (const candidate of candidateBlocks) {
+        if (candidate.id === targetId) return candidate;
+        if (candidate.children && candidate.children.length > 0) {
+          const found = findById(candidate.children);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    return findById(blocks);
+  }, [props.editor.document]);
+
   const handleChange = React.useCallback(async (newChecked: boolean | 'indeterminate') => {
     const prevChecked = localChecked;
     const checkedVal = newChecked === true;
@@ -44,9 +70,15 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
     // Immediately update local state for visual feedback
     setLocalChecked(checkedVal);
 
-    // Update the BlockNote document's block props with error handling
+    // Find the actual block in the document and update it
     try {
-      props.editor.updateBlock(block, { props: { checked: checkedVal } });
+      const targetBlock = findBlockInDocument(block.id);
+      if (targetBlock) {
+        props.editor.updateBlock(targetBlock, { props: { checked: checkedVal } });
+      } else {
+        console.warn('[CheckboxBlock] Block not found in document, skipping editor update');
+        // Still allow local state change for UI feedback
+      }
     } catch (error) {
       // Log the error and revert local state to maintain consistency
       console.error('[CheckboxBlock] Failed to update block:', error);
@@ -76,7 +108,12 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
                 if (!inTauriContext) {
                   console.warn('[CheckboxBlock] Not in Tauri context; reverting UI/doc and skipping backend update');
                   setLocalChecked(prevChecked);
-                  try { props.editor.updateBlock(block, { props: { checked: prevChecked } }); } catch { /* ignore error */ }
+                  try { 
+                    const targetBlock = findBlockInDocument(block.id);
+                    if (targetBlock) {
+                      props.editor.updateBlock(targetBlock, { props: { checked: prevChecked } });
+                    }
+                  } catch { /* ignore error */ }
                   return null; // signal "not applied"
                 }
 
@@ -88,20 +125,36 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
                 if (typeof invoke !== 'function') {
                   console.warn('[CheckboxBlock] Tauri invoke unavailable; reverting UI/doc and skipping backend update');
                   setLocalChecked(prevChecked);
-                  try { props.editor.updateBlock(block, { props: { checked: prevChecked } }); } catch { /* ignore error */ }
+                  try { 
+                    const targetBlock = findBlockInDocument(block.id);
+                    if (targetBlock) {
+                      props.editor.updateBlock(targetBlock, { props: { checked: prevChecked } });
+                    }
+                  } catch { /* ignore error */ }
                   return null;
                 }
 
+                console.log('[CheckboxBlock] Calling update_habit_status with:', {
+                  habitPath: filePath,
+                  newStatus: statusValue,
+                });
+                
                 await invoke('update_habit_status', {
                   habitPath: filePath,
                   newStatus: statusValue,
                 });
 
+                console.log('[CheckboxBlock] Successfully updated habit status');
                 return { statusValue };
               } catch (e) {
                 console.warn('[CheckboxBlock] Failed to call backend; reverting UI/doc and skipping update', e);
                 setLocalChecked(prevChecked);
-                try { props.editor.updateBlock(block, { props: { checked: prevChecked } }); } catch { /* ignore error */ }
+                try { 
+              const targetBlock = findBlockInDocument(block.id);
+              if (targetBlock) {
+                props.editor.updateBlock(targetBlock, { props: { checked: prevChecked } });
+              }
+            } catch { /* ignore error */ }
                 return null;
               }
             },
@@ -112,7 +165,7 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
             // Show success toast
             const normalizedPath = filePath.replace(/\\/g, '/');
             const habitName = normalizedPath.split('/').pop()?.replace(/\.(md|markdown)$/i, '') || 'Habit';
-            const statusLabel = checkedVal ? 'Completed' : 'To Do';
+            const statusLabel = checkedVal ? 'Complete' : 'To Do';
 
             toast({
               title: "Habit Recorded",
@@ -141,12 +194,17 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
           } else {
             // Revert already performed in the failure/early-return branches above
             setLocalChecked(prevChecked);
-            try { props.editor.updateBlock(block, { props: { checked: prevChecked } }); } catch { /* ignore error */ }
+            try { 
+              const targetBlock = findBlockInDocument(block.id);
+              if (targetBlock) {
+                props.editor.updateBlock(targetBlock, { props: { checked: prevChecked } });
+              }
+            } catch { /* ignore error */ }
           }
         }
       }
     }
-  }, [localChecked, type, withErrorHandling, filePath, block, props.editor]);
+  }, [localChecked, type, withErrorHandling, filePath, block.id, props.editor, findBlockInDocument]);
 
   // Determine display label based on type and state - memoized
   const displayLabel = React.useMemo(() => {

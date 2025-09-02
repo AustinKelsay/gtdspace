@@ -162,9 +162,21 @@ impl std::fmt::Debug for BrowserOpenError {
 /// Result of starting the OAuth flow. Contains the CSRF `state` (DO NOT LOG),
 /// PKCE `code_verifier` (DO NOT LOG), and a `redacted_auth_url` safe for display/logging.
 pub struct StartOAuthFlowResult {
-    pub state: String,
-    pub code_verifier: String,
+    state: String,
+    code_verifier: String,
     pub redacted_auth_url: String,
+}
+
+impl StartOAuthFlowResult {
+    /// CSRF state required to validate the OAuth callback. DO NOT LOG.
+    pub fn state(&self) -> &str {
+        &self.state
+    }
+
+    /// PKCE code_verifier required for token exchange. DO NOT LOG.
+    pub fn code_verifier(&self) -> &str {
+        &self.code_verifier
+    }
 }
 
 // Simple function to start OAuth flow by opening browser

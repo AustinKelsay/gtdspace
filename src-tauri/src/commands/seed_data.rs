@@ -401,6 +401,7 @@ pub struct ProjectReadmeParams<'a> {
     pub areas_refs: &'a str,
     pub goals_refs: &'a str,
     pub vision_refs: &'a str,
+    pub purpose_refs: &'a str,
     pub general_refs: &'a str,
 }
 
@@ -419,6 +420,7 @@ pub fn generate_project_readme(
         areas_refs: "",
         goals_refs: "",
         vision_refs: "",
+        purpose_refs: "",
         general_refs: "",
     };
     generate_project_readme_with_refs(params)
@@ -451,6 +453,8 @@ pub fn generate_project_readme_with_refs(params: ProjectReadmeParams) -> String 
 
 [!vision-references:{}]
 
+[!purpose-references:{}]
+
 ## Actions
 Actions for this project are stored as individual markdown files in this directory.
 
@@ -468,6 +472,7 @@ Actions for this project are stored as individual markdown files in this directo
         params.areas_refs,
         params.goals_refs,
         params.vision_refs,
+        params.purpose_refs,
         params.general_refs
     )
 }

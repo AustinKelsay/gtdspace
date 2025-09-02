@@ -214,8 +214,8 @@ export function useGTDSpace() {
               projectPath: params.project_path,
               actionName: params.action_name,
               status: params.status,
-              focusDate: params.focusDate || undefined,
               dueDate: params.dueDate || undefined,
+              focusDate: params.focusDate || undefined,
               effort: params.effort,
               contexts: contextsArray,
             });

@@ -55,10 +55,11 @@ use seed_data::{
 // ===== REGEX PATTERNS FOR HABIT PARSING =====
 // Define regex patterns as static constants to avoid duplication and ensure consistency
 
-/// Regex for parsing habit history table entries
-/// Format: | Date | Time | Status | Action | Notes |
+/// Regex for parsing habit history entries (supports both table and list formats)
+/// List format: - **2025-09-01** at **7:26 PM**: Complete (Manual - Changed from To Do)
+/// Table format: | 2025-09-01 | 7:26 PM | Complete | Manual | Changed from To Do |
 static HABIT_HISTORY_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\| (\d{4}-\d{2}-\d{2}) \| (\d{2}:\d{2}) \| ([^|]+) \| ([^|]+) \| ([^|]+) \|")
+    Regex::new(r"(?:- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*(\d{1,2}:\d{2} [AP]M)\*\*:|\| (\d{4}-\d{2}-\d{2}) \| (\d{1,2}:\d{2}(?: [AP]M)?) \|)")
         .expect("Invalid habit history regex pattern")
 });
 
@@ -87,16 +88,44 @@ static HABIT_FREQUENCY_FIELD_REGEX: Lazy<Regex> = Lazy::new(|| {
 fn parse_last_habit_action_time(content: &str) -> Option<chrono::NaiveDateTime> {
     let mut last_action_time = None;
 
-    // Parse history table entries
+    // Parse history entries (supports both list and table formats)
     for cap in HABIT_HISTORY_REGEX.captures_iter(content) {
-        if let (Some(date_str), Some(time_str)) = (cap.get(1), cap.get(2)) {
-            let datetime_str = format!("{} {}", date_str.as_str(), time_str.as_str());
-            if let Ok(time) = chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M")
-            {
-                if last_action_time.is_none() || last_action_time < Some(time) {
-                    last_action_time = Some(time);
-                }
+        // Try list format first (groups 1 and 2)
+        let (date_str, time_str) = if let (Some(d), Some(t)) = (cap.get(1), cap.get(2)) {
+            (d.as_str(), t.as_str())
+        } else if let (Some(d), Some(t)) = (cap.get(3), cap.get(4)) {
+            // Try table format (groups 3 and 4)
+            (d.as_str(), t.as_str())
+        } else {
+            continue;
+        };
+
+        // Parse the datetime
+        let datetime_str = format!("{} {}", date_str, time_str);
+        
+        // Try parsing with 12-hour format first (e.g., "7:26 PM")
+        let parsed_time = if time_str.contains("AM") || time_str.contains("PM") {
+            chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %-I:%M %p")
+                .or_else(|_| chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %I:%M %p"))
+        } else {
+            // Fall back to 24-hour format
+            chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M")
+        };
+
+        if let Ok(time) = parsed_time {
+            log::debug!(
+                "[HABIT-PARSE] Found history entry: {} -> {:?}",
+                datetime_str,
+                time
+            );
+            if last_action_time.is_none() || last_action_time < Some(time) {
+                last_action_time = Some(time);
             }
+        } else {
+            log::debug!(
+                "[HABIT-PARSE] Failed to parse history entry: {}",
+                datetime_str
+            );
         }
     }
 
@@ -894,16 +923,21 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
         });
     }
 
-    // Check if we're in a GTD Projects directory
+    // Check which GTD horizon we're in
     let is_in_projects = dir_path.components().any(|c| c.as_os_str() == "Projects");
+    let is_in_vision = dir_path.components().any(|c| c.as_os_str() == "Vision");
+    let is_in_goals = dir_path.components().any(|c| c.as_os_str() == "Goals");
+    let is_in_areas = dir_path.components().any(|c| c.as_os_str() == "Areas of Focus");
+    let is_in_purpose = dir_path.components().any(|c| c.as_os_str() == "Purpose & Principles");
+    let is_in_habits = dir_path.components().any(|c| c.as_os_str() == "Habits");
 
     // Check if this is a project directory (has README.md)
     let is_project_dir = dir_path.join("README.md").exists();
 
-    // Create appropriate template content
+    // Create appropriate template content based on GTD horizon
+    let clean_name = name.trim_end_matches(".md");
     let template_content = if is_in_projects && is_project_dir {
         // Use GTD action template with single select and datetime fields
-        let clean_name = name.trim_end_matches(".md");
         format!(
             r#"# {}
 
@@ -928,10 +962,190 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
             clean_name,
             chrono::Local::now().to_rfc3339()
         )
+    } else if is_in_vision {
+        // Vision template with purpose references
+        format!(
+            r#"# {}
+
+## Living My Purpose
+
+[!purpose-references:]
+
+## The Picture of Success
+*Describe what success looks like in 3-5 years...*
+
+## Key Milestones
+- 
+
+## Supporting Goals
+
+[!goals-list]
+
+## Supporting Areas
+
+[!areas-list]
+
+## Supporting Projects
+
+[!projects-list]
+
+---
+[!datetime:created_date_time:{}]
+"#,
+            clean_name,
+            chrono::Local::now().to_rfc3339()
+        )
+    } else if is_in_goals {
+        // Goals template with vision and purpose references
+        format!(
+            r#"# {}
+
+## Target Date
+
+[!datetime:target_date:]
+
+## Outcome
+*What specific outcome will be achieved?*
+
+## Success Criteria
+- 
+
+## Aligned With
+
+[!vision-references:]
+
+[!purpose-references:]
+
+## Supporting Areas
+
+[!areas-list]
+
+## Projects
+
+[!projects-list]
+
+---
+[!datetime:created_date_time:{}]
+"#,
+            clean_name,
+            chrono::Local::now().to_rfc3339()
+        )
+    } else if is_in_areas {
+        // Areas of Focus template with all horizon references
+        format!(
+            r#"# {}
+
+## Purpose
+*Why is this area important?*
+
+## Standards
+*What does excellence look like in this area?*
+
+## Current Focus
+- 
+
+## Aligned With
+
+[!goals-references:]
+
+[!vision-references:]
+
+[!purpose-references:]
+
+## Supporting Projects
+
+[!projects-list]
+
+## References
+
+[!references:]
+
+---
+[!datetime:created_date_time:{}]
+"#,
+            clean_name,
+            chrono::Local::now().to_rfc3339()
+        )
+    } else if is_in_purpose {
+        // Purpose & Principles template
+        format!(
+            r#"# {}
+
+## Core Principle
+*What fundamental truth or value does this represent?*
+
+## Why It Matters
+*How does this guide your decisions and actions?*
+
+## Living This Principle
+*What does it look like when you embody this?*
+
+## Supporting Visions
+
+[!visions-list]
+
+## Supporting Goals
+
+[!goals-list]
+
+## Supporting Areas
+
+[!areas-list]
+
+## Supporting Projects
+
+[!projects-list]
+
+---
+[!datetime:created_date_time:{}]
+"#,
+            clean_name,
+            chrono::Local::now().to_rfc3339()
+        )
+    } else if is_in_habits {
+        // Habits template
+        format!(
+            r#"# {}
+
+## Habit Tracking
+
+[!checkbox:habit-status:false]
+
+## Frequency
+
+[!singleselect:habit-frequency:daily]
+
+## Focus Time
+
+[!datetime:focus_date:]
+
+## Why This Habit?
+*What benefit does this habit provide?*
+
+## Success Looks Like
+*How will you know you're doing it right?*
+
+## History
+| Date | Time | Status | Action | Notes |
+|------|------|--------|--------|-------|
+
+---
+[!datetime:created_date_time:{}]
+"#,
+            clean_name,
+            chrono::Local::now().to_rfc3339()
+        )
     } else {
-        // Use basic template for non-GTD files
-        let clean_name = name.trim_end_matches(".md");
-        format!("# {}\n\n", clean_name)
+        // Use basic template for non-GTD files (Cabinet, Someday Maybe, etc.)
+        format!(
+            r#"# {}
+
+---
+[!datetime:created_date_time:{}]
+"#,
+            clean_name,
+            chrono::Local::now().to_rfc3339()
+        )
     };
 
     match fs::write(&file_path, template_content) {
@@ -1920,7 +2134,7 @@ pub fn find_reverse_relationships(
         "areas" => vec!["Areas of Focus"],
         "goals" => vec!["Goals"],
         "visions" => vec!["Vision"],
-        _ => vec!["Projects", "Areas of Focus", "Goals", "Vision"],
+        _ => vec!["Projects", "Areas of Focus", "Goals", "Vision", "Purpose & Principles"],
     };
 
     // Search through each directory
@@ -2005,35 +2219,41 @@ pub fn find_reverse_relationships(
                 }
 
                 // Check for references in various formats
-                // Determine what type of reference to look for based on the target path
-                let has_reference = if filter_type == "projects" && dir_name == "Projects" {
-                    // Projects can reference areas, goals, vision, or purpose
-                    // Check all possible reference types
-                    let found = content_normalized
-                        .contains(&format!("[!areas-references:{}", target_normalized))
-                        || content_normalized
-                            .contains(&format!("[!goals-references:{}", target_normalized))
-                        || content_normalized
-                            .contains(&format!("[!vision-references:{}", target_normalized))
-                        || content_normalized
-                            .contains(&format!("[!purpose-references:{}", target_normalized));
-
+                // Need to check for both JSON array format and CSV format
+                let has_reference = {
+                    // Check for JSON array format: ["path"]
+                    let json_format = format!(r#""{}""#, target_normalized);
+                    // Check for CSV format: path
+                    let csv_format = target_normalized.clone();
+                    
+                    let found = if filter_type == "projects" && dir_name == "Projects" {
+                        // Projects can reference areas, goals, vision, or purpose
+                        content_normalized.contains(&format!("[!areas-references:"))
+                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!areas-references:{}", csv_format)))
+                        || content_normalized.contains(&format!("[!goals-references:"))
+                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!goals-references:{}", csv_format)))
+                        || content_normalized.contains(&format!("[!vision-references:"))
+                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!vision-references:{}", csv_format)))
+                        || content_normalized.contains(&format!("[!purpose-references:"))
+                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!purpose-references:{}", csv_format)))
+                    } else {
+                        // For other types, check all reference patterns including generic references
+                        content_normalized.contains(&format!("[!areas-references:"))
+                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!areas-references:{}", csv_format)))
+                        || content_normalized.contains(&format!("[!goals-references:"))
+                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!goals-references:{}", csv_format)))
+                        || content_normalized.contains(&format!("[!vision-references:"))
+                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!vision-references:{}", csv_format)))
+                        || content_normalized.contains(&format!("[!purpose-references:"))
+                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!purpose-references:{}", csv_format)))
+                        || content_normalized.contains(&format!("[!references:"))
+                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!references:{}", csv_format)))
+                    };
+                    
                     if found {
-                        log::info!("Found horizon reference match in project!");
+                        log::info!("Found reference match for: {}", target_normalized);
                     }
                     found
-                } else {
-                    // For other types, check all reference patterns
-                    content_normalized
-                        .contains(&format!("[!areas-references:{}", target_normalized))
-                        || content_normalized
-                            .contains(&format!("[!goals-references:{}", target_normalized))
-                        || content_normalized
-                            .contains(&format!("[!vision-references:{}", target_normalized))
-                        || content_normalized
-                            .contains(&format!("[!purpose-references:{}", target_normalized))
-                        || content_normalized
-                            .contains(&format!("[!references:{}", target_normalized))
                 };
 
                 if has_reference {
@@ -2055,10 +2275,40 @@ pub fn find_reverse_relationships(
                         if let Ok(re) = Regex::new(pattern) {
                             for cap in re.captures_iter(&content) {
                                 if let Some(refs) = cap.get(1) {
-                                    for ref_path in refs.as_str().split(',') {
-                                        let trimmed = ref_path.trim().replace('\\', "/");
-                                        if !trimmed.is_empty() && trimmed == target_normalized {
-                                            references.push(trimmed);
+                                    let refs_str = refs.as_str().trim();
+                                    
+                                    // Handle both JSON array format and CSV format
+                                    let paths: Vec<String> = if refs_str.starts_with('[') && refs_str.ends_with(']') {
+                                        // JSON array format: ["path1","path2"]
+                                        // Parse as JSON array
+                                        if let Ok(json_paths) = serde_json::from_str::<Vec<String>>(refs_str) {
+                                            json_paths.into_iter()
+                                                .map(|p| p.replace('\\', "/"))
+                                                .collect()
+                                        } else {
+                                            // Fallback: try to extract paths manually
+                                            refs_str
+                                                .trim_start_matches('[')
+                                                .trim_end_matches(']')
+                                                .split(',')
+                                                .map(|p| p.trim().trim_matches('"').replace('\\', "/"))
+                                                .filter(|p| !p.is_empty())
+                                                .map(|p| p.to_string())
+                                                .collect()
+                                        }
+                                    } else {
+                                        // CSV format: path1,path2
+                                        refs_str.split(',')
+                                            .map(|p| p.trim().replace('\\', "/"))
+                                            .filter(|p| !p.is_empty())
+                                            .map(|p| p.to_string())
+                                            .collect()
+                                    };
+                                    
+                                    // Check if any path matches the target
+                                    for path in paths {
+                                        if path == target_normalized {
+                                            references.push(path);
                                         }
                                     }
                                 }
@@ -2678,6 +2928,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     let areas_ref = format!("{}/Areas of Focus/Professional Excellence.md", &space_path);
     let goals_ref = format!("{}/Goals/Build Financial Freedom.md", &space_path);
     let vision_ref = format!("{}/Vision/10 Year Vision.md", &space_path);
+    let purpose_ref = format!("{}/Purpose & Principles/Core Values.md", &space_path);
     let cabinet_ref = format!("{}/Cabinet/GTD Quick Reference.md", &space_path);
 
     let readme_path = Path::new(&project1_path).join("README.md");
@@ -2689,6 +2940,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         areas_refs: &areas_ref,     // References Area
         goals_refs: &goals_ref,     // References Goal
         vision_refs: &vision_ref,   // References Vision
+        purpose_refs: &purpose_ref, // References Purpose & Principles
         general_refs: &cabinet_ref, // References Cabinet
     };
     let readme_content = generate_project_readme_with_refs(readme_params);
@@ -3158,8 +3410,8 @@ pub fn create_gtd_habit(
 [!datetime:created_date_time:{}]
 
 ## History
-| Date | Time | Status | Action | Notes |
-|------|------|--------|--------|-------|
+
+*Track your habit completions below:*
 
 "#,
         habit_name,
@@ -3215,6 +3467,11 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
         } else {
             "todo"
         };
+        log::info!(
+            "Found checkbox format: value='{}', converted to status='{}'",
+            checkbox_value,
+            status
+        );
         (status.to_string(), true)
     } else {
         // Fall back to old format
@@ -3235,8 +3492,9 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
     // Skip if status isn't changing
     if current_status == new_status {
         log::info!(
-            "Habit status unchanged ({}), skipping history update",
-            current_status
+            "Habit status unchanged (current='{}', new='{}'), skipping history update",
+            current_status,
+            new_status
         );
         return Ok(());
     }
@@ -3260,8 +3518,9 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
     } else {
         "Complete"
     };
+    // Use a list format instead of table for BlockNote compatibility
     let history_entry = format!(
-        "| {} | {} | {} | Manual | Changed from {} |",
+        "- **{}** at **{}**: {} (Manual - Changed from {})",
         now.format("%Y-%m-%d"),
         now.format("%-I:%M %p"),
         status_display,
@@ -3303,15 +3562,24 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
     // Insert the history entry using our standardized function
     let final_content = insert_history_entry(&updated_content, &history_entry)?;
 
+    log::info!(
+        "About to write habit file with history entry: {}",
+        history_entry
+    );
+
     // OLD complex regex code removed - using simpler line-based approach above
 
     // Removed - using simpler line-based approach above
 
     // Write the updated file with proper error handling
-    fs::write(&habit_path, final_content)
+    fs::write(&habit_path, &final_content)
         .map_err(|e| format!("Failed to write habit file: {}", e))?;
 
-    log::info!("Successfully updated habit status for: {}", habit_path);
+    log::info!(
+        "Successfully updated habit status for: {} (wrote {} bytes)",
+        habit_path,
+        final_content.len()
+    );
     Ok(())
 }
 
@@ -3468,8 +3736,9 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                         let is_catchup = i < periods_to_process.len() - 1;
                         let action_type = if is_catchup { "Backfill" } else { "Auto-Reset" };
 
+                        // Use list format for BlockNote compatibility
                         let history_entry = format!(
-                            "| {} | {} | {} | {} | {} |",
+                            "- **{}** at **{}**: {} ({} - {})",
                             period_time.format("%Y-%m-%d"),
                             period_time.format("%-I:%M %p"),
                             period_status,
@@ -3543,24 +3812,25 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
 /// * `Err(String)` - Error message if insertion fails
 fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
     let lines: Vec<&str> = content.lines().collect();
-    let mut last_table_line_idx = None;
-    let mut in_history_table = false;
-    let mut has_history_section = false;
-    let mut separator_idx = None;
+    let mut last_history_line_idx = None;
+    let mut in_history_section = false;
+    let mut history_section_idx = None;
 
-    // Find the history section and last table row
+    // Find the history section and last history entry
     for (i, line) in lines.iter().enumerate() {
         if line.starts_with("## History") {
-            in_history_table = true;
-            has_history_section = true;
+            in_history_section = true;
+            history_section_idx = Some(i);
             continue;
         }
 
-        if in_history_table {
-            if line.contains("---") && line.contains("|") {
-                separator_idx = Some(i);
-            } else if line.starts_with("|") && !line.contains("Date") {
-                last_table_line_idx = Some(i);
+        if in_history_section {
+            // Look for list items (history entries) or old table format
+            // Skip the descriptive text line
+            if line.starts_with("*Track your habit completions") || line.starts_with("*Track your habit") {
+                continue; // Skip this line, not a history entry
+            } else if line.starts_with("- ") || (line.starts_with("|") && !line.contains("Date") && !line.contains("---")) {
+                last_history_line_idx = Some(i);
             } else if line.starts_with("##") {
                 // Hit another section, stop looking
                 break;
@@ -3569,25 +3839,58 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
     }
 
     // Insert the entry in the appropriate location
-    let result = if let Some(idx) = last_table_line_idx {
-        // Insert after the last existing table row
+    let result = if let Some(idx) = last_history_line_idx {
+        // Insert after the last existing history entry
         let mut new_lines = lines[..=idx].to_vec();
         new_lines.push(entry);
         new_lines.extend_from_slice(&lines[idx + 1..]);
         new_lines.join("\n")
-    } else if let Some(idx) = separator_idx {
-        // No data rows yet, insert after separator
-        let mut new_lines = lines[..=idx].to_vec();
-        new_lines.push(entry);
-        new_lines.extend_from_slice(&lines[idx + 1..]);
+    } else if let Some(idx) = history_section_idx {
+        // History section exists but no entries yet, insert after header
+        // Skip any blank lines, descriptive text, or old table headers/separators
+        let mut insert_idx = idx + 1;
+        let mut found_descriptive_text = false;
+        while insert_idx < lines.len() {
+            let line = lines[insert_idx].trim();
+            if line.is_empty() {
+                insert_idx += 1;
+            } else if line.starts_with("*Track your habit") {
+                found_descriptive_text = true;
+                insert_idx += 1;
+            } else if line.contains("| Date") || (line.contains("---") && line.contains("|")) {
+                // Skip old table headers/separators
+                insert_idx += 1;
+            } else {
+                break;
+            }
+        }
+        
+        // Build the new content
+        let mut new_lines = lines[..insert_idx].to_vec();
+        
+        // If we didn't find descriptive text, add it
+        if !found_descriptive_text && insert_idx > idx {
+            // Insert after the History header but before the entry
+            new_lines.insert(idx + 1, "");
+            new_lines.insert(idx + 2, "*Track your habit completions below:*");
+            new_lines.insert(idx + 3, "");
+            new_lines.push(entry);
+        } else {
+            // Just add the entry
+            if insert_idx > 0 && !lines[insert_idx - 1].is_empty() {
+                new_lines.push("");  // Add blank line if needed
+            }
+            new_lines.push(entry);
+        }
+        
+        if insert_idx < lines.len() {
+            new_lines.extend_from_slice(&lines[insert_idx..]);
+        }
         new_lines.join("\n")
-    } else if has_history_section {
-        // History section exists but no table, append entry
-        format!("{}\n{}", content.trim_end(), entry)
     } else {
-        // No history section, create it with proper table structure
+        // No history section, create it
         format!(
-            "{}\n\n## History\n\n| Date | Time | Status | Action | Notes |\n|------|------|--------|--------|-------|\n{}",
+            "{}\n\n## History\n\n*Track your habit completions below:*\n\n{}",
             content.trim_end(),
             entry
         )
@@ -3721,8 +4024,15 @@ fn should_reset_habit(content: &str, frequency: &str, _current_status: &str) -> 
     let last_action_time = parse_last_habit_action_time(content);
 
     let Some(last_action) = last_action_time else {
+        log::debug!("[HABIT-RESET] No last action time found, not resetting");
         return false; // Can't determine, don't reset
     };
+    
+    log::debug!(
+        "[HABIT-RESET] Last action: {:?}, frequency: {}",
+        last_action,
+        frequency
+    );
 
     // Always reset habits at their frequency interval, regardless of status
     // This ensures we record missed habits (when status is still "todo")
@@ -4487,8 +4797,8 @@ pub async fn google_calendar_start_auth(app: AppHandle) -> Result<String, String
     };
 
     // Restart the server with the expected state so CSRF can be validated
-    let state = start_result.state.clone();
-    let code_verifier = start_result.code_verifier.clone();
+    let state = start_result.state().to_string();
+    let code_verifier = start_result.code_verifier().to_string();
     let server_handle = tokio::spawn(async move {
         println!("[GoogleCalendar] Restarting OAuth callback server with expected state...");
         run_oauth_server(Some(state))

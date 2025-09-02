@@ -282,9 +282,13 @@ async function main() {
     }
 
     // Push the current HEAD and the tag using execFile with explicit args
-    execCommandFile('git', ['push', 'origin', 'HEAD']);
-    execCommandFile('git', ['push', 'origin', `refs/tags/${tagName}`]);
-    log('✓ Pushed commits and tags to remote', 'green');
+    if (flags.has('--dry-run')) {
+      log('⚠ Dry run: Skipping git push commands.', 'yellow');
+    } else {
+      execCommandFile('git', ['push', 'origin', 'HEAD']);
+      execCommandFile('git', ['push', 'origin', `refs/tags/${tagName}`]);
+      log('✓ Pushed commits and tags to remote', 'green');
+    }
 
     if (process.env.CI && process.env.GITHUB_TOKEN && originalRemoteUrl) {
       log('Restoring original git remote URL...', 'yellow');

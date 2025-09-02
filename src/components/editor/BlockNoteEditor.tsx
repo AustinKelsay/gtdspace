@@ -267,9 +267,9 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
               return;
             }
             // Read fresh content from disk instead of using potentially stale prop
-            freshContent = await tauriCore.invoke<string>('read_text_file', { path: filePath });
+            freshContent = await tauriCore.invoke<string>('read_file', { path: filePath });
           } catch (invokeError) {
-            console.error('Failed to invoke Tauri read_text_file:', invokeError);
+            console.error('Failed to invoke Tauri read_file:', invokeError);
             return; // Exit without throwing to prevent event handler crash
           }
 

@@ -48,7 +48,6 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       projectName: projectName.trim(),
       description: description.trim(),
       dueDate,
-      dueTime,
       status,
       spacePath
     });
@@ -62,23 +61,14 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
     setIsCreating(true);
     
     try {
-      // Combine due date and time into ISO datetime string
-      let dueDateTime: string | null = null;
-      if (dueDate) {
-        if (dueTime) {
-          // Combine date and time
-          dueDateTime = `${dueDate}T${dueTime}:00`;
-        } else {
-          // Default to 5 PM if no time specified (typical end of workday)
-          dueDateTime = `${dueDate}T17:00:00`;
-        }
-      }
+      // Use date-only format (YYYY-MM-DD) as per type definition
+      const dueDateOnly: string | null = dueDate || null;
       
       const projectData: GTDProjectCreate = {
         space_path: spacePath,
         project_name: projectName.trim(),
         description: description.trim(),
-        dueDate: dueDateTime,
+        dueDate: dueDateOnly,
         status: status,
       };
 

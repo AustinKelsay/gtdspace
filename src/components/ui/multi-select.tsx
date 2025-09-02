@@ -319,6 +319,7 @@ const MultiSelect = React.forwardRef<
                   className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Filter options"
                   aria-controls={listboxId}
+                  aria-activedescendant={activeIndex >= 0 && activeIndex < selectableOptions.length ? sanitizeOptionId(selectableOptions[activeIndex].value, activeIndex) : undefined}
                   placeholder={searchPlaceholder}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -344,7 +345,6 @@ const MultiSelect = React.forwardRef<
                     id={listboxId}
                     role="listbox"
                     aria-multiselectable="true"
-                    aria-activedescendant={activeIndex >= 0 && activeIndex < selectableOptions.length ? sanitizeOptionId(selectableOptions[activeIndex].value, activeIndex) : undefined}
                   >
                     {groupedOptions.ungrouped.length > 0 && (
                       <div className="py-1">

@@ -30,6 +30,8 @@ export const GTDProjectList: React.FC<GTDProjectListProps> = ({
         return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400';
       case 'completed':
         return 'bg-blue-500/10 text-blue-700 dark:text-blue-400';
+      case 'cancelled':
+        return 'bg-red-500/10 text-red-700 dark:text-red-400';
       default:
         return 'bg-gray-500/10 text-gray-700 dark:text-gray-400';
     }

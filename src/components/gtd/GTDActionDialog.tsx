@@ -68,24 +68,15 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
         }
       }
       
-      // Combine due date and time into ISO datetime string
-      let dueDateTime: string | null = null;
-      if (dueDate) {
-        if (dueTime) {
-          // Combine date and time
-          dueDateTime = `${dueDate}T${dueTime}:00`;
-        } else {
-          // Default to 5 PM if no time specified (typical deadline)
-          dueDateTime = `${dueDate}T17:00:00`;
-        }
-      }
+      // Use date-only format (YYYY-MM-DD) for due date as per type definition
+      const dueDateOnly: string | null = dueDate || null;
       
       const actionData: GTDActionCreate = {
         project_path: projectPath,
         action_name: actionName.trim(),
         status,
         focusDate: focusDateTime,
-        dueDate: dueDateTime,
+        dueDate: dueDateOnly,
         effort,
         contexts: contexts.length > 0 ? contexts : undefined,
       };

@@ -238,31 +238,30 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
 
   // Parse references - supports both JSON array and legacy CSV format
   const parsedReferences = React.useMemo(() => {
-    if (!references) return [];
+    const raw = (references || '').trim();
+    if (!raw || raw === '[' || raw === ']' || raw === '[]') return [];
 
     let refs: string[] = [];
 
     // Try to parse as JSON first
     try {
-      const parsed = JSON.parse(references);
-      if (Array.isArray(parsed)) {
-        refs = parsed;
-      } else {
-        // Not an array, fall back to CSV
-        refs = references.split(',');
-      }
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) refs = parsed as string[];
+      else refs = raw.split(',');
     } catch {
-      // JSON parse failed, use legacy CSV format
-      refs = references.split(',');
+      // JSON parse failed, use legacy CSV format with extra sanitization
+      refs = raw.split(',');
     }
 
-    // Normalize paths to forward slashes, trim, and filter empty strings
+    // Normalize and drop bracket-only artifacts
     const normalized = refs
       .map(ref => ref.replace(/\\/g, '/').trim())
-      .filter(Boolean);
-    // Remove duplicates while preserving order
+      .filter(ref => !!ref && ref !== '[' && ref !== ']');
+
     return Array.from(new Set(normalized));
   }, [references]);
+
+  // (moved) healMalformedReferences is defined after updateReferences
 
   // Load available horizon files
   const loadAvailableFiles = React.useCallback(async () => {
@@ -455,6 +454,19 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
     scheduleRetries([32, 96, 256]);
     return false;
   }, [block.id, editor, horizonType, block.props.references]);
+
+  // Auto-heal malformed "[" or "]" references persisted from earlier bugs
+  const healMalformedReferences = React.useCallback(() => {
+    const raw = (references || '').trim();
+    if (raw === '[' || raw === ']') updateReferences([]);
+  }, [references, updateReferences]);
+
+  // Run healing effect after updateReferences is declared
+  React.useEffect(() => {
+    healMalformedReferences();
+    // We intentionally only run this when references changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [references]);
 
   const handleAddReference = React.useCallback((file: HorizonFile) => {
     // Normalize path to use forward slashes
@@ -665,9 +677,8 @@ export const AreasReferencesBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: () => {
-      // For blocks with no content, return null to skip HTML serialization
-      // The actual markdown conversion happens in the editor's markdown exporter
-      return null;
+      // Export as markdown marker for persistence
+      return <p>[!areas-references:]</p>;
     },
     parse: (element) => {
       const textContent = (element.textContent || '').replace(/\]\]$/, ']');
@@ -700,9 +711,8 @@ export const GoalsReferencesBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: () => {
-      // For blocks with no content, return null to skip HTML serialization
-      // The actual markdown conversion happens in the editor's markdown exporter
-      return null;
+      // Export as markdown marker for persistence
+      return <p>[!goals-references:]</p>;
     },
     parse: (element) => {
       const textContent = (element.textContent || '').replace(/\]\]$/, ']');
@@ -735,9 +745,8 @@ export const VisionReferencesBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: () => {
-      // For blocks with no content, return null to skip HTML serialization
-      // The actual markdown conversion happens in the editor's markdown exporter
-      return null;
+      // Export as markdown marker for persistence
+      return <p>[!vision-references:]</p>;
     },
     parse: (element) => {
       const textContent = (element.textContent || '').replace(/\]\]$/, ']');
@@ -770,9 +779,8 @@ export const PurposeReferencesBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: () => {
-      // For blocks with no content, return null to skip HTML serialization
-      // The actual markdown conversion happens in the editor's markdown exporter
-      return null;
+      // Export as markdown marker for persistence
+      return <p>[!purpose-references:]</p>;
     },
     parse: (element) => {
       const textContent = (element.textContent || '').replace(/\]\]$/, ']');

@@ -1,6 +1,9 @@
 name: Release
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       type:
@@ -64,6 +67,11 @@ jobs:
 
       - name: Run safe release script
         run: npm run release:${{ github.event.inputs.type }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push bump commit to remote
+        run: git push origin HEAD
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

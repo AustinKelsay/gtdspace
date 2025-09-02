@@ -23,22 +23,30 @@ The GTD Space habit tracking system automatically manages recurring habits with 
 3. **Backfilling**: When the app starts, it backfills any missed periods while offline
 
 ### History Format
-Each habit maintains a complete history table:
+Each habit maintains a complete history as formatted list entries:
+
+**Markdown Format:**
+```markdown
+- **2025-01-16** at **2:00 PM**: Complete (Manual - Changed from To Do)
+- **2025-01-16** at **2:05 PM**: Complete (Auto-Reset - Completed)
+- **2025-01-16** at **2:10 PM**: To Do (Auto-Reset - Missed habit)
+- **2025-01-16** at **2:15 PM**: To Do (Backfill - Missed (app offline))
 ```
-| Date | Time | Status | Action | Notes |
-|------|------|--------|--------|-------|
-| 2025-01-16 | 14:00 | Complete | Manual | Changed from To Do |
-| 2025-01-16 | 14:05 | Complete | Auto-Reset | Completed |
-| 2025-01-16 | 14:10 | To Do | Auto-Reset | Missed habit |
-| 2025-01-16 | 14:15 | To Do | Backfill | Missed (app offline) |
-```
+
+**Display Format:**
+The history entries are displayed with visual formatting using emojis:
+- 📅 2025-01-16 • 🕐 2:00 PM • ✅ Complete • Manual - Changed from To Do
+- 📅 2025-01-16 • 🕐 2:05 PM • ✅ Complete • Auto-Reset - Completed
+- 📅 2025-01-16 • 🕐 2:10 PM • ⏳ To Do • Auto-Reset - Missed habit
+- 📅 2025-01-16 • 🕐 2:15 PM • ⏳ To Do • Backfill - Missed (app offline)
 
 ## Implementation Details
 
 ### Backend (Rust)
 - **Commands**: `create_gtd_habit`, `update_habit_status`, `check_and_reset_habits`
 - **Reset Logic**: Checks last action time from history, calculates if frequency interval passed
-- **History Management**: Appends entries to markdown table in habit file
+- **History Management**: Appends entries as markdown list items in habit file
+- **Format**: `- **YYYY-MM-DD** at **H:MM AM/PM**: Status (Action - Details)`
 
 ### Frontend (React)
 - **Checkbox UI**: Interactive checkbox for status (replaces dropdown for cleaner UX)
@@ -65,9 +73,9 @@ Each habit maintains a complete history table:
 2025-01-16
 
 ## History
-| Date | Time | Status | Action | Notes |
-|------|------|--------|--------|-------|
-| ... history entries ... |
+
+- **2025-01-16** at **2:00 PM**: Complete (Manual - Changed from To Do)
+- **2025-01-16** at **2:05 PM**: To Do (Auto-Reset - Completed habit)
 ```
 
 ## Usage

@@ -42,7 +42,7 @@ GTD Space includes automatic data migration to handle breaking changes and ensur
 - `planning` → `in-progress`
 - `on-hold` → `waiting`
 - `waiting-for` → `waiting`
-- `cancelled` → `completed`
+- `cancelled` → `cancelled`
 - `done` → `completed`
 - `complete` → `completed`
 

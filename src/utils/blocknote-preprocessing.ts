@@ -5,7 +5,7 @@
  */
 
 // Local minimal BlockNote-like types to avoid using `any`
-type TextChild = string | { text?: string; type?: string };
+type TextChild = string | { text?: string; type?: string; styles?: { italic?: boolean; bold?: boolean } };
 
 interface UnknownBlock {
   id?: string;
@@ -71,12 +71,13 @@ interface ReferencesBlock {
 
 interface ListBlock {
   type: 'projects-list' | 'areas-list' | 'goals-list' | 'visions-list' | 
-        'projects-and-areas-list' | 'goals-and-areas-list' | 'visions-and-goals-list';
+        'projects-areas-list' | 'goals-areas-list' | 'visions-goals-list';
   props: {
     listType: string;
     currentPath?: string;
   };
 }
+
 
 type ProcessedBlock =
   | UnknownBlock
@@ -101,7 +102,7 @@ export function preprocessMarkdownForBlockNote(markdown: string): string {
   const multiSelectHTMLPattern = /<div\s+data-multiselect='([^']+)'\s+class="multiselect-block">([^<]+)<\/div>/g;
   
   let processedMarkdown = markdown;
-  let match;
+  let match: RegExpExecArray | null;
   const blocksToInsert: Array<{ position: number; block: { type: string; props: Record<string, unknown> } }> = [];
   
   while ((match = multiSelectHTMLPattern.exec(markdown)) !== null) {
@@ -150,7 +151,16 @@ function toBase64(str: string): string {
   
   // Use btoa if available (browser environment)
   if (typeof btoa !== 'undefined') {
-    return btoa(input);
+    // Handle Unicode by converting to UTF-8 bytes first
+    try {
+      // Use encodeURIComponent trick to handle Unicode characters
+      return btoa(encodeURIComponent(input).replace(/%([0-9A-F]{2})/g, 
+        (_match, p1) => String.fromCharCode(parseInt(p1, 16))));
+    } catch (e) {
+      console.error('Failed to encode to base64:', e);
+      // Fallback to simple hash based on length
+      return input.length.toString(36);
+    }
   }
   
   // Fallback to Buffer for Node.js environments
@@ -221,15 +231,11 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
     }
   }
   
-  // Only log when actually processing (not using cache)
-  if (import.meta?.env?.DEV) {
-    console.log('postProcessBlockNoteBlocks: Processing new content');
-  }
-  
-  // Only log block details in development and when actually processing
-  if (import.meta?.env?.DEV) {
-    console.log('Number of blocks:', blocks.length);
-  }
+  // Only log when actually processing (not using cache) - keep minimal logging for debugging
+  // Uncomment for debugging if needed:
+  // if (hasHistory) {
+  //   console.log('Processing blocks with History section');
+  // }
   
   // Pattern to match multiselect markers in markdown (e.g., [!multiselect:tags:urgent,important])
   const multiSelectMarkerPattern = /\[!multiselect:([^:]+):([^\]]*)\]/g;
@@ -280,7 +286,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   const checkboxBlocks: Array<{ text: string; type: string; checked: boolean; label?: string }> = [];
   const dateTimeBlocks: Array<{ text: string; type: string; value: string; label?: string }> = [];
   const referencesBlocks: Array<{ text: string; references: string; blockType?: string }> = [];
-  let match;
+  let match: RegExpExecArray | null;
   
   // First check for new marker syntax
   while ((match = multiSelectMarkerPattern.exec(markdown)) !== null) {
@@ -463,15 +469,15 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   
   // New patterns with "and" for compatibility
   while ((match = projectsAndAreasListPattern.exec(markdown)) !== null) {
-    listBlocks.push({ text: match[0], listType: 'projects', blockType: 'projects-and-areas-list' });
+    listBlocks.push({ text: match[0], listType: 'projects', blockType: 'projects-areas-list' });
   }
   
   while ((match = goalsAndAreasListPattern.exec(markdown)) !== null) {
-    listBlocks.push({ text: match[0], listType: 'goals', blockType: 'goals-and-areas-list' });
+    listBlocks.push({ text: match[0], listType: 'goals', blockType: 'goals-areas-list' });
   }
   
   while ((match = visionsAndGoalsListPattern.exec(markdown)) !== null) {
-    listBlocks.push({ text: match[0], listType: 'visions', blockType: 'visions-and-goals-list' });
+    listBlocks.push({ text: match[0], listType: 'visions', blockType: 'visions-goals-list' });
   }
   
   // Check for references HTML syntax
@@ -510,8 +516,150 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   const processedBlocks: ProcessedBlock[] = [];
   // let multiSelectIndex = 0; // Keeping for potential future use
   
-  for (const block of blocks as UnknownBlock[]) {
+  // Track if we're in a History section
+  let inHistorySection = false;
+  let historyEntries: string[] = [];
+  
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i] as UnknownBlock;
     let blockReplaced = false;
+    
+    // Skip horizontal rules (---) but preserve them
+    if (block.type === 'paragraph') {
+      const blockText = getTextFromBlock(block);
+      if (blockText === '---' || blockText === '***' || blockText === '___') {
+        processedBlocks.push(block);
+        continue;
+      }
+    }
+    
+    // Check if this is a History heading BEFORE checking for empty references
+    // This ensures History sections are processed correctly
+    if (block.type === 'heading' && block.props?.level === 2) {
+      const headingText = getTextFromBlock(block);
+      // Also try trimming in case there's whitespace
+      const trimmedText = headingText.trim();
+      if (trimmedText === 'History') {
+        // Found History heading - start collecting entries
+        inHistorySection = true;
+        historyEntries = [];
+        // Add the heading to processed blocks
+        processedBlocks.push(block);
+        continue;
+      } else {
+        // End of History section if we hit another heading
+        if (inHistorySection && historyEntries.length > 0) {
+          // Add the history block before the new heading
+          processedBlocks.push({
+            type: 'history',
+            props: {
+              entries: historyEntries.join('\n')
+            }
+          });
+          historyEntries = [];
+        }
+        inHistorySection = false;
+      }
+    }
+    
+    // If we're in a History section, collect entries
+    if (inHistorySection) {
+      const blockText = getTextFromBlock(block);
+      // Processing block in History section
+      
+      // Check if BlockNote wrongly parsed history as a references block
+      if (block.type === 'references' && block.props) {
+        // Found references block in History section - convert to formatted list
+        // The history entries are in the original markdown, we need to extract them
+        // Look for list items in the markdown after the History heading
+        const historyMatch = markdown.match(/## History[\s\S]*?(?=##|$)/);
+        if (historyMatch) {
+          const historySection = historyMatch[0];
+          const entryMatches = historySection.match(/^- \*\*\d{4}-\d{2}-\d{2}\*\*.*$/gm);
+          if (entryMatches && entryMatches.length > 0) {
+            // Extract and format history entries
+            
+            // Parse entries and create formatted list items
+            for (const entry of entryMatches) {
+              // Format: - **2025-09-01** at **8:40 PM**: Complete (Manual - Changed from To Do)
+              const match = entry.match(/^- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*([^*]+)\*\*: ([^(]+) \(([^)]+)\)$/);
+              if (match) {
+                const date = match[1];
+                const time = match[2];
+                const status = match[3].trim();
+                const notes = match[4];
+                
+                // Choose emoji based on status
+                const statusEmoji = status.toLowerCase().includes('complete') ? '✅' : '⏳';
+                
+                // Create formatted text with emojis and separators
+                const formattedText = `📅 ${date} • 🕐 ${time} • ${statusEmoji} ${status} • ${notes}`;
+                
+                // Add as a bullet list item
+                processedBlocks.push({
+                  type: 'bulletListItem',
+                  content: [{
+                    type: 'text',
+                    text: formattedText,
+                    styles: {}
+                  }]
+                });
+              }
+            }
+          }
+        }
+        inHistorySection = false;
+        continue; // Skip the references block
+      }
+      
+      // Check if it's a list item (history entry)
+      if (block.type === 'bulletListItem' || 
+          (block.type === 'paragraph' && blockText.startsWith('- '))) {
+        // Add history entry
+        historyEntries.push(blockText);
+        continue; // Skip this block, we'll add it to the history block
+      }
+      
+      // Skip descriptive text like "Track your habit completions below:"
+      // Also check for italic content
+      const hasItalicContent = Array.isArray(block.content) && 
+        block.content.some((item: unknown) => {
+          const child = item as TextChild;
+          return typeof child === 'object' && child.styles?.italic;
+        });
+      if (block.type === 'paragraph' && 
+          (blockText.includes('Track your habit') || blockText.trim() === '' || hasItalicContent)) {
+        // Skip descriptive/empty paragraph in History section
+        continue; // Skip this block
+      }
+      
+      // If we hit something else that's not empty, end the history section
+      if (blockText.trim() !== '') {
+        if (historyEntries.length > 0) {
+          processedBlocks.push({
+            type: 'history',
+            props: {
+              entries: historyEntries.join('\n')
+            }
+          });
+          historyEntries = [];
+        }
+        inHistorySection = false;
+      }
+    }
+    
+    // Skip empty generic references blocks ONLY if NOT in a History section
+    // These are often created by BlockNote from horizontal rules or other markdown
+    if (!inHistorySection && block.type === 'references' && block.props) {
+      const refsValue = block.props.references;
+      const refs = typeof refsValue === 'string' ? refsValue.trim() : '';
+      // If it's an empty generic references block (not areas/goals/vision/purpose-references)
+      // then skip it as it's likely a parsing artifact
+      if (refs === '' || refs === '---') {
+        // Skip this empty references block
+        continue;
+      }
+    }
     
     // Check if this block contains multiselect or singleselect markers or HTML
     if (isParagraphBlock(block) && block.content) {
@@ -560,10 +708,38 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
               type: 'checkbox',
               props: { type: type || '', checked: checkedRaw === 'true', label: '' },
             });
-          } else if (kind === 'projects-list' || kind === 'areas-list' || kind === 'goals-list' || kind === 'visions-list' || kind === 'projects-areas-list' || kind === 'goals-areas-list' || kind === 'visions-goals-list' || kind === 'projects-and-areas-list' || kind === 'goals-and-areas-list' || kind === 'visions-and-goals-list') {
+          } else if (
+            kind === 'projects-list' ||
+            kind === 'areas-list' ||
+            kind === 'goals-list' ||
+            kind === 'visions-list' ||
+            kind === 'projects-areas-list' ||
+            kind === 'goals-areas-list' ||
+            kind === 'visions-goals-list' ||
+            kind === 'projects-and-areas-list' ||
+            kind === 'goals-and-areas-list' ||
+            kind === 'visions-and-goals-list'
+          ) {
+            // Map to canonical tokens used by HorizonList blocks
+            const listTypeCanonical = (
+              kind === 'projects-list' ? 'projects' :
+              kind === 'areas-list' ? 'areas' :
+              kind === 'goals-list' ? 'goals' :
+              kind === 'visions-list' ? 'visions' :
+              kind === 'projects-areas-list' || kind === 'projects-and-areas-list' ? 'projects-areas' :
+              kind === 'goals-areas-list' || kind === 'goals-and-areas-list' ? 'goals-areas' :
+              /* visions-goals */ 'visions-goals'
+            );
+            // Map legacy "and" versions to registered types
+            const blockType = (
+              kind === 'projects-and-areas-list' ? 'projects-areas-list' :
+              kind === 'goals-and-areas-list' ? 'goals-areas-list' :
+              kind === 'visions-and-goals-list' ? 'visions-goals-list' :
+              kind
+            ) as ListBlock['type'];
             processedBlocks.push({
-              type: kind as ListBlock['type'],
-              props: { listType: kind.replace('-list', '').replace(/-/g, ' ') },
+              type: blockType,
+              props: { listType: listTypeCanonical },
             });
           } else {
             // If we encounter an unknown marker, preserve as paragraph text token for safety
@@ -733,6 +909,43 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       processedBlocks.push(block);
     }
   }
+  
+  // Add any remaining history entries at the end of the document
+  if (inHistorySection && historyEntries.length > 0) {
+    // Add remaining history entries as formatted list
+    
+    // Parse entries and create formatted list items
+    for (const entry of historyEntries) {
+      const entryText = entry.startsWith('- ') ? entry : `- ${entry}`;
+      const match = entryText.match(/^- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*([^*]+)\*\*: ([^(]+) \(([^)]+)\)$/);
+      if (match) {
+        const date = match[1];
+        const time = match[2];
+        const status = match[3].trim();
+        const notes = match[4];
+        
+        // Choose emoji based on status
+        const statusEmoji = status.toLowerCase().includes('complete') ? '✅' : '⏳';
+        
+        // Create formatted text with emojis and separators
+        const formattedText = `📅 ${date} • 🕐 ${time} • ${statusEmoji} ${status} • ${notes}`;
+        
+        // Add as a bullet list item
+        processedBlocks.push({
+          type: 'bulletListItem',
+          content: [{
+            type: 'text',
+            text: formattedText,
+            styles: {}
+          }]
+        });
+      }
+    }
+  } else if (inHistorySection) {
+    // In history section but no entries collected
+  }
+  
+  // Processing complete
   
   // Cache the processed result
   const result = processedBlocks as unknown[];

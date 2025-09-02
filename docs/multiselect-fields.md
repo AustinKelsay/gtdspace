@@ -21,19 +21,22 @@ Examples:
 - `[!multiselect:tags:urgent,home]`
 - `[!multiselect:contexts:work,deep]`
 
-**Important Note on Legacy MultiSelect Markers:**
+**Important Note on Legacy MultiSelect Markers (Automatic Migration):**
 
-The legacy `!multiselect:status`, `!multiselect:effort`, and `!multiselect:project-status` markers are **no longer parsed, migrated, or preserved**. When a file containing these markers is loaded, they will be skipped and effectively dropped from the document.
+The legacy `!multiselect:status`, `!multiselect:effort`, and `!multiselect:project-status` markers are automatically migrated to their corresponding single-select fields when a file is loaded. The migration process in `src/utils/data-migration.ts` (specifically, `migrateMarkdownContent` function, lines 28-55) parses these legacy markers and converts them to single-select fields by taking the *first value* in the comma-separated list.
 
-**Example of Dropped Input:**
+**Example of Automatic Migration:**
 If your markdown contains:
 ```
 [!multiselect:status:in-progress,waiting]
 ```
-This marker will be ignored and removed when the file is loaded in the editor.
+When loaded, this marker will be automatically converted to:
+```
+[!singleselect:status:in-progress]
+```
+This ensures backward compatibility and preserves the primary value.
 
-**Recommended Migration:**
-To preserve this information, you must manually convert these to the new single-select format or recreate the options. For example, `[!multiselect:status:in-progress,waiting]` should be manually converted to `[!singleselect:status:in-progress]` (if only one status is desired) or the information should be re-entered using the appropriate single-select fields.
+For the exact migration logic, refer to the `migrateMarkdownContent` function in [`src/utils/data-migration.ts`](../src/utils/data-migration.ts#L28-L55).
 
 ## Manual Insertion
 You can manually insert multiselect fields for `contexts` using a keyboard shortcut:

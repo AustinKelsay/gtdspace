@@ -172,7 +172,7 @@ export function migrateGTDObject<T extends Record<string, any>>(obj: T): T {
       'complete': 'completed',
     };
     
-    const normalizedStatus = migrated.status.toLowerCase().replace(/\s+/g, '-');
+    const normalizedStatus = migrated.status.trim().toLowerCase().replace(/\s+/g, '-');
     // Use normalized value as fallback to ensure proper casing
     migrated.status = statusMappings[normalizedStatus] || normalizedStatus;
   }

@@ -66,6 +66,7 @@ interface CalendarEvent {
   endDate?: Date;  // Add end date for Google events
   endTime?: string; // Add end time display string
   duration?: number; // Duration in minutes for positioning
+  frequency?: string; // Habit frequency (for habit events)
   path: string;
   projectName?: string;
   effort?: string; // Effort level for actions
@@ -484,6 +485,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               date: eventDate,
               path: item.path,
               projectName: undefined,
+              frequency: item.frequency,
               time: formattedTime // Include the formatted time for display
             });
           });
@@ -1239,7 +1241,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           type: selectedEvent.type,
           status: selectedEvent.status as CalendarItemStatus,
           projectName: selectedEvent.projectName,
-          frequency: selectedEvent.type === 'habit' ? 'daily' : undefined,
+          frequency: selectedEvent.type === 'habit' ? selectedEvent.frequency : undefined,
           // Map dates to ExtendedCalendarItem fields
           focusDate: (selectedEvent.eventType === 'focus' || selectedEvent.type === 'google-event') ? selectedEvent.date.toISOString() : undefined,
           dueDate: (selectedEvent.eventType === 'due' || selectedEvent.type === 'google-event') ? selectedEvent.date.toISOString() : undefined,

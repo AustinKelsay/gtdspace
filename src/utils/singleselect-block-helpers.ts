@@ -57,10 +57,10 @@ export const mapStatusValue = (status: string): string => {
     'in-progress': 'in-progress',
     'waiting': 'waiting',
     'completed': 'completed',
+    'cancelled': 'cancelled',  // Preserve cancelled as its own status
     'active': 'in-progress',
     'planning': 'in-progress',
     'on-hold': 'waiting',
-    'cancelled': 'completed',  // Remap cancelled/canceled to completed
     'done': 'completed',
     'complete': 'completed',
     'todo': 'in-progress',
@@ -72,8 +72,13 @@ export const mapStatusValue = (status: string): string => {
   }
   
   // Log unmapped values for diagnostics
-  if (import.meta.env.DEV) {
-    console.warn(`[SingleSelect] Unmapped status value encountered: "${status}" (normalized: "${normalized}"), defaulting to "in-progress"`);
+  // Guard access to import.meta.env.DEV to prevent runtime errors outside Vite
+  try {
+    if (import.meta.env.DEV) {
+      console.warn(`[SingleSelect] Unmapped status value encountered: "${status}" (normalized: "${normalized}"), defaulting to "in-progress"`);
+    }
+  } catch {
+    // Silently ignore if import.meta is not available (non-Vite environments)
   }
   
   // Always return safe default for unknown values

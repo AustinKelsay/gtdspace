@@ -93,35 +93,42 @@ The editor uses these custom markdown markers:
 
 ```markdown
 # Single Select
+
 [!singleselect:status:in-progress] # Action status: in-progress|waiting|completed
 [!singleselect:effort:medium] # Effort: small|medium|large|extra-large
 [!singleselect:project-status:waiting] # Project status
 [!singleselect:habit-frequency:daily] # Habit frequency
 
 # DateTime
+
 [!datetime:due_date:2025-01-20] # Date only
 [!datetime:focus_date:2025-01-20T14:30:00] # Date with time
 [!datetime:created_date_time:2025-01-17T10:00:00Z] # ISO 8601
 
 # References & Lists
+
 [!references:path1.md,path2.md] # Links to Cabinet/Someday
 [!areas-references:path1.md] # Links to Areas
 [!projects-list] # Dynamic list of referencing projects
 
 # Checkbox (Habits)
+
 [!checkbox:habit-status:false] # Todo/complete state
 ```
 
 ### Critical Event Flow
 
 1. **Project Creation**:
+
    - `useGTDSpace.createProject()` → `invoke('create_gtd_project')` → dispatches `gtd-project-created` event
    - `GTDWorkspaceSidebar` listens for event → reloads projects
 
 2. **Content Updates**:
+
    - Editor change → `useTabManager` → `content-event-bus` → UI components update
 
 3. **File Operations**:
+
    - UI action → Tauri command → File system → File watcher (500ms) → UI refresh
 
 4. **Data Migration**:
@@ -141,7 +148,7 @@ The editor uses these custom markdown markers:
 Key hooks and their responsibilities:
 
 - `useGTDSpace` - Workspace initialization, project/action CRUD operations
-- `useTabManager` - Multi-tab editing with manual save (debounced, 2s for metadata)
+- `useTabManager` - Multi-tab editing with manual save (debounced, 500ms for metadata)
 - `useFileManager` - File system operations via Tauri
 - `useFileWatcher` - External change detection (500ms debounce)
 - `useCalendarData` - Aggregates all dated items (parallel reads)
@@ -222,6 +229,7 @@ Projects may not appear immediately after creation. The event system (`gtd-proje
 ### Google Calendar Auth
 
 If authentication fails:
+
 1. Check `.env` file exists with valid credentials
 2. Verify redirect URI is `http://localhost:9898/callback`
 3. Ensure port 9898 is free
@@ -229,7 +237,7 @@ If authentication fails:
 
 ### Large File Performance
 
-Files over 1MB may cause editor performance issues. The app uses manual save (debounced, 2s for metadata) to mitigate.
+Files over 1MB may cause editor performance issues. The app uses manual save (debounced, 500ms for metadata) to mitigate.
 
 ### Test Coverage
 
@@ -238,6 +246,7 @@ No automated testing framework is currently implemented. Manual testing is requi
 ### BlockNote Formatting Limitations
 
 Due to BlockNote's `blocksToMarkdownLossy` conversion, some rich text formatting is lost when saving:
+
 - Text colors and highlighting are not preserved
 - Advanced text styling may be simplified
 - Complex nested structures may be flattened

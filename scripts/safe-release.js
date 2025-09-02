@@ -269,31 +269,37 @@ async function main() {
     }
 
     let originalRemoteUrl = '';
-    if (process.env.CI && process.env.GITHUB_TOKEN) {
-      log('Configuring git for authenticated push in CI...', 'yellow');
-      originalRemoteUrl = execCommand('git remote get-url origin', true);
-      if (!originalRemoteUrl) {
-        exitWithError('Failed to get original remote URL.');
+    let remoteChanged = false;
+    
+    try {
+      if (process.env.CI && process.env.GITHUB_TOKEN) {
+        log('Configuring git for authenticated push in CI...', 'yellow');
+        originalRemoteUrl = execCommand('git remote get-url origin', true);
+        if (!originalRemoteUrl) {
+          exitWithError('Failed to get original remote URL.');
+        }
+        const repoSlug = process.env.GITHUB_REPOSITORY; // e.g., 'owner/repo'
+        const authenticatedRemoteUrl = `https://x-access-token:${process.env.GITHUB_TOKEN}@github.com/${repoSlug}.git`;
+        execCommand(`git remote set-url origin ${authenticatedRemoteUrl}`);
+        remoteChanged = true;
+        log('✓ Git remote URL configured for authentication', 'green');
       }
-      const repoSlug = process.env.GITHUB_REPOSITORY; // e.g., 'owner/repo'
-      const authenticatedRemoteUrl = `https://x-access-token:${process.env.GITHUB_TOKEN}@github.com/${repoSlug}.git`;
-      execCommand(`git remote set-url origin ${authenticatedRemoteUrl}`);
-      log('✓ Git remote URL configured for authentication', 'green');
-    }
 
-    // Push the current HEAD and the tag using execFile with explicit args
-    if (flags.has('--dry-run')) {
-      log('⚠ Dry run: Skipping git push commands.', 'yellow');
-    } else {
-      execCommandFile('git', ['push', 'origin', 'HEAD']);
-      execCommandFile('git', ['push', 'origin', `refs/tags/${tagName}`]);
-      log('✓ Pushed commits and tags to remote', 'green');
-    }
-
-    if (process.env.CI && process.env.GITHUB_TOKEN && originalRemoteUrl) {
-      log('Restoring original git remote URL...', 'yellow');
-      execCommand(`git remote set-url origin ${originalRemoteUrl}`);
-      log('✓ Original git remote URL restored', 'green');
+      // Push the current HEAD and the tag using execFile with explicit args
+      if (flags.has('--dry-run')) {
+        log('⚠ Dry run: Skipping git push commands.', 'yellow');
+      } else {
+        execCommandFile('git', ['push', 'origin', 'HEAD']);
+        execCommandFile('git', ['push', 'origin', `refs/tags/${tagName}`]);
+        log('✓ Pushed commits and tags to remote', 'green');
+      }
+    } finally {
+      // Always restore the original remote URL if it was changed
+      if (remoteChanged && originalRemoteUrl) {
+        log('Restoring original git remote URL...', 'yellow');
+        execCommand(`git remote set-url origin ${originalRemoteUrl}`);
+        log('✓ Original git remote URL restored', 'green');
+      }
     }
 
   } catch (error) {

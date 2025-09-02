@@ -92,10 +92,11 @@ export const HistoryBlock = createReactBlockSpec(
       const { block } = props;
       const entriesText = (block.props?.entries as string) || '';
       
-      // Parse entries
+      // Parse entries - trim lines before parsing
       const entries = entriesText
         .split('\n')
-        .filter(line => line.trim().startsWith('-'))
+        .map(line => line.trim())
+        .filter(line => line.startsWith('-'))
         .map(parseHistoryEntry)
         .filter((entry): entry is HistoryEntry => entry !== null);
       

@@ -676,9 +676,10 @@ export const AreasReferencesBlock = createReactBlockSpec(
         />
       );
     },
-    toExternalHTML: () => {
-      // Export as markdown marker for persistence
-      return <p>[!areas-references:]</p>;
+    toExternalHTML: (props) => {
+      // Export as markdown marker for persistence with references payload
+      const references = props.block.props.references || '';
+      return <p>{`[!areas-references:${references}]`}</p>;
     },
     parse: (element) => {
       const textContent = (element.textContent || '').replace(/\]\]$/, ']');
@@ -710,9 +711,10 @@ export const GoalsReferencesBlock = createReactBlockSpec(
         />
       );
     },
-    toExternalHTML: () => {
-      // Export as markdown marker for persistence
-      return <p>[!goals-references:]</p>;
+    toExternalHTML: (props) => {
+      // Export as markdown marker for persistence with references payload
+      const references = props.block.props.references || '';
+      return <p>{`[!goals-references:${references}]`}</p>;
     },
     parse: (element) => {
       const textContent = (element.textContent || '').replace(/\]\]$/, ']');
@@ -744,9 +746,10 @@ export const VisionReferencesBlock = createReactBlockSpec(
         />
       );
     },
-    toExternalHTML: () => {
-      // Export as markdown marker for persistence
-      return <p>[!vision-references:]</p>;
+    toExternalHTML: (props) => {
+      // Export as markdown marker for persistence with references payload
+      const references = props.block.props.references || '';
+      return <p>{`[!vision-references:${references}]`}</p>;
     },
     parse: (element) => {
       const textContent = (element.textContent || '').replace(/\]\]$/, ']');
@@ -778,9 +781,10 @@ export const PurposeReferencesBlock = createReactBlockSpec(
         />
       );
     },
-    toExternalHTML: () => {
-      // Export as markdown marker for persistence
-      return <p>[!purpose-references:]</p>;
+    toExternalHTML: (props) => {
+      // Export as markdown marker for persistence with references payload
+      const references = props.block.props.references || '';
+      return <p>{`[!purpose-references:${references}]`}</p>;
     },
     parse: (element) => {
       const textContent = (element.textContent || '').replace(/\]\]$/, ']');

@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { readFileText } from '@/hooks/useFileManager';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -188,7 +189,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
               const loadedHabits: GTDHabit[] = await Promise.all(
                 habitFiles.map(async (file) => {
                   try {
-                    const content = await invoke<string>('read_file', { path: file.path });
+                    const content = await readFileText(file.path);
                     const frequencyMatch = content.match(/\[!singleselect:habit-frequency:([^\]]+)\]/);
                     const checkboxStatus = content.match(/\[!checkbox:habit-status:(true|false)\]/);
                     const singleselectStatus = content.match(/\[!singleselect:habit-status:([^\]]+)\]/);
@@ -357,7 +358,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
             total += files.length;
             await Promise.all(files.map(async (file) => {
               try {
-                const content = await invoke<string>('read_file', { path: file.path });
+                const content = await readFileText(file.path);
                 // Match any status value, including legacy ones
                 const statusMatch = content.match(/\[!singleselect:status:([^\]]+)\]/i);
                 const raw = (statusMatch?.[1] || 'in-progress').toLowerCase().trim();

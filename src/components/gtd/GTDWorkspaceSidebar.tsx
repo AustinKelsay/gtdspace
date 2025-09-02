@@ -7,6 +7,7 @@
 import React from 'react';
 import { flushSync } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
+import { readFileText } from '@/hooks/useFileManager';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -307,7 +308,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       // Load status and due date for all actions in parallel
       const statusPromises = actions.map(async (action) => {
         try {
-          const content = await invoke<string>('read_file', { path: action.path });
+          const content = await readFileText(action.path);
           // Extract status from the markdown content
           // Look for [!singleselect:status:xxx] pattern - capture everything up to ]
           const match = content.match(/\[!singleselect:status:([^\]]+?)\]/i);

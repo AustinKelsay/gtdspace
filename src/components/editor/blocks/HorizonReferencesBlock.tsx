@@ -677,15 +677,26 @@ export const AreasReferencesBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: (props) => {
-      // Export as markdown marker for persistence with references payload
+      // Export as markdown marker for persistence with encoded references payload
       const references = props.block.props.references || '';
-      return <p>{`[!areas-references:${references}]`}</p>;
+      const encoded = encodeURIComponent(references);
+      return <p>{`[!areas-references:${encoded}]`}</p>;
     },
     parse: (element) => {
-      const textContent = (element.textContent || '').replace(/\]\]$/, ']');
-      const match = textContent.match(/\[!areas-references:([^\]]*)\]\]?/);
-      if (match) {
-        return { references: match[1] || '' };
+      const text = element.textContent || '';
+      // Find the start and end positions for robust parsing
+      const start = text.indexOf(':');
+      const end = text.lastIndexOf(']');
+      
+      if (start !== -1 && end > start) {
+        const raw = text.slice(start + 1, end);
+        try {
+          // Try to decode the payload
+          return { references: decodeURIComponent(raw) };
+        } catch {
+          // Backward compatibility: if decoding fails, use raw value
+          return { references: raw };
+        }
       }
       return { references: '' };
     },
@@ -712,15 +723,26 @@ export const GoalsReferencesBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: (props) => {
-      // Export as markdown marker for persistence with references payload
+      // Export as markdown marker for persistence with encoded references payload
       const references = props.block.props.references || '';
-      return <p>{`[!goals-references:${references}]`}</p>;
+      const encoded = encodeURIComponent(references);
+      return <p>{`[!goals-references:${encoded}]`}</p>;
     },
     parse: (element) => {
-      const textContent = (element.textContent || '').replace(/\]\]$/, ']');
-      const match = textContent.match(/\[!goals-references:([^\]]*)\]\]?/);
-      if (match) {
-        return { references: match[1] || '' };
+      const text = element.textContent || '';
+      // Find the start and end positions for robust parsing
+      const start = text.indexOf(':');
+      const end = text.lastIndexOf(']');
+      
+      if (start !== -1 && end > start) {
+        const raw = text.slice(start + 1, end);
+        try {
+          // Try to decode the payload
+          return { references: decodeURIComponent(raw) };
+        } catch {
+          // Backward compatibility: if decoding fails, use raw value
+          return { references: raw };
+        }
       }
       return { references: '' };
     },
@@ -747,15 +769,26 @@ export const VisionReferencesBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: (props) => {
-      // Export as markdown marker for persistence with references payload
+      // Export as markdown marker for persistence with encoded references payload
       const references = props.block.props.references || '';
-      return <p>{`[!vision-references:${references}]`}</p>;
+      const encoded = encodeURIComponent(references);
+      return <p>{`[!vision-references:${encoded}]`}</p>;
     },
     parse: (element) => {
-      const textContent = (element.textContent || '').replace(/\]\]$/, ']');
-      const match = textContent.match(/\[!vision-references:([^\]]*)\]\]?/);
-      if (match) {
-        return { references: match[1] || '' };
+      const text = element.textContent || '';
+      // Find the start and end positions for robust parsing
+      const start = text.indexOf(':');
+      const end = text.lastIndexOf(']');
+      
+      if (start !== -1 && end > start) {
+        const raw = text.slice(start + 1, end);
+        try {
+          // Try to decode the payload
+          return { references: decodeURIComponent(raw) };
+        } catch {
+          // Backward compatibility: if decoding fails, use raw value
+          return { references: raw };
+        }
       }
       return { references: '' };
     },
@@ -782,15 +815,26 @@ export const PurposeReferencesBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: (props) => {
-      // Export as markdown marker for persistence with references payload
+      // Export as markdown marker for persistence with encoded references payload
       const references = props.block.props.references || '';
-      return <p>{`[!purpose-references:${references}]`}</p>;
+      const encoded = encodeURIComponent(references);
+      return <p>{`[!purpose-references:${encoded}]`}</p>;
     },
     parse: (element) => {
-      const textContent = (element.textContent || '').replace(/\]\]$/, ']');
-      const match = textContent.match(/\[!purpose-references:([^\]]*)\]\]?/);
-      if (match) {
-        return { references: match[1] || '' };
+      const text = element.textContent || '';
+      // Find the start and end positions for robust parsing
+      const start = text.indexOf(':');
+      const end = text.lastIndexOf(']');
+      
+      if (start !== -1 && end > start) {
+        const raw = text.slice(start + 1, end);
+        try {
+          // Try to decode the payload
+          return { references: decodeURIComponent(raw) };
+        } catch {
+          // Backward compatibility: if decoding fails, use raw value
+          return { references: raw };
+        }
       }
       return { references: '' };
     },

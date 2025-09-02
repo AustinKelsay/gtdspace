@@ -26,7 +26,8 @@ import {
 import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { useCalendarData } from '@/hooks/useCalendarData';
 import type { MarkdownFile, GTDSpace } from '@/types';
-import type { GoogleCalendarSyncStatus, CalendarItemStatus } from '@/types/google-calendar';
+import type { GoogleCalendarSyncStatus, SyncStatus, CalendarItemStatus } from '@/types/google-calendar';
+import { mapGoogleCalendarSyncStatus } from '@/types/google-calendar';
 import { cn } from '@/lib/utils';
 import { EventDetailModal } from './EventDetailModal';
 
@@ -277,7 +278,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [googleSyncStatus, setGoogleSyncStatus] = useState<GoogleCalendarSyncStatus | null>(null);
+  const [googleSyncStatus, setGoogleSyncStatus] = useState<SyncStatus | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Modal and filter state
@@ -305,7 +306,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         }
         const status = await invoke<GoogleCalendarSyncStatus>('google_calendar_get_status');
         console.log('[CalendarView] Google Calendar status:', status);
-        setGoogleSyncStatus(status);
+        setGoogleSyncStatus(mapGoogleCalendarSyncStatus(status));
       } catch (error) {
         console.error('[CalendarView] Failed to load Google Calendar status:', error);
       }
@@ -328,7 +329,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       refresh();
       // Update sync status
       const status = await invoke<GoogleCalendarSyncStatus>('google_calendar_get_status');
-      setGoogleSyncStatus(status);
+      setGoogleSyncStatus(mapGoogleCalendarSyncStatus(status));
     } catch (error) {
       console.error('Failed to sync Google Calendar:', error);
     } finally {
@@ -717,7 +718,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
         <div className="flex items-center gap-2">
           {/* Google Calendar Sync Status */}
-          {googleSyncStatus?.is_connected && (
+          {googleSyncStatus?.isConnected && (
             <div className="flex items-center gap-2 mr-2">
               <Badge variant="outline" className="gap-1.5">
                 <Cloud className="h-3 w-3" />
@@ -727,13 +728,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 variant="ghost"
                 size="icon"
                 onClick={handleGoogleSync}
-                disabled={isSyncing || googleSyncStatus.sync_in_progress}
+                disabled={isSyncing || googleSyncStatus.syncInProgress}
                 className="h-7 w-7"
                 title="Sync Google Calendar"
               >
                 <RefreshCw className={cn(
                   "h-3.5 w-3.5",
-                  (isSyncing || googleSyncStatus.sync_in_progress) && "animate-spin"
+                  (isSyncing || googleSyncStatus.syncInProgress) && "animate-spin"
                 )} />
               </Button>
             </div>

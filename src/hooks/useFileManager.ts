@@ -435,6 +435,24 @@ export const useFileManager = () => {
     };
   }, [saveCurrentFile, selectFolder]);
 
+  // === UTILITY FUNCTIONS ===
+  
+  /**
+   * Read file text content directly (for external components)
+   * Encapsulates the Tauri invoke call with proper error handling
+   */
+  const readFileText = useCallback(async (path: string): Promise<string> => {
+    // Note: Hook version assumes we're already in Tauri context
+    // since the entire useFileManager hook requires Tauri
+    try {
+      const content = await invoke<string>('read_file', { path });
+      return content;
+    } catch (error) {
+      console.error('Failed to read file:', path, error);
+      throw new Error(`Failed to read file: ${error}`);
+    }
+  }, []);
+
   // === RETURN STATE AND OPERATIONS ===
   
   return {
@@ -448,7 +466,29 @@ export const useFileManager = () => {
     setSearchQuery,
     setEditorMode: setEditorModeLocal,
     refreshFiles,
+    readFileText,
   };
+};
+
+// Export the readFileText helper for external use
+// This standalone export is intentionally kept for components that need file reading
+// without instantiating the entire file manager state
+export const readFileText = async (path: string): Promise<string> => {
+  // Check if we're in Tauri context first
+  const { checkTauriContextAsync } = await import('@/utils/tauri-ready');
+  const inTauriContext = await checkTauriContextAsync();
+  
+  if (!inTauriContext) {
+    throw new Error('readFileText is only available in the Tauri runtime');
+  }
+  
+  try {
+    const content = await invoke<string>('read_file', { path });
+    return content;
+  } catch (error) {
+    console.error('Failed to read file:', path, error);
+    throw new Error(`Failed to read file: ${error}`);
+  }
 };
 
 export default useFileManager;

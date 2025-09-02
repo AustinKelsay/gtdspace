@@ -14,11 +14,11 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarIcon, RefreshCw, Link2, Link2Off, Clock, AlertCircle } from 'lucide-react';
-import type { GoogleCalendarSyncStatus } from '@/types/google-calendar';
+import type { SyncStatus } from '@/types/google-calendar';
 import { cn } from '@/lib/utils';
 
 export const GoogleCalendarSettings: React.FC = () => {
-  const [syncStatus, setSyncStatus] = useState<GoogleCalendarSyncStatus | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [autoSync, setAutoSync] = useState(false);
@@ -39,9 +39,9 @@ export const GoogleCalendarSettings: React.FC = () => {
         const lastSync = localStorage.getItem('google-calendar-last-sync');
 
         setSyncStatus({
-          is_connected: true,
-          last_sync: lastSync,
-          sync_in_progress: false,
+          isConnected: true,
+          lastSync: lastSync,
+          syncInProgress: false,
           error: null
         });
       }
@@ -62,9 +62,9 @@ export const GoogleCalendarSettings: React.FC = () => {
 
       // Mark as connected in the UI
       setSyncStatus({
-        is_connected: true,
-        last_sync: null,
-        sync_in_progress: false,
+        isConnected: true,
+        lastSync: null,
+        syncInProgress: false,
         error: null
       });
 
@@ -119,9 +119,9 @@ export const GoogleCalendarSettings: React.FC = () => {
 
       // Clear local state
       setSyncStatus({
-        is_connected: false,
-        last_sync: null,
-        sync_in_progress: false,
+        isConnected: false,
+        lastSync: null,
+        syncInProgress: false,
         error: null
       });
 
@@ -158,7 +158,7 @@ export const GoogleCalendarSettings: React.FC = () => {
         // Update UI
         setSyncStatus(prev => ({
           ...prev,
-          last_sync: now
+          lastSync: now
         }));
 
         toast({
@@ -224,7 +224,7 @@ export const GoogleCalendarSettings: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Label>Status:</Label>
-                {syncStatus?.is_connected ? (
+                {syncStatus?.isConnected ? (
                   <Badge variant="default" className="bg-green-600">
                     Connected
                   </Badge>
@@ -235,7 +235,7 @@ export const GoogleCalendarSettings: React.FC = () => {
                 )}
               </div>
 
-              {syncStatus?.is_connected ? (
+              {syncStatus?.isConnected ? (
                 <Button
                   variant="destructive"
                   size="sm"
@@ -258,13 +258,13 @@ export const GoogleCalendarSettings: React.FC = () => {
               )}
             </div>
 
-            {syncStatus?.is_connected && (
+            {syncStatus?.isConnected && (
               <>
                 <div className="flex items-center justify-between pt-2 border-t">
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">
-                      Last synced: {formatLastSync(syncStatus.last_sync)}
+                      Last synced: {formatLastSync(syncStatus.lastSync)}
                     </span>
                   </div>
 
@@ -272,13 +272,13 @@ export const GoogleCalendarSettings: React.FC = () => {
                     variant="outline"
                     size="sm"
                     onClick={handleSync}
-                    disabled={isSyncing || syncStatus.sync_in_progress}
+                    disabled={isSyncing || syncStatus.syncInProgress}
                   >
                     <RefreshCw className={cn(
                       "h-4 w-4 mr-2",
-                      (isSyncing || syncStatus.sync_in_progress) && "animate-spin"
+                      (isSyncing || syncStatus.syncInProgress) && "animate-spin"
                     )} />
-                    {isSyncing || syncStatus.sync_in_progress ? 'Syncing...' : 'Sync Now'}
+                    {isSyncing || syncStatus.syncInProgress ? 'Syncing...' : 'Sync Now'}
                   </Button>
                 </div>
 
@@ -294,7 +294,7 @@ export const GoogleCalendarSettings: React.FC = () => {
         </Card>
 
         {/* Sync Settings Card */}
-        {syncStatus?.is_connected && (
+        {syncStatus?.isConnected && (
           <Card>
             <CardHeader>
               <CardTitle>Sync Settings</CardTitle>

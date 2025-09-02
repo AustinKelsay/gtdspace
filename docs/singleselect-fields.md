@@ -41,18 +41,21 @@ You can manually insert single-select fields using keyboard shortcuts:
 
 The system continues to support `[!multiselect:tags:value1,value2]` for tags and categories, primarily for legacy content and specific use cases where multiple selections are genuinely needed.
 
-**Important: Dropped Legacy MultiSelect Markers**
-Please be aware that legacy `!multiselect:status`, `!multiselect:effort`, and `!multiselect:project-status` markers are **no longer supported**. They are skipped (not migrated or preserved) when files are loaded.
+**Automatic Migration of Legacy MultiSelect Markers**
+The system automatically migrates legacy `[!multiselect]` markers for `status`, `effort`, and `project-status` to the new `[!singleselect]` format. The migration utility uses the **first value** listed in the legacy marker.
 
-**Example of Dropped Input:**
-If your markdown contains:
+**Before and After Migration Example:**
+If your markdown contains a legacy marker with multiple values:
 ```
 [!multiselect:status:in-progress,waiting]
 ```
-This marker will be ignored and removed when the file is loaded in the editor.
+It will be automatically converted to a `singleselect` marker using the first value:
+```
+[!singleselect:status:in-progress]
+```
 
-**Recommended Migration:**
-Users with existing content using these legacy multi-select markers for status, effort, or project-status must manually migrate this data. Convert them to the new single-select format (e.g., `[!singleselect:status:in-progress]`) or manually re-enter the information using the appropriate single-select fields.
+**Migration Guidance:**
+Because the automatic migration only preserves the first value, it is important to **verify your data** after the migration. If a different value was intended, you can manually adjust it using the dropdown in the editor. For example, if `waiting` was the desired status in the example above, you would need to manually change it from `in-progress` to `waiting`.
 
 ## Real-time Updates
 - Status changes are immediately reflected in the sidebar

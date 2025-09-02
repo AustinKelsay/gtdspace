@@ -9,6 +9,7 @@ import { FileText, MoreHorizontal, Edit3, Trash2, Copy, Move, Clock, Calendar, C
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { readFileText } from '@/hooks/useFileManager';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +37,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { invoke } from '@tauri-apps/api/core';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import type { FileItemProps } from '@/types';
 import { mapStatusValue } from '@/utils/singleselect-block-helpers'; // Import the shared normalizer
@@ -82,7 +82,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
       if (file.name === 'README.md' && file.path.includes('/Projects/')) {
         try {
           const content = await withErrorHandling(
-            async () => await invoke<string>('read_file', { path: file.path }),
+            async () => await readFileText(file.path),
             'Failed to read project file'
           );
           
@@ -103,7 +103,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
       else if (file.path.includes('/Projects/') && file.name !== 'README.md' && file.name.endsWith('.md')) {
         try {
           const content = await withErrorHandling(
-            async () => await invoke<string>('read_file', { path: file.path }),
+            async () => await readFileText(file.path),
             'Failed to read action file'
           );
           

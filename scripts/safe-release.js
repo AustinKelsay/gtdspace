@@ -274,13 +274,13 @@ async function main() {
     try {
       if (process.env.CI && process.env.GITHUB_TOKEN) {
         log('Configuring git for authenticated push in CI...', 'yellow');
-        originalRemoteUrl = execCommand('git remote get-url origin', true);
+        originalRemoteUrl = execCommandFile('git', ['remote', 'get-url', 'origin'], true);
         if (!originalRemoteUrl) {
           exitWithError('Failed to get original remote URL.');
         }
         const repoSlug = process.env.GITHUB_REPOSITORY; // e.g., 'owner/repo'
         const authenticatedRemoteUrl = `https://x-access-token:${process.env.GITHUB_TOKEN}@github.com/${repoSlug}.git`;
-        execCommand(`git remote set-url origin ${authenticatedRemoteUrl}`);
+        execCommandFile('git', ['remote', 'set-url', 'origin', authenticatedRemoteUrl]);
         remoteChanged = true;
         log('✓ Git remote URL configured for authentication', 'green');
       }
@@ -297,7 +297,7 @@ async function main() {
       // Always restore the original remote URL if it was changed
       if (remoteChanged && originalRemoteUrl) {
         log('Restoring original git remote URL...', 'yellow');
-        execCommand(`git remote set-url origin ${originalRemoteUrl}`);
+        execCommandFile('git', ['remote', 'set-url', 'origin', originalRemoteUrl]);
         log('✓ Original git remote URL restored', 'green');
       }
     }

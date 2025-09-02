@@ -4814,20 +4814,25 @@ pub async fn google_calendar_start_auth(app: AppHandle) -> Result<String, String
             res
         }
         Err(e) => {
-            // Check if this is a BrowserOpenError - if so, we could provide manual instructions
-            // For now, we just log the error (which will use the safe redacted URL)
-            eprintln!("[GoogleCalendar] Failed to open browser: {}", e);
-
-            // If we can downcast to BrowserOpenError, we could access auth_url for manual opening
-            // but for security reasons we're not exposing the full URL in the error message
+            // If this is a BrowserOpenError, serialize details for UI manual fallback
             if let Some(browser_err) = e.downcast_ref::<BrowserOpenError>() {
-                eprintln!(
-                    "[GoogleCalendar] Authorization URL (redacted): {}",
-                    browser_err.redacted_auth_url
-                );
+                // Build a JSON string containing fields needed for manual OAuth fallback.
+                // Do not log this payload; it is returned to the UI only.
+                let payload = serde_json::json!({
+                    "type": "browser_open_error",
+                    "message": e.to_string(),
+                    "redacted_auth_url": browser_err.redacted_auth_url,
+                    // Sensitive fields included for UI manual flow:
+                    "auth_url": browser_err.auth_url(),
+                    "state": browser_err.state(),
+                    "code_verifier": browser_err.code_verifier(),
+                })
+                .to_string();
+                return Err(payload);
             }
 
-            return Err("Failed to open browser for OAuth authentication. Please check the logs for details.".to_string());
+            // Fallback: return stringified error
+            return Err(e.to_string());
         }
     };
 

@@ -4,6 +4,19 @@ use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex};
 use warp::{http::StatusCode, Filter};
+// Basic HTML escaping to prevent reflected XSS in error messages
+fn escape_html(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '&' => "&amp;".into(),
+            '<' => "&lt;".into(),
+            '>' => "&gt;".into(),
+            '"' => "&quot;".into(),
+            '\'' => "&#39;".into(),
+            _ => c.to_string(),
+        })
+        .collect()
+}
 
 #[derive(Debug, Deserialize)]
 struct OAuthCallback {
@@ -495,7 +508,7 @@ impl OAuthCallbackServer {
                                 </body>
                                 </html>
                                 "#,
-                                    error
+                                    escape_html(&error)
                                 ),
                             ),
                             StatusCode::BAD_REQUEST,

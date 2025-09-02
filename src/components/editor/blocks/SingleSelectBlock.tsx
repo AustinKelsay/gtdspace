@@ -146,6 +146,9 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
   const handleChange = React.useCallback(async (newValue: string) => {
     const selectedValue = newValue; // Use immutable copy to avoid mutation issues
     const previousValue = block.props.value; // Capture previous value for reverting on failure
+    
+    // Track whether the update should be applied to the document
+    let updateApplied = type !== 'habit-status'; // Default true for non-habit fields
 
     // If this is a habit status field, update the backend
     if (type === 'habit-status') {
@@ -170,6 +173,9 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                   habitPath: currentPath,
                   newStatus: selectedValue,
                 });
+                
+                // Mark update as successfully applied
+                updateApplied = true;
 
                 // After marking as complete, backend immediately resets to "todo"
                 // Update the UI to reflect this
@@ -287,9 +293,11 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
       return false;
     };
 
-    // Try the update
-    if (!findAndUpdateBlock()) {
-      console.warn('Could not find block to update, value may not persist');
+    // Try the update only if it was successfully applied (or for non-habit fields)
+    if (updateApplied) {
+      if (!findAndUpdateBlock()) {
+        console.warn('Could not find block to update, value may not persist');
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, block.id, block.props.value, block.props.type, block.props.label, props.editor, filePath, findBlockInDocument]);

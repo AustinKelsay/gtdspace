@@ -506,7 +506,16 @@ pub fn generate_action_template(
     ));
 
     // Always add due date section (with value if provided, empty if not)
-    let due_value = due_date.unwrap_or_default();
+    let due_value = due_date.map_or_else(String::new, |d| {
+        // Attempt to parse as RFC3339 and format to YYYY-MM-DD
+        if let Ok(datetime) = chrono::DateTime::parse_from_rfc3339(&d) {
+            datetime.format("%Y-%m-%d").to_string()
+        } else {
+            // If parsing fails, it might already be in a date-like format or empty.
+            // We'll take the first 10 chars if it looks like a date.
+            d.chars().take(10).collect()
+        }
+    });
     template.push_str(&format!(
         r#"
 ## Due Date

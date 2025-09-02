@@ -6,8 +6,7 @@
 
 import React, { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { join } from '@tauri-apps/api/path';
-import { isTauriContext } from '@/utils/tauri-ready';
+import { checkTauriContextAsync, isTauriContext } from '@/utils/tauri-ready';
 import {
   Dialog,
   DialogContent,
@@ -97,8 +96,10 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
           }
 
           // Prefer the backend-created path, fallback to OS-safe join
+          // Ensure Tauri context check runs first to prime the cache
+          await checkTauriContextAsync();
           const filePath = createResult.path || (isTauriContext()
-            ? await join(directory, fileName)
+            ? await import('@tauri-apps/api/path').then(m => m.join(directory, fileName))
             : `${directory}/${fileName}`);
 
           // The backend create_file already provides appropriate templates

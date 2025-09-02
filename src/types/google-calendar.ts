@@ -17,11 +17,30 @@ export interface GoogleCalendarEvent {
   color_id?: string;
 }
 
+// Backend returns snake_case fields
 export interface GoogleCalendarSyncStatus {
   is_connected: boolean;
   last_sync?: string;
   sync_in_progress: boolean;
   error?: string;
+}
+
+// Frontend uses camelCase fields
+export interface SyncStatus {
+  isConnected: boolean;
+  lastSync?: string;
+  syncInProgress: boolean;
+  error?: string;
+}
+
+// Mapper function to convert from backend snake_case to frontend camelCase
+export function mapGoogleCalendarSyncStatus(status: GoogleCalendarSyncStatus): SyncStatus {
+  return {
+    isConnected: status.is_connected,
+    lastSync: status.last_sync,
+    syncInProgress: status.sync_in_progress,
+    error: status.error,
+  };
 }
 
 // GTD task/project statuses

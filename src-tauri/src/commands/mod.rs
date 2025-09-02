@@ -102,11 +102,12 @@ fn parse_last_habit_action_time(content: &str) -> Option<chrono::NaiveDateTime> 
 
         // Parse the datetime
         let datetime_str = format!("{} {}", date_str, time_str);
-        
+
         // Try parsing with 12-hour format first (e.g., "7:26 PM")
         let parsed_time = if time_str.contains("AM") || time_str.contains("PM") {
-            chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %-I:%M %p")
-                .or_else(|_| chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %I:%M %p"))
+            chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %-I:%M %p").or_else(
+                |_| chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %I:%M %p"),
+            )
         } else {
             // Fall back to 24-hour format
             chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M")
@@ -927,8 +928,12 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
     let is_in_projects = dir_path.components().any(|c| c.as_os_str() == "Projects");
     let is_in_vision = dir_path.components().any(|c| c.as_os_str() == "Vision");
     let is_in_goals = dir_path.components().any(|c| c.as_os_str() == "Goals");
-    let is_in_areas = dir_path.components().any(|c| c.as_os_str() == "Areas of Focus");
-    let is_in_purpose = dir_path.components().any(|c| c.as_os_str() == "Purpose & Principles");
+    let is_in_areas = dir_path
+        .components()
+        .any(|c| c.as_os_str() == "Areas of Focus");
+    let is_in_purpose = dir_path
+        .components()
+        .any(|c| c.as_os_str() == "Purpose & Principles");
     let is_in_habits = dir_path.components().any(|c| c.as_os_str() == "Habits");
 
     // Check if this is a project directory (has README.md)
@@ -2134,7 +2139,13 @@ pub fn find_reverse_relationships(
         "areas" => vec!["Areas of Focus"],
         "goals" => vec!["Goals"],
         "visions" => vec!["Vision"],
-        _ => vec!["Projects", "Areas of Focus", "Goals", "Vision", "Purpose & Principles"],
+        _ => vec![
+            "Projects",
+            "Areas of Focus",
+            "Goals",
+            "Vision",
+            "Purpose & Principles",
+        ],
     };
 
     // Search through each directory
@@ -2230,10 +2241,8 @@ pub fn find_reverse_relationships(
                     let matches_tag = |tag: &str| {
                         let start = format!("[!{}:", tag);
                         content_normalized.contains(&start)
-                            && (
-                                content_normalized.contains(&json_format)
-                                    || content_normalized.contains(&format!("{}{}", start, csv_format))
-                            )
+                            && (content_normalized.contains(&json_format)
+                                || content_normalized.contains(&format!("{}{}", start, csv_format)))
                     };
 
                     // Determine which tags to check
@@ -2290,37 +2299,42 @@ pub fn find_reverse_relationships(
                             for cap in re.captures_iter(&content) {
                                 if let Some(refs) = cap.get(1) {
                                     let refs_str = refs.as_str().trim();
-                                    
+
                                     // Handle both JSON array format and CSV format
-                                    let paths: Vec<String> = if refs_str.starts_with('[') && refs_str.ends_with(']') {
-                                        // JSON array format: ["path1","path2"]
-                                        // Parse as JSON array
-                                        match serde_json::from_str::<Vec<String>>(refs_str) {
-                                            Ok(json_paths) => json_paths
-                                                .into_iter()
-                                                .map(|p| p.replace('\\', "/"))
-                                                .collect(),
-                                            Err(_) => {
-                                                // Fallback: try to extract paths manually
-                                                refs_str
-                                                    .trim_start_matches('[')
-                                                    .trim_end_matches(']')
-                                                    .split(',')
-                                                    .map(|p| p.trim().trim_matches('"').replace('\\', "/"))
-                                                    .filter(|p| !p.is_empty())
-                                                    .map(|p| p.to_string())
-                                                    .collect()
+                                    let paths: Vec<String> =
+                                        if refs_str.starts_with('[') && refs_str.ends_with(']') {
+                                            // JSON array format: ["path1","path2"]
+                                            // Parse as JSON array
+                                            match serde_json::from_str::<Vec<String>>(refs_str) {
+                                                Ok(json_paths) => json_paths
+                                                    .into_iter()
+                                                    .map(|p| p.replace('\\', "/"))
+                                                    .collect(),
+                                                Err(_) => {
+                                                    // Fallback: try to extract paths manually
+                                                    refs_str
+                                                        .trim_start_matches('[')
+                                                        .trim_end_matches(']')
+                                                        .split(',')
+                                                        .map(|p| {
+                                                            p.trim()
+                                                                .trim_matches('"')
+                                                                .replace('\\', "/")
+                                                        })
+                                                        .filter(|p| !p.is_empty())
+                                                        .map(|p| p.to_string())
+                                                        .collect()
+                                                }
                                             }
-                                        }
-                                    } else {
-                                        // CSV format: path1,path2
-                                        refs_str
-                                            .split(',')
-                                            .map(|p| p.trim().replace('\\', "/"))
-                                            .filter(|p| !p.is_empty())
-                                            .map(|p| p.to_string())
-                                            .collect()
-                                    };
+                                        } else {
+                                            // CSV format: path1,path2
+                                            refs_str
+                                                .split(',')
+                                                .map(|p| p.trim().replace('\\', "/"))
+                                                .filter(|p| !p.is_empty())
+                                                .map(|p| p.to_string())
+                                                .collect()
+                                        };
 
                                     // Check if any path matches the target
                                     for path in paths {

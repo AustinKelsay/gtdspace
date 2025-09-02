@@ -2223,37 +2223,51 @@ pub fn find_reverse_relationships(
                 let has_reference = {
                     // Check for JSON array format: ["path"]
                     let json_format = format!(r#""{}""#, target_normalized);
-                    // Check for CSV format: path
+                    // CSV format is the normalized path itself
                     let csv_format = target_normalized.clone();
-                    
-                    let found = if filter_type == "projects" && dir_name == "Projects" {
-                        // Projects can reference areas, goals, vision, or purpose
-                        content_normalized.contains(&format!("[!areas-references:"))
-                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!areas-references:{}", csv_format)))
-                        || content_normalized.contains(&format!("[!goals-references:"))
-                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!goals-references:{}", csv_format)))
-                        || content_normalized.contains(&format!("[!vision-references:"))
-                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!vision-references:{}", csv_format)))
-                        || content_normalized.contains(&format!("[!purpose-references:"))
-                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!purpose-references:{}", csv_format)))
-                    } else {
-                        // For other types, check all reference patterns including generic references
-                        content_normalized.contains(&format!("[!areas-references:"))
-                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!areas-references:{}", csv_format)))
-                        || content_normalized.contains(&format!("[!goals-references:"))
-                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!goals-references:{}", csv_format)))
-                        || content_normalized.contains(&format!("[!vision-references:"))
-                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!vision-references:{}", csv_format)))
-                        || content_normalized.contains(&format!("[!purpose-references:"))
-                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!purpose-references:{}", csv_format)))
-                        || content_normalized.contains(&format!("[!references:"))
-                            && (content_normalized.contains(&json_format) || content_normalized.contains(&format!("[!references:{}", csv_format)))
+
+                    // Helper to test a single reference tag
+                    let matches_tag = |tag: &str| {
+                        let start = format!("[!{}:", tag);
+                        content_normalized.contains(&start)
+                            && (
+                                content_normalized.contains(&json_format)
+                                    || content_normalized.contains(&format!("{}{}", start, csv_format))
+                            )
                     };
-                    
-                    if found {
+
+                    // Determine which tags to check
+                    let tags_projects = [
+                        "areas-references",
+                        "goals-references",
+                        "vision-references",
+                        "purpose-references",
+                    ];
+                    let tags_all = [
+                        "areas-references",
+                        "goals-references",
+                        "vision-references",
+                        "purpose-references",
+                        "references",
+                    ];
+                    let tags: &[&str] = if filter_type == "projects" && dir_name == "Projects" {
+                        &tags_projects
+                    } else {
+                        &tags_all
+                    };
+
+                    let mut found_any = false;
+                    for tag in tags {
+                        if matches_tag(tag) {
+                            found_any = true;
+                            break;
+                        }
+                    }
+
+                    if found_any {
                         log::info!("Found reference match for: {}", target_normalized);
                     }
-                    found
+                    found_any
                 };
 
                 if has_reference {
@@ -2281,22 +2295,22 @@ pub fn find_reverse_relationships(
                                     let paths: Vec<String> = if refs_str.starts_with('[') && refs_str.ends_with(']') {
                                         // JSON array format: ["path1","path2"]
                                         // Parse as JSON array
-                                        if let Ok(json_paths) = serde_json::from_str::<Vec<String>>(refs_str) {
-                                            json_paths.into_iter()
+                                        match serde_json::from_str::<Vec<String>>(refs_str) {
+                                            Ok(json_paths) => json_paths
+                                                .into_iter()
                                                 .map(|p| p.replace('\\', "/"))
-                                                .collect()
-                                        } else {
-                                            // Fallback: try to extract paths manually
-                                            refs_str
-                                                .trim_start_matches('[')
-                                                .trim_end_matches(']')
-                                                .split(',')
-                                                .map(|p| {
-                                                    p.trim().trim_matches('"').replace('\\', "/")
-                                                })
-                                                .filter(|p| !p.is_empty())
-                                                .map(|p| p.to_string())
-                                                .collect()
+                                                .collect(),
+                                            Err(_) => {
+                                                // Fallback: try to extract paths manually
+                                                refs_str
+                                                    .trim_start_matches('[')
+                                                    .trim_end_matches(']')
+                                                    .split(',')
+                                                    .map(|p| p.trim().trim_matches('"').replace('\\', "/"))
+                                                    .filter(|p| !p.is_empty())
+                                                    .map(|p| p.to_string())
+                                                    .collect()
+                                            }
                                         }
                                     } else {
                                         // CSV format: path1,path2

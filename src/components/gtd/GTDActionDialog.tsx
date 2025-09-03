@@ -78,6 +78,8 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
         dueDate: dueDateOnly,
         effort,
         contexts: contexts.length > 0 ? contexts : undefined,
+        // TODO: Add notes field when backend supports it
+        // notes: notes.trim() ? notes : undefined,
       };
 
       console.log('[GTDActionDialog] Calling createAction with:', actionData);
@@ -170,6 +172,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
                   <SelectItem value="small">Small (&lt;30 min)</SelectItem>
                   <SelectItem value="medium">Medium (30-90 min)</SelectItem>
                   <SelectItem value="large">Large (&gt;90 min)</SelectItem>
+                  <SelectItem value="extra-large">Extra Large (&gt;3 hours)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

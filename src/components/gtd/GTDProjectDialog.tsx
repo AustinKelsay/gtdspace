@@ -51,7 +51,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       status,
       spacePath
     });
-    
+
     if (!projectName.trim() || !description.trim()) {
       console.log('[GTDProjectDialog] Validation failed - missing name or description');
       return;
@@ -59,14 +59,14 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
 
     console.log('[GTDProjectDialog] Setting isCreating to true');
     setIsCreating(true);
-    
+
     try {
       // Use date-only format (YYYY-MM-DD) as per type definition
       const dueDateOnly: string | null = dueDate || null;
-      
+
       const projectData: GTDProjectCreate = {
-        space_path: spacePath,
-        project_name: projectName.trim(),
+        spacePath: spacePath,
+        projectName: projectName.trim(),
         description: description.trim(),
         dueDate: dueDateOnly,
         status: status,
@@ -83,13 +83,13 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
         setDueDate('');
         setDueTime('');
         setStatus('in-progress');
-        
+
         // Call success callback if provided
         if (onSuccess) {
           console.log('[GTDProjectDialog] Calling onSuccess callback');
           onSuccess();
         }
-        
+
         onClose();
       }
     } catch (error) {

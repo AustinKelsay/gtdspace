@@ -2,56 +2,51 @@
 
 ## 🚀 Creating a New Release
 
-### Fastest Method (Patch Release)
+### Fully Automated Release (Recommended)
+
+The `npm run release` command (and its `:minor`, `:major` variants) is the recommended method.
 
 ```bash
+# For a patch release (e.g., 0.1.0 → 0.1.1)
 npm run release
+
+# Or for other types:
+npm run release:minor
+npm run release:major
 ```
 
-This command will automatically:
+This command automates the entire process:
+1.  Runs pre-flight checks (clean git status, up-to-date branch, tests, linting).
+2.  Bumps the version in `package.json`, `Cargo.toml`, and `tauri.conf.json`.
+3.  Creates a Git commit and a version tag (e.g., `v0.1.1`).
+4.  **Pushes the commit and tag to the remote `origin` repository.**
+5.  This push automatically triggers the GitHub Actions release workflow.
 
-1. Bump the patch version
-2. Create a git commit and tag
-3. Instructs you to push the commit and tag to GitHub. You will need to run `git push && git push --tags` manually.
-4. Trigger the GitHub Actions build and release process
+### Semi-Automated Release (Manual Push)
 
-### Other Version Types
-
-These commands bump the version and create a local commit and tag:
-
-```bash
-npm run release:minor  # 0.1.0 → 0.2.0
-npm run release:major  # 0.1.0 → 1.0.0
-npm run release:patch  # 0.1.0 → 0.1.1
-```
-
-Then push commits and tags:
+If you prefer to push manually, use the `version:*` scripts. These perform the version bump and create a local commit and tag, but do **not** push to the remote.
 
 ```bash
-git push && git push --tags
-```
-
-Alternatively, to only bump the version and create a local commit and tag without automatically pushing, use the `version:*` commands. You will need to push manually afterward.
-
-```bash
-# Bump version, create local commit and tag only (no auto-push):
+# Bump version and create local commit/tag:
+npm run version:patch
 npm run version:minor
 npm run version:major
-npm run version:patch
 
-# Then, push the changes manually:
+# Then, push manually to trigger the release workflow:
 git push --follow-tags
 ```
 
-## 📦 What Happens Next?
+## 📦 What Happens Next? The CI/CD Pipeline
 
-After pushing a tag, GitHub Actions automatically:
+Pushing a tag matching `v*` (e.g., `v1.2.3`) triggers the `build.yml` workflow in GitHub Actions, which handles the rest of the release process:
 
-1. Builds for Windows, macOS (Intel & Apple Silicon), and Linux
-2. Releases are published automatically by the CI via the `finalize-release` job in `.github/workflows/build.yml`.
-3. The VERSION environment variable is automatically set from the git tag - no manual configuration needed
+1.  **Create Draft Release**: A draft release is created on GitHub using the tag. This is done by the `actions/create-release` action with `draft: true`.
+2.  **Build Artifacts**: The application is built in parallel for all target platforms (Windows, macOS x64/aarch64, Linux).
+3.  **Publish and Upload**: Once all builds are successful, the `finalize-release` job runs. It uses `softprops/action-gh-release@v2` to:
+    *   Publish the draft release (by setting `draft: false`).
+    *   Upload all the compiled application installers and bundles (e.g., `.msi`, `.dmg`, `.AppImage`) to the release page.
 
-Monitor progress: [GitHub Actions](https://github.com/AustinKelsay/gtdspace/actions)
+You can monitor the progress in the [GitHub Actions tab](https://github.com/AustinKelsay/gtdspace/actions).
 
 ## 📋 Pre-Release Checklist
 

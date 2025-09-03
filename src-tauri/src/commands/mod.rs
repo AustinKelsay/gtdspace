@@ -979,9 +979,6 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
 ## The Picture of Success
 *Describe what success looks like in 3-5 years...*
 
-## Key Milestones
-- 
-
 ## Supporting Goals
 
 [!goals-list]
@@ -1011,9 +1008,6 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
 
 ## Outcome
 *What specific outcome will be achieved?*
-
-## Success Criteria
-- 
 
 ## Aligned With
 
@@ -1045,9 +1039,6 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
 
 ## Standards
 *What does excellence look like in this area?*
-
-## Current Focus
-- 
 
 ## Aligned With
 
@@ -3238,7 +3229,7 @@ pub fn create_gtd_project(
 /// * `action_name` - Name of the action
 /// * `status` - Initial status (In Progress / Waiting / Completed)
 /// * `due_date` - Optional due date (ISO format: YYYY-MM-DD)
-/// * `effort` - Effort estimate (Small / Medium / Large)
+/// * `effort` - Effort estimate (Small / Medium / Large / Extra Large)
 ///
 /// # Returns
 ///
@@ -3300,10 +3291,14 @@ pub fn create_gtd_action(
     }
 
     let effort_value = match effort.as_str() {
-        "Small" => "small",
-        "Medium" => "medium",
-        "Large" => "large",
-        _ => "medium",
+        "Small" | "small" => "small",
+        "Medium" | "medium" => "medium",
+        "Large" | "large" => "large",
+        "Extra Large" | "ExtraLarge" | "extra-large" | "extra_large" => "extra-large",
+        _ => {
+            log::warn!("Unknown effort value '{}', defaulting to 'medium'", effort);
+            "medium"
+        }
     };
 
     // Map contexts to normalized values for multiselect
@@ -3746,7 +3741,7 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                             // For historical periods during backfilling:
                             // These were missed (not completed) since the app wasn't running
                             period_status = "To Do";
-                            notes = "Missed (app offline)";
+                            notes = "Missed - app offline";
                         } else {
                             // Current period - record the actual status before reset
                             // If it's still "todo", that means it was missed

@@ -279,6 +279,14 @@ async function main() {
           exitWithError('Failed to get original remote URL.');
         }
         const repoSlug = process.env.GITHUB_REPOSITORY; // e.g., 'owner/repo'
+        const repoSlugPattern = /^[a-zA-Z0-9-]+\/[a-zA-Z0-9-._]+$/;
+
+        if (!repoSlug || !repoSlugPattern.test(repoSlug)) {
+          exitWithError(
+            `Invalid or missing GITHUB_REPOSITORY environment variable: "${repoSlug}". Expected format: "owner/repo".`
+          );
+        }
+
         const authenticatedRemoteUrl = `https://x-access-token:${process.env.GITHUB_TOKEN}@github.com/${repoSlug}.git`;
         execCommandFile('git', ['remote', 'set-url', 'origin', authenticatedRemoteUrl]);
         remoteChanged = true;

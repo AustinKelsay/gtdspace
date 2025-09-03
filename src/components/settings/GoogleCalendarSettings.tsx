@@ -155,11 +155,18 @@ export const GoogleCalendarSettings: React.FC = () => {
         const now = new Date().toISOString();
         localStorage.setItem('google-calendar-last-sync', now);
 
-        // Update UI
-        setSyncStatus(prev => ({
+        // Update UI - guard against null prev
+        setSyncStatus(prev => prev ? {
           ...prev,
-          lastSync: now
-        }));
+          lastSync: now,
+          syncInProgress: false,
+          error: null
+        } : {
+          isConnected: true,  // Successful sync means we're connected
+          syncInProgress: false,
+          lastSync: now,
+          error: null
+        });
 
         toast({
           title: 'Calendar Synced',

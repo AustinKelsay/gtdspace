@@ -300,7 +300,8 @@ export const useCalendarData = (
               const singleSelectStatus = parseSingleSelectField(content, 'habit-status');
               if (singleSelectStatus) {
                 // Normalize singleselect values to 'completed' or 'todo'
-                habitStatus = singleSelectStatus.toLowerCase() === 'completed' ? 'completed' : 'todo';
+                // Accept both 'complete' and 'completed' for backward compatibility
+                habitStatus = (singleSelectStatus.toLowerCase() === 'complete' || singleSelectStatus.toLowerCase() === 'completed') ? 'completed' : 'todo';
               } else {
                 // Fall back to checkbox field (older format)
                 habitStatus = parseCheckboxField(content, 'habit-status') ? 'completed' : 'todo';

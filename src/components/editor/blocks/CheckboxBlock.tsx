@@ -100,7 +100,7 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
           const result = await withErrorHandling(
             async () => {
               // Convert checkbox state to status values for backend
-              const statusValue = checkedVal ? 'completed' : 'todo';
+              const statusValue = checkedVal ? 'complete' : 'todo';
 
               // Gracefully bail out if not in Tauri/browser-only envs
               try {

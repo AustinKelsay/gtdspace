@@ -582,7 +582,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
             // Parse entries and create formatted list items
             for (const entry of entryMatches) {
               // Format: - **2025-09-01** at **8:40 PM**: Complete (Manual - Changed from To Do)
-              const match = entry.match(/^- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*([^*]+)\*\*: ([^(]+) \(([^)]+)\)$/);
+              const match = entry.match(/^- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*([^*]+)\*\*: ([^(]+) \((.+)\)$/);
               if (match) {
                 const date = match[1];
                 const time = match[2];
@@ -917,7 +917,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
     // Parse entries and create formatted list items
     for (const entry of historyEntries) {
       const entryText = entry.startsWith('- ') ? entry : `- ${entry}`;
-      const match = entryText.match(/^- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*([^*]+)\*\*: ([^(]+) \(([^)]+)\)$/);
+      const match = entryText.match(/^- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*([^*]+)\*\*: ([^(]+) \((.+)\)$/);
       if (match) {
         const date = match[1];
         const time = match[2];

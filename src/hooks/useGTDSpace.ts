@@ -145,8 +145,8 @@ export function useGTDSpace() {
         const result = await withErrorHandling(
           async () => {
             const projectPath = await invoke<string>('create_gtd_project', {
-              spacePath: params.space_path,
-              projectName: params.project_name,
+              spacePath: params.spacePath,
+              projectName: params.projectName,
               description: params.description,
               dueDate: params.dueDate || undefined,
               status: params.status || 'in-progress',
@@ -154,7 +154,7 @@ export function useGTDSpace() {
             
             // Create project object for state update
             const newProject: GTDProject = {
-              name: params.project_name,
+              name: params.projectName,
               description: params.description,
               dueDate: params.dueDate,
               status: params.status || 'in-progress',
@@ -179,11 +179,11 @@ export function useGTDSpace() {
         );
 
         if (result) {
-          showSuccess(`Project "${params.project_name}" created successfully`);
+          showSuccess(`Project "${params.projectName}" created successfully`);
           
           // Emit custom event to trigger sidebar refresh
           window.dispatchEvent(new CustomEvent('gtd-project-created', {
-            detail: { projectPath: result, projectName: params.project_name }
+            detail: { projectPath: result, projectName: params.projectName }
           }));
         }
         

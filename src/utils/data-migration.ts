@@ -154,10 +154,7 @@ export function migrateGTDObject<T extends Record<string, any>>(obj: T): T {
     delete migrated.modified_date;
   }
   
-  // Ensure status is a single value, not an array
-  if ('status' in migrated && Array.isArray(migrated.status)) {
-    migrated.status = migrated.status[0] || 'in-progress';
-  }
+  
   
   // Map old status values to canonical tokens
   if ('status' in migrated && typeof migrated.status === 'string') {

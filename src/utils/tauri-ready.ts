@@ -54,23 +54,41 @@ export const checkTauriContextAsync = async (): Promise<boolean> => {
 
   // Create the check promise
   tauriCheckPromise = (async () => {
+    // Timeout helper
+    const timeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error(`[checkTauriContextAsync] API call timed out after ${ms}ms`));
+        }, ms);
+
+        promise
+          .then((value) => {
+            clearTimeout(timer);
+            resolve(value);
+          })
+          .catch((err) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+      });
+    };
+
     try {
-      // Try to import and invoke a simple command
-      // This works in Tauri 2.x where window.__TAURI__ doesn't exist
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('ping');
-      
+      // Use a stable Tauri API call with a timeout
+      const { getVersion } = await import('@tauri-apps/api/app');
+      const appVersion = await timeout(getVersion(), 2000); // 2-second timeout
+
       if (isDebugLoggingEnabled) {
-        console.log('[checkTauriContextAsync] Successfully invoked ping - in Tauri context');
+        console.log(`[checkTauriContextAsync] Successfully called getVersion(), version: ${appVersion} - in Tauri context`);
       }
-      
+
       tauriContextCache = true;
       return true;
     } catch (error) {
       if (isDebugLoggingEnabled) {
-        console.log('[checkTauriContextAsync] Failed to invoke ping - not in Tauri context', error);
+        console.log('[checkTauriContextAsync] Failed to call getVersion() - not in Tauri context or timed out', error);
       }
-      
+
       tauriContextCache = false;
       return false;
     }

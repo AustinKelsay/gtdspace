@@ -505,9 +505,9 @@ export interface GTDInitResult {
  */
 export interface GTDProjectCreate {
   /** GTD space root path */
-  space_path: string;
+  spacePath: string;
   /** Project name */
-  project_name: string;
+  projectName: string;
   /** Project description */
   description: string;
   /** Optional due date (ISO format: YYYY-MM-DD) */
@@ -534,6 +534,8 @@ export interface GTDActionCreate {
   effort: GTDActionEffort;
   /** GTD contexts where this action can be performed */
   contexts?: string[];
+  // TODO: Add notes field when backend supports it
+  // notes?: string;
 }
 
 /**

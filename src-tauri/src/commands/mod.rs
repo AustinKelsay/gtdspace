@@ -2439,7 +2439,7 @@ pub fn find_habits_referencing(
     // Normalize the target path for comparison
     let target_normalized = target_path.replace('\\', "/");
     log::info!("Target normalized: {}", target_normalized);
-    
+
     // For project README files, also check against the project folder path
     let alt_target = if target_normalized.ends_with("/README.md") {
         Some(target_normalized.trim_end_matches("/README.md").to_string())
@@ -2471,19 +2471,22 @@ pub fn find_habits_referencing(
                             "[!vision-references:",
                             "[!purpose-references:",
                         ];
-                        
+
                         let mut found = false;
                         for marker in &markers {
                             if let Some(start_idx) = content_normalized.find(marker) {
                                 let after_start = &content_normalized[start_idx + marker.len()..];
                                 // Find the last ']' which closes the [!marker:...] block
                                 // Look for either "]]" (end of line has two brackets) or "]\n" (single bracket at end)
-                                let end_idx = if let Some(double_bracket_idx) = after_start.find("]]") {
+                                let end_idx = if let Some(double_bracket_idx) =
+                                    after_start.find("]]")
+                                {
                                     // Found "]]", take content up to the first ']'
                                     double_bracket_idx + 1
                                 } else if let Some(newline_idx) = after_start.find('\n') {
                                     // Find the last ']' before the newline
-                                    if let Some(bracket_idx) = after_start[..newline_idx].rfind(']') {
+                                    if let Some(bracket_idx) = after_start[..newline_idx].rfind(']')
+                                    {
                                         bracket_idx
                                     } else {
                                         continue;
@@ -2496,26 +2499,37 @@ pub fn find_habits_referencing(
                                         continue;
                                     }
                                 };
-                                
+
                                 let refs_str_raw = &after_start[..end_idx];
                                 log::info!("Found {} raw content: {}", marker, refs_str_raw);
-                                    
-                                    // Decode URL-encoded content - handle multiple levels of encoding
-                                    let mut refs_str = refs_str_raw.to_string();
-                                    let mut decode_attempts = 0;
-                                    while (refs_str.contains("%25") || refs_str.contains("%5B") || refs_str.contains("%22") || refs_str.contains("%2F")) && decode_attempts < 3 {
-                                        match urlencoding::decode(&refs_str) {
-                                            Ok(decoded) => {
-                                                refs_str = decoded.into_owned();
-                                                decode_attempts += 1;
-                                                log::info!("After decode attempt {}: {}", decode_attempts, refs_str);
-                                            },
-                                            Err(_) => break,
+
+                                // Decode URL-encoded content - handle multiple levels of encoding
+                                let mut refs_str = refs_str_raw.to_string();
+                                let mut decode_attempts = 0;
+                                while (refs_str.contains("%25")
+                                    || refs_str.contains("%5B")
+                                    || refs_str.contains("%22")
+                                    || refs_str.contains("%2F"))
+                                    && decode_attempts < 3
+                                {
+                                    match urlencoding::decode(&refs_str) {
+                                        Ok(decoded) => {
+                                            refs_str = decoded.into_owned();
+                                            decode_attempts += 1;
+                                            log::info!(
+                                                "After decode attempt {}: {}",
+                                                decode_attempts,
+                                                refs_str
+                                            );
                                         }
+                                        Err(_) => break,
                                     }
-                                
+                                }
+
                                 // Handle both JSON array format and CSV format
-                                let paths: Vec<String> = if refs_str.starts_with('[') && refs_str.ends_with(']') {
+                                let paths: Vec<String> = if refs_str.starts_with('[')
+                                    && refs_str.ends_with(']')
+                                {
                                     // JSON array format
                                     match serde_json::from_str::<Vec<String>>(&refs_str) {
                                         Ok(json_paths) => json_paths
@@ -2528,7 +2542,9 @@ pub fn find_habits_referencing(
                                                 .trim_start_matches('[')
                                                 .trim_end_matches(']')
                                                 .split(',')
-                                                .map(|p| p.trim().trim_matches('"').replace('\\', "/"))
+                                                .map(|p| {
+                                                    p.trim().trim_matches('"').replace('\\', "/")
+                                                })
                                                 .filter(|p| !p.is_empty())
                                                 .map(|p| p.to_string())
                                                 .collect()
@@ -2543,11 +2559,19 @@ pub fn find_habits_referencing(
                                         .map(|p| p.to_string())
                                         .collect()
                                 };
-                                
+
                                 // Check if any path matches the target
-                                log::info!("Checking {} paths for match with target: {}", paths.len(), target_normalized);
+                                log::info!(
+                                    "Checking {} paths for match with target: {}",
+                                    paths.len(),
+                                    target_normalized
+                                );
                                 for path in &paths {
-                                    log::info!("  Comparing: '{}' == '{}'", path, target_normalized);
+                                    log::info!(
+                                        "  Comparing: '{}' == '{}'",
+                                        path,
+                                        target_normalized
+                                    );
                                     if path == &target_normalized {
                                         log::info!("  MATCH FOUND!");
                                     }
@@ -2558,11 +2582,15 @@ pub fn find_habits_referencing(
                                     }
                                 }
                                 if paths.iter().any(|p| {
-                                    p == &target_normalized || 
-                                    (alt_target.is_some() && p == alt_target.as_ref().unwrap())
+                                    p == &target_normalized
+                                        || (alt_target.is_some()
+                                            && p == alt_target.as_ref().unwrap())
                                 }) {
                                     found = true;
-                                    log::info!("Reference match confirmed for habit: {}", path.display());
+                                    log::info!(
+                                        "Reference match confirmed for habit: {}",
+                                        path.display()
+                                    );
                                     break;
                                 }
                             }
@@ -2613,7 +2641,10 @@ pub fn find_habits_referencing(
     }
 
     log::info!("=== find_habits_referencing END ===");
-    log::info!("Found {} habits referencing the target", habit_references.len());
+    log::info!(
+        "Found {} habits referencing the target",
+        habit_references.len()
+    );
     for hab in &habit_references {
         log::info!("  - {} ({})", hab.habit_name, hab.status);
     }

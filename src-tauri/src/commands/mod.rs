@@ -991,6 +991,10 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
 
 [!projects-list]
 
+## Related Habits
+
+[!habits-list]
+
 ---
 [!datetime:created_date_time:{}]
 "#,
@@ -1023,6 +1027,10 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
 
 [!projects-list]
 
+## Related Habits
+
+[!habits-list]
+
 ---
 [!datetime:created_date_time:{}]
 "#,
@@ -1051,6 +1059,10 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
 ## Supporting Projects
 
 [!projects-list]
+
+## Related Habits
+
+[!habits-list]
 
 ## References
 
@@ -1091,6 +1103,10 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
 ## Supporting Projects
 
 [!projects-list]
+
+## Related Habits
+
+[!habits-list]
 
 ---
 [!datetime:created_date_time:{}]
@@ -2389,6 +2405,229 @@ pub struct ReverseRelationship {
     pub references: Vec<String>,
 }
 
+/// Find habits that reference a specific file
+///
+/// Searches through the Habits directory for habits that reference the target file
+/// in their habits-references field.
+///
+/// # Arguments
+///
+/// * `target_path` - Path to the file to find references to
+/// * `space_path` - Root path of the GTD space
+///
+/// # Returns
+///
+/// List of habits that reference the target file
+#[tauri::command]
+pub fn find_habits_referencing(
+    target_path: String,
+    space_path: String,
+) -> Result<Vec<HabitReference>, String> {
+    log::info!("=== find_habits_referencing START ===");
+    log::info!("Target path: {}", target_path);
+    log::info!("Space path: {}", space_path);
+
+    let mut habit_references = Vec::new();
+    let space_root = Path::new(&space_path);
+    let habits_dir = space_root.join("Habits");
+
+    if !habits_dir.exists() {
+        log::info!("Habits directory does not exist");
+        return Ok(habit_references);
+    }
+
+    // Normalize the target path for comparison
+    let target_normalized = target_path.replace('\\', "/");
+    log::info!("Target normalized: {}", target_normalized);
+    
+    // For project README files, also check against the project folder path
+    let alt_target = if target_normalized.ends_with("/README.md") {
+        Some(target_normalized.trim_end_matches("/README.md").to_string())
+    } else {
+        None
+    };
+    if let Some(ref alt) = alt_target {
+        log::info!("Also checking against project folder path: {}", alt);
+    }
+
+    // Search through all habit files
+    if let Ok(entries) = fs::read_dir(&habits_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("md") {
+                log::info!("Checking habit file: {}", path.display());
+                // Read habit file content
+                if let Ok(content) = fs::read_to_string(&path) {
+                    // Normalize content paths for comparison
+                    let content_normalized = content.replace('\\', "/");
+
+                    // Check if this habit references the target file
+                    let has_reference = {
+                        // Check all possible reference fields
+                        let markers = [
+                            "[!projects-references:",
+                            "[!areas-references:",
+                            "[!goals-references:",
+                            "[!vision-references:",
+                            "[!purpose-references:",
+                        ];
+                        
+                        let mut found = false;
+                        for marker in &markers {
+                            if let Some(start_idx) = content_normalized.find(marker) {
+                                let after_start = &content_normalized[start_idx + marker.len()..];
+                                // Find the last ']' which closes the [!marker:...] block
+                                // Look for either "]]" (end of line has two brackets) or "]\n" (single bracket at end)
+                                let end_idx = if let Some(double_bracket_idx) = after_start.find("]]") {
+                                    // Found "]]", take content up to the first ']'
+                                    double_bracket_idx + 1
+                                } else if let Some(newline_idx) = after_start.find('\n') {
+                                    // Find the last ']' before the newline
+                                    if let Some(bracket_idx) = after_start[..newline_idx].rfind(']') {
+                                        bracket_idx
+                                    } else {
+                                        continue;
+                                    }
+                                } else {
+                                    // No newline, find the last ']' in the remaining content
+                                    if let Some(bracket_idx) = after_start.rfind(']') {
+                                        bracket_idx
+                                    } else {
+                                        continue;
+                                    }
+                                };
+                                
+                                let refs_str_raw = &after_start[..end_idx];
+                                log::info!("Found {} raw content: {}", marker, refs_str_raw);
+                                    
+                                    // Decode URL-encoded content - handle multiple levels of encoding
+                                    let mut refs_str = refs_str_raw.to_string();
+                                    let mut decode_attempts = 0;
+                                    while (refs_str.contains("%25") || refs_str.contains("%5B") || refs_str.contains("%22") || refs_str.contains("%2F")) && decode_attempts < 3 {
+                                        match urlencoding::decode(&refs_str) {
+                                            Ok(decoded) => {
+                                                refs_str = decoded.into_owned();
+                                                decode_attempts += 1;
+                                                log::info!("After decode attempt {}: {}", decode_attempts, refs_str);
+                                            },
+                                            Err(_) => break,
+                                        }
+                                    }
+                                
+                                // Handle both JSON array format and CSV format
+                                let paths: Vec<String> = if refs_str.starts_with('[') && refs_str.ends_with(']') {
+                                    // JSON array format
+                                    match serde_json::from_str::<Vec<String>>(&refs_str) {
+                                        Ok(json_paths) => json_paths
+                                            .into_iter()
+                                            .map(|p| p.replace('\\', "/"))
+                                            .collect(),
+                                        Err(_) => {
+                                            // Fallback: try to extract paths manually
+                                            refs_str
+                                                .trim_start_matches('[')
+                                                .trim_end_matches(']')
+                                                .split(',')
+                                                .map(|p| p.trim().trim_matches('"').replace('\\', "/"))
+                                                .filter(|p| !p.is_empty())
+                                                .map(|p| p.to_string())
+                                                .collect()
+                                        }
+                                    }
+                                } else {
+                                    // CSV format
+                                    refs_str
+                                        .split(',')
+                                        .map(|p| p.trim().replace('\\', "/"))
+                                        .filter(|p| !p.is_empty())
+                                        .map(|p| p.to_string())
+                                        .collect()
+                                };
+                                
+                                // Check if any path matches the target
+                                log::info!("Checking {} paths for match with target: {}", paths.len(), target_normalized);
+                                for path in &paths {
+                                    log::info!("  Comparing: '{}' == '{}'", path, target_normalized);
+                                    if path == &target_normalized {
+                                        log::info!("  MATCH FOUND!");
+                                    }
+                                    if let Some(ref alt) = alt_target {
+                                        if path == alt {
+                                            log::info!("  MATCH FOUND (alt target)!");
+                                        }
+                                    }
+                                }
+                                if paths.iter().any(|p| {
+                                    p == &target_normalized || 
+                                    (alt_target.is_some() && p == alt_target.as_ref().unwrap())
+                                }) {
+                                    found = true;
+                                    log::info!("Reference match confirmed for habit: {}", path.display());
+                                    break;
+                                }
+                            }
+                        }
+                        found
+                    };
+
+                    if has_reference {
+                        log::info!("Found habit referencing target: {}", path.display());
+
+                        // Extract habit metadata
+                        let habit_name = path
+                            .file_stem()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("Unknown")
+                            .to_string();
+
+                        // Extract status (checkbox value)
+                        let status = if content.contains("[!checkbox:habit-status:true]") {
+                            "complete".to_string()
+                        } else {
+                            "todo".to_string()
+                        };
+
+                        // Extract frequency
+                        let marker = "[!singleselect:habit-frequency:";
+                        let frequency = if let Some(idx) = content.find(marker) {
+                            let after_start = &content[idx + marker.len()..];
+                            if let Some(end) = after_start.find(']') {
+                                after_start[..end].to_string()
+                            } else {
+                                "daily".to_string()
+                            }
+                        } else {
+                            "daily".to_string()
+                        };
+
+                        habit_references.push(HabitReference {
+                            file_path: path.to_string_lossy().to_string(),
+                            habit_name,
+                            status,
+                            frequency,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    log::info!("=== find_habits_referencing END ===");
+    log::info!("Found {} habits referencing the target", habit_references.len());
+    for hab in &habit_references {
+        log::info!("  - {} ({})", hab.habit_name, hab.status);
+    }
+    Ok(habit_references)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HabitReference {
+    pub file_path: String,
+    pub habit_name: String,
+    pub status: String,
+    pub frequency: String,
+}
+
 /// Replace text in a file with new content
 ///
 /// Replaces all occurrences of a search term with a replacement term in the specified file.
@@ -3432,6 +3671,18 @@ pub fn create_gtd_habit(
 ## Frequency
 [!singleselect:habit-frequency:{}]
 {}
+## Horizon References
+
+[!projects-references:]
+
+[!areas-references:]
+
+[!goals-references:]
+
+[!vision-references:]
+
+[!purpose-references:]
+
 ## Created
 [!datetime:created_date_time:{}]
 
@@ -3553,18 +3804,14 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
         old_status_display
     );
 
-    // After recording a completion, immediately reset to "todo" for the next cycle
-    // This ensures each cycle starts fresh and auto-reset can detect if it was missed
-    let final_status = if new_status == "completed" || new_status == "complete" {
-        "todo"
-    } else {
-        new_status.as_str()
-    };
+    // Keep the actual status that was set - don't auto-reset
+    // The habit should remain checked until the next frequency window
+    let final_status = new_status.as_str();
 
     // Update the status field in the content based on format
     let updated_content = if is_checkbox_format {
         // Convert status to checkbox value
-        let checkbox_value = if final_status == "completed" {
+        let checkbox_value = if final_status == "completed" || final_status == "complete" {
             "true"
         } else {
             "false"
@@ -3743,19 +3990,11 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                             period_status = "To Do";
                             notes = "Missed - app offline";
                         } else {
-                            // Current period - record the actual status before reset
-                            // If it's still "todo", that means it was missed
-                            // If it's "complete", record it as complete
-                            period_status = if status == "todo" {
-                                "To Do"
-                            } else {
-                                "Complete"
-                            };
-                            notes = if status == "todo" {
-                                "Missed habit"
-                            } else {
-                                "Completed"
-                            };
+                            // Current period - we're entering a NEW frequency window
+                            // The previous period's completion was already recorded when it happened
+                            // This entry represents the START of the new period, so it's always "To Do"
+                            period_status = "To Do";
+                            notes = "New period";
                         }
 
                         // Determine if this is a catch-up reset (backfilling) or regular auto-reset

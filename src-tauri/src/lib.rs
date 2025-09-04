@@ -62,6 +62,7 @@ pub fn run() {
             commands::move_file,
             commands::replace_in_file,
             commands::find_reverse_relationships,
+            commands::find_habits_referencing,
             commands::check_is_gtd_space,
             commands::initialize_gtd_space,
             commands::seed_example_gtd_content,

@@ -43,11 +43,12 @@ type EditorBlockNode = {
 interface HorizonFile {
   path: string;
   name: string;
-  horizon: 'areas' | 'goals' | 'vision' | 'purpose';
+  horizon: 'areas' | 'goals' | 'vision' | 'purpose' | 'projects';
 }
 
 // Define horizon colors for consistent UI
 const HORIZON_COLORS = {
+  projects: 'bg-green-100 hover:bg-green-200 dark:bg-green-900/20 dark:hover:bg-green-900/30',
   areas: 'bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/20 dark:hover:bg-blue-900/30',
   goals: 'bg-violet-100 hover:bg-violet-200 dark:bg-violet-900/20 dark:hover:bg-violet-900/30',
   vision: 'bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30',
@@ -55,6 +56,7 @@ const HORIZON_COLORS = {
 };
 
 const HORIZON_LABELS = {
+  projects: 'Projects',
   areas: 'Areas of Focus',
   goals: 'Goals',
   vision: 'Vision',
@@ -62,7 +64,8 @@ const HORIZON_LABELS = {
 };
 
 // Relative directory names for each horizon within a GTD space
-const HORIZON_DIRS: Record<'areas' | 'goals' | 'vision' | 'purpose', string> = {
+const HORIZON_DIRS: Record<'areas' | 'goals' | 'vision' | 'purpose' | 'projects', string> = {
+  projects: 'Projects',
   areas: 'Areas of Focus',
   goals: 'Goals',
   vision: 'Vision',
@@ -173,8 +176,8 @@ interface HorizonReferencesProps {
       update: { type: string; props: { references: string } }
     ) => void;
   };
-  horizonType: 'areas' | 'goals' | 'vision' | 'purpose';
-  allowedHorizons: Array<'areas' | 'goals' | 'vision' | 'purpose'>;
+  horizonType: 'areas' | 'goals' | 'vision' | 'purpose' | 'projects';
+  allowedHorizons: Array<'areas' | 'goals' | 'vision' | 'purpose' | 'projects'>;
   label: string;
 }
 
@@ -243,14 +246,22 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
 
     let refs: string[] = [];
 
+    // First try to decode if it's URL encoded
+    let decodedRaw = raw;
+    try {
+      decodedRaw = decodeURIComponent(raw);
+    } catch {
+      // Not URL encoded, use as is
+    }
+
     // Try to parse as JSON first
     try {
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(decodedRaw);
       if (Array.isArray(parsed)) refs = parsed as string[];
-      else refs = raw.split(',');
+      else refs = decodedRaw.split(',');
     } catch {
       // JSON parse failed, use legacy CSV format with extra sanitization
-      refs = raw.split(',');
+      refs = decodedRaw.split(',');
     }
 
     // Normalize and drop bracket-only artifacts
@@ -286,15 +297,30 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
         }
 
         try {
-          const files = await invoke<MarkdownFile[]>('list_markdown_files', { path: horizonPath });
-          const horizonFiles = files
-            .filter(f => !f.name.toLowerCase().includes('readme'))
-            .map(f => ({
-              path: f.path,
-              name: f.name.replace('.md', ''),
-              horizon
-            }));
-          allFiles.push(...horizonFiles);
+          if (horizon === 'projects') {
+            // For projects, we need to list project folders
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const projects = await invoke<any[]>('list_gtd_projects', { spacePath });
+            if (projects) {
+              const projectFiles = projects.map(p => ({
+                path: p.path,
+                name: p.name,
+                horizon: 'projects' as const
+              }));
+              allFiles.push(...projectFiles);
+            }
+          } else {
+            // For other horizons, list .md files directly
+            const files = await invoke<MarkdownFile[]>('list_markdown_files', { path: horizonPath });
+            const horizonFiles = files
+              .filter(f => !f.name.toLowerCase().includes('readme'))
+              .map(f => ({
+                path: f.path,
+                name: f.name.replace('.md', ''),
+                horizon
+              }));
+            allFiles.push(...horizonFiles);
+          }
         } catch (err) {
           console.error(`Failed to load ${HORIZON_LABELS[horizon]} files:`, err);
         }
@@ -509,6 +535,14 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
     if (file) return { name: file.name, horizon: file.horizon };
 
     const normalized = path.replace(/\\/g, '/');
+    
+    // For projects, extract just the project folder name
+    if (normalized.includes('/Projects/')) {
+      const parts = normalized.split('/Projects/')[1]?.split('/') || [];
+      const name = parts[0] || 'Unknown';
+      return { name, horizon: 'projects' };
+    }
+    
     const name = normalized.split('/').pop()?.replace(/\.md$/i, '') || 'Unknown';
 
     let horizon = 'areas';
@@ -656,6 +690,52 @@ const horizonReferencesPropSchema = {
     default: '',  // Store as comma-separated list of file paths
   },
 } satisfies PropSchema;
+
+// Projects References Block
+export const ProjectsReferencesBlock = createReactBlockSpec(
+  {
+    type: 'projects-references' as const,
+    propSchema: horizonReferencesPropSchema,
+    content: 'none' as const,
+  },
+  {
+    render: (props) => {
+      const baseProps = toHorizonBlockRenderProps(props);
+      return (
+        <HorizonReferencesRenderer
+          {...baseProps}
+          horizonType="projects"
+          allowedHorizons={['projects']}
+          label="Related Projects"
+        />
+      );
+    },
+    toExternalHTML: (props) => {
+      // Export as markdown marker for persistence with encoded references payload
+      const references = props.block.props.references || '';
+      const encoded = encodeURIComponent(references);
+      return <p>{`[!projects-references:${encoded}]`}</p>;
+    },
+    parse: (element) => {
+      const text = element.textContent || '';
+      // Find the start and end positions for robust parsing
+      const start = text.indexOf(':');
+      const end = text.lastIndexOf(']');
+      
+      if (start !== -1 && end > start) {
+        const raw = text.slice(start + 1, end);
+        try {
+          // Try to decode the payload
+          return { references: decodeURIComponent(raw) };
+        } catch {
+          // Backward compatibility: if decoding fails, use raw value
+          return { references: raw };
+        }
+      }
+      return { references: '' };
+    },
+  }
+);
 
 // Areas References Block (for Projects)
 export const AreasReferencesBlock = createReactBlockSpec(

@@ -63,14 +63,14 @@ interface DatetimeBlock {
 }
 
 interface ReferencesBlock {
-  type: 'references' | 'areas-references' | 'goals-references' | 'vision-references' | 'purpose-references';
+  type: 'references' | 'projects-references' | 'areas-references' | 'goals-references' | 'vision-references' | 'purpose-references' | 'habits-references';
   props: {
     references: string; // comma-separated file paths
   };
 }
 
 interface ListBlock {
-  type: 'projects-list' | 'areas-list' | 'goals-list' | 'visions-list' | 
+  type: 'projects-list' | 'areas-list' | 'goals-list' | 'visions-list' | 'habits-list' | 
         'projects-areas-list' | 'goals-areas-list' | 'visions-goals-list';
   props: {
     listType: string;
@@ -184,7 +184,7 @@ function toBase64(str: string): string {
 // Create a hash of the content for efficient caching - focus on structural elements
 function createContentHash(markdown: string, blockCount: number): string {
   // Extract only GTD field markers and structural elements for stable caching
-  const gtdFieldMarkers = markdown.match(/\[!(?:multiselect|singleselect|checkbox|datetime|references|areas-references|goals-references|vision-references|purpose-references|projects-list|areas-list|goals-list|visions-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(?::[^\]]*)?\]/g) || [];
+  const gtdFieldMarkers = markdown.match(/\[!(?:multiselect|singleselect|checkbox|datetime|references|projects-references|areas-references|goals-references|vision-references|purpose-references|projects-list|areas-list|goals-list|visions-list|habits-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(?::[^\]]*)?\]/g) || [];
   
   // Create a structural signature based on:
   // 1. Block count (structural changes)
@@ -265,11 +265,13 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   const goalsReferencesPattern = /\[!goals-references:([^\]]*)\]\]?/g;
   const visionReferencesPattern = /\[!vision-references:([^\]]*)\]\]?/g;
   const purposeReferencesPattern = /\[!purpose-references:([^\]]*)\]\]?/g;
+  const projectsReferencesPattern = /\[!projects-references:([^\]]*)\]\]?/g;
   // Pattern to match list markers in markdown (e.g., [!projects-list])
   const projectsListPattern = /\[!projects-list\]/g;
   const areasListPattern = /\[!areas-list\]/g;
   const goalsListPattern = /\[!goals-list\]/g;
   const visionsListPattern = /\[!visions-list\]/g;
+  const habitsListPattern = /\[!habits-list\]/g;
   const projectsAreasListPattern = /\[!projects-areas-list\]/g;
   const goalsAreasListPattern = /\[!goals-areas-list\]/g;
   const visionsGoalsListPattern = /\[!visions-goals-list\]/g;
@@ -436,6 +438,11 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
     referencesBlocks.push({ text: match[0], references, blockType: 'purpose-references' });
   }
   
+  while ((match = projectsReferencesPattern.exec(markdown)) !== null) {
+    const references = match[1];
+    referencesBlocks.push({ text: match[0], references, blockType: 'projects-references' });
+  }
+  
   // Check for list markers
   const listBlocks: Array<{ text: string; listType: string; blockType: string }> = [];
   
@@ -453,6 +460,10 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   
   while ((match = visionsListPattern.exec(markdown)) !== null) {
     listBlocks.push({ text: match[0], listType: 'visions', blockType: 'visions-list' });
+  }
+  
+  while ((match = habitsListPattern.exec(markdown)) !== null) {
+    listBlocks.push({ text: match[0], listType: 'habits', blockType: 'habits-list' });
   }
   
   while ((match = projectsAreasListPattern.exec(markdown)) !== null) {
@@ -667,7 +678,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
 
       // New: If this paragraph is composed only of our custom markers (possibly multiple),
       // split them into individual custom blocks to prevent them rendering as plain text.
-      const markerTokenRegex = /\[!(references|areas-references|goals-references|vision-references|purpose-references|multiselect|singleselect|checkbox|datetime|projects-list|areas-list|goals-list|visions-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(:[^\]]*)?\](?:\])?/g;
+      const markerTokenRegex = /\[!(references|projects-references|areas-references|goals-references|vision-references|purpose-references|multiselect|singleselect|checkbox|datetime|projects-list|areas-list|goals-list|visions-list|habits-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(:[^\]]*)?\](?:\])?/g;
       const leftoverAfterRemoval = blockText.replace(markerTokenRegex, '');
       const leftoverSanitized = leftoverAfterRemoval.replace(/[\s\u200B-\u200D\uFEFF]/g, '').trim();
       const onlyMarkers = blockText.trim().length > 0 && leftoverSanitized === '';
@@ -678,7 +689,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
           const kind = m[1];
           const rest = (m[2] || '').replace(/^:/, '');
           // Parse per marker kind
-          if (kind === 'references' || kind === 'areas-references' || kind === 'goals-references' || kind === 'vision-references' || kind === 'purpose-references') {
+          if (kind === 'references' || kind === 'projects-references' || kind === 'areas-references' || kind === 'goals-references' || kind === 'vision-references' || kind === 'purpose-references' || kind === 'habits-references') {
             processedBlocks.push({
               type: kind as ReferencesBlock['type'],
               // Accept both JSON array and legacy CSV preserved in markdown
@@ -713,6 +724,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
             kind === 'areas-list' ||
             kind === 'goals-list' ||
             kind === 'visions-list' ||
+            kind === 'habits-list' ||
             kind === 'projects-areas-list' ||
             kind === 'goals-areas-list' ||
             kind === 'visions-goals-list' ||
@@ -726,6 +738,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
               kind === 'areas-list' ? 'areas' :
               kind === 'goals-list' ? 'goals' :
               kind === 'visions-list' ? 'visions' :
+              kind === 'habits-list' ? 'habits' :
               kind === 'projects-areas-list' || kind === 'projects-and-areas-list' ? 'projects-areas' :
               kind === 'goals-areas-list' || kind === 'goals-and-areas-list' ? 'goals-areas' :
               /* visions-goals */ 'visions-goals'

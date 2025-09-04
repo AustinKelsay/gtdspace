@@ -17,6 +17,7 @@ import { CheckboxBlock } from './blocks/CheckboxBlock';
 import { DateTimeSelectBlock } from './blocks/DateTimeSelectBlock';
 import { ReferencesBlock } from './blocks/ReferencesBlock';
 import {
+  ProjectsReferencesBlock,
   AreasReferencesBlock,
   GoalsReferencesBlock,
   VisionReferencesBlock,
@@ -31,6 +32,7 @@ import {
   GoalsAndAreasListBlock,
   VisionsAndGoalsListBlock
 } from './blocks/HorizonListBlock';
+import { HabitsListBlock } from './blocks/HabitsListBlock';
 import { postProcessBlockNoteBlocks } from '@/utils/blocknote-preprocessing';
 import { useMultiSelectInsertion } from '@/hooks/useMultiSelectInsertion';
 import { useSingleSelectInsertion } from '@/hooks/useSingleSelectInsertion';
@@ -98,6 +100,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       checkbox: CheckboxBlock,
       datetime: DateTimeSelectBlock,
       references: ReferencesBlock,
+      'projects-references': ProjectsReferencesBlock,
       'areas-references': AreasReferencesBlock,
       'goals-references': GoalsReferencesBlock,
       'vision-references': VisionReferencesBlock,
@@ -106,6 +109,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       'areas-list': AreasListBlock,
       'goals-list': GoalsListBlock,
       'visions-list': VisionsListBlock,
+      'habits-list': HabitsListBlock,
       'projects-areas-list': ProjectsAndAreasListBlock,
       'goals-areas-list': GoalsAndAreasListBlock,
       'visions-goals-list': VisionsAndGoalsListBlock,

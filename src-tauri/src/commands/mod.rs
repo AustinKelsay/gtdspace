@@ -3544,14 +3544,18 @@ pub fn create_gtd_action(
     let contexts_value = contexts.map(|ctx_vec| {
         ctx_vec
             .iter()
-            .map(|c| match c.as_str() {
-                "Home" => "home".to_string(),
-                "Office" => "office".to_string(),
-                "Computer" => "computer".to_string(),
-                "Phone" => "phone".to_string(),
-                "Errands" => "errands".to_string(),
-                "Anywhere" => "anywhere".to_string(),
-                _ => c.to_lowercase().replace(' ', "-").replace('@', ""),
+            .map(|c| {
+                // Remove @ prefix and normalize
+                let normalized = c.to_lowercase().replace('@', "").replace(' ', "-");
+                match normalized.as_str() {
+                    "home" => "home".to_string(),
+                    "office" => "office".to_string(),
+                    "computer" => "computer".to_string(),
+                    "phone" => "phone".to_string(),
+                    "errands" => "errands".to_string(),
+                    "anywhere" => "anywhere".to_string(),
+                    _ => normalized,
+                }
             })
             .collect::<Vec<String>>()
     });

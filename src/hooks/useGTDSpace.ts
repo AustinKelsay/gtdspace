@@ -211,11 +211,11 @@ export function useGTDSpace() {
               : undefined;
             
             const actionPath = await invoke<string>('create_gtd_action', {
-              project_path: params.project_path,
-              action_name: params.action_name,
+              projectPath: params.project_path,
+              actionName: params.action_name,
               status: params.status,
-              due_date: params.dueDate || undefined,
-              focus_date: params.focusDate || undefined,
+              dueDate: params.dueDate || undefined,
+              focusDate: params.focusDate || undefined,
               effort: params.effort,
               contexts: contextsArray,
             });

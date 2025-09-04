@@ -763,26 +763,28 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
       }
       
       // Check if this paragraph contains our multiselect markers or HTML
-      for (const msBlock of multiSelectBlocks) {
-        // Use exact-token match to avoid partial replacements
-        const normalizedBlockText = (blockText ?? '').trim();
-        const normalizedMSText = (msBlock.text ?? '').trim();
-        if (normalizedMSText.length > 0 && normalizedBlockText === normalizedMSText) {
-          // Replace this paragraph with a multiselect block
-          processedBlocks.push({
-            type: 'multiselect',
-            props: {
-              type: msBlock.type || 'tags',
-              value: (msBlock.value || []).join(','),
-              label: msBlock.label || '',
-              placeholder: '',
-              maxCount: 0,
-              customOptionsJson: '[]',
-            },
-          });
-          blockReplaced = true;
-          // Multiselect block replaced
-          break; // Exit the inner loop once we've replaced the block
+      if (!blockReplaced) {
+        for (const msBlock of multiSelectBlocks) {
+          // Use exact-token match to avoid partial replacements
+          const normalizedBlockText = (blockText ?? '').trim();
+          const normalizedMSText = (msBlock.text ?? '').trim();
+          if (normalizedMSText.length > 0 && normalizedBlockText === normalizedMSText) {
+            // Replace this paragraph with a multiselect block
+            processedBlocks.push({
+              type: 'multiselect',
+              props: {
+                type: msBlock.type || 'tags',
+                value: (msBlock.value || []).join(','),
+                label: msBlock.label || '',
+                placeholder: '',
+                maxCount: 0,
+                customOptionsJson: '[]',
+              },
+            });
+            blockReplaced = true;
+            // Multiselect block replaced
+            break; // Exit the inner loop once we've replaced the block
+          }
         }
       }
       

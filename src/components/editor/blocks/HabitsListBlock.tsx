@@ -111,9 +111,8 @@ function HabitsListBlockComponent(incomingProps: unknown) {
     const tabsJson = localStorage.getItem('gtdspace-tabs');
     if (tabsJson) {
       try {
-        const tabs = JSON.parse(tabsJson);
-        const activeTabId = localStorage.getItem('gtdspace-active-tab');
-        const activeTab = tabs.find((tab: { id: string; filePath?: string }) => tab.id === activeTabId);
+        const persisted = JSON.parse(tabsJson);
+        const activeTab = persisted.openTabs?.find((tab: { id: string; filePath?: string }) => tab.id === persisted.activeTabId);
         if (activeTab?.filePath) {
           return activeTab.filePath;
         }
@@ -170,8 +169,8 @@ function HabitsListBlockComponent(incomingProps: unknown) {
   const openHabit = async (habitPath: string) => {
     try {
       // Dispatch event to open file
-      const event = new CustomEvent('open-file', {
-        detail: { filePath: habitPath }
+      const event = new CustomEvent('open-reference-file', {
+        detail: { path: habitPath }
       });
       window.dispatchEvent(event);
     } catch (err) {

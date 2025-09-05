@@ -97,8 +97,8 @@ export function migrateMarkdownContent(content: string): string {
  */
 export function needsMigration(content: string): boolean {
   return (
-    // Check for old created_date field
-    content.includes('[!datetime:created_date:') ||
+    // Check for old created_date field, but not created_date_time
+    /\[!datetime:created_date:(?!_time)/i.test(content) ||
     // Check for old focus_date_time field (should be focus_date)
     content.includes('[!datetime:focus_date_time:') ||
     // Check for multiselect status fields (should be singleselect)
@@ -107,7 +107,7 @@ export function needsMigration(content: string): boolean {
     // Check for multiselect effort field (should be singleselect)
     content.includes('[!multiselect:effort:') ||
     // Check for old status values (excluding 'completed' which is canonical)
-    /\[!singleselect:(?:status|project-status):(?:not-started|active|planning|on-hold|waiting-for|cancelled|done)\]/i.test(content)
+    /\[!singleselect:(?:status|project-status):(?:not-started|active|planning|on-hold|waiting-for|cancelled|done|complete)\]/i.test(content)
   );
 }
 

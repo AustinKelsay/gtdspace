@@ -68,6 +68,8 @@ const result = await withErrorHandling(
 
 **Important:** Frontend uses `camelCase`, backend expects `snake_case` - Tauri auto-converts.
 
+**Safe Invocation:** For commands during app init or in web contexts, use `safeInvoke()` from `@/utils/safe-invoke.ts` which gracefully handles non-Tauri environments.
+
 ### GTD Directory Structure
 
 The app auto-creates and manages this structure at `~/GTD Space`:
@@ -82,7 +84,7 @@ gtd-space/
 │   └── [Project]/
 │       ├── README.md     # Project metadata
 │       └── *.md          # Individual actions
-├── Habits/               # Recurring routines with auto-reset
+├── Habits/               # Recurring routines with auto-reset & bidirectional references
 ├── Someday Maybe/        # Future possibilities
 └── Cabinet/              # Reference materials
 ```
@@ -93,42 +95,42 @@ The editor uses these custom markdown markers:
 
 ```markdown
 # Single Select
-
 [!singleselect:status:in-progress] # Action status: in-progress|waiting|completed
 [!singleselect:effort:medium] # Effort: small|medium|large|extra-large
 [!singleselect:project-status:waiting] # Project status
 [!singleselect:habit-frequency:daily] # Habit frequency
 
 # DateTime
-
 [!datetime:due_date:2025-01-20] # Date only
 [!datetime:focus_date:2025-01-20T14:30:00] # Date with time
 [!datetime:created_date_time:2025-01-17T10:00:00Z] # ISO 8601
 
 # References & Lists
-
 [!references:path1.md,path2.md] # Links to Cabinet/Someday
 [!areas-references:path1.md] # Links to Areas
+[!goals-references:path1.md] # Links to Goals
+[!vision-references:path1.md] # Links to Vision
+[!purpose-references:path1.md] # Links to Purpose
 [!projects-list] # Dynamic list of referencing projects
+[!habits-list] # Dynamic list of referencing habits
+
+# Multi Select (Contexts/Tags)
+[!multiselect:contexts:home,work,errand] # Multiple contexts
 
 # Checkbox (Habits)
-
 [!checkbox:habit-status:false] # Todo/complete state
 ```
 
 ### Critical Event Flow
 
 1. **Project Creation**:
-
    - `useGTDSpace.createProject()` → `invoke('create_gtd_project')` → dispatches `gtd-project-created` event
    - `GTDWorkspaceSidebar` listens for event → reloads projects
 
 2. **Content Updates**:
-
    - Editor change → `useTabManager` → `content-event-bus` → UI components update
 
 3. **File Operations**:
-
    - UI action → Tauri command → File system → File watcher (500ms) → UI refresh
 
 4. **Data Migration**:
@@ -139,9 +141,20 @@ The editor uses these custom markdown markers:
 ### Performance Patterns
 
 - **Parallel Operations**: File reads run concurrently in `useCalendarData`
-- **Debouncing**: Manual save (debounced, 500ms for metadata), file watcher (500ms), habit scheduler (1min)
+- **Debouncing**: Auto-save (2s), manual save (500ms for metadata), file watcher (500ms), habit scheduler (1min)
 - **Calendar Optimization**: Only generates dates in current view window
 - **Regex Caching**: Metadata patterns pre-compiled for performance
+
+### Habits System
+
+The habit tracking system provides automatic recurring task management:
+
+- **Frequency Options**: Daily, Weekdays, Every Other Day, Twice Weekly, Weekly, Biweekly, Monthly, 5 Minutes (testing)
+- **Auto-Reset**: Uses system local time (not UTC), resets at midnight for daily habits
+- **History Tracking**: Maintains complete timestamped history of status changes
+- **Backfilling**: Automatically creates entries for missed periods when app was offline
+- **Bidirectional References**: Habits can reference and be referenced by Projects/Areas/Goals/Vision/Purpose
+- **Real-time Updates**: Toast notifications on status changes with visual feedback
 
 ### State Management Hooks
 
@@ -153,6 +166,7 @@ Key hooks and their responsibilities:
 - `useFileWatcher` - External change detection (500ms debounce)
 - `useCalendarData` - Aggregates all dated items (parallel reads)
 - `useHabitTracking` - Habit status updates and reset scheduling
+- `useHabitScheduler` - Manages habit reset timers (1min check interval)
 - `useErrorHandler` - Centralized error handling with toast notifications
 
 ### Google Calendar Integration
@@ -191,11 +205,12 @@ GOOGLE_CLIENT_SECRET=your-client-secret
 - **TypeScript**: Strict mode disabled - be careful with null checks
 - **File Size**: Max 10MB per file
 - **Open Tabs**: Max 10 simultaneous
-- **ESLint**: Max warnings: 0 (CI will fail on any warnings)
+- **ESLint**: Max warnings: 0 (CI will fail on any warnings), `@typescript-eslint/no-unused-vars` with `argsIgnorePattern: "^_"`
 - **BlockNote**: Version pinned at 0.35 for stability
 - **Rust**: Must pass `cargo check`, `cargo clippy -D warnings`, and `cargo fmt --check`
 - **Node Version**: Requires Node 20+
 - **Testing**: Limited test infrastructure - no unit test framework currently implemented
+- **Port Requirements**: Google OAuth server requires port 9898 to be available
 
 ## CI/CD Quality Gates
 
@@ -205,7 +220,8 @@ GitHub Actions enforce these requirements:
 - **ESLint**: Zero warnings allowed (`max-warnings: 0`)
 - **Rust Format**: `cargo fmt --check` must pass
 - **Rust Linting**: `cargo clippy -D warnings` must pass
-- **Cross-platform**: Builds tested on Ubuntu, macOS, Windows
+- **Cross-platform**: Builds tested on Ubuntu, macOS (Intel + Apple Silicon), Windows
+- **Concurrency**: In-progress runs cancelled when new runs triggered on same ref
 - **Branch Protection**: main/develop/staging with workflow dispatch on main/staging only
 - **Release Safety**: Scripts include git status checks, version validation, and tag verification
 
@@ -215,38 +231,36 @@ The release scripts (`scripts/safe-release.js`) include safety checks:
 
 1. Verifies clean git status (no uncommitted changes)
 2. Ensures on correct branch (main/staging)
-3. Validates version bump type (patch/minor/major)
+3. Validates version bump type (patch/minor/major) or explicit semver (e.g., 1.2.3, 1.2.3-beta.1)
 4. Updates version in package.json, Cargo.toml, and src-tauri/tauri.conf.json
-5. Creates git tag only at HEAD
+5. Creates git tag only at HEAD (format: v0.1.0)
 6. Triggers GitHub Actions for multi-platform builds
+
+**Semi-automated option:** Use `npm run version:*` commands to bump version locally, then `git push --follow-tags` manually
 
 ## Known Issues
 
 ### Sidebar Not Updating
-
 Projects may not appear immediately after creation. The event system (`gtd-project-created`) may have timing issues. Workaround: Collapse/expand Projects section.
 
 ### Google Calendar Auth
-
 If authentication fails:
-
-1. Check `.env` file exists with valid credentials
+1. Check `.env` file exists with valid credentials:
+   - `GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com`
+   - `GOOGLE_CLIENT_SECRET=your-client-secret`
 2. Verify redirect URI is `http://localhost:9898/callback`
 3. Ensure port 9898 is free
 4. Check Google Cloud Console for OAuth consent screen configuration
+5. OAuth tokens stored in Tauri app data directory
 
 ### Large File Performance
-
 Files over 1MB may cause editor performance issues. The app uses manual save (debounced, 500ms for metadata) to mitigate.
 
 ### Test Coverage
-
 No automated testing framework is currently implemented. Manual testing is required before releases.
 
 ### BlockNote Formatting Limitations
-
 Due to BlockNote's `blocksToMarkdownLossy` conversion, some rich text formatting is lost when saving:
-
 - Text colors and highlighting are not preserved
 - Advanced text styling may be simplified
 - Complex nested structures may be flattened

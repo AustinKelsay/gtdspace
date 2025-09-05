@@ -3,6 +3,7 @@ import '@/utils/resize-observer-fix';
 // Use guarded Tauri detection and dynamic invoke to avoid web/runtime crashes
 import { waitForTauriReady } from '@/utils/tauri-ready';
 import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import { PanelLeftClose, PanelLeft, FolderOpen, Folder, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -445,8 +446,8 @@ export const App: React.FC = () => {
         await waitForTauriReady();
 
         // Check permissions on app start (guarded)
-        await withErrorHandling(
-          async () => await invoke<{ status: string }>('check_permissions'),
+        await withErrorHandling<{ status: string } | null>(
+          async () => await safeInvoke<{ status: string }>('check_permissions', undefined, null),
           'Failed to check permissions'
         );
 
@@ -605,7 +606,7 @@ export const App: React.FC = () => {
         if (!currentSpacePath || currentSpacePath.trim() === '') {
           return; // Skip invocation if no valid space path
         }
-        
+
         // Always run the check - the backend will determine if any habits need resetting
         // This ensures we catch all frequency intervals properly
         const resetHabits = (await invoke<string[]>('check_and_reset_habits', {
@@ -642,7 +643,7 @@ export const App: React.FC = () => {
         if (!currentSpacePath || currentSpacePath.trim() === '') {
           return; // Skip invocation if no valid space path
         }
-        
+
         const resetHabits = (await invoke<string[]>('check_and_reset_habits', {
           spacePath: currentSpacePath,
         })) ?? [];

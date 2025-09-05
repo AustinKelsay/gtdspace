@@ -184,7 +184,7 @@ function toBase64(str: string): string {
 // Create a hash of the content for efficient caching - focus on structural elements
 function createContentHash(markdown: string, blockCount: number): string {
   // Extract only GTD field markers and structural elements for stable caching
-  const gtdFieldMarkers = markdown.match(/\[!(?:multiselect|singleselect|checkbox|datetime|references|projects-references|areas-references|goals-references|vision-references|purpose-references|projects-list|areas-list|goals-list|visions-list|habits-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(?::[^\]]*)?\]/g) || [];
+  const gtdFieldMarkers = markdown.match(/\[!(?:multiselect|singleselect|checkbox|datetime|references|projects-references|areas-references|goals-references|vision-references|purpose-references|habits-references|projects-list|areas-list|goals-list|visions-list|habits-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(?::[^\]]*)?\]/g) || [];
   
   // Create a structural signature based on:
   // 1. Block count (structural changes)
@@ -266,6 +266,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   const visionReferencesPattern = /\[!vision-references:([^\]]*)\]\]?/g;
   const purposeReferencesPattern = /\[!purpose-references:([^\]]*)\]\]?/g;
   const projectsReferencesPattern = /\[!projects-references:([^\]]*)\]\]?/g;
+  const habitsReferencesPattern = /\[!habits-references:([^\]]*)\]\]?/g;
   // Pattern to match list markers in markdown (e.g., [!projects-list])
   const projectsListPattern = /\[!projects-list\]/g;
   const areasListPattern = /\[!areas-list\]/g;
@@ -441,6 +442,11 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   while ((match = projectsReferencesPattern.exec(markdown)) !== null) {
     const references = match[1];
     referencesBlocks.push({ text: match[0], references, blockType: 'projects-references' });
+  }
+  
+  while ((match = habitsReferencesPattern.exec(markdown)) !== null) {
+    const references = match[1];
+    referencesBlocks.push({ text: match[0], references, blockType: 'habits-references' });
   }
   
   // Check for list markers
@@ -678,7 +684,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
 
       // New: If this paragraph is composed only of our custom markers (possibly multiple),
       // split them into individual custom blocks to prevent them rendering as plain text.
-      const markerTokenRegex = /\[!(references|projects-references|areas-references|goals-references|vision-references|purpose-references|multiselect|singleselect|checkbox|datetime|projects-list|areas-list|goals-list|visions-list|habits-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(:[^\]]*)?\](?:\])?/g;
+      const markerTokenRegex = /\[!(references|projects-references|areas-references|goals-references|vision-references|purpose-references|habits-references|multiselect|singleselect|checkbox|datetime|projects-list|areas-list|goals-list|visions-list|habits-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(:[^\]]*)?\](?:\])?/g;
       const leftoverAfterRemoval = blockText.replace(markerTokenRegex, '');
       const leftoverSanitized = leftoverAfterRemoval.replace(/[\s\u200B-\u200D\uFEFF]/g, '').trim();
       const onlyMarkers = blockText.trim().length > 0 && leftoverSanitized === '';

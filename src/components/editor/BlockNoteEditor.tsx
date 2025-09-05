@@ -364,7 +364,15 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
             type === 'singleselect' ||
             type === 'datetime' ||
             type === 'checkbox' ||
-            type === 'multiselect'
+            type === 'multiselect' ||
+            type === 'projects-list' ||
+            type === 'areas-list' ||
+            type === 'goals-list' ||
+            type === 'visions-list' ||
+            type === 'habits-list' ||
+            type === 'projects-areas-list' ||
+            type === 'goals-areas-list' ||
+            type === 'visions-goals-list'
           );
         };
 
@@ -386,7 +394,15 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
               /^\[!singleselect:[^\]]*\]$/.test(fullText) ||
               /^\[!datetime:[^\]]*\]$/.test(fullText) ||
               /^\[!checkbox:[^\]]*\]$/.test(fullText) ||
-              /^\[!multiselect:[^\]]*\]$/.test(fullText)
+              /^\[!multiselect:[^\]]*\]$/.test(fullText) ||
+              /^\[!projects-list\]$/.test(fullText) ||
+              /^\[!areas-list\]$/.test(fullText) ||
+              /^\[!goals-list\]$/.test(fullText) ||
+              /^\[!visions-list\]$/.test(fullText) ||
+              /^\[!habits-list\]$/.test(fullText) ||
+              /^\[!projects-areas-list\]$/.test(fullText) ||
+              /^\[!goals-areas-list\]$/.test(fullText) ||
+              /^\[!visions-goals-list\]$/.test(fullText)
             );
 
             if (isMarker) {
@@ -430,6 +446,22 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
               const type = props?.type || '';
               const value = props?.value || '';
               markdownParts.push(`[!multiselect:${type}:${value}]\n\n`);
+            } else if (blockType === 'projects-list') {
+              markdownParts.push(`[!projects-list]\n\n`);
+            } else if (blockType === 'areas-list') {
+              markdownParts.push(`[!areas-list]\n\n`);
+            } else if (blockType === 'goals-list') {
+              markdownParts.push(`[!goals-list]\n\n`);
+            } else if (blockType === 'visions-list') {
+              markdownParts.push(`[!visions-list]\n\n`);
+            } else if (blockType === 'habits-list') {
+              markdownParts.push(`[!habits-list]\n\n`);
+            } else if (blockType === 'projects-areas-list') {
+              markdownParts.push(`[!projects-areas-list]\n\n`);
+            } else if (blockType === 'goals-areas-list') {
+              markdownParts.push(`[!goals-areas-list]\n\n`);
+            } else if (blockType === 'visions-goals-list') {
+              markdownParts.push(`[!visions-goals-list]\n\n`);
             }
           } else {
             // Collect standard blocks to convert together

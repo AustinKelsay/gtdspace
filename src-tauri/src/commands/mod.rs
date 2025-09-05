@@ -4133,7 +4133,7 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
                 || line.starts_with("*Track your habit")
             {
                 continue;
-            } 
+            }
             // Check for table header
             else if line.contains("| Date") && line.contains("| Time") {
                 has_table_header = true;
@@ -4164,15 +4164,18 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
     // Helper function to convert old list entry to table row
     fn convert_list_to_table_row(list_entry: &str) -> Option<String> {
         // Parse old format: - **YYYY-MM-DD** at **HH:MM AM/PM**: Status (Action - Details)
-        let re = regex::Regex::new(r"^- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*([^*]+)\*\*: ([^(]+) \(([^)]+) - ([^)]+)\)$").ok()?;
+        let re = regex::Regex::new(
+            r"^- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*([^*]+)\*\*: ([^(]+) \(([^)]+) - ([^)]+)\)$",
+        )
+        .ok()?;
         if let Some(caps) = re.captures(list_entry) {
             return Some(format!(
                 "| {} | {} | {} | {} | {} |",
-                &caps[1], // Date
-                &caps[2], // Time
+                &caps[1],       // Date
+                &caps[2],       // Time
                 caps[3].trim(), // Status
-                &caps[4], // Action
-                &caps[5]  // Details
+                &caps[4],       // Action
+                &caps[5]        // Details
             ));
         }
         None
@@ -4183,14 +4186,14 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
         // Need to migrate from list format to table format
         let mut new_lines = Vec::new();
         let mut table_rows = Vec::new();
-        
+
         // Convert all old list entries to table rows
         for (_, list_entry) in &old_list_entries {
             if let Some(table_row) = convert_list_to_table_row(list_entry) {
                 table_rows.push(table_row);
             }
         }
-        
+
         // Build the new content with table format
         if let Some(idx) = history_section_idx {
             // Add everything up to and including the history header
@@ -4200,33 +4203,34 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
             new_lines.push("");
             new_lines.push("| Date | Time | Status | Action | Details |");
             new_lines.push("|------|------|--------|--------|---------|");
-            
+
             // Add all converted rows
             for row in &table_rows {
                 new_lines.push(row);
             }
-            
+
             // Add the new entry
             new_lines.push(entry);
-            
+
             // Add everything after the old entries
             let skip_until = if let Some(last_idx) = last_history_line_idx {
                 last_idx + 1
             } else {
                 idx + 1
             };
-            
+
             if skip_until < lines.len() {
                 // Skip any remaining old list entries and empty lines
                 let mut i = skip_until;
-                while i < lines.len() && (lines[i].starts_with("- ") || lines[i].trim().is_empty()) {
+                while i < lines.len() && (lines[i].starts_with("- ") || lines[i].trim().is_empty())
+                {
                     i += 1;
                 }
                 if i < lines.len() {
                     new_lines.extend_from_slice(&lines[i..]);
                 }
             }
-            
+
             new_lines.join("\n")
         } else {
             // Shouldn't happen, but fallback to creating new section
@@ -4248,15 +4252,15 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
         new_lines.push("");
         new_lines.push("*Track your habit completions below:*");
         new_lines.push("");
-        
+
         if !has_table_header {
             // Add table header
             new_lines.push("| Date | Time | Status | Action | Details |");
             new_lines.push("|------|------|--------|--------|---------|");
         }
-        
+
         new_lines.push(entry);
-        
+
         // Add remaining content
         let skip_from = idx + 1;
         let mut i = skip_from;
@@ -4266,7 +4270,7 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
         if i < lines.len() {
             new_lines.extend_from_slice(&lines[i..]);
         }
-        
+
         new_lines.join("\n")
     } else {
         // No history section, create it with table format

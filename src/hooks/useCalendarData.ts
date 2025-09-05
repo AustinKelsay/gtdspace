@@ -420,12 +420,10 @@ export const useCalendarData = (
                   const fallback = fileLastModifiedToISO(file.last_modified, habitName);
                   if (fallback) {
                     createdDateTime = fallback;
-                    console.log(`[CalendarData] Habit ${habitName} missing created_date_time - using file.last_modified: ${createdDateTime}`);
                   }
                 }
               }
 
-              console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDateTime}, focus=${focusDate}`);
               
               // Only add habits if we have a valid createdDateTime
               if (createdDateTime) {

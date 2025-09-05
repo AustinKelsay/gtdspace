@@ -24,7 +24,6 @@ export const useHabitScheduler = (spacePath: string | null, enabled: boolean = t
 
     // Function to check and reset habits
     const checkHabits = async () => {
-      console.log('[HabitScheduler] Checking habits for reset...');
       
       const result = await withErrorHandling(
         async () => {
@@ -34,7 +33,6 @@ export const useHabitScheduler = (spacePath: string | null, enabled: boolean = t
             });
             
             if (resetHabits && resetHabits.length > 0) {
-              console.log('[HabitScheduler] Reset habits:', resetHabits);
               
               // Emit events for UI refresh
               resetHabits.forEach(habitName => {
@@ -67,7 +65,6 @@ export const useHabitScheduler = (spacePath: string | null, enabled: boolean = t
     };
 
     // Run immediately on mount (for backfilling)
-    console.log('[HabitScheduler] Starting habit scheduler for space:', spacePath);
     checkHabits();
 
     // Set up interval to check every minute (60000ms)
@@ -78,7 +75,6 @@ export const useHabitScheduler = (spacePath: string | null, enabled: boolean = t
     // Cleanup on unmount
     return () => {
       if (intervalRef.current) {
-        console.log('[HabitScheduler] Stopping habit scheduler');
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }

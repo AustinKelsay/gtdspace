@@ -59,7 +59,7 @@ const MultiSelectRenderer = React.memo(function MultiSelectRenderer(props: {
   const options = React.useMemo((): Option[] => {
     // Guard: legacy types should use SingleSelectBlock
     if (["status", "effort", "project-status"].includes(normalizedType)) {
-      if (import.meta.env.DEV) {
+      if (import.meta.env.VITE_DEBUG_BLOCKNOTE) {
         console.warn(`MultiSelectBlock: Legacy type '${normalizedType}' should use SingleSelectBlock instead`);
       }
       return [];
@@ -77,7 +77,7 @@ const MultiSelectRenderer = React.memo(function MultiSelectRenderer(props: {
         return customOptions || [];
       default:
         // Unknown type - no options
-        if (import.meta.env.DEV) {
+        if (import.meta.env.VITE_DEBUG_BLOCKNOTE) {
           console.warn(`MultiSelectBlock: Type '${normalizedType}' is not recognized for MultiSelectBlock`);
         }
         return [];
@@ -225,8 +225,32 @@ export const MultiSelectBlock = createReactBlockSpec(
       return <MultiSelectRenderer block={block} editor={props.editor} />;
     },
     parse: (element) => {
-      if (import.meta.env.DEV) {
+      if (import.meta.env.VITE_DEBUG_BLOCKNOTE) {
         console.log('MultiSelectBlock parse called with element:', element.tagName, element.outerHTML?.substring(0, 100));
+      }
+
+      // Skip table-related HTML elements - these should be handled by native table parsing
+      const tag = (element.tagName || '').toUpperCase();
+      const tableElements = ['TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD'];
+      if (tableElements.includes(tag)) {
+        if (import.meta.env.VITE_DEBUG_BLOCKNOTE) {
+          console.log('MultiSelectBlock skipping table element:', tag);
+        }
+        return undefined;
+      }
+
+      // Also skip if the element is nested anywhere inside a table
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let parent: any = element.parentElement;
+      while (parent) {
+        const pTag = (parent.tagName || '').toUpperCase();
+        if (tableElements.includes(pTag)) {
+          if (import.meta.env.VITE_DEBUG_BLOCKNOTE) {
+            console.log('MultiSelectBlock skipping element inside table:', tag);
+          }
+          return undefined;
+        }
+        parent = parent.parentElement;
       }
 
       // Check for new markdown format in paragraph

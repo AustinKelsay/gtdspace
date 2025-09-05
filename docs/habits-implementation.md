@@ -66,30 +66,35 @@ When a habit references a Project or Horizon item:
 
 ### History Format
 
-Each habit maintains a complete history as formatted list entries:
+Each habit maintains a complete history as a structured markdown table:
 
 **Markdown Format:**
 
 ```markdown
-- **2025-01-16** at **2:00 PM**: Complete (Manual - Changed from To Do)
-- **2025-01-16** at **2:05 PM**: To Do (Auto-Reset - New period)
-- **2025-01-16** at **2:10 PM**: Complete (Manual - Changed from To Do)
-- **2025-01-16** at **2:15 PM**: To Do (Backfill - Missed - app offline)
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2025-01-16 | 2:00 PM | Complete | Manual | Changed from To Do |
+| 2025-01-16 | 2:05 PM | To Do | Auto-Reset | New period |
+| 2025-01-16 | 2:10 PM | Complete | Manual | Changed from To Do |
+| 2025-01-16 | 2:15 PM | To Do | Backfill | Missed - app offline |
 ```
 
-**History Entry Types:**
-- `Complete (Manual - Changed from To Do)` - User manually checked the habit
-- `To Do (Manual - Changed from Complete)` - User manually unchecked the habit
-- `To Do (Auto-Reset - New period)` - System reset when entering new frequency window
-- `To Do (Backfill - Missed - app offline)` - Historical entry for periods while app was closed
+**History Entry Columns:**
+- **Date** - The date of the action (YYYY-MM-DD format)
+- **Time** - The time of the action (12-hour format with AM/PM)
+- **Status** - The status set (Complete or To Do)
+- **Action** - The type of action (Manual, Auto-Reset, Backfill)
+- **Details** - Additional context about the action
 
 **Display Format:**
-The history entries are displayed with visual formatting using emojis:
+The history entries from the table are displayed in the UI with visual formatting using emojis:
 
 - 📅 2025-01-16 • 🕐 2:00 PM • ✅ Complete • Manual - Changed from To Do
 - 📅 2025-01-16 • 🕐 2:05 PM • ⏳ To Do • Auto-Reset - New period
 - 📅 2025-01-16 • 🕐 2:10 PM • ✅ Complete • Manual - Changed from To Do
 - 📅 2025-01-16 • 🕐 2:15 PM • ⏳ To Do • Backfill - Missed - app offline
+
+The underlying data is stored as a clean markdown table for better structure and easier parsing.
 
 ## File Format
 
@@ -117,13 +122,17 @@ The history entries are displayed with visual formatting using emojis:
 
 *Track your habit completions below:*
 
-- **2025-01-17** at **10:00 AM**: Complete (Manual - Changed from To Do)
-- **2025-01-18** at **12:00 AM**: To Do (Auto-Reset - New period)
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2025-01-17 | 10:00 AM | Complete | Manual | Changed from To Do |
+| 2025-01-18 | 12:00 AM | To Do | Auto-Reset | New period |
 
 ### Monthly Reset Example:
-- **2025-01-31** at **10:00 AM**: Complete (Manual - Changed from To Do)
-- **2025-02-28** at **12:00 AM**: To Do (Auto-Reset - Monthly boundary, adjusted for February)
-- **2025-03-31** at **12:00 AM**: To Do (Auto-Reset - Back to day 31)
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2025-01-31 | 10:00 AM | Complete | Manual | Changed from To Do |
+| 2025-02-28 | 12:00 AM | To Do | Auto-Reset | Monthly boundary, adjusted for February |
+| 2025-03-31 | 12:00 AM | To Do | Auto-Reset | Back to day 31 |
 ```
 
 ### Reference Field Formats
@@ -171,8 +180,8 @@ The component (`HabitsListBlock`) features:
 
 **Core Commands:**
 - `create_gtd_habit` - Creates new habit with initial structure
-- `update_habit_status` - Records manual status changes
-- `check_and_reset_habits` - Runs periodically to handle auto-resets
+- `update_habit_status` - Records manual status changes (creates table row)
+- `check_and_reset_habits` - Runs periodically to handle auto-resets (creates table rows)
 - `find_habits_referencing` - Finds habits that reference a specific file/folder
 
 **Reset Logic:**
@@ -186,9 +195,10 @@ The component (`HabitsListBlock`) features:
 - Creates appropriate history entries for the transition
 
 **History Management:**
-- Appends entries as markdown list items
-- Format: `- **YYYY-MM-DD** at **H:MM AM/PM**: Status (Action - Details)`
+- Appends entries as markdown table rows
+- Format: `| YYYY-MM-DD | H:MM AM/PM | Status | Action | Details |`
 - Preserves all historical data for pattern analysis
+- Automatically migrates old list format to table format when updating
 
 **Reference Processing:**
 - Supports all three reference field formats (see Reference Field Formats section above)

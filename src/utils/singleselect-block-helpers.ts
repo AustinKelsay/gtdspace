@@ -72,9 +72,9 @@ export const mapStatusValue = (status: string): string => {
   }
   
   // Log unmapped values for diagnostics
-  // Guard access to import.meta.env.DEV to prevent runtime errors outside Vite
+  // Guard access to debug env var to prevent runtime errors outside Vite
   try {
-    if (import.meta.env.DEV) {
+    if (import.meta.env.VITE_DEBUG_BLOCKNOTE) {
       console.warn(`[SingleSelect] Unmapped status value encountered: "${status}" (normalized: "${normalized}"), defaulting to "in-progress"`);
     }
   } catch {

@@ -134,17 +134,12 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
                   return null;
                 }
 
-                console.log('[CheckboxBlock] Calling update_habit_status with:', {
-                  habitPath: filePath,
-                  newStatus: statusValue,
-                });
                 
                 await invoke('update_habit_status', {
                   habitPath: filePath,
                   newStatus: statusValue,
                 });
 
-                console.log('[CheckboxBlock] Successfully updated habit status');
                 return { statusValue };
               } catch (e) {
                 console.warn('[CheckboxBlock] Failed to call backend; reverting UI/doc and skipping update', e);

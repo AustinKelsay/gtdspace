@@ -28,7 +28,31 @@ interface HistoryEntry {
 
 // Parse a history entry string
 function parseHistoryEntry(entry: string): HistoryEntry | null {
-  // Format: - **2025-09-01** at **8:40 PM**: Complete (Manual - Changed from To Do)
+  // New table format: | 2025-09-01 | 8:40 PM | Complete | Manual | Changed from To Do |
+  const tableMatch = entry.match(/^\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|$/);
+  if (tableMatch) {
+    const cells = tableMatch.slice(1, 6).map((c) => c.trim());
+    const header = cells.map((c) => c.toLowerCase());
+    // Skip header row (supports "Notes" or "Details")
+    if (
+      header[0] === 'date' &&
+      header[1] === 'time' &&
+      header[2] === 'status' &&
+      header[3] === 'action' &&
+      (header[4] === 'notes' || header[4] === 'details')
+    ) {
+      return null;
+    }
+    return {
+      date: cells[0],
+      time: cells[1],
+      status: cells[2],
+      action: cells[3],
+      notes: cells[4],
+    };
+  }
+
+  // Old list format: - **2025-09-01** at **8:40 PM**: Complete (Manual - Changed from To Do)
   const listMatch = entry.match(/^- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*([^*]+)\*\*: ([^(]+) \(([^)]+) - ([^)]+)\)$/);
   if (listMatch) {
     return {
@@ -39,7 +63,7 @@ function parseHistoryEntry(entry: string): HistoryEntry | null {
       notes: listMatch[5],
     };
   }
-  
+
   // Also support plain format without markdown
   const plainMatch = entry.match(/^- (\d{4}-\d{2}-\d{2}) at ([^:]+): ([^(]+) \(([^)]+) - ([^)]+)\)$/);
   if (plainMatch) {
@@ -51,7 +75,7 @@ function parseHistoryEntry(entry: string): HistoryEntry | null {
       notes: plainMatch[5],
     };
   }
-  
+
   return null;
 }
 
@@ -91,15 +115,25 @@ export const HistoryBlock = createReactBlockSpec(
     render: (props) => {
       const { block } = props;
       const entriesText = (block.props?.entries as string) || '';
-      
-      // Parse entries - trim lines before parsing
+
+
+      // Parse entries - support both list format (old) and table format (new)
       const entries = entriesText
         .split('\n')
         .map(line => line.trim())
-        .filter(line => line.startsWith('-'))
+        .filter(line => {
+          const isListRow = line.startsWith('-');
+          const isTableRow = line.startsWith('|');
+          // Divider-only lines: either only dashes, or markdown table separator (pipes + dashes/colons/spaces)
+          const isDashOnlyDivider = /^-+$/.test(line);
+          const isMarkdownTableDivider = /^\|\s*[:\-\s|]+\|\s*$/.test(line);
+          const isDivider = isDashOnlyDivider || isMarkdownTableDivider;
+          return (isListRow || isTableRow) && !isDivider;
+        })
         .map(parseHistoryEntry)
         .filter((entry): entry is HistoryEntry => entry !== null);
-      
+
+
       if (entries.length === 0) {
         return (
           <div className="my-2 p-3 border rounded-lg bg-muted/50">
@@ -110,39 +144,47 @@ export const HistoryBlock = createReactBlockSpec(
           </div>
         );
       }
-      
+
       return (
-        <div className="my-2 border rounded-lg bg-card">
-          <ScrollArea className="max-h-64">
-            <div className="p-3 space-y-2">
-              {entries.map((entry, index) => (
-                <div
-                  key={index}
-                  className="flex items-start gap-3 p-2 rounded hover:bg-accent/50 transition-colors"
-                >
-                  {getStatusIcon(entry.status)}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium">
-                        {entry.date}
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        at {entry.time}
-                      </span>
+        <div className="my-2 border rounded-lg bg-card overflow-hidden">
+          <ScrollArea className="max-h-96">
+            <table className="w-full">
+              <thead className="bg-muted/50 sticky top-0">
+                <tr className="border-b">
+                  <th className="text-left p-2 text-sm font-medium">Date</th>
+                  <th className="text-left p-2 text-sm font-medium">Time</th>
+                  <th className="text-left p-2 text-sm font-medium">Status</th>
+                  <th className="text-left p-2 text-sm font-medium">Action</th>
+                  <th className="text-left p-2 text-sm font-medium">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry, index) => (
+                  <tr
+                    key={index}
+                    className="border-b hover:bg-accent/50 transition-colors"
+                  >
+                    <td className="p-2 text-sm">{entry.date}</td>
+                    <td className="p-2 text-sm text-muted-foreground">{entry.time}</td>
+                    <td className="p-2">
+                      <div className="flex items-center gap-1">
+                        {getStatusIcon(entry.status)}
+                        <span className="text-sm">{entry.status}</span>
+                      </div>
+                    </td>
+                    <td className="p-2">
                       <span className={cn(
                         "text-xs px-2 py-0.5 rounded-full font-medium",
                         getActionColor(entry.action)
                       )}>
                         {entry.action}
                       </span>
-                    </div>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {entry.status} - {entry.notes}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                    </td>
+                    <td className="p-2 text-sm text-muted-foreground">{entry.notes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </ScrollArea>
         </div>
       );

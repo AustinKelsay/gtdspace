@@ -73,6 +73,41 @@ const HORIZON_DIRS: Record<'areas' | 'goals' | 'vision' | 'purpose' | 'projects'
 };
 
 /**
+ * Return true if this element is a table element or nested anywhere within a table.
+ */
+function isInTable(element: Element): boolean {
+  const tableElements = ['TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD'];
+  let current: Element | null = element;
+  while (current) {
+    const tag = (current.tagName || '').toUpperCase();
+    if (tableElements.includes(tag)) return true;
+    current = current.parentElement;
+  }
+  return false;
+}
+
+/**
+ * Safe parser for horizon reference markers like [!projects-references:...].
+ * - Skips nodes inside tables
+ * - Only parses paragraph nodes
+ * - Requires an exact marker match; otherwise returns undefined
+ */
+function parseHorizonMarker(element: Element, marker: 'projects' | 'areas' | 'goals' | 'vision' | 'purpose'): { references: string } | undefined {
+  if (isInTable(element)) return undefined;
+  const tag = (element.tagName || '').toUpperCase();
+  if (tag !== 'P') return undefined;
+  const text = element.textContent || '';
+  const regex = new RegExp(`\\[!${marker}-references:([^\\]]*)\\]`);
+  const match = text.match(regex);
+  if (!match) return undefined;
+  try {
+    return { references: decodeURIComponent(match[1] || '') };
+  } catch {
+    return { references: match[1] || '' };
+  }
+}
+
+/**
  * Normalize a filesystem-like path to a forward-slash form, removing dot segments.
  * Rejects traversal attempts by returning an empty string if `..` would escape base when joined later.
  */
@@ -535,14 +570,14 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
     if (file) return { name: file.name, horizon: file.horizon };
 
     const normalized = path.replace(/\\/g, '/');
-    
+
     // For projects, extract just the project folder name
     if (normalized.includes('/Projects/')) {
       const parts = normalized.split('/Projects/')[1]?.split('/') || [];
       const name = parts[0] || 'Unknown';
       return { name, horizon: 'projects' };
     }
-    
+
     const name = normalized.split('/').pop()?.replace(/\.md$/i, '') || 'Unknown';
 
     let horizon = 'areas';
@@ -716,24 +751,7 @@ export const ProjectsReferencesBlock = createReactBlockSpec(
       const encoded = encodeURIComponent(references);
       return <p>{`[!projects-references:${encoded}]`}</p>;
     },
-    parse: (element) => {
-      const text = element.textContent || '';
-      // Find the start and end positions for robust parsing
-      const start = text.indexOf(':');
-      const end = text.lastIndexOf(']');
-      
-      if (start !== -1 && end > start) {
-        const raw = text.slice(start + 1, end);
-        try {
-          // Try to decode the payload
-          return { references: decodeURIComponent(raw) };
-        } catch {
-          // Backward compatibility: if decoding fails, use raw value
-          return { references: raw };
-        }
-      }
-      return { references: '' };
-    },
+    parse: (element) => parseHorizonMarker(element, 'projects'),
   }
 );
 
@@ -762,24 +780,7 @@ export const AreasReferencesBlock = createReactBlockSpec(
       const encoded = encodeURIComponent(references);
       return <p>{`[!areas-references:${encoded}]`}</p>;
     },
-    parse: (element) => {
-      const text = element.textContent || '';
-      // Find the start and end positions for robust parsing
-      const start = text.indexOf(':');
-      const end = text.lastIndexOf(']');
-      
-      if (start !== -1 && end > start) {
-        const raw = text.slice(start + 1, end);
-        try {
-          // Try to decode the payload
-          return { references: decodeURIComponent(raw) };
-        } catch {
-          // Backward compatibility: if decoding fails, use raw value
-          return { references: raw };
-        }
-      }
-      return { references: '' };
-    },
+    parse: (element) => parseHorizonMarker(element, 'areas'),
   }
 );
 
@@ -808,24 +809,7 @@ export const GoalsReferencesBlock = createReactBlockSpec(
       const encoded = encodeURIComponent(references);
       return <p>{`[!goals-references:${encoded}]`}</p>;
     },
-    parse: (element) => {
-      const text = element.textContent || '';
-      // Find the start and end positions for robust parsing
-      const start = text.indexOf(':');
-      const end = text.lastIndexOf(']');
-      
-      if (start !== -1 && end > start) {
-        const raw = text.slice(start + 1, end);
-        try {
-          // Try to decode the payload
-          return { references: decodeURIComponent(raw) };
-        } catch {
-          // Backward compatibility: if decoding fails, use raw value
-          return { references: raw };
-        }
-      }
-      return { references: '' };
-    },
+    parse: (element) => parseHorizonMarker(element, 'goals'),
   }
 );
 
@@ -854,24 +838,7 @@ export const VisionReferencesBlock = createReactBlockSpec(
       const encoded = encodeURIComponent(references);
       return <p>{`[!vision-references:${encoded}]`}</p>;
     },
-    parse: (element) => {
-      const text = element.textContent || '';
-      // Find the start and end positions for robust parsing
-      const start = text.indexOf(':');
-      const end = text.lastIndexOf(']');
-      
-      if (start !== -1 && end > start) {
-        const raw = text.slice(start + 1, end);
-        try {
-          // Try to decode the payload
-          return { references: decodeURIComponent(raw) };
-        } catch {
-          // Backward compatibility: if decoding fails, use raw value
-          return { references: raw };
-        }
-      }
-      return { references: '' };
-    },
+    parse: (element) => parseHorizonMarker(element, 'vision'),
   }
 );
 
@@ -900,23 +867,6 @@ export const PurposeReferencesBlock = createReactBlockSpec(
       const encoded = encodeURIComponent(references);
       return <p>{`[!purpose-references:${encoded}]`}</p>;
     },
-    parse: (element) => {
-      const text = element.textContent || '';
-      // Find the start and end positions for robust parsing
-      const start = text.indexOf(':');
-      const end = text.lastIndexOf(']');
-      
-      if (start !== -1 && end > start) {
-        const raw = text.slice(start + 1, end);
-        try {
-          // Try to decode the payload
-          return { references: decodeURIComponent(raw) };
-        } catch {
-          // Backward compatibility: if decoding fails, use raw value
-          return { references: raw };
-        }
-      }
-      return { references: '' };
-    },
+    parse: (element) => parseHorizonMarker(element, 'purpose'),
   }
 );

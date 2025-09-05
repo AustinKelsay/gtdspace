@@ -3,7 +3,7 @@
  */
 
 // Determine whether verbose debug logging should be enabled
-const isDebugLoggingEnabled = import.meta.env.DEV || import.meta.env.VITE_DEBUG === 'true';
+const isDebugLoggingEnabled = import.meta.env.VITE_DEBUG === 'true';
 
 /**
  * Wait for Tauri to be ready

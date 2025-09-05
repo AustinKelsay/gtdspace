@@ -69,17 +69,30 @@ export const ReferencesBlock = createReactBlockSpec(
       return null;
     },
     parse: (element) => {
-      // Parse the element to extract references data
+      // Normalize tag name for robust comparisons
+      const tag = (element.tagName || '').toUpperCase();
+
+      // 1) Never parse inside tables — let native table parsing handle these nodes
+      const tableElements = ['TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD'];
+      if (tableElements.includes(tag)) return undefined;
+      // Also skip if the element is nested anywhere inside a table
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let parent: any = element.parentElement;
+      while (parent) {
+        const pTag = (parent.tagName || '').toUpperCase();
+        if (tableElements.includes(pTag)) return undefined;
+        parent = parent.parentElement;
+      }
+
+      // 2) Only consider paragraph elements for marker-style parsing
+      if (tag !== 'P') return undefined;
+
+      // 3) Parse only if the exact marker exists; otherwise return undefined
       const textContent = element.textContent || '';
       const match = textContent.match(/\[!references:([^\]]*)\]/);
-      if (match) {
-        return {
-          references: match[1] || ''
-        };
-      }
-      return {
-        references: ''
-      };
+      if (!match) return undefined;
+
+      return { references: match[1] || '' };
     },
   }
 );
@@ -114,7 +127,7 @@ const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(prop
     try {
       const spacePath = window.localStorage.getItem('gtdspace-current-path') || '';
 
-      if (import.meta.env.DEV) {
+      if (import.meta.env.VITE_DEBUG_BLOCKNOTE) {
         console.log('ReferencesBlock: Loading files, spacePath:', spacePath);
       }
 
@@ -127,7 +140,7 @@ const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(prop
       const cabinetPath = `${spacePath}/Cabinet`;
       const somedayPath = `${spacePath}/Someday Maybe`;
 
-      if (import.meta.env.DEV) {
+      if (import.meta.env.VITE_DEBUG_BLOCKNOTE) {
         console.log('ReferencesBlock: Loading from paths:', { cabinetPath, somedayPath });
       }
 
@@ -158,7 +171,7 @@ const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(prop
         console.error('Failed to load Someday Maybe files:', err);
       }
 
-      if (import.meta.env.DEV) {
+      if (import.meta.env.VITE_DEBUG_BLOCKNOTE) {
         console.log('ReferencesBlock: Total loaded files:', {
           cabinet: cabinetFiles.length,
           someday: somedayFiles.length

@@ -9,7 +9,7 @@ import React, { useEffect, useRef, useMemo } from 'react';
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
-import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
+import { BlockNoteSchema, defaultBlockSpecs, PartialBlock } from "@blocknote/core";
 import debounce from 'lodash.debounce';
 import { MultiSelectBlock } from './blocks/MultiSelectBlock';
 import { SingleSelectBlock } from './blocks/SingleSelectBlock';
@@ -120,7 +120,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   // Create the BlockNote editor instance with custom schema
   const editor = useCreateBlockNote({
     schema,
-  });
+  })
 
   // Add multiselect insertion capabilities
   useMultiSelectInsertion(editor);
@@ -158,19 +158,19 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
 
           // First parse markdown to blocks
           const parsedBlocks = await editor.tryParseMarkdownToBlocks(content);
-
           // Then post-process to handle custom blocks; cast to the schema's block type
           const processedBlocks = postProcessBlockNoteBlocks(parsedBlocks as unknown[], content) as typeof parsedBlocks;
 
           // Log to see if multiselect blocks are being created
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const hasMultiselect = (processedBlocks as any[]).some((b: any) => b.type === 'multiselect');
-          if (hasMultiselect) {
+          if (hasMultiselect && import.meta.env.VITE_DEBUG_BLOCKNOTE) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             console.log('Found multiselect blocks in parsed content:', (processedBlocks as any[]).filter((b: any) => b.type === 'multiselect'));
           }
 
-          editor.replaceBlocks(editor.document, processedBlocks);
+          // Cast to PartialBlock array to ensure proper typing
+          editor.replaceBlocks(editor.document, processedBlocks as PartialBlock[]);
           initialContentLoaded.current = true;
 
           // Reset the flag after a short delay to ensure the onChange has fired

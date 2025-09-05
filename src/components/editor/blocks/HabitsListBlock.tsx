@@ -135,13 +135,10 @@ function HabitsListBlockComponent(incomingProps: unknown) {
       setError(null);
 
       const spacePath = localStorage.getItem('gtdspace-current-path') || '';
-      console.log('[HabitsListBlock] Loading habits for path:', currentPath);
-      console.log('[HabitsListBlock] Space path:', spacePath);
       const result = await invoke<HabitItem[]>('find_habits_referencing', {
         targetPath: currentPath,
         spacePath: spacePath,
       });
-      console.log('[HabitsListBlock] Found habits:', result);
 
       setHabits(result || []);
     } catch (err) {

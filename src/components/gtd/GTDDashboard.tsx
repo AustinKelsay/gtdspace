@@ -496,9 +496,6 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
   // Calculate habit statistics
   const habitStats = React.useMemo<HabitStats>(() => {
-    console.log('[GTDDashboard] Recalculating habitStats', {
-      habitCount: habits.length
-    });
     if (!habits || habits.length === 0) {
       return {
         total: 0,

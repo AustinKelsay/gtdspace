@@ -231,11 +231,6 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
     }
   }
   
-  // Only log when actually processing (not using cache) - keep minimal logging for debugging
-  // Uncomment for debugging if needed:
-  // if (hasHistory) {
-  //   console.log('Processing blocks with History section');
-  // }
   
   // Pattern to match multiselect markers in markdown (e.g., [!multiselect:tags:urgent,important])
   const multiSelectMarkerPattern = /\[!multiselect:([^:]+):([^\]]*)\]/g;
@@ -514,8 +509,8 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
     }
   }
   
-  // Log summary only in development
-  if (import.meta?.env?.DEV) {
+  // Log summary only when debug enabled
+  if (import.meta?.env?.VITE_DEBUG_BLOCKNOTE) {
     const totalCustomBlocks = multiSelectBlocks.length + singleSelectBlocks.length + 
                               checkboxBlocks.length + dateTimeBlocks.length + referencesBlocks.length;
     if (totalCustomBlocks > 0) {
@@ -535,15 +530,18 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   
   // Track if we're in a History section
   let inHistorySection = false;
-  let historyEntries: string[] = [];
   
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i] as UnknownBlock;
     let blockReplaced = false;
     
+    const blockText = getTextFromBlock(block);
+    
+    
+    
+    
     // Skip horizontal rules (---) but preserve them
     if (block.type === 'paragraph') {
-      const blockText = getTextFromBlock(block);
       if (blockText === '---' || blockText === '***' || blockText === '___') {
         processedBlocks.push(block);
         continue;
@@ -553,127 +551,59 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
     // Check if this is a History heading BEFORE checking for empty references
     // This ensures History sections are processed correctly
     if (block.type === 'heading' && block.props?.level === 2) {
-      const headingText = getTextFromBlock(block);
       // Also try trimming in case there's whitespace
-      const trimmedText = headingText.trim();
+      const trimmedText = blockText.trim();
       if (trimmedText === 'History') {
-        // Found History heading - start collecting entries
+        // Found History heading - we'll let BlockNote handle the table natively
         inHistorySection = true;
-        historyEntries = [];
+        // Don't collect entries, just let the table pass through
         // Add the heading to processed blocks
         processedBlocks.push(block);
         continue;
       } else {
         // End of History section if we hit another heading
-        if (inHistorySection && historyEntries.length > 0) {
-          // Add the history block before the new heading
-          processedBlocks.push({
-            type: 'history',
-            props: {
-              entries: historyEntries.join('\n')
-            }
-          });
-          historyEntries = [];
-        }
         inHistorySection = false;
       }
     }
     
-    // If we're in a History section, collect entries
+    // If we're in a History section, just pass everything through to BlockNote
     if (inHistorySection) {
-      const blockText = getTextFromBlock(block);
-      // Processing block in History section
       
-      // Check if BlockNote wrongly parsed history as a references block
-      if (block.type === 'references' && block.props) {
-        // Found references block in History section - convert to formatted list
-        // The history entries are in the original markdown, we need to extract them
-        // Look for list items in the markdown after the History heading
-        const historyMatch = markdown.match(/## History[\s\S]*?(?=##|$)/);
-        if (historyMatch) {
-          const historySection = historyMatch[0];
-          const entryMatches = historySection.match(/^- \*\*\d{4}-\d{2}-\d{2}\*\*.*$/gm);
-          if (entryMatches && entryMatches.length > 0) {
-            // Extract and format history entries
-            
-            // Parse entries and create formatted list items
-            for (const entry of entryMatches) {
-              // Format: - **2025-09-01** at **8:40 PM**: Complete (Manual - Changed from To Do)
-              const match = entry.match(/^- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*([^*]+)\*\*: ([^(]+) \((.+)\)$/);
-              if (match) {
-                const date = match[1];
-                const time = match[2];
-                const status = match[3].trim();
-                const notes = match[4];
-                
-                // Choose emoji based on status
-                const statusEmoji = status.toLowerCase().includes('complete') ? '✅' : '⏳';
-                
-                // Create formatted text with emojis and separators
-                const formattedText = `📅 ${date} • 🕐 ${time} • ${statusEmoji} ${status} • ${notes}`;
-                
-                // Add as a bullet list item
-                processedBlocks.push({
-                  type: 'bulletListItem',
-                  content: [{
-                    type: 'text',
-                    text: formattedText,
-                    styles: {}
-                  }]
-                });
-              }
-            }
-          }
-        }
-        inHistorySection = false;
-        continue; // Skip the references block
+      // Handle table blocks in History section - just pass them through
+      if (block.type === 'table') {
+        processedBlocks.push(block);
+        continue;
       }
       
-      // Check if it's a list item (history entry)
-      if (block.type === 'bulletListItem' || 
-          (block.type === 'paragraph' && blockText.startsWith('- '))) {
-        // Add history entry
-        historyEntries.push(blockText);
-        continue; // Skip this block, we'll add it to the history block
-      }
-      
-      // Skip descriptive text like "Track your habit completions below:"
-      // Also check for italic content
-      const hasItalicContent = Array.isArray(block.content) && 
-        block.content.some((item: unknown) => {
-          const child = item as TextChild;
-          return typeof child === 'object' && child.styles?.italic;
-        });
-      if (block.type === 'paragraph' && 
-          (blockText.includes('Track your habit') || blockText.trim() === '' || hasItalicContent)) {
-        // Skip descriptive/empty paragraph in History section
-        continue; // Skip this block
-      }
-      
-      // If we hit something else that's not empty, end the history section
-      if (blockText.trim() !== '') {
-        if (historyEntries.length > 0) {
-          processedBlocks.push({
-            type: 'history',
-            props: {
-              entries: historyEntries.join('\n')
-            }
+      // Pass through all content in history sections - let BlockNote handle natively
+      // Only skip truly empty paragraphs or descriptive text
+      if (block.type === 'paragraph') {
+        const hasItalicContent = Array.isArray(block.content) && 
+          block.content.some((item: unknown) => {
+            const child = item as TextChild;
+            return typeof child === 'object' && child.styles?.italic;
           });
-          historyEntries = [];
+        
+        if (blockText.includes('Track your habit') || blockText.trim() === '' || hasItalicContent) {
+          // Skip descriptive/empty paragraph in History section
+          continue;
         }
-        inHistorySection = false;
       }
+      
+      // Pass through all other content (including references blocks that might be table data)
+      processedBlocks.push(block);
+      continue;
     }
     
-    // Skip empty generic references blocks ONLY if NOT in a History section
-    // These are often created by BlockNote from horizontal rules or other markdown
-    if (!inHistorySection && block.type === 'references' && block.props) {
+    // Skip empty generic references blocks (but not in History sections)
+    // These are often created by BlockNote from horizontal rules, table separators, or other markdown
+    if (block.type === 'references' && block.props && !inHistorySection) {
       const refsValue = block.props.references;
       const refs = typeof refsValue === 'string' ? refsValue.trim() : '';
       // If it's an empty generic references block (not areas/goals/vision/purpose-references)
       // then skip it as it's likely a parsing artifact
-      if (refs === '' || refs === '---') {
-        // Skip this empty references block
+      // But don't filter in History sections as these might be legitimate table content
+      if (refs === '' || refs === '---' || refs.includes('|') || refs.includes('---')) {
         continue;
       }
     }
@@ -931,42 +861,10 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
     }
   }
   
-  // Add any remaining history entries at the end of the document
-  if (inHistorySection && historyEntries.length > 0) {
-    // Add remaining history entries as formatted list
-    
-    // Parse entries and create formatted list items
-    for (const entry of historyEntries) {
-      const entryText = entry.startsWith('- ') ? entry : `- ${entry}`;
-      const match = entryText.match(/^- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*([^*]+)\*\*: ([^(]+) \((.+)\)$/);
-      if (match) {
-        const date = match[1];
-        const time = match[2];
-        const status = match[3].trim();
-        const notes = match[4];
-        
-        // Choose emoji based on status
-        const statusEmoji = status.toLowerCase().includes('complete') ? '✅' : '⏳';
-        
-        // Create formatted text with emojis and separators
-        const formattedText = `📅 ${date} • 🕐 ${time} • ${statusEmoji} ${status} • ${notes}`;
-        
-        // Add as a bullet list item
-        processedBlocks.push({
-          type: 'bulletListItem',
-          content: [{
-            type: 'text',
-            text: formattedText,
-            styles: {}
-          }]
-        });
-      }
-    }
-  } else if (inHistorySection) {
-    // In history section but no entries collected
-  }
+  // Don't create history blocks anymore - let BlockNote handle tables natively
   
   // Processing complete
+  
   
   // Cache the processed result
   const result = processedBlocks as unknown[];

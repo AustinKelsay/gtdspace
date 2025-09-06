@@ -7,20 +7,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # Development
 npm run tauri:dev      # Primary dev server with hot reload
+npm run tauri          # Run Tauri CLI commands directly
+npm run dev            # Vite dev server only (frontend)
+npm run preview        # Preview built frontend
 
 # Code Quality - ALWAYS RUN BEFORE COMMITTING
 npm run type-check     # TypeScript validation
 npm run lint           # ESLint check (CI fails on warnings)
+npm run lint:fix       # Auto-fix ESLint issues
 cd src-tauri && cargo check && cargo clippy  # Rust checks
+cd src-tauri && cargo fmt --check  # Rust formatting check
 
 # Production Build
-npm run tauri:build    # Creates platform-specific installer
+npm run tauri:build    # Creates platform-specific installer (runs pretauri:build automatically)
+npm run build          # Build frontend only
 
-# Release (includes version bumping and git tags)
-npm run release:patch  # 0.1.0 → 0.1.1
-npm run release:minor  # 0.1.0 → 0.2.0
-npm run release:major  # 0.1.0 → 1.0.0
+# Version Management (updates versions only)
+npm run version:bump   # Alias for version:patch (default bump)
+npm run version:patch  # Bump patch version
+npm run version:minor  # Bump minor version
+npm run version:major  # Bump major version
+
+# Release (full release: version bump + git tag + commit)
+npm run release        # Alias for release:patch (default release)
+npm run release:patch  # 0.1.0 → 0.1.1 with git operations
+npm run release:minor  # 0.1.0 → 0.2.0 with git operations
+npm run release:major  # 0.1.0 → 1.0.0 with git operations
+
+# Utilities
+npm run icons:generate # Generate app icons for all platforms
 ```
+
+## Before First Run
+
+1. Install dependencies: `npm install`
+2. Rust toolchain: Ensure Rust is installed via [rustup](https://rustup.rs/)
+3. For Google Calendar integration:
+   - **WARNING**: Never put secrets in `VITE_*` environment variables as they are exposed to the frontend
+   - Use PKCE (Proof Key for Code Exchange) flow in the Vite frontend with only a public client ID
+   - If a client secret is required, it must be handled on the Tauri (Rust) backend and stored securely in the OS keychain
+   - Create `.env` with only:
+   ```
+   VITE_GOOGLE_CLIENT_ID=your_client_id
+   ```
+4. First build may take longer due to Rust compilation
 
 ## Architecture Overview
 
@@ -76,7 +106,9 @@ Auto-created at `~/GTD Space`:
 
 **Project Creation**: `useGTDSpace.createProject()` → Tauri command → `gtd-project-created` event → UI refresh  
 **Content Updates**: Editor → `useTabManager` → `content-event-bus` → Components update  
+**Tab Management**: Open file → `addTab()` → Active tab state → Editor mount → Content load  
 **File Watch**: External change → File watcher (500ms debounce) → UI refresh  
+**Save Flow**: Manual save (Cmd/Ctrl+S) → `saveTab()` → Tauri `write_file` → Success notification  
 **Data Migration**: In-memory only during reads via `migrateMarkdownContent()`
 
 ### Performance Optimizations
@@ -115,10 +147,11 @@ Auto-created at `~/GTD Space`:
 - **TypeScript**: Strict mode disabled
 - **ESLint**: Zero warnings allowed (CI enforced)
 - **Rust**: Must pass `cargo clippy -D warnings` and `cargo fmt --check`
-- **BlockNote**: v0.35 pinned for stability
+- **BlockNote**: v0.35 pinned for stability (DO NOT upgrade without testing)
 - **Node**: v20+ required
 - **Limits**: Max 10MB files, max 10 open tabs
 - **Google OAuth**: Port 9898 required (`.env` config needed)
+- **Testing**: No test framework configured - manual testing required
 
 ## CI/CD & Release
 
@@ -130,9 +163,25 @@ Auto-created at `~/GTD Space`:
 3. Creates git tag (format: v0.1.0)
 4. Triggers multi-platform builds
 
+## Debugging Tips
+
+- **Tauri DevTools**: Available in dev mode via right-click → Inspect
+- **Rust Logs**: Check terminal output for backend errors
+- **Event Bus**: Use `window.addEventListener('content-updated')` to debug
+- **File Operations**: Check Tauri permissions if file access fails
+
+## Common Troubleshooting
+
+- **"Cannot find module"**: Run `npm install` and restart dev server
+- **Rust compilation errors**: Update Rust toolchain with `rustup update`
+- **Calendar sync fails**: Check `.env` configuration and port 9898 availability
+- **Editor not loading**: Clear browser cache in dev tools
+- **File changes not detected**: Check file watcher is running (see console logs)
+
 ## Known Issues
 
 - **Sidebar refresh**: Projects may not appear immediately after creation
 - **Large files**: >1MB may cause editor lag
 - **BlockNote formatting**: Rich text features lost when converting to markdown
 - **No test framework**: Manual testing required
+- **macOS code signing**: Unsigned builds may require security bypass on first run

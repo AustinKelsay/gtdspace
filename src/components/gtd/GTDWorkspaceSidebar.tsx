@@ -1157,16 +1157,18 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   if (!currentFolder) {
     return (
       <Card className={`flex flex-col h-full border-r ${className}`}>
-        <div className="p-6 text-center">
-          <FolderOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-          <h3 className="font-semibold mb-2">Welcome to GTD Space</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Select a folder to create or open a GTD workspace
-          </p>
-          <Button onClick={handleSelectFolder} variant="default" size="sm">
-            <Folder className="h-4 w-4 mr-2" />
-            Select Folder
-          </Button>
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center">
+            <FolderOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+            <h3 className="font-semibold mb-2">Welcome to GTD Space</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Select a folder to create or open a GTD workspace
+            </p>
+            <Button onClick={handleSelectFolder} variant="default" size="sm">
+              <Folder className="h-4 w-4 mr-2" />
+              Select Folder
+            </Button>
+          </div>
         </div>
       </Card>
     );
@@ -1176,19 +1178,21 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   if (!gtdSpace?.isGTDSpace) {
     return (
       <Card className={`flex flex-col h-full border-r ${className}`}>
-        <div className="p-6 text-center text-muted-foreground">
-          <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>This is not a GTD workspace</p>
-          <p className="text-sm mt-2">Initialize from the prompt</p>
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center text-muted-foreground">
+            <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>This is not a GTD workspace</p>
+            <p className="text-sm mt-2">Initialize from the prompt</p>
+          </div>
         </div>
       </Card>
     );
   }
 
   return (
-    <Card className={`flex flex-col h-full border-r overflow-hidden ${className}`}>
-      {/* Header */}
-      <div className="p-3 border-b">
+    <Card className={`flex flex-col h-full border-r ${className}`}>
+      {/* Header - Fixed height section */}
+      <div className="flex-shrink-0 p-3 border-b">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold flex items-center gap-1">
             <Target className="h-4 w-4 flex-shrink-0" />
@@ -1249,33 +1253,36 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         </div>
       </div>
 
-      {/* Search Toggle */}
-      <div className="px-3 pt-2">
-        <Button
-          onClick={() => setShowSearch(!showSearch)}
-          variant="outline"
-          size="sm"
-          className="w-full justify-start"
-        >
-          <Search className="h-3.5 w-3.5 mr-1.5 flex-shrink-0" />
-          <span className="truncate">Search</span>
-        </Button>
+      {/* Search Section - Fixed height when visible */}
+      <div className="flex-shrink-0">
+        {/* Search Toggle */}
+        <div className="px-3 pt-2">
+          <Button
+            onClick={() => setShowSearch(!showSearch)}
+            variant="outline"
+            size="sm"
+            className="w-full justify-start"
+          >
+            <Search className="h-3.5 w-3.5 mr-1.5 flex-shrink-0" />
+            <span className="truncate">Search</span>
+          </Button>
+        </div>
+
+        {/* Search Bar */}
+        {showSearch && (
+          <div className="px-3 py-2">
+            <FileSearch
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search..."
+            />
+          </div>
+        )}
       </div>
 
-      {/* Search Bar */}
-      {showSearch && (
-        <div className="px-3 py-2">
-          <FileSearch
-            value={searchQuery}
-            onChange={setSearchQuery}
-            placeholder="Search..."
-          />
-        </div>
-      )}
-
-      {/* GTD Sections */}
-      <ScrollArea className="flex-1">
-        <div className="p-2">
+      {/* GTD Sections - Scrollable area that takes remaining space */}
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="p-2 pb-4">
           {/* Show search results when searching */}
           {searchQuery && searchResults ? (
             <div className="space-y-4">

@@ -55,9 +55,8 @@
   color: rgb(var(--foreground)) !important;
   font-family: inherit;
   height: 100%;
-  overflow-y: auto !important;
-  /* Allow side menu/hover effects to overflow horizontally */
-  overflow-x: visible !important;
+  /* Remove forced overflow to prevent cursor jumping */
+  overflow: visible !important;
 }
 
 .bn-container {
@@ -65,22 +64,28 @@
   color: rgb(var(--foreground)) !important;
   min-height: 100%;
   padding-bottom: 2rem; /* Add some bottom padding for better scrolling experience */
+  /* Ensure the container itself handles scrolling properly */
+  overflow-y: auto;
+  overflow-x: visible;
+  /* Prevent layout recalculation during typing */
+  will-change: scroll-position;
 }
 
-/* Ensure the BlockNote editor wrapper allows scrolling */
+/* Ensure the BlockNote editor wrapper allows proper layout */
 .bn-editor-wrapper {
   height: 100%;
   /* Do not clip BlockNote floating UI on the left gutter */
   overflow: visible;
 }
 
-/* Make sure the content area is scrollable */
+/* Remove conflicting overflow rules that cause cursor jumping */
 .bn-editor > div {
   height: 100%;
-  overflow-y: auto;
+  /* Let ProseMirror handle its own scrolling */
+  overflow: visible;
 }
 
-/* Fix BlockNote's internal structure for proper scrolling */
+/* Fix BlockNote's internal structure for proper layout */
 .bn-editor .bn-editor-wrapper {
   height: auto !important;
   min-height: 100%;
@@ -91,6 +96,13 @@
   min-height: 100%;
   height: auto !important;
   padding: 1rem;
+  /* Prevent cursor jumping by maintaining stable layout */
+  position: relative;
+  /* Ensure text input works properly */
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  /* Improve line height for better cursor navigation */
+  line-height: 1.6;
 }
 
 /* Remove any max-height constraints */
@@ -102,8 +114,10 @@
 /* Block content styling */
 .bn-block-content {
   padding: 0.375rem 0;
-  line-height: 1.75;
+  line-height: 1.6;
   color: rgb(var(--foreground)) !important;
+  /* Ensure stable layout for cursor navigation */
+  position: relative;
 }
 
 /* Placeholder text */
@@ -153,17 +167,21 @@
   color: rgb(96, 165, 250);
 }
 
-/* Lists */
+/* Lists - Ensure they don't interfere with our custom blocks */
 .bn-block-content ul,
 .bn-block-content ol {
   padding-left: 1.5rem;
   margin: 0.5rem 0;
   color: rgb(var(--foreground));
+  /* Prevent list items from being misinterpreted */
+  list-style-position: outside;
 }
 
 .bn-block-content li {
   margin: 0.25rem 0;
   color: rgb(var(--foreground));
+  /* Ensure proper line height for cursor navigation */
+  line-height: 1.6;
 }
 
 /* Code blocks */
@@ -280,15 +298,22 @@
   font-weight: 500;
 }
 
+/*
+ * Restore legacy ‘complete’ selectors and improve light-mode status color contrast
+ * Add td[data-status="complete"] and .status-complete alongside existing completed/todo rules for back-compat.
+ * Change light-mode green to rgb(21 128 61) and amber to rgb(180 83 9) (green-700/amber-700) to raise contrast from 2.28/2.15 up to 5.02 for WCAG 4.5:1 compliance.
+ */
 /* Color coding for status values - using data attributes and classes */
 .bn-block-content td[data-status="complete"],
-.bn-block-content td.status-complete {
-  color: rgb(34 197 94);
+.bn-block-content td.status-complete,
+.bn-block-content td[data-status="completed"],
+.bn-block-content td.status-completed {
+  color: rgb(21 128 61); /* Changed from rgb(34 197 94) for WCAG 4.5:1 compliance */
 }
 
 .bn-block-content td[data-status="todo"],
 .bn-block-content td.status-todo {
-  color: rgb(245 158 11);
+  color: rgb(180 83 9); /* Changed from rgb(245 158 11) for WCAG 4.5:1 compliance */
 }
 
 /* Action column styling */
@@ -312,8 +337,8 @@
   background: rgb(var(--accent) / 0.35);
 }
 
-.dark .bn-block-content td[data-status="complete"],
-.dark .bn-block-content td.status-complete {
+.dark .bn-block-content td[data-status="completed"],
+.dark .bn-block-content td.status-completed {
   color: rgb(74 222 128);
 }
 
@@ -427,21 +452,21 @@
 }
 
 /* Scrollbar styling */
-.bn-editor::-webkit-scrollbar {
+.bn-container::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-.bn-editor::-webkit-scrollbar-track {
+.bn-container::-webkit-scrollbar-track {
   background: rgb(var(--background));
 }
 
-.bn-editor::-webkit-scrollbar-thumb {
+.bn-container::-webkit-scrollbar-thumb {
   background: rgb(var(--border));
   border-radius: 4px;
 }
 
-.bn-editor::-webkit-scrollbar-thumb:hover {
+.bn-container::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--muted-foreground));
 }
 
@@ -477,6 +502,10 @@ no longer clipped. Additionally, ensure node wrappers don't hide child effects.
 .bn-block-content,
 .bn-react-node-view-renderer {
   overflow: visible;
+  /* Prevent layout shifts that cause cursor jumping */
+  position: relative;
+  /* Ensure consistent box model */
+  box-sizing: border-box;
 }
 
 /* Provide a tiny inset so inner content doesn't touch the left gutter */

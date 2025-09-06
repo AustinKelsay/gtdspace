@@ -6,7 +6,8 @@
 
 import React from 'react';
 import { flushSync } from 'react-dom';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
+import { readFileText } from '@/hooks/useFileManager';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +48,7 @@ import {
   RefreshCw,
   Folder,
   MoreHorizontal,
+  XCircle,
   Trash2
 } from 'lucide-react';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
@@ -149,6 +151,26 @@ const GTD_SECTIONS: GTDSection[] = [
   }
 ];
 
+// Helper function to normalize status values to canonical tokens
+const normalizeStatus = (status: string | undefined): string => {
+  if (!status) return 'in-progress';
+
+  const statusMappings: Record<string, string> = {
+    'not-started': 'in-progress',
+    'active': 'in-progress',
+    'planning': 'in-progress',
+    'on-hold': 'waiting',
+    'waiting-for': 'waiting',
+    'cancelled': 'cancelled',
+    'done': 'completed',
+    'complete': 'completed',
+    'canceled': 'cancelled', // Map US spelling to canonical UK spelling
+  };
+
+  const normalized = status.trim().toLowerCase().replace(/\s+/g, '-');
+  return statusMappings[normalized] || normalized;
+};
+
 export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   currentFolder,
   onFolderSelect,
@@ -217,9 +239,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         return sectionFiles[sectionPath] || [];
       }
       loadingSectionsRef.current.add(sectionPath);
-      const files = await invoke<MarkdownFile[]>('list_markdown_files', {
+      const files = await safeInvoke<MarkdownFile[]>('list_markdown_files', {
         path: sectionPath
-      });
+      }, []);
 
       // Sort files alphabetically by default
       const sortedFiles = files.sort((a, b) => {
@@ -270,9 +292,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       // Use dedicated backend command to list actions only
       let files: MarkdownFile[] = [];
       try {
-        files = await invoke<MarkdownFile[]>('list_project_actions', { projectPath });
+        files = await safeInvoke<MarkdownFile[]>('list_project_actions', { projectPath }, []);
       } catch (e) {
-        const all = await invoke<MarkdownFile[]>('list_markdown_files', { path: projectPath });
+        const all = await safeInvoke<MarkdownFile[]>('list_markdown_files', { path: projectPath }, []);
         files = all.filter(f => f.name !== 'README.md');
       }
 
@@ -286,13 +308,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       // Load status and due date for all actions in parallel
       const statusPromises = actions.map(async (action) => {
         try {
-          const content = await invoke<string>('read_file', { path: action.path });
+          const content = await readFileText(action.path);
           // Extract status from the markdown content
-          // Look for [!singleselect:status:xxx] pattern
-          const match = content.match(/\[!singleselect:status:(in-progress|waiting|completed?|done)\]/i);
-          const raw = (match?.[1] ?? 'in-progress').trim().toLowerCase();
-          // Normalize to the canonical set used by the UI
-          const normalized = (raw === 'completed' || raw === 'done') ? 'complete' : raw;
+          // Look for [!singleselect:status:xxx] pattern - capture everything up to ]
+          const match = content.match(/\[!singleselect:status:([^\]]+?)\]/i);
+          const rawStatus = match?.[1]?.trim() || 'in-progress';
+          const normalized = normalizeStatus(rawStatus);
 
           // Extract due date from the markdown content
           // Look for [!datetime:due_date:xxx] pattern
@@ -343,7 +364,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     const checkSpace = async () => {
       // Only use gtdSpace.root_path when available to prevent loading from wrong workspace
       const pathToCheck = gtdSpace?.root_path;
-      
+
       // Skip if no valid GTD space path or if currentFolder doesn't match
       if (!pathToCheck || !currentFolder?.startsWith(pathToCheck)) {
         return;
@@ -381,7 +402,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             loadSectionFiles(areasPath),
             loadSectionFiles(goalsPath)
           ]);
-          
+
           // Load remaining sections after a small delay to reduce UI jank (no dangling timer)
           await new Promise((r) => setTimeout(r, 150));
           await Promise.allSettled([
@@ -517,11 +538,16 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           if (currentProjectName && currentProjectName !== newTitle) {
 
             // Call rename synchronously to avoid issues with async event handlers
-            invoke<string>('rename_gtd_project', {
+            safeInvoke<string>('rename_gtd_project', {
               oldProjectPath: projectPath,
               newProjectName: newTitle
-            })
+            }, null)
               .then(async (newProjectPath) => {
+                // Check that we got a valid project path back
+                if (!newProjectPath || typeof newProjectPath !== 'string') {
+                  console.warn('Project rename failed - no valid path returned');
+                  return;
+                }
 
                 // Only update UI after successful rename
                 // Update local state - keep both old and new paths until projects reload
@@ -620,11 +646,16 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           if (currentActionName && currentActionName !== newTitle) {
 
             // Call rename_gtd_action command
-            invoke<string>('rename_gtd_action', {
+            safeInvoke<string>('rename_gtd_action', {
               oldActionPath: filePath,
               newActionName: newTitle
-            })
+            }, null)
               .then(async (newActionPath) => {
+                // Check that we got a valid action path back
+                if (!newActionPath || typeof newActionPath !== 'string') {
+                  console.warn('Action rename failed - no valid path returned');
+                  return;
+                }
 
                 // Update local state with new path
                 setActionMetadata(prev => {
@@ -685,11 +716,16 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             if (currentFileName && currentFileName !== newTitle) {
 
               // Call rename_gtd_action command (works for any markdown file)
-              invoke<string>('rename_gtd_action', {
+              safeInvoke<string>('rename_gtd_action', {
                 oldActionPath: filePath,
                 newActionName: newTitle
-              })
+              }, null)
                 .then(async (newFilePath) => {
+                  // Check that we got a valid file path back
+                  if (!newFilePath || typeof newFilePath !== 'string') {
+                    console.warn('File rename failed - no valid path returned');
+                    return;
+                  }
 
                   // Update local state with new path
                   setSectionFileMetadata(prev => {
@@ -749,10 +785,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         const optimistic: GTDProject = {
           name: projectName,
           description: '',
-          due_date: undefined,
-          status: ['in-progress'],
+          dueDate: undefined,
+          status: 'in-progress',
           path: projectPath,
-          created_date: new Date().toISOString().split('T')[0],
+          createdDateTime: new Date().toISOString(),
           action_count: 0,
         };
         setPendingProjects(prev => (prev.some(p => p.path === optimistic.path) ? prev : [...prev, optimistic]));
@@ -862,47 +898,47 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     );
   };
 
-  const getProjectStatusColor = (statusInput: string | string[]) => {
-    // Handle both string and array inputs
-    const status = Array.isArray(statusInput) ? statusInput[0] : statusInput;
-    const normalizedStatus = status || 'in-progress';
-    switch (normalizedStatus) {
+  const getProjectStatusColor = (statusInput: string) => {
+    const status = normalizeStatus(statusInput);
+    switch (status) {
       case 'completed': return 'text-green-600 dark:text-green-500';
       case 'waiting': return 'text-purple-600 dark:text-purple-500';
       case 'in-progress': return 'text-blue-600 dark:text-blue-500';
+      case 'cancelled': return 'text-red-600 dark:text-red-500';
       default: return 'text-gray-600 dark:text-gray-400';
     }
   };
 
-  const getProjectStatusIcon = (statusInput: string | string[]) => {
-    // Handle both string and array inputs
-    const status = Array.isArray(statusInput) ? statusInput[0] : statusInput;
-    const normalizedStatus = status || 'in-progress';
-    switch (normalizedStatus) {
-      case 'completed': return CheckCircle2; // Filled circle with checkmark for completed
+  const getProjectStatusIcon = (statusInput: string) => {
+    const status = normalizeStatus(statusInput);
+    switch (status) {
+      case 'completed': return CheckCircle2;
       case 'waiting': return CircleDot; // Filled circle (dot in center) for waiting
       case 'in-progress': return Circle; // Outline circle for in-progress
+      case 'cancelled': return XCircle;
       default: return Circle;
     }
   };
 
-  const getActionStatusIcon = (status: string) => {
-    const normalizedStatus = status || 'in-progress';
-    switch (normalizedStatus) {
-      case 'complete': return CheckCircle2;
-      case 'waiting': return CircleDot;
-      case 'in-progress': return Circle;
-      default: return Circle;
-    }
-  };
-
-  const getActionStatusColor = (status: string) => {
-    const normalizedStatus = status || 'in-progress';
-    switch (normalizedStatus) {
-      case 'complete': return 'text-green-600 dark:text-green-500';
+  const getActionStatusColor = (statusInput: string) => {
+    const status = normalizeStatus(statusInput);
+    switch (status) {
+      case 'completed': return 'text-green-600 dark:text-green-500';
       case 'waiting': return 'text-purple-600 dark:text-purple-500';
       case 'in-progress': return 'text-blue-600 dark:text-blue-500';
+      case 'cancelled': return 'text-red-600 dark:text-red-500';
       default: return 'text-gray-600 dark:text-gray-400';
+    }
+  };
+
+  const getActionStatusIcon = (statusInput: string) => {
+    const status = normalizeStatus(statusInput);
+    switch (status) {
+      case 'completed': return CheckCircle2;
+      case 'waiting': return CircleDot;
+      case 'in-progress': return Circle;
+      case 'cancelled': return XCircle;
+      default: return Circle;
     }
   };
 
@@ -978,7 +1014,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
   const handleSelectFolder = async () => {
     try {
-      const folderPath = await invoke<string>('select_folder');
+      const folderPath = await safeInvoke<string>('select_folder', undefined, null);
+      if (!folderPath) {
+        throw new Error('No folder selected');
+      }
       onFolderSelect(folderPath);
     } catch (error) {
       // Silently handle folder selection errors (user cancelled)
@@ -991,7 +1030,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     try {
       if (deleteItem.type === 'project') {
         // For projects, we need to delete the entire folder
-        const result = await invoke<{ success: boolean; path?: string | null; message?: string | null }>('delete_folder', { path: deleteItem.path });
+        const result = await safeInvoke<{ success: boolean; path?: string | null; message?: string | null }>('delete_folder', { path: deleteItem.path }, { success: false, message: 'Failed to delete folder' });
 
         if (!result || !result.success) {
           alert(`Failed to delete project: ${result?.message || 'Unknown error'}`);
@@ -1023,7 +1062,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
         try {
           // Add a timeout to the invoke call
-          const deletePromise = invoke<{ success: boolean; path?: string | null; message?: string | null }>('delete_file', { path: deleteItem.path });
+          const deletePromise = safeInvoke<{ success: boolean; path?: string | null; message?: string | null }>('delete_file', { path: deleteItem.path }, { success: false, message: 'Failed to delete file' });
 
           // Create a timeout promise
           const timeoutPromise = new Promise((_, reject) => {
@@ -1109,7 +1148,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     if (!currentFolder) return;
 
     try {
-      await invoke('open_folder_in_explorer', { path: currentFolder });
+      await safeInvoke('open_folder_in_explorer', { path: currentFolder }, null);
     } catch (error) {
       // Silently handle explorer open errors
     }
@@ -1147,7 +1186,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   }
 
   return (
-    <Card className={`flex flex-col h-full border-r ${className}`}>
+    <Card className={`flex flex-col h-full border-r overflow-hidden ${className}`}>
       {/* Header */}
       <div className="p-3 border-b">
         <div className="flex items-center justify-between mb-2">
@@ -1253,8 +1292,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                   <div className="space-y-1 pl-2">
                     {searchResults.projects.map((project) => {
                       const currentStatus = projectMetadata[project.path]?.status || project.status || 'in-progress';
+                      const normalizedStatus = normalizeStatus(currentStatus);
                       const currentTitle = projectMetadata[project.path]?.title || project.name;
-                      const StatusIcon = getProjectStatusIcon(currentStatus);
+                      const StatusIcon = getProjectStatusIcon(normalizedStatus);
 
                       return (
                         <div
@@ -1262,7 +1302,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                           className="group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer"
                           onClick={() => handleProjectClick(project)}
                         >
-                          <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(currentStatus)}`} />
+                          <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(normalizedStatus)}`} />
                           <span className="text-sm truncate">{currentTitle}</span>
                         </div>
                       );
@@ -1287,8 +1327,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                         <div className="text-xs text-muted-foreground mb-1">{project}</div>
                         {actions.map((action) => {
                           const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress';
+                          const normalizedStatus = normalizeStatus(currentStatus);
                           const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
-                          const StatusIcon = getActionStatusIcon(currentStatus);
+                          const StatusIcon = getActionStatusIcon(normalizedStatus);
 
                           return (
                             <div
@@ -1296,7 +1337,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                               className="group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer"
                               onClick={() => onFileSelect(action)}
                             >
-                              <StatusIcon className={`h-3 w-3 flex-shrink-0 ${getActionStatusColor(currentStatus)}`} />
+                              <StatusIcon className={`h-3 w-3 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
                               <span className="text-sm truncate">{currentTitle}</span>
                             </div>
                           );
@@ -1438,8 +1479,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                               const isProjectExpanded = expandedProjects.includes(project.path);
                               const actions = projectActions[project.path] || [];
                               const currentStatus = projectMetadata[project.path]?.status || project.status || 'in-progress';
+                              const normalizedStatus = normalizeStatus(currentStatus);
                               const currentTitle = projectMetadata[project.path]?.title || project.name;
-                              const StatusIcon = getProjectStatusIcon(currentStatus);
+                              const StatusIcon = getProjectStatusIcon(normalizedStatus);
 
                               return (
                                 <div key={project.path}>
@@ -1469,13 +1511,13 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                       >
                                         <ChevronRight className={`h-3 w-3 transition-transform ${isProjectExpanded ? 'rotate-90' : ''}`} />
                                       </Button>
-                                      <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(currentStatus)}`} />
+                                      <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(normalizedStatus)}`} />
                                       <div className="flex-1 min-w-0 ml-1">
                                         <div className="font-medium text-sm truncate">{currentTitle}</div>
                                         <div className="text-xs text-muted-foreground flex items-center gap-1">
                                           <span className="truncate">{project.action_count || 0} actions</span>
                                           {(() => {
-                                            const dueStr = projectMetadata[project.path]?.due_date ?? project.due_date ?? '';
+                                            const dueStr = projectMetadata[project.path]?.due_date ?? project.dueDate ?? '';
                                             if (!dueStr || dueStr.trim() === '') return null;
                                             const date = parseLocalDateString(dueStr);
                                             return date ? (
@@ -1518,7 +1560,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                             onClick={async (e) => {
                                               e.stopPropagation();
                                               try {
-                                                await invoke('open_file_location', { file_path: project.path });
+                                                await safeInvoke('open_file_location', { file_path: project.path }, null);
                                               } catch (error) {
                                                 // Silently handle file location open errors
                                               }
@@ -1557,6 +1599,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                           .filter(action => !action.name.toLowerCase().includes('readme'))
                                           .map((action) => {
                                             const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress';
+                                            const normalizedStatus = normalizeStatus(currentStatus);
                                             const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
                                             const currentPath = actionMetadata[action.path]?.currentPath || action.path;
 
@@ -1579,7 +1622,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                     }
                                                   }}
                                                 >
-                                                  <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(currentStatus)}`} />
+                                                  <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
                                                   <span className="truncate flex-1">{currentTitle}</span>
                                                   {actionMetadata[action.path]?.due_date && actionMetadata[action.path].due_date.trim() !== '' && (() => {
                                                     const date = new Date(actionMetadata[action.path].due_date);
@@ -1607,7 +1650,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                       onClick={async (e) => {
                                                         e.stopPropagation();
                                                         try {
-                                                          await invoke('open_file_location', { file_path: currentPath });
+                                                          await safeInvoke('open_file_location', { file_path: currentPath }, null);
                                                         } catch (error) {
                                                           // Silently handle file location open errors
                                                         }
@@ -1765,7 +1808,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                       onClick={async (e) => {
                                         e.stopPropagation();
                                         try {
-                                          await invoke('open_file_location', { file_path: currentPath });
+                                          await safeInvoke('open_file_location', { file_path: currentPath }, null);
                                         } catch (error) {
                                           // Silently handle file location open errors
                                         }
@@ -1937,9 +1980,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             // Sync with actual files from disk after a short delay
             setTimeout(async () => {
               try {
-                const _files = await invoke<MarkdownFile[]>('list_markdown_files', {
+                const _files = await safeInvoke<MarkdownFile[]>('list_markdown_files', {
                   path: habitsPath
-                });
+                }, []);
                 setSectionFiles(prev => ({
                   ...prev,
                   [habitsPath]: _files

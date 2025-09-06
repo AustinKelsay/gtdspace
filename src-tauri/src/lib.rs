@@ -2,7 +2,7 @@
 //!
 //! Core library exports for the Tauri markdown editor application.
 
-// Import command modules  
+// Import command modules
 mod commands;
 mod google_calendar;
 
@@ -11,11 +11,17 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Load .env file if it exists
-    dotenv::dotenv().ok();
-    
+    // Load .env file only in debug builds to avoid loading secrets in release
+    #[cfg(debug_assertions)]
+    {
+        dotenv::dotenv().ok();
+    }
+
     // Initialize logging for development
-    env_logger::init();
+    #[cfg(debug_assertions)]
+    {
+        let _ = env_logger::try_init();
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -56,6 +62,7 @@ pub fn run() {
             commands::move_file,
             commands::replace_in_file,
             commands::find_reverse_relationships,
+            commands::find_habits_referencing,
             commands::check_is_gtd_space,
             commands::initialize_gtd_space,
             commands::seed_example_gtd_content,

@@ -9,6 +9,7 @@ import { FileText, MoreHorizontal, Edit3, Trash2, Copy, Move, Clock, Calendar, C
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { readFileText } from '@/hooks/useFileManager';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,9 +37,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { invoke } from '@tauri-apps/api/core';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import type { FileItemProps } from '@/types';
+import { mapStatusValue } from '@/utils/singleselect-block-helpers'; // Import the shared normalizer
 
 interface GTDMetadata {
   type: 'project' | 'action' | 'regular';
@@ -63,7 +64,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
   ...props
 }) => {
   // === STATE ===
-  
+
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
@@ -74,22 +75,23 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
   const { withErrorHandling } = useErrorHandler();
 
   // === GTD DETECTION ===
-  
+
   useEffect(() => {
     const detectGTDType = async () => {
+      const normalizedPath = file.path.replace(/\\+/g, '/');
       // Check if it's a project README
-      if (file.name === 'README.md' && file.path.includes('/Projects/')) {
+      if (file.name === 'README.md' && normalizedPath.includes('/Projects/')) {
         try {
           const content = await withErrorHandling(
-            async () => await invoke<string>('read_file', { path: file.path }),
+            async () => await readFileText(file.path),
             'Failed to read project file'
           );
-          
+
           if (content) {
             const metadata = parseProjectMetadata(content);
             setGtdMetadata({
               type: 'project',
-              status: metadata.status,
+              status: metadata.status ? mapStatusValue(metadata.status) : undefined,
               dueDate: metadata.dueDate,
               description: metadata.description
             });
@@ -99,18 +101,18 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
         }
       }
       // Check if it's an action file
-      else if (file.path.includes('/Projects/') && file.name !== 'README.md' && file.name.endsWith('.md')) {
+      else if (normalizedPath.includes('/Projects/') && file.name !== 'README.md' && file.name.endsWith('.md')) {
         try {
           const content = await withErrorHandling(
-            async () => await invoke<string>('read_file', { path: file.path }),
+            async () => await readFileText(file.path),
             'Failed to read action file'
           );
-          
+
           if (content) {
             const metadata = parseActionMetadata(content);
             setGtdMetadata({
               type: 'action',
-              status: metadata.status,
+              status: metadata.status ? mapStatusValue(metadata.status) : undefined,
               dueDate: metadata.dueDate,
               effort: metadata.effort
             });
@@ -125,7 +127,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
   }, [file.path, file.name, withErrorHandling]);
 
   // === METADATA PARSING ===
-  
+
   const parseProjectMetadata = (content: string): Partial<GTDMetadata> => {
     const lines = content.split('\n');
     let status = 'in-progress';
@@ -135,7 +137,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
 
     for (const line of lines) {
       const trimmed = line.trim();
-      
+
       if (trimmed.startsWith('## Status')) {
         currentSection = 'status';
       } else if (trimmed.startsWith('## Due Date')) {
@@ -168,14 +170,14 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
 
   const parseActionMetadata = (content: string): Partial<GTDMetadata> => {
     const lines = content.split('\n');
-    let status = 'In Progress';
+    let status = 'in-progress';
     let dueDate = null;
     let effort = 'Medium';
     let currentSection = '';
 
     for (const line of lines) {
       const trimmed = line.trim();
-      
+
       if (trimmed.startsWith('## Status')) {
         currentSection = 'status';
       } else if (trimmed.startsWith('## Due Date')) {
@@ -205,7 +207,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
   };
 
   // === FORMATTERS ===
-  
+
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -219,18 +221,19 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays} days ago`;
-    
+
     return date.toLocaleDateString();
   };
 
   const getDisplayName = (fileName: string): string => {
     if (gtdMetadata.type === 'project' && fileName === 'README.md') {
       // Extract project name from path
-      const pathParts = file.path.split('/');
+      const normalizedPath = file.path.replace(/\\+/g, '/');
+      const pathParts = normalizedPath.split('/');
       const projectIndex = pathParts.indexOf('Projects');
       if (projectIndex !== -1 && projectIndex < pathParts.length - 2) {
         return pathParts[projectIndex + 1];
@@ -241,11 +244,11 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
 
   const getStatusIcon = () => {
     switch (gtdMetadata.status?.toLowerCase()) {
-      case 'complete':
+      case 'completed':
         return <CheckCircle2 className="h-4 w-4 text-green-600" />;
-      case 'in progress':
+      case 'in-progress':
         return <Circle className="h-4 w-4 text-blue-600" />;
-      case 'on hold':
+      case 'waiting':
         return <Clock className="h-4 w-4 text-yellow-600" />;
       default:
         return <Circle className="h-4 w-4 text-gray-400" />;
@@ -254,13 +257,14 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
 
   const getStatusColor = () => {
     switch (gtdMetadata.status?.toLowerCase()) {
-      case 'active':
-      case 'in progress':
+      case 'in-progress':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      case 'complete':
+      case 'completed':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      case 'on hold':
+      case 'waiting':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
     }
@@ -272,12 +276,12 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
       'Medium': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
       'Large': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
     };
-    
+
     return colors[gtdMetadata.effort as keyof typeof colors] || colors['Medium'];
   };
 
   // === EVENT HANDLERS ===
-  
+
   const handleClick = () => {
     onSelect();
   };
@@ -324,7 +328,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
     if (newFilePath.trim() && onFileOperation) {
       const parentDir = file.path.substring(0, file.path.lastIndexOf('/'));
       const destPath = `${parentDir}/${newFilePath.trim()}`;
-      
+
       onFileOperation({
         type: 'copy',
         sourcePath: file.path,
@@ -345,7 +349,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
     if (newFilePath.trim() && onFileOperation) {
       const parentDir = file.path.substring(0, file.path.lastIndexOf('/'));
       const destPath = `${parentDir}/${newFilePath.trim()}`;
-      
+
       onFileOperation({
         type: 'move',
         sourcePath: file.path,
@@ -362,7 +366,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
 
   return (
     <>
-      <Card 
+      <Card
         className={`
           border-none bg-transparent hover:bg-muted/50 transition-colors cursor-pointer
           ${isSelected ? 'bg-accent border-accent' : ''}
@@ -377,7 +381,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
             <div className="flex items-center space-x-3 min-w-0 flex-1">
               {gtdMetadata.type !== 'regular' && getStatusIcon()}
               {gtdMetadata.type === 'regular' && <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
-              
+
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium truncate">
@@ -387,7 +391,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
                     <Badge variant="outline" className="text-xs">Project</Badge>
                   )}
                 </div>
-                
+
                 {/* GTD Metadata Row */}
                 {gtdMetadata.type !== 'regular' && (
                   <div className="flex items-center gap-2 mt-1">
@@ -409,7 +413,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
                     )}
                   </div>
                 )}
-                
+
                 {/* File metadata */}
                 <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-1">
                   <span>{formatFileSize(file.size)}</span>
@@ -418,7 +422,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
                 </div>
               </div>
             </div>
-            
+
             {onFileOperation && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -456,7 +460,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
                     Move
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem 
+                  <DropdownMenuItem
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDelete();
@@ -506,7 +510,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleConfirmRename}
               disabled={!newFileName.trim()}
             >
@@ -521,13 +525,13 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete File</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{getDisplayName(file.name)}"? 
+              Are you sure you want to delete "{getDisplayName(file.name)}"?
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleConfirmDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -569,7 +573,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleConfirmCopy}
               disabled={!newFilePath.trim()}
             >
@@ -611,7 +615,7 @@ export const GTDFileItem: React.FC<FileItemProps> = ({
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleConfirmMove}
               disabled={!newFilePath.trim()}
             >

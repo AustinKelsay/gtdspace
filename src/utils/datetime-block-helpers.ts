@@ -5,7 +5,8 @@
  */
 
 export type DateTimeFieldType = 
-  | 'created_date'
+  | 'created_date_time'
+  | 'created_date' // Legacy support - will be normalized to created_date_time
   | 'modified_date'
   | 'due_date'
   | 'focus_date'
@@ -18,8 +19,7 @@ export type DateTimeFieldType =
 export function createDateTimeBlock(
   type: DateTimeFieldType,
   label?: string,
-  value?: string,
-  includeTime = false
+  value?: string
 ) {
   return {
     type: 'datetime',
@@ -27,7 +27,6 @@ export function createDateTimeBlock(
       type,
       value: value || '',
       label: label || getDefaultLabel(type),
-      includeTime,
       optional: true,
     },
   };
@@ -38,7 +37,7 @@ export function createDateTimeBlock(
  */
 function getDefaultLabel(type: DateTimeFieldType): string {
   switch (type) {
-    case 'created_date':
+    case 'created_date_time':
       return 'Created';
     case 'modified_date':
       return 'Modified';
@@ -60,11 +59,10 @@ function getDefaultLabel(type: DateTimeFieldType): string {
 export function parseDateTimeField(markdown: string): {
   type: DateTimeFieldType;
   value: string;
-  includeTime: boolean;
 } | null {
   // Match patterns like:
   // [!datetime:due_date:2025-01-17]
-  // [!datetime:due_date_time:2025-01-17T10:30:00]
+  // [!datetime:focus_date:2025-01-17T10:30:00]
   // Captures:
   //  - Group 1: base type (e.g., "due_date")
   //  - Group 2: optional suffix "_time" if present
@@ -77,13 +75,25 @@ export function parseDateTimeField(markdown: string): {
   const value = match[3];
 
   const rawType = capturedBaseType + (capturedSuffix || '');
-  const includeTime = Boolean(capturedSuffix) || rawType.endsWith('_time');
-  const baseType = includeTime ? rawType.replace(/_time$/, '') : rawType;
+  
+  // Normalize the type - special case for created_date_time
+  let normalizedType: string;
+  if (rawType === 'created_date' || rawType === 'created_date_time') {
+    normalizedType = 'created_date_time';
+  } else {
+    // For other types, strip _time suffix if present
+    normalizedType = rawType.replace(/_time$/, '');
+  }
+  
+  // Validate against DateTimeFieldType union
+  const validTypes: DateTimeFieldType[] = ['created_date_time', 'modified_date', 'due_date', 'focus_date', 'completed_date', 'custom'];
+  const finalType: DateTimeFieldType = validTypes.includes(normalizedType as DateTimeFieldType) 
+    ? normalizedType as DateTimeFieldType 
+    : 'custom';
 
   return {
-    type: baseType as DateTimeFieldType,
+    type: finalType,
     value,
-    includeTime,
   };
 }
 
@@ -92,9 +102,29 @@ export function parseDateTimeField(markdown: string): {
  */
 export function dateTimeBlockToMarkdown(
   type: DateTimeFieldType,
-  value: string,
-  includeTime: boolean
+  value: string
 ): string {
-  const fieldType = includeTime ? `${type}_time` : type;
-  return `[!datetime:${fieldType}:${value}]`;
+  const hasTime = value.includes('T');
+  let fieldType: string;
+  let outValue = value;
+  
+  if (type === 'focus_date') {
+    fieldType = 'focus_date';
+  } else if (type === 'due_date' || type === 'completed_date' || type === 'modified_date') {
+    fieldType = type;
+    // enforce date-only for due_date, completed_date, and modified_date
+    outValue = value && hasTime ? value.split('T')[0] : value;
+  } else if (type === 'created_date' || type === 'created_date_time') {
+    // Canonicalize both created_date and created_date_time to created_date_time
+    fieldType = 'created_date_time';
+  } else if ((type as string).endsWith('_time')) {
+    fieldType = String(type);
+  } else if (type === 'custom') {
+    // Preserve custom types exactly as they are
+    fieldType = type;
+  } else {
+    fieldType = hasTime ? `${type}_time` : type;
+  }
+  
+  return `[!datetime:${fieldType}:${outValue}]`;
 }

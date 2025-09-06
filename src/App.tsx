@@ -1,5 +1,8 @@
 import React from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import '@/utils/resize-observer-fix';
+// Use guarded Tauri detection and dynamic invoke to avoid web/runtime crashes
+import { waitForTauriReady } from '@/utils/tauri-ready';
+import { safeInvoke } from '@/utils/safe-invoke';
 import { PanelLeftClose, PanelLeft, FolderOpen, Folder, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -26,7 +29,43 @@ import { ErrorBoundary } from '@/components/error-handling';
 import { Toaster } from '@/components/ui/toaster';
 import type { Theme, MarkdownFile, EditorMode, GTDProject } from '@/types';
 import './styles/globals.css';
-import { waitForTauriReady } from '@/utils/tauri-ready';
+
+/**
+ * Normalizes a file path by converting it to lowercase and replacing
+ * backslashes with forward slashes. This ensures consistent path comparisons
+ * across different operating systems (e.g., Windows vs. Unix-like).
+ * @param p The path to normalize.
+ * @returns The normalized path, or null/undefined if the input is null/undefined.
+ */
+function norm(p?: string | null): string | null | undefined {
+  return p?.toLowerCase().replace(/\\/g, '/');
+}
+
+/**
+ * Checks if a given path `p` is located under a directory `dir`.
+ * Paths are normalized before comparison to ensure cross-platform consistency.
+ * @param p The path to check.
+ * @param dir The directory path to check against.
+ * @returns True if `p` is under `dir`, false otherwise.
+ */
+function isUnder(p?: string | null, dir?: string | null): boolean {
+  const normalizedP = norm(p);
+  const normalizedDir = norm(dir);
+
+  if (!normalizedP || !normalizedDir) {
+    return false;
+  }
+
+  // Ensure the directory path ends with a slash for accurate "under" comparison
+  const dirWithTrailingSlash = normalizedDir.endsWith('/') ? normalizedDir : `${normalizedDir}/`;
+
+  return normalizedP.startsWith(dirWithTrailingSlash);
+}
+
+function isHabitPath(p?: string | null): boolean {
+  const normalized = p?.replace(/\\/g, '/');
+  return !!normalized && normalized.toLowerCase().includes('/habits/');
+}
 
 /**
  * Main application component - Simplified version
@@ -214,7 +253,7 @@ export const App: React.FC = () => {
 
       case 'deleted': {
         // File deleted - close tab if open and refresh file list
-        const deletedTab = tabState.openTabs.find(tab => tab.file.path === latestEvent.file_path);
+        const deletedTab = tabState.openTabs.find(tab => norm(tab.file.path) === norm(latestEvent.file_path));
         if (deletedTab) {
           closeTab(deletedTab.id);
         }
@@ -226,7 +265,7 @@ export const App: React.FC = () => {
 
       case 'modified': {
         // File modified externally - show notification if tab is open
-        const modifiedTab = tabState.openTabs.find(tab => tab.file.path === latestEvent.file_path);
+        const modifiedTab = tabState.openTabs.find(tab => norm(tab.file.path) === norm(latestEvent.file_path));
         if (modifiedTab && !modifiedTab.hasUnsavedChanges) {
           // File was modified externally
         }
@@ -241,7 +280,7 @@ export const App: React.FC = () => {
   const shouldReloadProjects = (filePath: string): boolean => {
     if (!gtdSpace?.root_path) return false;
     const projectsPath = `${gtdSpace.root_path}/Projects/`;
-    return filePath.startsWith(projectsPath) && filePath.endsWith('.md');
+    return isUnder(filePath, projectsPath) && norm(filePath)?.endsWith('.md');
   };
 
   const keyboardHandlers = {
@@ -311,7 +350,7 @@ export const App: React.FC = () => {
 
     window.onTabFileSaved = async (filePath: string) => {
       // Only reload if the file is in the Projects directory
-      if (filePath.startsWith(projectsPath) && filePath.endsWith('.md')) {
+      if (isUnder(filePath, projectsPath) && norm(filePath)?.endsWith('.md')) {
         await loadProjects(gtdSpace.root_path);
       }
     };
@@ -327,22 +366,22 @@ export const App: React.FC = () => {
     tabState.openTabs.forEach(tab => {
       closeTab(tab.id);
     });
-    
+
     // Mark that we're handling a workspace change to prevent loops
     hasInitializedWorkspace.current = true;
-    
+
     // Initialize the new GTD space
     await initializeGTDSpace(path);
-    
+
     // Load the folder without saving to settings to avoid triggering side effects
     await loadFolder(path, { saveToSettings: false });
-    
+
     // Save the workspace path to settings after everything is loaded
     await setLastFolder(path);
   }, [tabState.openTabs, closeTab, initializeGTDSpace, loadFolder, setLastFolder]);
 
   // === VIEW STATE ===
-  
+
   const [showSettings, setShowSettings] = React.useState(false);
 
   // === SIDEBAR STATE ===
@@ -372,11 +411,11 @@ export const App: React.FC = () => {
 
   React.useEffect(() => {
     // Only update current project when in a GTD space
-    if (gtdSpace?.root_path && fileState.currentFolder?.startsWith(gtdSpace.root_path)) {
+    if (gtdSpace?.root_path && isUnder(fileState.currentFolder, gtdSpace.root_path)) {
       // Check if we're in a specific project
-      if (fileState.currentFolder.includes('/Projects/') && gtdSpace?.projects) {
+      if (isUnder(fileState.currentFolder, `${gtdSpace.root_path}/Projects/`) && gtdSpace?.projects) {
         const projectPath = fileState.currentFolder;
-        const project = gtdSpace.projects.find(p => p.path === projectPath);
+        const project = gtdSpace.projects.find(p => norm(p.path) === norm(projectPath));
         setCurrentProject(project || null);
       } else {
         setCurrentProject(null);
@@ -405,8 +444,11 @@ export const App: React.FC = () => {
         // Ensure Tauri is ready to reduce callback warnings during hot reload
         await waitForTauriReady();
 
-        // Check permissions on app start
-        await invoke<{ status: string }>('check_permissions');
+        // Check permissions on app start (guarded)
+        await withErrorHandling<{ status: string } | null>(
+          async () => await safeInvoke<{ status: string }>('check_permissions', undefined, null),
+          'Failed to check permissions'
+        );
 
         // Clear tab state if no folder is selected (fresh start)
         if (!fileState.currentFolder) {
@@ -421,7 +463,7 @@ export const App: React.FC = () => {
     // Run only once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  
+
   // Separate effect for workspace initialization after settings load
   React.useEffect(() => {
     const initWorkspace = async () => {
@@ -429,15 +471,15 @@ export const App: React.FC = () => {
       if (isLoadingSettings) {
         return;
       }
-      
+
       // Only initialize once
       if (hasInitializedWorkspace.current || gtdSpace?.root_path) {
         setIsAppInitializing(false); // App is initialized if we already have a workspace
         return;
       }
-      
+
       hasInitializedWorkspace.current = true;
-      
+
       try {
         // Check if settings has a last_folder saved
         if (settings.last_folder && settings.last_folder !== '') {
@@ -462,7 +504,7 @@ export const App: React.FC = () => {
         setIsAppInitializing(false); // Always stop showing loading state
       }
     };
-    
+
     initWorkspace();
   }, [isLoadingSettings, settings.last_folder, gtdSpace?.root_path, handleFolderLoad, checkGTDSpace, loadProjects, initializeDefaultSpaceIfNeeded]);
 
@@ -478,14 +520,10 @@ export const App: React.FC = () => {
   React.useEffect(() => {
     // Check for Tauri environment after component mount
     const checkTauri = async () => {
-      try {
-        // In Tauri 2.x, check if we can invoke commands
-        await invoke('ping');
-        setIsTauriEnvironment(true);
-      } catch (error) {
-        // If invoke fails, we're not in Tauri environment
-        setIsTauriEnvironment(false);
-      }
+      // In Tauri 2.x, check if we can invoke commands
+      // Use safeInvoke which gracefully handles non-Tauri environments
+      const result = await safeInvoke<string>('ping', undefined, null);
+      setIsTauriEnvironment(result !== null);
     };
 
     checkTauri();
@@ -495,11 +533,13 @@ export const App: React.FC = () => {
   React.useEffect(() => {
     const handleHabitStatusUpdate = (event: CustomEvent<{ habitPath: string }>) => {
       // Check if the updated habit is currently open in the editor
-      if (activeTab?.filePath === event.detail.habitPath) {
+      if (norm(activeTab?.filePath) === norm(event.detail.habitPath)) {
         // Reload the file content from disk
-        invoke<string>('read_file', { path: event.detail.habitPath })
+        safeInvoke<string>('read_file', { path: event.detail.habitPath }, null)
           .then(freshContent => {
-            updateTabContent(activeTab.id, freshContent);
+            if (freshContent !== null && freshContent !== undefined) {
+              updateTabContent(activeTab.id, freshContent);
+            }
           })
           .catch(error => {
             console.error('Failed to refresh habit after status update:', error);
@@ -507,7 +547,7 @@ export const App: React.FC = () => {
       }
 
       // Also refresh the sidebar to show updated status
-      if (event.detail.habitPath.toLowerCase().includes('/habits/')) {
+      if (isHabitPath(event.detail.habitPath)) {
         refreshGTDSpace();
       }
     };
@@ -517,10 +557,12 @@ export const App: React.FC = () => {
       const { filePath } = event.detail;
 
       // If the changed file is the currently active tab, reload its content
-      if (activeTab?.filePath === filePath) {
-        invoke<string>('read_file', { path: filePath })
+      if (norm(activeTab?.filePath) === norm(filePath)) {
+        safeInvoke<string>('read_file', { path: filePath }, null)
           .then(freshContent => {
-            updateTabContent(activeTab.id, freshContent);
+            if (freshContent !== null && freshContent !== undefined) {
+              updateTabContent(activeTab.id, freshContent);
+            }
           })
           .catch(error => {
             console.error('Failed to reload habit content:', error);
@@ -541,10 +583,15 @@ export const App: React.FC = () => {
   // Store refs to avoid re-running effect when functions change
   const checkGTDSpaceRef = React.useRef(checkGTDSpace);
   const loadProjectsRef = React.useRef(loadProjects);
+  const updateTabContentRef = React.useRef(updateTabContent);
+  const activeTabRef = React.useRef(activeTab);
+
   React.useEffect(() => {
     checkGTDSpaceRef.current = checkGTDSpace;
     loadProjectsRef.current = loadProjects;
-  }, [checkGTDSpace, loadProjects]);
+    updateTabContentRef.current = updateTabContent;
+    activeTabRef.current = activeTab;
+  }, [checkGTDSpace, loadProjects, updateTabContent, activeTab]);
 
   React.useEffect(() => {
     const currentSpacePath = gtdSpace?.root_path;
@@ -555,27 +602,32 @@ export const App: React.FC = () => {
     // Function to check and reset habits
     const checkHabits = async () => {
       try {
+        // Guard against missing required state
+        if (!currentSpacePath || currentSpacePath.trim() === '') {
+          return; // Skip invocation if no valid space path
+        }
+
         // Always run the check - the backend will determine if any habits need resetting
         // This ensures we catch all frequency intervals properly
-        const resetHabits = await invoke<string[]>('check_and_reset_habits', {
+        const resetHabits = (await safeInvoke<string[]>('check_and_reset_habits', {
           spacePath: currentSpacePath,
-        }).catch(error => {
-          console.error('[App] Failed to check_and_reset_habits:', error);
-          return [];
-        });
+        }, [])) ?? [];
 
-        if (resetHabits.length > 0) {
+        if (resetHabits && resetHabits.length > 0) {
           // Refresh the workspace to show updated statuses
           // Use refs to avoid effect re-running when these functions change
           await checkGTDSpaceRef.current(currentSpacePath);
           await loadProjectsRef.current(currentSpacePath);
 
           // Also refresh the current tab if it's a habit
-          if (activeTab?.filePath?.toLowerCase().includes('/habits/')) {
+          const currentTab = activeTabRef.current;
+          if (isHabitPath(currentTab?.filePath)) {
             // Reload the file content from disk
             try {
-              const freshContent = await invoke<string>('read_file', { path: activeTab.filePath });
-              updateTabContent(activeTab.id, freshContent);
+              const freshContent = await safeInvoke<string>('read_file', { path: currentTab.filePath }, null);
+              if (freshContent !== null && freshContent !== undefined) {
+                updateTabContentRef.current(currentTab.id, freshContent);
+              }
             } catch (error) {
               console.error('Failed to refresh habit tab:', error);
             }
@@ -589,11 +641,16 @@ export const App: React.FC = () => {
     // Check for missed resets on startup
     const checkMissedResets = async () => {
       try {
-        const resetHabits = await invoke<string[]>('check_and_reset_habits', {
-          spacePath: currentSpacePath,
-        });
+        // Guard against missing required state
+        if (!currentSpacePath || currentSpacePath.trim() === '') {
+          return; // Skip invocation if no valid space path
+        }
 
-        if (resetHabits.length > 0) {
+        const resetHabits = (await safeInvoke<string[]>('check_and_reset_habits', {
+          spacePath: currentSpacePath,
+        }, [])) ?? [];
+
+        if (resetHabits && resetHabits.length > 0) {
           // Refresh the workspace to show updated statuses
           // Use refs to avoid effect re-running when these functions change
           await checkGTDSpaceRef.current(currentSpacePath);
@@ -616,7 +673,7 @@ export const App: React.FC = () => {
     return () => {
       clearInterval(interval);
     };
-  }, [gtdSpace?.root_path, activeTab?.filePath, activeTab?.id, updateTabContent]);
+  }, [gtdSpace?.root_path]); // Only depend on root_path, use refs for everything else
 
 
 

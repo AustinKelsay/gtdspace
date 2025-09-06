@@ -41,26 +41,36 @@ export function useDateTimeInsertion(editor: any) {
       const isMac = navigator.platform.toLowerCase().includes('mac');
       const modKey = isMac ? e.metaKey : e.ctrlKey;
 
-      // Cmd+Alt+D (Mac) or Ctrl+Alt+D (Windows/Linux) for Due Date field (with Shift for time)
-      if (modKey && e.altKey && e.key === 'd') {
+      // Cmd+Alt+D (Mac) or Ctrl+Alt+D (Windows/Linux) for Due Date field (always date-only)
+      if (modKey && e.altKey && e.key.toLowerCase() === 'd') {
         e.preventDefault();
-        const includeTime = e.shiftKey; // Add Shift to include time
-        const block = createDateTimeBlock('due_date', 'Due Date', '', includeTime);
+        // Due date is always date-only, ignore Shift and provide local YYYY-MM-DD string
+        let initialValue = '';
+        if (e.shiftKey) {
+          const now = new Date();
+          const year = now.getFullYear();
+          const month = (now.getMonth() + 1).toString().padStart(2, '0');
+          const day = now.getDate().toString().padStart(2, '0');
+          initialValue = `${year}-${month}-${day}`;
+        }
+        const block = createDateTimeBlock('due_date', 'Due Date', initialValue);
         insertAfterCurrent(block);
       }
 
       // Cmd+Alt+T (Mac) or Ctrl+Alt+T (Windows/Linux) for Focus Date with Time field
-      if (modKey && e.altKey && e.key === 't') {
+      if (modKey && e.altKey && e.key.toLowerCase() === 't') {
         e.preventDefault();
-        const block = createDateTimeBlock('focus_date', 'Focus Date', '', true);
+        // Focus date typically includes time by default
+        const initialValue = new Date().toISOString();
+        const block = createDateTimeBlock('focus_date', 'Focus Date', initialValue);
         insertAfterCurrent(block);
       }
 
       // Cmd+Alt+C (Mac) or Ctrl+Alt+C (Windows/Linux) for Created Date field
-      if (modKey && e.altKey && e.key === 'c') {
+      if (modKey && e.altKey && e.key.toLowerCase() === 'c') {
         e.preventDefault();
         const now = new Date().toISOString();
-        const block = createDateTimeBlock('created_date', 'Created', now, true);
+        const block = createDateTimeBlock('created_date_time', 'Created', now);
         insertAfterCurrent(block);
       }
     };
@@ -74,14 +84,16 @@ export function useDateTimeInsertion(editor: any) {
 
   // Function to manually insert datetime blocks
   const insertDateTime = (
-    type: DateTimeFieldType,
-    includeTime = false,
+    type: DateTimeFieldType | 'created_date',
     defaultValue?: string
   ) => {
     if (!editor) return;
 
-    const value = defaultValue || (type === 'created_date' ? new Date().toISOString() : '');
-    const block = createDateTimeBlock(type, undefined, value, includeTime);
+    // Normalize legacy 'created_date' to 'created_date_time' and ensure narrowed type
+    const normalizedType: DateTimeFieldType = type === 'created_date' ? 'created_date_time' : type;
+    const isCreated = normalizedType === 'created_date_time';
+    const value = defaultValue ?? (isCreated ? new Date().toISOString() : '');
+    const block = createDateTimeBlock(normalizedType, undefined, value);
 
     // Safely resolve current block from cursor position with fallbacks
     let cursorPos: unknown;

@@ -21,7 +21,7 @@ GTD Space now includes beautiful, interactive date and time selection components
 
 The system supports multiple datetime field types:
 
-- `created_date` - When an item was created
+- `created_date_time` - When an item was created
 - `modified_date` - Last modification time
 - `due_date` - Deadline for completion (date only)
 - `focus_date` - When to work on the item (includes time)
@@ -33,7 +33,7 @@ DateTime fields are stored in markdown using a special syntax:
 
 ```markdown
 [!datetime:due_date:2025-01-17]
-[!datetime:focus_date_time:2025-01-17T14:30:00]
+[!datetime:focus_date:2025-01-17T14:30:00]
 [!datetime:created_date_time:2025-01-17T10:00:00Z]
 ```
 
@@ -45,7 +45,7 @@ The `_time` suffix indicates fields that include time components.
 
 - **Cmd/Ctrl+Alt+D** - Insert Due Date field
 - **Cmd/Ctrl+Alt+T** - Insert Focus Date with Time
-- **Cmd/Ctrl+Alt+C** - Insert Created Date (auto-fills current time)
+- **Cmd/Ctrl+Alt+C** - Insert Created Date/Time (auto-fills current time)
 
 ### In the Editor
 
@@ -65,14 +65,27 @@ import {
 import { useDateTimeInsertion } from "@/hooks/useDateTimeInsertion";
 
 // Valid DateTimeFieldType values you can use:
-// 'due_date' | 'focus_date' | 'created_date' | 'modified_date'
+//   'created_date_time'
+// | 'created_date'      // Legacy alias, normalized to created_date_time
+// | 'modified_date'
+// | 'due_date'
+// | 'focus_date'
+// | 'completed_date'
+// | 'custom'
+//
+// Note: The runtime determines time inclusion based on the field type and ISO format.
+// Fields that include time accept ISO 8601 datetime with optional timezone:
+// e.g., 2025-01-17T14:30:00 (local) or 2025-01-17T14:30:00Z / 2025-01-17T14:30:00-05:00.
+// Fields intended to be date-only (e.g., due_date, completed_date) expect YYYY-MM-DD format.
+// The 'focus_date' field is flexible and can accept either date-only (YYYY-MM-DD) or date-time (YYYY-MM-DDTHH:mm:ss) values.
+// The 'custom' field accepts user-defined formats and is parsed using the runtime's flexible parsing rules, falling back to ISO formats if parsing fails.
 
 // Create a datetime field block
-const block = createDateTimeBlock("due_date", "Due Date", "2025-01-20", false);
+const block = createDateTimeBlock("due_date", "Due Date", "2025-01-20");
 
 // Insert using the hook (editor is your BlockNote editor instance)
 const { insertDateTime } = useDateTimeInsertion(editor);
-insertDateTime("focus_date", true, "2025-01-20T14:00:00");
+insertDateTime("focus_date", "2025-01-20T14:00:00");
 ```
 
 ## GTD Integration
@@ -119,7 +132,7 @@ Example action template:
 
 ## Focus Date
 
-[!datetime:focus_date_time:]
+[!datetime:focus_date:]
 
 ## Due Date
 

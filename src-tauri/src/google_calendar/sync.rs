@@ -1,11 +1,10 @@
+// Compatibility with different Rust versions
+
 use chrono::{DateTime, Utc};
-use google_calendar3::{
-    hyper, hyper_rustls,
-    CalendarHub,
-};
+use google_calendar3::{hyper, hyper_rustls, CalendarHub};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager};
 use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::{AppHandle, Emitter, Manager};
 
 use super::GoogleCalendarEvent;
 
@@ -36,7 +35,6 @@ impl CalendarSyncManager {
         }
     }
 
-
     pub async fn sync_events(
         &mut self,
         hub: CalendarHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
@@ -44,11 +42,7 @@ impl CalendarSyncManager {
         time_max: Option<DateTime<Utc>>,
     ) -> Result<Vec<GoogleCalendarEvent>, Box<dyn std::error::Error>> {
         if self.is_syncing.swap(true, Ordering::SeqCst) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Google Calendar sync already in progress",
-            )
-            .into());
+            return Err(std::io::Error::other("Google Calendar sync already in progress").into());
         }
         let result: Result<Vec<GoogleCalendarEvent>, Box<dyn std::error::Error>> = (async {
             let mut all_events = Vec::new();
@@ -56,31 +50,29 @@ impl CalendarSyncManager {
             // Get the primary calendar (we can extend this to multiple calendars later)
             let calendar_id = "primary";
 
+            // Compute effective time bounds once before the loop
+            let mut effective_min = time_min
+                .unwrap_or_else(|| Utc::now() - chrono::Duration::days(DEFAULT_SYNC_DAYS_PAST));
+            let mut effective_max = time_max
+                .unwrap_or_else(|| Utc::now() + chrono::Duration::days(DEFAULT_SYNC_DAYS_FUTURE));
+            // Normalize bounds so lower <= upper, in case callers pass time_min > time_max
+            if effective_min > effective_max {
+                std::mem::swap(&mut effective_min, &mut effective_max);
+            }
+
             // Fetch events with pagination
             let mut page_token: Option<String> = None;
             loop {
                 // Recreate the call for each page
+                // Clone the DateTime values since time_min/time_max take ownership
                 let mut call = hub
                     .events()
                     .list(calendar_id)
                     .single_events(true)
-                    .order_by("startTime");
-                
-                // Re-apply time range
-                if let Some(min) = time_min {
-                    call = call.time_min(min);
-                } else {
-                    let default_min = Utc::now() - chrono::Duration::days(DEFAULT_SYNC_DAYS_PAST);
-                    call = call.time_min(default_min);
-                }
-                
-                if let Some(max) = time_max {
-                    call = call.time_max(max);
-                } else {
-                    let default_max = Utc::now() + chrono::Duration::days(DEFAULT_SYNC_DAYS_FUTURE);
-                    call = call.time_max(default_max);
-                }
-                
+                    .order_by("startTime")
+                    .time_min(effective_min)
+                    .time_max(effective_max);
+
                 if let Some(token) = &page_token {
                     call = call.page_token(token);
                 }
@@ -116,7 +108,8 @@ impl CalendarSyncManager {
                 .ok();
 
             Ok(all_events)
-        }).await;
+        })
+        .await;
 
         // Always clear the syncing flag
         self.is_syncing.store(false, Ordering::SeqCst);
@@ -124,6 +117,7 @@ impl CalendarSyncManager {
         result
     }
 
+    #[allow(dead_code)]
     pub async fn get_calendars(
         &self,
         hub: CalendarHub<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
@@ -136,7 +130,9 @@ impl CalendarSyncManager {
             .into_iter()
             .map(|cal| CalendarInfo {
                 id: cal.id.unwrap_or_default(),
-                summary: cal.summary.unwrap_or_else(|| "Unnamed Calendar".to_string()),
+                summary: cal
+                    .summary
+                    .unwrap_or_else(|| "Unnamed Calendar".to_string()),
                 description: cal.description,
                 color_id: cal.color_id,
                 selected: cal.selected.unwrap_or(false),
@@ -146,7 +142,9 @@ impl CalendarSyncManager {
         Ok(calendars)
     }
 
-    pub fn get_cached_events(&self) -> Result<Vec<GoogleCalendarEvent>, Box<dyn std::error::Error>> {
+    pub fn get_cached_events(
+        &self,
+    ) -> Result<Vec<GoogleCalendarEvent>, Box<dyn std::error::Error>> {
         Ok(self
             .cached_events
             .as_ref()
@@ -180,6 +178,7 @@ impl CalendarSyncManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn load_cache(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let app_dir = self
             .app_handle

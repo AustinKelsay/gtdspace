@@ -12,9 +12,9 @@ interface AppLoadingScreenProps {
   progress?: number;
 }
 
-export const AppLoadingScreen: React.FC<AppLoadingScreenProps> = ({ 
+export const AppLoadingScreen: React.FC<AppLoadingScreenProps> = ({
   message = 'Loading GTD Space...',
-  progress 
+  progress
 }) => {
   const [dots, setDots] = React.useState(0);
 
@@ -32,16 +32,14 @@ export const AppLoadingScreen: React.FC<AppLoadingScreenProps> = ({
         <div className="relative">
           <Target className="h-20 w-20 text-primary animate-pulse" />
         </div>
-        
+
         {/* Loading message */}
-        <div className="text-center space-y-2" role="status" aria-live="polite">
+        <div className="text-center space-y-2" role="status" aria-live="polite" aria-atomic="true">
           <h2 className="text-2xl font-semibold">GTD Space</h2>
           <p className="text-muted-foreground">
             {message}
-            {'.'.repeat(dots)}
-            <span className="invisible">
-              {'.'.repeat(3 - dots)}
-            </span>
+            <span aria-hidden="true">{'.'.repeat(dots)}</span>
+            <span className="invisible" aria-hidden="true">{'.'.repeat(3 - dots)}</span>
           </p>
         </div>
 

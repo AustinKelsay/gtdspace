@@ -4,11 +4,81 @@
  * @created 2025-01-XX
  */
 
+// Canonical token sets for validation
+const STATUS_TOKENS = ['in-progress', 'waiting', 'completed'] as const;
+const EFFORT_TOKENS = ['small', 'medium', 'large', 'extra-large'] as const;
+
+/**
+ * Escapes special characters for safe inclusion in HTML attributes
+ * @param str - The string to escape
+ * @returns Escaped string safe for HTML attributes
+ */
+function escapeHtmlAttr(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Escapes special characters for safe inclusion in HTML text content
+ * @param str - The string to escape
+ * @returns Escaped string safe for HTML text
+ */
+function escapeHtmlText(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Normalizes a string into a slug format (lowercase, hyphenated)
+ * @param str - The string to normalize
+ * @returns Normalized slug string
+ */
+function normalizeSlug(str: string): string {
+  return str.toLowerCase().trim().replace(/\s+/g, '-');
+}
+
+/**
+ * Escapes angle brackets for safe inclusion in plain Markdown text
+ * @param str - The string to escape
+ * @returns Escaped string safe for Markdown
+ */
+function escapePlain(str: string): string {
+  return str
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Escapes special characters for safe inclusion in Markdown inline text
+ * This prevents headings/formatting from breaking when interpolating user-provided text
+ * @param str - The string to escape
+ * @returns Escaped string safe for Markdown inline contexts
+ */
+function escapeMarkdownInline(str: string): string {
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/\*/g, '\\*')
+    .replace(/_/g, '\\_')
+    .replace(/`/g, '\\`')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)')
+    .replace(/\|/g, '\\|')
+    .replace(/#/g, '\\#');
+}
+
 /**
  * Generates HTML markup for a multiselect field that BlockNote can parse
  */
 export function generateMultiSelectMarkup(
-  type: 'status' | 'effort' | 'project-status',
+  type: 'tags' | 'contexts' | 'categories' | 'custom',
   label: string,
   value: string[],
   options?: { placeholder?: string; maxCount?: number }
@@ -21,15 +91,21 @@ export function generateMultiSelectMarkup(
     maxCount: options?.maxCount,
   });
   
+  // Safely escape values for HTML
+  const escapedData = escapeHtmlAttr(data);
+  const escapedLabel = escapeHtmlText(label);
+  const escapedValues = value.map(v => escapeHtmlText(v)).join(', ');
+  const escapedType = escapeHtmlText(type);
+  
   // Return HTML that BlockNote will parse into a multiselect block
-  return `<div data-multiselect='${data}' class="multiselect-block">${label}: ${value.join(', ') || `[No ${type} selected]`}</div>`;
+  return `<div data-multiselect='${escapedData}' class="multiselect-block">${escapedLabel}: ${escapedValues || `[No ${escapedType} selected]`}</div>`;
 }
 
 /**
  * Generates HTML markup for a single select field that BlockNote can parse
  */
 export function generateSingleSelectMarkup(
-  type: 'status' | 'effort' | 'project-status',
+  type: 'status' | 'effort' | 'project-status' | 'habit-frequency' | 'habit-status',
   label: string,
   value: string,
   options?: { placeholder?: string }
@@ -41,8 +117,14 @@ export function generateSingleSelectMarkup(
     placeholder: options?.placeholder,
   });
   
+  // Safely escape values for HTML
+  const escapedData = escapeHtmlAttr(data);
+  const escapedLabel = escapeHtmlText(label);
+  const escapedValue = escapeHtmlText(value);
+  const escapedType = escapeHtmlText(type);
+  
   // Return HTML that BlockNote will parse into a single select block
-  return `<div data-singleselect='${data}' class="singleselect-block">${label}: ${value || `[No ${type} selected]`}</div>`;
+  return `<div data-singleselect='${escapedData}' class="singleselect-block">${escapedLabel}: ${escapedValue || `[No ${escapedType} selected]`}</div>`;
 }
 
 /**
@@ -52,9 +134,14 @@ export function generateProjectReadmeWithSingleSelect(
   projectName: string,
   description: string,
   dueDate: string | null,
-  createdDate: string
+  createdDateTime: string
 ): string {
-  const statusMarkup = generateSingleSelectMarkup('project-status', 'Status', 'in-progress');
+  // Always use valid default for project status
+  const validStatus = 'in-progress'; // Already a valid token from PROJECT_STATUS_TOKENS
+  const statusMarkup = generateSingleSelectMarkup('project-status', 'Status', validStatus);
+  
+  // Escape createdDateTime to prevent angle bracket injection
+  const escapedCreatedDateTime = escapePlain(createdDateTime);
   
   return `# ${projectName}
 
@@ -77,7 +164,7 @@ Each action file contains:
 - **Effort**: Single select field for time estimate
 
 ---
-Created: ${createdDate}`;
+Created: ${escapedCreatedDateTime}`;
 }
 
 /**
@@ -87,9 +174,9 @@ export function generateProjectReadmeWithMultiSelect(
   projectName: string,
   description: string,
   dueDate: string | null,
-  createdDate: string
+  createdDateTime: string
 ): string {
-  return generateProjectReadmeWithSingleSelect(projectName, description, dueDate, createdDate);
+  return generateProjectReadmeWithSingleSelect(projectName, description, dueDate, createdDateTime);
 }
 
 /**
@@ -101,10 +188,22 @@ export function generateActionFileWithSingleSelect(
   focusDate: string | null,
   dueDate: string | null,
   effort: string,
-  createdDate: string
+  createdDateTime: string
 ): string {
-  const statusMarkup = generateSingleSelectMarkup('status', 'Status', status.toLowerCase().replace(' ', '-'));
-  const effortMarkup = generateSingleSelectMarkup('effort', 'Effort', effort.toLowerCase());
+  // Properly normalize status and effort slugs using the normalizeSlug function
+  let normalizedStatus = normalizeSlug(status);
+  let normalizedEffort = normalizeSlug(effort);
+  
+  // Validate normalized values against canonical token sets
+  if (!STATUS_TOKENS.includes(normalizedStatus as typeof STATUS_TOKENS[number])) {
+    normalizedStatus = 'in-progress'; // Default to in-progress if invalid
+  }
+  if (!EFFORT_TOKENS.includes(normalizedEffort as typeof EFFORT_TOKENS[number])) {
+    normalizedEffort = 'medium'; // Default to medium if invalid
+  }
+  
+  const statusMarkup = generateSingleSelectMarkup('status', 'Status', normalizedStatus);
+  const effortMarkup = generateSingleSelectMarkup('effort', 'Effort', normalizedEffort);
   
   // Format focus date for display
   let focusDateDisplay = 'Not set';
@@ -129,7 +228,12 @@ export function generateActionFileWithSingleSelect(
     }
   }
   
-  return `# ${actionName}
+  // Escape createdDateTime to prevent angle bracket injection
+  const escapedCreatedDateTime = escapePlain(createdDateTime);
+  // Escape actionName for safe Markdown embedding
+  const escapedActionName = escapeMarkdownInline(actionName);
+  
+  return `# ${escapedActionName}
 
 ${statusMarkup}
 
@@ -145,7 +249,7 @@ ${effortMarkup}
 <!-- Add any additional notes or details about this action here -->
 
 ---
-Created: ${createdDate}`;
+Created: ${escapedCreatedDateTime}`;
 }
 
 /**
@@ -157,9 +261,9 @@ export function generateActionFileWithMultiSelect(
   focusDate: string | null,
   dueDate: string | null,
   effort: string,
-  createdDate: string
+  createdDateTime: string
 ): string {
-  return generateActionFileWithSingleSelect(actionName, status, focusDate, dueDate, effort, createdDate);
+  return generateActionFileWithSingleSelect(actionName, status, focusDate, dueDate, effort, createdDateTime);
 }
 
 /**
@@ -170,12 +274,12 @@ export function mapLegacyStatus(status: string): string {
     'Not Started': 'in-progress',  // Map old "Not Started" to new default "in-progress"
     'In Progress': 'in-progress',
     'Waiting': 'waiting',
-    'Complete': 'complete',
+    'Completed': 'completed',
     'Active': 'in-progress',  // Map old project status to new
     'Planning': 'in-progress',
     'On Hold': 'waiting',
-    'Completed': 'completed',
-    'Cancelled': 'completed',  // Map cancelled to completed
+    'Cancelled': 'cancelled',  // Keep cancelled as its own status
+    'Canceled': 'cancelled',  // Map US spelling to UK spelling
   };
   
   return statusMap[status] || status.toLowerCase().replace(/\s+/g, '-');

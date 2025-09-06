@@ -5,9 +5,10 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import { useSettings } from '@/hooks/useSettings';
 // Performance monitoring and caching removed during simplification
+import { serializeMultiselectsToMarkers, deserializeMarkersToMultiselects } from '@/utils/multiselect-block-helpers';
 import type { 
   MarkdownFile, 
   FileOperationResult, 
@@ -75,9 +76,9 @@ export const useFileManager = () => {
       console.log('Loading folder:', folderPath);
       
       // Load files from selected folder
-      const files = await invoke<MarkdownFile[]>('list_markdown_files', { 
+      const files = await safeInvoke<MarkdownFile[]>('list_markdown_files', { 
         path: folderPath 
-      });
+      }, []);
       console.log(`Loaded ${files.length} markdown files`);
       
       setState(prev => ({
@@ -114,7 +115,10 @@ export const useFileManager = () => {
   const selectFolder = useCallback(async () => {
     try {
       console.log('Opening folder selection dialog...');
-      const folderPath = await invoke<string>('select_folder');
+      const folderPath = await safeInvoke<string>('select_folder', undefined, null);
+      if (!folderPath) {
+        throw new Error('No folder selected');
+      }
       console.log('Folder selected:', folderPath);
       
       await loadFolder(folderPath);
@@ -137,9 +141,9 @@ export const useFileManager = () => {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
       
-      const files = await invoke<MarkdownFile[]>('list_markdown_files', { 
+      const files = await safeInvoke<MarkdownFile[]>('list_markdown_files', { 
         path: state.currentFolder 
-      });
+      }, []);
       
       setState(prev => ({
         ...prev,
@@ -170,8 +174,17 @@ export const useFileManager = () => {
       console.log('Loading file:', file.path);
       
       // Load from file system
-      const content = await invoke<string>('read_file', { path: file.path });
+      const rawContent = await safeInvoke<string>('read_file', { path: file.path }, '');
       
+      // Convert multiselect markers back to HTML format for the editor
+      let content: string;
+      try {
+        content = deserializeMarkersToMultiselects(rawContent);
+      } catch (error) {
+        console.warn('Failed to deserialize multiselect markers:', error);
+        // Fall back to using raw content if deserialization fails
+        content = typeof rawContent === 'string' ? rawContent : String(rawContent);
+      }
       
       setState(prev => ({
         ...prev,
@@ -204,10 +217,17 @@ export const useFileManager = () => {
       setState(prev => ({ ...prev, autoSaveStatus: 'saving' }));
       
       console.log('Saving file:', state.currentFile.path);
-      await invoke<string>('save_file', {
+
+      // Serialize multiselects from HTML to marker format before saving
+      const contentToSave = serializeMultiselectsToMarkers(state.fileContent);
+
+      const result = await safeInvoke<string>('save_file', {
         path: state.currentFile.path,
-        content: state.fileContent,
-      });
+        content: contentToSave,
+      }, null);
+      if (result === null) {
+        throw new Error('Failed to save file');
+      }
       
       
       setState(prev => ({
@@ -247,43 +267,49 @@ export const useFileManager = () => {
       switch (operation.type) {
         case 'create':
           console.log('Creating file:', operation.name);
-          result = await invoke<FileOperationResult>('create_file', {
+          result = await safeInvoke<FileOperationResult>('create_file', {
             directory: state.currentFolder,
             name: operation.name,
-          });
+          }, { success: false, message: 'Failed to create file' });
           break;
           
         case 'rename':
           console.log('Renaming file:', operation.oldPath, 'to', operation.newName);
-          result = await invoke<FileOperationResult>('rename_file', {
+          result = await safeInvoke<FileOperationResult>('rename_file', {
             old_path: operation.oldPath,
             new_name: operation.newName,
-          });
+          }, { success: false, message: 'Failed to rename file' });
           break;
           
         case 'delete':
           console.log('Deleting file:', operation.path);
-          result = await invoke<FileOperationResult>('delete_file', {
+          result = await safeInvoke<FileOperationResult>('delete_file', {
             path: operation.path,
-          });
+          }, { success: false, message: 'Failed to delete file' });
           break;
           
         case 'copy': {
           console.log('Copying file from:', operation.sourcePath, 'to:', operation.destPath);
-          const copyResult = await invoke<string>('copy_file', {
+          const copyResult = await safeInvoke<string>('copy_file', {
             source_path: operation.sourcePath,
             dest_path: operation.destPath,
-          });
+          }, null);
+          if (!copyResult) {
+            throw new Error('Failed to copy file');
+          }
           result = { success: true, message: copyResult };
           break;
         }
           
         case 'move': {
           console.log('Moving file from:', operation.sourcePath, 'to:', operation.destPath);
-          const moveResult = await invoke<string>('move_file', {
+          const moveResult = await safeInvoke<string>('move_file', {
             source_path: operation.sourcePath,
             dest_path: operation.destPath,
-          });
+          }, null);
+          if (!moveResult) {
+            throw new Error('Failed to move file');
+          }
           result = { success: true, message: moveResult };
           break;
         }
@@ -421,6 +447,27 @@ export const useFileManager = () => {
     };
   }, [saveCurrentFile, selectFolder]);
 
+  // === UTILITY FUNCTIONS ===
+  
+  /**
+   * Read file text content directly (for external components)
+   * Encapsulates the Tauri invoke call with proper error handling
+   */
+  const readFileText = useCallback(async (path: string): Promise<string> => {
+    // Note: Hook version assumes we're already in Tauri context
+    // since the entire useFileManager hook requires Tauri
+    try {
+      const content = await safeInvoke<string>('read_file', { path }, null);
+      if (!content) {
+        throw new Error('Failed to read file');
+      }
+      return content;
+    } catch (error) {
+      console.error('Failed to read file:', path, error);
+      throw new Error(`Failed to read file: ${error}`);
+    }
+  }, []);
+
   // === RETURN STATE AND OPERATIONS ===
   
   return {
@@ -434,7 +481,32 @@ export const useFileManager = () => {
     setSearchQuery,
     setEditorMode: setEditorModeLocal,
     refreshFiles,
+    readFileText,
   };
+};
+
+// Export the readFileText helper for external use
+// This standalone export is intentionally kept for components that need file reading
+// without instantiating the entire file manager state
+export const readFileText = async (path: string): Promise<string> => {
+  // Check if we're in Tauri context first
+  const { checkTauriContextAsync } = await import('@/utils/tauri-ready');
+  const inTauriContext = await checkTauriContextAsync();
+  
+  if (!inTauriContext) {
+    throw new Error('readFileText is only available in the Tauri runtime');
+  }
+  
+  try {
+    const content = await safeInvoke<string>('read_file', { path }, null);
+    if (!content) {
+      throw new Error('Failed to read file');
+    }
+    return content;
+  } catch (error) {
+    console.error('Failed to read file:', path, error);
+    throw new Error(`Failed to read file: ${error}`);
+  }
 };
 
 export default useFileManager;

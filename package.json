@@ -1,7 +1,8 @@
 {
   "name": "gtdspace",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "GTD-first productivity system with integrated markdown editing",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,10 +10,20 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
+    "pretauri:build": "npm run icons:generate",
     "tauri:build": "tauri build",
+    "icons:generate": "node scripts/icons-generate.mjs",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "lint:fix": "eslint . --ext ts,tsx --fix"
+    "lint:fix": "eslint . --ext ts,tsx --fix",
+    "version:bump": "node scripts/bump-version.js",
+    "version:major": "node scripts/bump-version.js major",
+    "version:minor": "node scripts/bump-version.js minor",
+    "version:patch": "node scripts/bump-version.js patch",
+    "release": "node scripts/safe-release.js patch",
+    "release:major": "node scripts/safe-release.js major",
+    "release:minor": "node scripts/safe-release.js minor",
+    "release:patch": "node scripts/safe-release.js patch"
   },
   "dependencies": {
     "@blocknote/code-block": "^0.35.0",
@@ -55,11 +66,12 @@
     "react-dom": "^18.2.0",
     "react-hotkeys-hook": "^5.1.0",
     "react-markdown": "^10.1.0",
+    "sharp": "0.34.3",
     "shiki": "^3.8.1",
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.0.0",
+    "@tauri-apps/cli": "2.0.0",
     "@types/lodash.debounce": "^4.0.9",
     "@types/node": "^24.1.0",
     "@types/react": "^18.2.66",

@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import type { UserSettings, Theme, EditorMode } from '@/types';
 
 /**
@@ -57,7 +57,11 @@ export const useSettings = () => {
       setIsLoading(true);
       setError(null);
       
-      const loadedSettings = await invoke<UserSettings>('load_settings');
+      const loadedSettings = await safeInvoke<UserSettings>('load_settings', undefined, null);
+      if (!loadedSettings) {
+        // Use default settings if loading fails
+        return;
+      }
       
       setSettings(loadedSettings);
       
@@ -78,7 +82,10 @@ export const useSettings = () => {
     try {
       setError(null);
       
-      await invoke<string>('save_settings', { settings: newSettings });
+      const result = await safeInvoke<string>('save_settings', { settings: newSettings }, null);
+      if (result === null) {
+        throw new Error('Failed to save settings');
+      }
       
       setSettings(newSettings);
       

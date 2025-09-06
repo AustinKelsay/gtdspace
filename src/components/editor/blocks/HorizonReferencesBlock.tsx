@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import {
   Plus,
   X,
@@ -43,11 +43,12 @@ type EditorBlockNode = {
 interface HorizonFile {
   path: string;
   name: string;
-  horizon: 'areas' | 'goals' | 'vision' | 'purpose';
+  horizon: 'areas' | 'goals' | 'vision' | 'purpose' | 'projects';
 }
 
 // Define horizon colors for consistent UI
 const HORIZON_COLORS = {
+  projects: 'bg-green-100 hover:bg-green-200 dark:bg-green-900/20 dark:hover:bg-green-900/30',
   areas: 'bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/20 dark:hover:bg-blue-900/30',
   goals: 'bg-violet-100 hover:bg-violet-200 dark:bg-violet-900/20 dark:hover:bg-violet-900/30',
   vision: 'bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30',
@@ -55,6 +56,7 @@ const HORIZON_COLORS = {
 };
 
 const HORIZON_LABELS = {
+  projects: 'Projects',
   areas: 'Areas of Focus',
   goals: 'Goals',
   vision: 'Vision',
@@ -62,12 +64,50 @@ const HORIZON_LABELS = {
 };
 
 // Relative directory names for each horizon within a GTD space
-const HORIZON_DIRS: Record<'areas' | 'goals' | 'vision' | 'purpose', string> = {
+const HORIZON_DIRS: Record<'areas' | 'goals' | 'vision' | 'purpose' | 'projects', string> = {
+  projects: 'Projects',
   areas: 'Areas of Focus',
   goals: 'Goals',
   vision: 'Vision',
   purpose: 'Purpose & Principles'
 };
+
+/**
+ * Return true if this element is a table element or nested anywhere within a table.
+ */
+function isInTable(element: Element): boolean {
+  const tableElements = ['TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD'];
+  let current: Element | null = element;
+  while (current) {
+    const tag = (current.tagName || '').toUpperCase();
+    if (tableElements.includes(tag)) return true;
+    current = current.parentElement;
+  }
+  return false;
+}
+
+/**
+ * Safe parser for horizon reference markers like [!projects-references:...].
+ * - Skips nodes inside tables
+ * - Only parses paragraph nodes
+ * - Requires an exact marker match; otherwise returns undefined
+ */
+function parseHorizonMarker(element: Element, marker: 'projects' | 'areas' | 'goals' | 'vision' | 'purpose'): { references: string } | undefined {
+  if (isInTable(element)) return undefined;
+  const tag = (element.tagName || '').toUpperCase();
+  if (tag !== 'P') return undefined;
+  const text = element.textContent || '';
+  const prefix = `[!${marker}-references:`;
+  const start = text.indexOf(prefix);
+  const end = text.lastIndexOf(']');
+  if (start === -1 || end <= start + prefix.length) return undefined;
+  const raw = text.slice(start + prefix.length, end);
+  try {
+    return { references: decodeURIComponent(raw) };
+  } catch {
+    return { references: raw };
+  }
+}
 
 /**
  * Normalize a filesystem-like path to a forward-slash form, removing dot segments.
@@ -173,8 +213,8 @@ interface HorizonReferencesProps {
       update: { type: string; props: { references: string } }
     ) => void;
   };
-  horizonType: 'areas' | 'goals' | 'vision' | 'purpose';
-  allowedHorizons: Array<'areas' | 'goals' | 'vision' | 'purpose'>;
+  horizonType: 'areas' | 'goals' | 'vision' | 'purpose' | 'projects';
+  allowedHorizons: Array<'areas' | 'goals' | 'vision' | 'purpose' | 'projects'>;
   label: string;
 }
 
@@ -227,7 +267,7 @@ function toHorizonBlockRenderProps(
   };
 }
 
-function HorizonReferencesRenderer(props: HorizonReferencesProps) {
+const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(props: HorizonReferencesProps) {
   const { block, editor, horizonType, allowedHorizons, label } = props;
   const { references } = block.props;
 
@@ -236,8 +276,40 @@ function HorizonReferencesRenderer(props: HorizonReferencesProps) {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
 
-  // Parse references from comma-separated string
-  const parsedReferences = references ? references.split(',').filter(Boolean) : [];
+  // Parse references - supports both JSON array and legacy CSV format
+  const parsedReferences = React.useMemo(() => {
+    const raw = (references || '').trim();
+    if (!raw || raw === '[' || raw === ']' || raw === '[]') return [];
+
+    let refs: string[] = [];
+
+    // First try to decode if it's URL encoded
+    let decodedRaw = raw;
+    try {
+      decodedRaw = decodeURIComponent(raw);
+    } catch {
+      // Not URL encoded, use as is
+    }
+
+    // Try to parse as JSON first
+    try {
+      const parsed = JSON.parse(decodedRaw);
+      if (Array.isArray(parsed)) refs = parsed as string[];
+      else refs = decodedRaw.split(',');
+    } catch {
+      // JSON parse failed, use legacy CSV format with extra sanitization
+      refs = decodedRaw.split(',');
+    }
+
+    // Normalize and drop bracket-only artifacts
+    const normalized = refs
+      .map(ref => ref.replace(/\\/g, '/').trim())
+      .filter(ref => !!ref && ref !== '[' && ref !== ']');
+
+    return Array.from(new Set(normalized));
+  }, [references]);
+
+  // (moved) healMalformedReferences is defined after updateReferences
 
   // Load available horizon files
   const loadAvailableFiles = React.useCallback(async () => {
@@ -262,15 +334,39 @@ function HorizonReferencesRenderer(props: HorizonReferencesProps) {
         }
 
         try {
-          const files = await invoke<MarkdownFile[]>('list_markdown_files', { path: horizonPath });
-          const horizonFiles = files
-            .filter(f => !f.name.toLowerCase().includes('readme'))
-            .map(f => ({
-              path: f.path,
-              name: f.name.replace('.md', ''),
-              horizon
-            }));
-          allFiles.push(...horizonFiles);
+          if (horizon === 'projects') {
+            // For projects, we need to list project folders
+            const projects = await safeInvoke<{ name: string; description: string; due_date?: string | null }[]>('list_gtd_projects', { spacePath }, []);
+            if (projects) {
+              const projectsBasePath = safeJoinWithinBase(spacePath, HORIZON_DIRS.projects);
+              if (projectsBasePath) {
+                const projectFiles = projects.map(p => {
+                  const projectPath = safeJoinWithinBase(projectsBasePath, p.name);
+                  if (!projectPath) {
+                    console.warn(`[HorizonReferences] Could not construct safe path for project '${p.name}'`);
+                    return null;
+                  }
+                  return {
+                    path: projectPath,
+                    name: p.name,
+                    horizon: 'projects' as const
+                  };
+                }).filter((p): p is { path: string; name: string; horizon: 'projects' } => !!p);
+                allFiles.push(...projectFiles);
+              }
+            }
+          } else {
+            // For other horizons, list .md files directly
+            const files = await safeInvoke<MarkdownFile[]>('list_markdown_files', { path: horizonPath }, []);
+            const horizonFiles = files
+              .filter(f => !f.name.toLowerCase().includes('readme'))
+              .map(f => ({
+                path: f.path,
+                name: f.name.replace('.md', ''),
+                horizon
+              }));
+            allFiles.push(...horizonFiles);
+          }
         } catch (err) {
           console.error(`Failed to load ${HORIZON_LABELS[horizon]} files:`, err);
         }
@@ -308,10 +404,149 @@ function HorizonReferencesRenderer(props: HorizonReferencesProps) {
     return groups;
   }, [filteredFiles]);
 
-  const handleAddReference = (file: HorizonFile) => {
-    if (parsedReferences.includes(file.path)) return;
+  const updateReferences = React.useCallback((newReferences: string[]): boolean => {
+    // Normalize a references string (JSON array or CSV) for stable comparisons
+    function normalizeRefsString(input: string | undefined): string {
+      if (!input) return '';
+      try {
+        const parsed = JSON.parse(input);
+        if (Array.isArray(parsed)) {
+          return parsed.map((s) => String(s).replace(/\\/g, '/').trim()).filter(Boolean).sort().join(',');
+        }
+      } catch {
+        // not JSON, treat as CSV
+      }
+      return input.split(',').map((s) => s.replace(/\\/g, '/').trim()).filter(Boolean).sort().join(',');
+    }
 
-    const newReferences = [...parsedReferences, file.path];
+    const previousRefsNormalized = normalizeRefsString(block.props.references);
+    const targetType = `${horizonType}-references`;
+
+    const tryUpdateById = (id: string): boolean => {
+      try {
+        editor.updateBlock(id, {
+          type: targetType,
+          props: { references: JSON.stringify(newReferences) }
+        });
+        return true;
+      } catch (err) {
+        console.error('HorizonReferences: updateBlock failed for id', id, err);
+        return false;
+      }
+    };
+
+    // First try the current block id
+    if (tryUpdateById(block.id)) return true;
+
+    // If that failed, search the current document for a block of the same type
+    // whose references equal the previous references of this renderer.
+    try {
+      const doc = (editor.document as unknown as EditorBlockNode[]) || [];
+      let foundId: string | null = null;
+
+      const visit = (node: EditorBlockNode) => {
+        if (foundId) return; // already found
+        if (node.type === targetType) {
+          const nodeNorm = normalizeRefsString(String((node.props?.references ?? '')));
+          if (nodeNorm === previousRefsNormalized) {
+            foundId = node.id;
+            return;
+          }
+        }
+        if (node.children) {
+          for (const child of node.children) visit(child);
+        }
+      };
+
+      for (const n of doc) visit(n);
+      if (foundId && tryUpdateById(foundId)) return true;
+    } catch (searchErr) {
+      console.error('HorizonReferences: error while searching for matching block', searchErr);
+    }
+
+    console.error('Failed to update references: target block not found', {
+      blockId: block.id,
+      horizonType,
+      newReferences
+    });
+    // Last-resort: retry a few times with small delays; first try exact id again,
+    // then by matching previous refs, then any first block of target type.
+    const scheduleRetries = (delaysMs: number[]) => {
+      delaysMs.forEach((delay) => {
+        setTimeout(() => {
+          try {
+            // 1) try current id
+            if (tryUpdateById(block.id)) return;
+
+            // 2) try matching by previous refs
+            try {
+              const doc = (editor.document as unknown as EditorBlockNode[]) || [];
+              let matchedId: string | null = null;
+              const visit = (node: EditorBlockNode) => {
+                if (matchedId) return;
+                if (node.type === targetType) {
+                  const nodeNorm = normalizeRefsString(String((node.props?.references ?? '')));
+                  if (nodeNorm === previousRefsNormalized) {
+                    matchedId = node.id;
+                    return;
+                  }
+                }
+                if (node.children) for (const c of node.children) visit(c);
+              };
+              for (const n of doc) visit(n);
+              if (matchedId && tryUpdateById(matchedId)) return;
+            } catch (searchErr) {
+              console.error('HorizonReferences: retry search failed', searchErr);
+            }
+
+            // 3) fallback: pick first block of target type
+            try {
+              const doc = (editor.document as unknown as EditorBlockNode[]) || [];
+              let firstId: string | null = null;
+              const findFirst = (node: EditorBlockNode) => {
+                if (firstId) return;
+                if (node.type === targetType) {
+                  firstId = node.id;
+                  return;
+                }
+                if (node.children) for (const c of node.children) findFirst(c);
+              };
+              for (const n of doc) findFirst(n);
+              if (firstId) tryUpdateById(firstId);
+            } catch (fallbackErr) {
+              console.error('HorizonReferences: fallback retry failed', fallbackErr);
+            }
+          } catch (delayedErr) {
+            console.error('HorizonReferences: delayed retry tick failed', delayedErr);
+          }
+        }, delay);
+      });
+    };
+
+    scheduleRetries([32, 96, 256]);
+    return false;
+  }, [block.id, editor, horizonType, block.props.references]);
+
+  // Auto-heal malformed "[" or "]" references persisted from earlier bugs
+  const healMalformedReferences = React.useCallback(() => {
+    const raw = (references || '').trim();
+    if (raw === '[' || raw === ']') updateReferences([]);
+  }, [references, updateReferences]);
+
+  // Run healing effect after updateReferences is declared
+  React.useEffect(() => {
+    healMalformedReferences();
+    // We intentionally only run this when references changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [references]);
+
+  const handleAddReference = React.useCallback((file: HorizonFile) => {
+    // Normalize path to use forward slashes
+    const canonicalPath = file.path.replace(/\\/g, '/');
+
+    if (parsedReferences.includes(canonicalPath)) return;
+
+    const newReferences = [...parsedReferences, canonicalPath];
     const didUpdate = updateReferences(newReferences);
     if (!didUpdate) {
       console.error('Failed to add reference; update did not apply', {
@@ -320,9 +555,9 @@ function HorizonReferencesRenderer(props: HorizonReferencesProps) {
         file
       });
     }
-  };
+  }, [parsedReferences, block.id, horizonType, updateReferences]);
 
-  const handleRemoveReference = (path: string) => {
+  const handleRemoveReference = React.useCallback((path: string) => {
     const newReferences = parsedReferences.filter(r => r !== path);
     const didUpdate = updateReferences(newReferences);
     if (!didUpdate) {
@@ -332,63 +567,42 @@ function HorizonReferencesRenderer(props: HorizonReferencesProps) {
         path
       });
     }
-  };
+  }, [parsedReferences, block.id, horizonType, updateReferences]);
 
-  const updateReferences = (newReferences: string[]): boolean => {
-    const findAndUpdateBlock = () => {
-      if (!editor.document) {
-        console.error('Editor document is not available');
-        return false;
-      }
-      const blocks = editor.document as unknown as EditorBlockNode[];
-
-      for (const docBlock of blocks) {
-        if (updateBlockRecursive(docBlock)) return true;
-      }
-      return false;
-    };
-
-    const updateBlockRecursive = (node: EditorBlockNode): boolean => {
-      if (node.id === block.id) {
-        editor.updateBlock(block.id, {
-          type: `${horizonType}-references`,
-          props: { references: newReferences.join(',') }
-        });
-        return true;
-      }
-
-      if (node.children) {
-        for (const child of node.children) {
-          if (updateBlockRecursive(child)) return true;
+  const handleReferenceClick = React.useCallback((path: string) => {
+    // Defensive check: if path looks like a JSON array, parse it
+    let finalPath = path;
+    if (path.startsWith('[') && path.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(path);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          finalPath = parsed[0];
+          console.warn('[HorizonReferences] Path was JSON array, extracted first element:', finalPath);
         }
+      } catch {
+        // Not valid JSON, use as-is
       }
-
-      return false;
-    };
-
-    const didUpdate = findAndUpdateBlock();
-    if (!didUpdate) {
-      console.error('Failed to update references: target block not found', {
-        blockId: block.id,
-        horizonType,
-        newReferences
-      });
     }
-    return didUpdate;
-  };
-
-  const handleReferenceClick = (path: string) => {
+    
     window.dispatchEvent(new CustomEvent('open-reference-file', {
-      detail: { path }
+      detail: { path: finalPath }
     }));
-  };
+  }, []);
 
-  // Get display info for a reference path
-  const getReferenceInfo = (path: string): { name: string; horizon: string } => {
+  // Get display info for a reference path - memoized
+  const getReferenceInfo = React.useCallback((path: string): { name: string; horizon: string } => {
     const file = availableFiles.find(f => f.path === path);
     if (file) return { name: file.name, horizon: file.horizon };
 
     const normalized = path.replace(/\\/g, '/');
+
+    // For projects, extract just the project folder name
+    if (normalized.includes('/Projects/')) {
+      const parts = normalized.split('/Projects/')[1]?.split('/') || [];
+      const name = parts[0] || 'Unknown';
+      return { name, horizon: 'projects' };
+    }
+
     const name = normalized.split('/').pop()?.replace(/\.md$/i, '') || 'Unknown';
 
     let horizon = 'areas';
@@ -398,7 +612,7 @@ function HorizonReferencesRenderer(props: HorizonReferencesProps) {
     else if (normalized.includes('/Purpose & Principles/')) horizon = 'purpose';
 
     return { name, horizon };
-  };
+  }, [availableFiles]);
 
   return (
     <div className="my-2">
@@ -528,7 +742,7 @@ function HorizonReferencesRenderer(props: HorizonReferencesProps) {
       </Dialog>
     </div>
   );
-}
+});
 
 // Define prop schema for each reference type
 const horizonReferencesPropSchema = {
@@ -536,6 +750,35 @@ const horizonReferencesPropSchema = {
     default: '',  // Store as comma-separated list of file paths
   },
 } satisfies PropSchema;
+
+// Projects References Block
+export const ProjectsReferencesBlock = createReactBlockSpec(
+  {
+    type: 'projects-references' as const,
+    propSchema: horizonReferencesPropSchema,
+    content: 'none' as const,
+  },
+  {
+    render: (props) => {
+      const baseProps = toHorizonBlockRenderProps(props);
+      return (
+        <HorizonReferencesRenderer
+          {...baseProps}
+          horizonType="projects"
+          allowedHorizons={['projects']}
+          label="Related Projects"
+        />
+      );
+    },
+    toExternalHTML: (props) => {
+      // Export as markdown marker for persistence with encoded references payload
+      const references = props.block.props.references || '';
+      const encoded = encodeURIComponent(references);
+      return <p>{`[!projects-references:${encoded}]`}</p>;
+    },
+    parse: (element) => parseHorizonMarker(element, 'projects'),
+  }
+);
 
 // Areas References Block (for Projects)
 export const AreasReferencesBlock = createReactBlockSpec(
@@ -556,15 +799,13 @@ export const AreasReferencesBlock = createReactBlockSpec(
         />
       );
     },
-    toExternalHTML: () => null,
-    parse: (element) => {
-      const textContent = element.textContent || '';
-      const match = textContent.match(/\[!areas-references:([^\]]*)\]/);
-      if (match) {
-        return { references: match[1] || '' };
-      }
-      return { references: '' };
+    toExternalHTML: (props) => {
+      // Export as markdown marker for persistence with encoded references payload
+      const references = props.block.props.references || '';
+      const encoded = encodeURIComponent(references);
+      return <p>{`[!areas-references:${encoded}]`}</p>;
     },
+    parse: (element) => parseHorizonMarker(element, 'areas'),
   }
 );
 
@@ -587,15 +828,13 @@ export const GoalsReferencesBlock = createReactBlockSpec(
         />
       );
     },
-    toExternalHTML: () => null,
-    parse: (element) => {
-      const textContent = element.textContent || '';
-      const match = textContent.match(/\[!goals-references:([^\]]*)\]/);
-      if (match) {
-        return { references: match[1] || '' };
-      }
-      return { references: '' };
+    toExternalHTML: (props) => {
+      // Export as markdown marker for persistence with encoded references payload
+      const references = props.block.props.references || '';
+      const encoded = encodeURIComponent(references);
+      return <p>{`[!goals-references:${encoded}]`}</p>;
     },
+    parse: (element) => parseHorizonMarker(element, 'goals'),
   }
 );
 
@@ -618,15 +857,13 @@ export const VisionReferencesBlock = createReactBlockSpec(
         />
       );
     },
-    toExternalHTML: () => null,
-    parse: (element) => {
-      const textContent = element.textContent || '';
-      const match = textContent.match(/\[!vision-references:([^\]]*)\]/);
-      if (match) {
-        return { references: match[1] || '' };
-      }
-      return { references: '' };
+    toExternalHTML: (props) => {
+      // Export as markdown marker for persistence with encoded references payload
+      const references = props.block.props.references || '';
+      const encoded = encodeURIComponent(references);
+      return <p>{`[!vision-references:${encoded}]`}</p>;
     },
+    parse: (element) => parseHorizonMarker(element, 'vision'),
   }
 );
 
@@ -649,14 +886,12 @@ export const PurposeReferencesBlock = createReactBlockSpec(
         />
       );
     },
-    toExternalHTML: () => null,
-    parse: (element) => {
-      const textContent = element.textContent || '';
-      const match = textContent.match(/\[!purpose-references:([^\]]*)\]/);
-      if (match) {
-        return { references: match[1] || '' };
-      }
-      return { references: '' };
+    toExternalHTML: (props) => {
+      // Export as markdown marker for persistence with encoded references payload
+      const references = props.block.props.references || '';
+      const encoded = encodeURIComponent(references);
+      return <p>{`[!purpose-references:${encoded}]`}</p>;
     },
+    parse: (element) => parseHorizonMarker(element, 'purpose'),
   }
 );

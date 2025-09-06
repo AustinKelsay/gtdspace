@@ -5,7 +5,8 @@
  */
 
 import React, { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
+import { checkTauriContextAsync, isTauriContext } from '@/utils/tauri-ready';
 import {
   Dialog,
   DialogContent,
@@ -58,18 +59,21 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
           // First check if the directory exists and create if needed
           try {
             console.log('Checking if directory exists:', directory);
-            const directoryExistsBefore = await invoke<boolean>('check_directory_exists', { path: directory });
+            const directoryExistsBefore = await safeInvoke<boolean>('check_directory_exists', { path: directory }, false);
             console.log('Directory exists before:', directoryExistsBefore);
             if (!directoryExistsBefore) {
               let createResponse: unknown;
               try {
-                createResponse = await invoke<string>('create_directory', { path: directory });
+                createResponse = await safeInvoke<string>('create_directory', { path: directory }, null);
+                if (!createResponse) {
+                  throw new Error('Failed to create directory');
+                }
               } catch (err) {
                 const detail = err instanceof Error ? err.message : String(err);
                 throw new Error(`Failed to create directory at '${directory}': ${detail}`);
               }
 
-              const directoryExistsAfter = await invoke<boolean>('check_directory_exists', { path: directory });
+              const directoryExistsAfter = await safeInvoke<boolean>('check_directory_exists', { path: directory }, false);
               if (!directoryExistsAfter) {
                 throw new Error(`Directory '${directory}' does not exist after creation attempt. Response: ${String(createResponse)}`);
               }
@@ -85,32 +89,24 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
           console.log('Creating file with name:', fileName);
 
           // Create the file - using FileOperationResult type
-          const createResult = await invoke<{ success: boolean; path?: string; message?: string }>('create_file', {
+          const createResult = await safeInvoke<{ success: boolean; path?: string; message?: string }>('create_file', {
             directory,
             name: fileName,
-          });
+          }, { success: false, message: 'Failed to create file' });
 
           if (!createResult.success) {
             throw new Error(createResult.message || 'Failed to create file');
           }
 
-          // Get the full path for the created file
-          const filePath = `${directory}/${fileName}`;
+          // Prefer the backend-created path, fallback to OS-safe join
+          // Ensure Tauri context check runs first to prime the cache
+          await checkTauriContextAsync();
+          const filePath = createResult.path || (isTauriContext()
+            ? await import('@tauri-apps/api/path').then(m => m.join(directory, fileName))
+            : `${directory}/${fileName}`);
 
-          // Write initial content based on directory type
-          const title = fileName.replace('.md', '');
-          let initialContent = `# ${title}\n\n`;
-
-          if (directoryName === 'Someday Maybe') {
-            initialContent += `## Idea\n\n[Describe your idea here]\n\n## Why it matters\n\n[Why is this worth considering?]\n\n## Next steps when ready\n\n- [ ] First step\n- [ ] Second step\n`;
-          } else if (directoryName === 'Cabinet') {
-            initialContent += `## Reference\n\n[Add your reference material here]\n\n## Key Points\n\n- \n\n## Notes\n\n`;
-          }
-
-          await invoke('save_file', {
-            path: filePath,
-            content: initialContent,
-          });
+          // The backend create_file already provides appropriate templates
+          // No need to overwrite with frontend templates
 
           return filePath;
         },

@@ -23,12 +23,31 @@ import {
   isMonday, isTuesday, isWednesday,
   isThursday, isFriday, setHours
 } from 'date-fns';
-import { invoke } from '@tauri-apps/api/core';
+import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { useCalendarData } from '@/hooks/useCalendarData';
 import type { MarkdownFile, GTDSpace } from '@/types';
-import type { GoogleCalendarSyncStatus } from '@/types/google-calendar';
+import type { GoogleCalendarSyncStatus, SyncStatus, CalendarItemStatus } from '@/types/google-calendar';
+import { mapGoogleCalendarSyncStatus } from '@/types/google-calendar';
 import { cn } from '@/lib/utils';
 import { EventDetailModal } from './EventDetailModal';
+
+// Helper to detect if a date has a time component
+// - For strings: return false when the time portion is zero (e.g., "T00:00:00", with optional fractional seconds and timezone)
+// - For Date objects: treat ISO strings ending with zero time as no time component before checking local time parts
+const hasTimeComponent = (d: string | Date): boolean => {
+  const zeroTimeStringRegex = /T00:00:00(?:\.0+)?(?:Z|[+-]\d{2}:\d{2})?/;
+  if (typeof d === 'string') {
+    if (!/T\d{2}:\d{2}/.test(d)) return false;
+    if (zeroTimeStringRegex.test(d)) return false;
+    return true;
+  }
+  if (d instanceof Date) {
+    const iso = d.toISOString();
+    if (/T00:00:00(?:\.0+)?Z$/.test(iso)) return false;
+    return (d.getHours() + d.getMinutes() + d.getSeconds() + d.getMilliseconds()) !== 0;
+  }
+  return false;
+};
 
 interface CalendarViewProps {
   onFileSelect: (file: MarkdownFile) => void;
@@ -48,6 +67,7 @@ interface CalendarEvent {
   endDate?: Date;  // Add end date for Google events
   endTime?: string; // Add end time display string
   duration?: number; // Duration in minutes for positioning
+  frequency?: string; // Habit frequency (for habit events)
   path: string;
   projectName?: string;
   effort?: string; // Effort level for actions
@@ -56,6 +76,14 @@ interface CalendarEvent {
   attendees?: string[];
   meetingLink?: string;
   description?: string;
+}
+
+// Lazy-load Tauri invoke only in Tauri context
+async function getTauriInvoke(): Promise<(<T>(cmd: string, args?: unknown) => Promise<T>) | null> {
+  const inTauriContext = await checkTauriContextAsync();
+  if (!inTauriContext) return null;
+  const core = await import('@tauri-apps/api/core');
+  return core.invoke as <T>(cmd: string, args?: unknown) => Promise<T>;
 }
 
 
@@ -99,20 +127,20 @@ const getEffortDuration = (effort?: string): number => {
  * - Old approach: Generate 365+ dates, then filter to ~30 for month view
  * - New approach: Generate only the ~30 dates needed for the current view
  * 
- * @param createdDate - The date the habit was created (ISO string)
+ * @param createdDateTime - The date the habit was created (ISO string)
  * @param frequency - The recurrence frequency of the habit
  * @param viewStart - Start of the current view window
  * @param viewEnd - End of the current view window
  * @returns Array of dates when the habit should appear in the current view
  */
 const generateHabitDates = (
-  createdDate: string,
+  createdDateTime: string,
   frequency: string,
   viewStart: Date,
   viewEnd: Date
 ): Date[] => {
   const dates: Date[] = [];
-  const created = parseISO(createdDate);
+  const created = parseISO(createdDateTime);
   if (!isValid(created)) return dates;
 
   // Add a small buffer to handle edge cases at view boundaries
@@ -250,7 +278,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [googleSyncStatus, setGoogleSyncStatus] = useState<GoogleCalendarSyncStatus | null>(null);
+  const [googleSyncStatus, setGoogleSyncStatus] = useState<SyncStatus | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Modal and filter state
@@ -271,9 +299,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     const loadGoogleStatus = async () => {
       console.log('[CalendarView] Loading Google Calendar status...');
       try {
+        const invoke = await getTauriInvoke();
+        if (!invoke) {
+          console.warn('[CalendarView] Not in Tauri context; skipping status load');
+          return;
+        }
         const status = await invoke<GoogleCalendarSyncStatus>('google_calendar_get_status');
         console.log('[CalendarView] Google Calendar status:', status);
-        setGoogleSyncStatus(status);
+        setGoogleSyncStatus(mapGoogleCalendarSyncStatus(status));
       } catch (error) {
         console.error('[CalendarView] Failed to load Google Calendar status:', error);
       }
@@ -285,12 +318,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const handleGoogleSync = async () => {
     setIsSyncing(true);
     try {
+      const invoke = await getTauriInvoke();
+      if (!invoke) {
+        console.warn('[CalendarView] Not in Tauri context; skipping Google Calendar sync');
+        setIsSyncing(false);
+        return;
+      }
       await invoke('google_calendar_sync');
       // Refresh calendar data after sync
       refresh();
       // Update sync status
       const status = await invoke<GoogleCalendarSyncStatus>('google_calendar_get_status');
-      setGoogleSyncStatus(status);
+      setGoogleSyncStatus(mapGoogleCalendarSyncStatus(status));
     } catch (error) {
       console.error('Failed to sync Google Calendar:', error);
     } finally {
@@ -348,34 +387,35 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     items.forEach(item => {
       // Handle Google Calendar events
       if (item.type === 'google-event') {
-        const startDate = item.focus_date || item.due_date;
-        const endDate = item.end_date || item.due_date;  // Use end_date or fallback to due_date
-        
+        const startDate = item.focusDate || item.dueDate;
+        const endDate = item.endDate || item.dueDate;  // Use end_date or fallback to due_date
+
         if (startDate) {
           const date = typeof startDate === 'string' ? parseISO(startDate) : startDate;
           const end = endDate ? (typeof endDate === 'string' ? parseISO(endDate) : endDate) : null;
-          
+
           if (isValid(date)) {
-            // Extract time if it's a datetime
-            const timeMatch = startDate.match(/T(\d{2}:\d{2})/);
+            // Format time from the Date object to get local time, not UTC
             let formattedTime: string | undefined;
-            if (timeMatch) {
-              const [hours, minutes] = timeMatch[1].split(':').map(Number);
+            // Check if this has a time component (not just a date)
+            if (hasTimeComponent(startDate)) {
+              const hours = date.getHours();
+              const minutes = date.getMinutes();
               const period = hours >= 12 ? 'PM' : 'AM';
               const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
               formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
             }
-            
+
             // Calculate duration in minutes if we have an end time
             let duration: number | undefined;
             let endTimeFormatted: string | undefined;
             if (end && isValid(end)) {
               duration = Math.round((end.getTime() - date.getTime()) / (1000 * 60)); // Duration in minutes
-              
-              // Format end time
-              const endTimeMatch = endDate?.match(/T(\d{2}:\d{2})/);
-              if (endTimeMatch) {
-                const [endHours, endMinutes] = endTimeMatch[1].split(':').map(Number);
+
+              // Format end time from Date object for local time
+              if (endDate && hasTimeComponent(endDate)) {
+                const endHours = end.getHours();
+                const endMinutes = end.getMinutes();
                 const endPeriod = endHours >= 12 ? 'PM' : 'AM';
                 const displayEndHours = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours;
                 endTimeFormatted = `${displayEndHours}:${endMinutes.toString().padStart(2, '0')} ${endPeriod}`;
@@ -405,19 +445,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       }
 
       // Handle habits separately - generate recurring events
-      if (item.type === 'habit' && item.frequency && item.createdDate) {
+      if (item.type === 'habit' && item.frequency && item.createdDateTime) {
         // Generate dates only for the current view window
-        const habitDates = generateHabitDates(item.createdDate, item.frequency, viewStart, viewEnd);
+        const habitDates = generateHabitDates(item.createdDateTime, item.frequency, viewStart, viewEnd);
 
         // Extract time from focus_date if available
         let timeString: string | undefined;
         let formattedTime: string | undefined;
-        if (item.focus_date) {
-          const timeMatch = item.focus_date.match(/T(\d{2}:\d{2})/);
-          if (timeMatch) {
-            timeString = timeMatch[1];
+        if (item.focusDate && hasTimeComponent(item.focusDate)) {
+          // Parse the date to get local time
+          const focusDate = parseISO(item.focusDate);
+          if (isValid(focusDate)) {
+            const hours = focusDate.getHours();
+            const minutes = focusDate.getMinutes();
+            timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
             // Convert to 12-hour format for display
-            const [hours, minutes] = timeString.split(':').map(Number);
             const period = hours >= 12 ? 'PM' : 'AM';
             const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
             formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
@@ -444,19 +486,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               date: eventDate,
               path: item.path,
               projectName: undefined,
+              frequency: item.frequency,
               time: formattedTime // Include the formatted time for display
             });
           });
       } else {
         // Handle projects and actions
-        if (item.due_date) {
-          const dueDate = typeof item.due_date === 'string' ? parseISO(item.due_date) : item.due_date;
+        if (item.dueDate) {
+          const dueDate = typeof item.dueDate === 'string' ? parseISO(item.dueDate) : item.dueDate;
           if (isValid(dueDate)) {
-            // Extract time if it's a datetime
-            const timeMatch = item.due_date.match(/T(\d{2}:\d{2})/);
+            // Format time from the Date object to get local time, not UTC
             let formattedTime: string | undefined;
-            if (timeMatch) {
-              const [hours, minutes] = timeMatch[1].split(':').map(Number);
+            // Check if this has a time component (not just a date)
+            if (item.dueDate && hasTimeComponent(item.dueDate)) {
+              const hours = dueDate.getHours();
+              const minutes = dueDate.getMinutes();
               const period = hours >= 12 ? 'PM' : 'AM';
               const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
               formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
@@ -475,38 +519,39 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           }
         }
 
-        if (item.focus_date) {
-          const focusDate = typeof item.focus_date === 'string' ? parseISO(item.focus_date) : item.focus_date;
+        if (item.focusDate) {
+          const focusDate = typeof item.focusDate === 'string' ? parseISO(item.focusDate) : item.focusDate;
           if (isValid(focusDate)) {
-            // Extract time if it's a datetime
-            const timeMatch = item.focus_date.match(/T(\d{2}:\d{2})/);
+            // Format time from the Date object to get local time, not UTC
             let formattedTime: string | undefined;
-            if (timeMatch) {
-              const [hours, minutes] = timeMatch[1].split(':').map(Number);
+            // Check if this has a time component (not just a date)
+            if (item.focusDate && hasTimeComponent(item.focusDate)) {
+              const hours = focusDate.getHours();
+              const minutes = focusDate.getMinutes();
               const period = hours >= 12 ? 'PM' : 'AM';
               const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
               formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
             }
-            
+
             // Calculate duration based on effort for actions with focus dates
             let duration: number | undefined;
             let endDate: Date | undefined;
             let endTimeFormatted: string | undefined;
-            
+
             if (item.type === 'action' && item.effort) {
               duration = getEffortDuration(item.effort);
-              
+
               // Calculate end date/time based on duration
               endDate = new Date(focusDate.getTime() + duration * 60 * 1000);
-              
-              // Format end time
+
+              // Format end time from Date object for local time
               const endHours = endDate.getHours();
               const endMinutes = endDate.getMinutes();
               const endPeriod = endHours >= 12 ? 'PM' : 'AM';
               const displayEndHours = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours;
               endTimeFormatted = `${displayEndHours}:${endMinutes.toString().padStart(2, '0')} ${endPeriod}`;
             }
-            
+
             events.push({
               id: `${item.path}-focus`,
               title: item.name,
@@ -582,11 +627,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         if (!a.time && b.time) return 1;
         if (a.time && b.time) return a.time.localeCompare(b.time);
         // Then by type: habits, actions, projects, google-events
-        const typeOrder: Record<string, number> = { 
-          'habit': 0, 
-          'action': 1, 
+        const typeOrder: Record<string, number> = {
+          'habit': 0,
+          'action': 1,
           'project': 2,
-          'google-event': 3 
+          'google-event': 3
         };
         return (typeOrder[a.type] || 99) - (typeOrder[b.type] || 99);
       });
@@ -673,7 +718,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
         <div className="flex items-center gap-2">
           {/* Google Calendar Sync Status */}
-          {googleSyncStatus?.is_connected && (
+          {googleSyncStatus?.isConnected && (
             <div className="flex items-center gap-2 mr-2">
               <Badge variant="outline" className="gap-1.5">
                 <Cloud className="h-3 w-3" />
@@ -683,13 +728,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 variant="ghost"
                 size="icon"
                 onClick={handleGoogleSync}
-                disabled={isSyncing || googleSyncStatus.sync_in_progress}
+                disabled={isSyncing || googleSyncStatus.syncInProgress}
                 className="h-7 w-7"
                 title="Sync Google Calendar"
               >
                 <RefreshCw className={cn(
                   "h-3.5 w-3.5",
-                  (isSyncing || googleSyncStatus.sync_in_progress) && "animate-spin"
+                  (isSyncing || googleSyncStatus.syncInProgress) && "animate-spin"
                 )} />
               </Button>
             </div>
@@ -955,18 +1000,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                         const eventStartHour = event.date.getHours();
                         const eventEndHour = event.endDate ? event.endDate.getHours() : eventStartHour;
                         const eventEndMinute = event.endDate ? event.endDate.getMinutes() : event.date.getMinutes();
-                        
+
                         // Check if this event starts in this hour or spans across this hour
                         if (eventStartHour === hour) {
                           return true; // Event starts in this hour
                         }
-                        
+
                         // Check if event spans across this hour (for multi-hour events)
                         if (event.duration && eventStartHour < hour) {
                           const endHour = eventEndMinute > 0 ? eventEndHour : eventEndHour - 1;
                           return hour <= endHour;
                         }
-                        
+
                         return false;
                       });
 
@@ -982,7 +1027,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           {(() => {
                             // Only render events that start in this hour (not spanning ones)
                             const startingEvents = hourEvents.filter(ev => ev.date.getHours() === hour);
-                            
+
                             // Group events by minute within this hour for side-by-side layout
                             const groupsByMinute = new Map<number, typeof startingEvents>();
                             for (const ev of startingEvents) {
@@ -1001,17 +1046,17 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                     // Calculate event height based on duration
                                     let eventHeight = 'auto';
                                     const minuteOffset = (min / 60) * 80; // Convert minutes to pixels
-                                    
+
                                     if (event.duration) {
                                       // Each hour slot is 80px (h-20), calculate height based on duration
                                       const heightInPixels = (event.duration / 60) * 80;
                                       eventHeight = `${Math.max(20, heightInPixels)}px`; // Min height of 20px
                                     }
-                                    
+
                                     // Calculate left position for side-by-side events
                                     const width = group.length > 1 ? `${100 / group.length}%` : '100%';
                                     const left = group.length > 1 ? `${(100 / group.length) * index}%` : '0';
-                                    
+
                                     return (
                                       <div
                                         key={event.id}
@@ -1195,12 +1240,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           name: selectedEvent.title,
           path: selectedEvent.path,
           type: selectedEvent.type,
-          status: selectedEvent.status,
+          status: selectedEvent.status as CalendarItemStatus,
           projectName: selectedEvent.projectName,
-          frequency: selectedEvent.type === 'habit' ? 'daily' : undefined,
+          frequency: selectedEvent.type === 'habit' ? selectedEvent.frequency : undefined,
           // Map dates to ExtendedCalendarItem fields
-          focus_date: (selectedEvent.eventType === 'focus' || selectedEvent.type === 'google-event') ? selectedEvent.date.toISOString() : undefined,
-          due_date: (selectedEvent.eventType === 'due' || selectedEvent.type === 'google-event') ? selectedEvent.date.toISOString() : undefined,
+          focusDate: (selectedEvent.eventType === 'focus' || selectedEvent.type === 'google-event') ? selectedEvent.date.toISOString() : undefined,
+          dueDate: (selectedEvent.eventType === 'due' || selectedEvent.type === 'google-event') ? selectedEvent.date.toISOString() : undefined,
           // Google-specific optional fields
           attendees: selectedEvent.attendees,
           location: selectedEvent.location,

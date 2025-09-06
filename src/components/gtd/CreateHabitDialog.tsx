@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import {
   Dialog,
   DialogContent,
@@ -72,13 +72,16 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
 
     const result = await withErrorHandling(
       async () => {
-        const habitPath = await invoke<string>('create_gtd_habit', {
-          space_path: spacePath,
-          habit_name: habitName.trim(),
+        const habitPath = await safeInvoke<string>('create_gtd_habit', {
+          spacePath: spacePath,
+          habitName: habitName.trim(),
           frequency: frequency,
-          _status: 'todo', // Always start habits as 'todo'
-          focus_time: focusTime.trim() || null, // Optional focus time
-        });
+          status: 'todo', // Always start habits as 'todo'
+          focusTime: focusTime.trim() || null, // Optional focus time
+        }, null);
+        if (!habitPath) {
+          throw new Error('Failed to create habit');
+        }
         return habitPath;
       },
       'Failed to create habit',

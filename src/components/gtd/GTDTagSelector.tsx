@@ -108,11 +108,50 @@ export const GTDTagSelector: React.FC<GTDTagSelectorProps> = ({
     }
   };
 
+  // For contexts and 'all' type, ensure the UI receives '@'-prefixed values for matching options,
+  // but propagate normalized values without '@' to callers.
+  const displayValue = React.useMemo(() => {
+    if (type !== 'contexts' && type !== 'all') return value;
+    // Include both predefined contexts and custom context options
+    const allContextOptions = type === 'contexts' 
+      ? [...GTD_CONTEXTS, ...customOptions.filter(o => o.group === 'Contexts' || o.value.startsWith('@'))]
+      : GTD_CONTEXTS;
+    const contextSet = new Set(allContextOptions.map(o => o.value)); // includes values like '@computer'
+    return (value || []).map(v => {
+      // Normalize only if this is a context tag (with/without @)
+      const hasAt = v.startsWith('@');
+      const normalized = hasAt ? v : `@${v}`;
+      return contextSet.has(normalized) ? normalized : v; // leave non-contexts untouched
+    });
+  }, [type, value, customOptions]);
+
+  const handleChange = React.useCallback((newValue: string[]) => {
+    if (!onValueChange) return;
+    if (type !== 'contexts' && type !== 'all') {
+      onValueChange(newValue);
+      return;
+    }
+    // Strip '@' only for values that are recognized contexts
+    const options = getOptions();
+    const contextSet = new Set(
+      options
+        .filter(o => o.group === 'Contexts' || o.value.startsWith('@'))
+        .map(o => (o.value.startsWith('@') ? o.value : `@${o.value}`))
+    );
+    const withoutAt = newValue.map(v => {
+      const normalized = v.startsWith('@') ? v : `@${v}`;
+      return contextSet.has(normalized) ? normalized.slice(1) : v;
+    });
+    onValueChange(withoutAt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onValueChange, type, customOptions]);
+
+  // For display options, contexts options include '@' values already
   return (
     <MultiSelect
       options={getOptions()}
-      value={value}
-      onValueChange={onValueChange}
+      value={(type === 'contexts' || type === 'all') ? displayValue : value}
+      onValueChange={(type === 'contexts' || type === 'all') ? handleChange : onValueChange}
       placeholder={getPlaceholder()}
       searchPlaceholder="Search tags..."
       maxCount={maxCount}

@@ -48,11 +48,10 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       projectName: projectName.trim(),
       description: description.trim(),
       dueDate,
-      dueTime,
       status,
       spacePath
     });
-    
+
     if (!projectName.trim() || !description.trim()) {
       console.log('[GTDProjectDialog] Validation failed - missing name or description');
       return;
@@ -60,25 +59,16 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
 
     console.log('[GTDProjectDialog] Setting isCreating to true');
     setIsCreating(true);
-    
+
     try {
-      // Combine due date and time into ISO datetime string
-      let dueDateTime: string | null = null;
-      if (dueDate) {
-        if (dueTime) {
-          // Combine date and time
-          dueDateTime = `${dueDate}T${dueTime}:00`;
-        } else {
-          // Default to 5 PM if no time specified (typical end of workday)
-          dueDateTime = `${dueDate}T17:00:00`;
-        }
-      }
-      
+      // Use date-only format (YYYY-MM-DD) as per type definition
+      const dueDateOnly: string | null = dueDate || null;
+
       const projectData: GTDProjectCreate = {
-        space_path: spacePath,
-        project_name: projectName.trim(),
+        spacePath: spacePath,
+        projectName: projectName.trim(),
         description: description.trim(),
-        due_date: dueDateTime,
+        dueDate: dueDateOnly,
         status: status,
       };
 
@@ -93,13 +83,13 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
         setDueDate('');
         setDueTime('');
         setStatus('in-progress');
-        
+
         // Call success callback if provided
         if (onSuccess) {
           console.log('[GTDProjectDialog] Calling onSuccess callback');
           onSuccess();
         }
-        
+
         onClose();
       }
     } catch (error) {
@@ -144,7 +134,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">Desired Outcome</Label>
             <Textarea
               id="description"
               placeholder="What is the desired outcome of this project?"

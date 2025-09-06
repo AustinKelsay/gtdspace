@@ -7,11 +7,14 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { checkTauriContextAsync } from './utils/tauri-ready';
 
-// Ensure we're running in a Tauri environment
-if (typeof window !== 'undefined' && !(window as unknown as {__TAURI__?: unknown}).__TAURI__) {
-  console.warn('GTD Space is designed to run as a Tauri application');
-}
+// Initialize Tauri context check early and cache the result
+checkTauriContextAsync().then(inTauri => {
+  if (!inTauri) {
+    console.warn('GTD Space is designed to run as a Tauri application');
+  }
+});
 
 /**
  * Initialize React application

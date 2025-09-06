@@ -43,7 +43,6 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
   const [focusDate, setFocusDate] = React.useState('');
   const [focusTime, setFocusTime] = React.useState('');
   const [dueDate, setDueDate] = React.useState('');
-  const [dueTime, setDueTime] = React.useState('');
   const [effort, setEffort] = React.useState<GTDActionEffort>('medium');
   const [notes, setNotes] = React.useState('');
   const [contexts, setContexts] = React.useState<string[]>([]);
@@ -54,7 +53,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
     if (!actionName.trim()) return;
 
     setIsCreating(true);
-    
+
     try {
       // Combine focus date and time into ISO datetime string
       let focusDateTime: string | null = null;
@@ -67,27 +66,20 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
           focusDateTime = `${focusDate}T09:00:00`;
         }
       }
-      
-      // Combine due date and time into ISO datetime string
-      let dueDateTime: string | null = null;
-      if (dueDate) {
-        if (dueTime) {
-          // Combine date and time
-          dueDateTime = `${dueDate}T${dueTime}:00`;
-        } else {
-          // Default to 5 PM if no time specified (typical deadline)
-          dueDateTime = `${dueDate}T17:00:00`;
-        }
-      }
-      
+
+      // Use date-only format (YYYY-MM-DD) for due date as per type definition
+      const dueDateOnly: string | null = dueDate || null;
+
       const actionData: GTDActionCreate = {
         project_path: projectPath,
         action_name: actionName.trim(),
         status,
-        focus_date: focusDateTime,
-        due_date: dueDateTime,
+        focusDate: focusDateTime,
+        dueDate: dueDateOnly,
         effort,
         contexts: contexts.length > 0 ? contexts : undefined,
+        // TODO: Add notes field when backend supports it
+        // notes: notes.trim() ? notes : undefined,
       };
 
       console.log('[GTDActionDialog] Calling createAction with:', actionData);
@@ -101,16 +93,15 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
         setFocusDate('');
         setFocusTime('');
         setDueDate('');
-        setDueTime('');
         setEffort('medium');
         setNotes('');
         setContexts([]);
-        
+
         // Call onSuccess with the action path if provided
         if (onSuccess && typeof result === 'string') {
           onSuccess(result);
         }
-        
+
         onClose();
       }
     } catch (error) {
@@ -127,7 +118,6 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
       setFocusDate('');
       setFocusTime('');
       setDueDate('');
-      setDueTime('');
       setEffort('medium');
       setNotes('');
       setContexts([]);
@@ -136,8 +126,8 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col overflow-visible">
         <DialogHeader>
           <DialogTitle>Add Action to {projectName}</DialogTitle>
           <DialogDescription>
@@ -167,7 +157,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
                 <SelectContent>
                   <SelectItem value="in-progress">In Progress</SelectItem>
                   <SelectItem value="waiting">Waiting</SelectItem>
-                  <SelectItem value="complete">Complete</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -182,6 +172,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
                   <SelectItem value="small">Small (&lt;30 min)</SelectItem>
                   <SelectItem value="medium">Medium (30-90 min)</SelectItem>
                   <SelectItem value="large">Large (&gt;90 min)</SelectItem>
+                  <SelectItem value="extra-large">Extra Large (&gt;3 hours)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -220,7 +211,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
             <p className="text-xs text-muted-foreground mb-2">
               When must this action be completed?
             </p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <div className="relative">
                 <Input
                   id="due-date"
@@ -232,14 +223,6 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
                 />
                 <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               </div>
-              <Input
-                id="due-time"
-                type="time"
-                value={dueTime}
-                onChange={(e) => setDueTime(e.target.value)}
-                disabled={isCreating}
-                placeholder="Time"
-              />
             </div>
           </div>
 

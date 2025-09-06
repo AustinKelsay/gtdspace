@@ -58,7 +58,8 @@ export function useErrorHandler(
       description: message,
       variant: 'destructive',
     });
-  }, [toast, logToConsole]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]); // logToConsole is stable from options
 
   /**
    * Wrap an async operation with error handling

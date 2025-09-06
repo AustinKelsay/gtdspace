@@ -53,19 +53,25 @@ A GTD-first productivity system with integrated markdown editing, built with Tau
 - **Global Search** - Find text across all markdown files
 - **Native File Operations** - Create, rename, delete with OS dialogs
 
+## Download
+
+### Pre-built Releases
+
+Releases coming soon — download links will appear here once the first release is published.
+
 ## Quick Start
 
-### Prerequisites
+### Prerequisites for Building from Source
 
 - [Node.js](https://nodejs.org/) v18+
 - [Rust](https://www.rust-lang.org/) (latest stable)
-- Platform-specific requirements in [docs/installation.md](docs/installation.md)
+- Platform-specific requirements in [docs/build-setup.md](docs/build-setup.md)
 
-### Installation
+### Installation from Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/gtdspace.git
+git clone https://github.com/AustinKelsay/gtdspace.git
 cd gtdspace
 
 # Install dependencies
@@ -137,7 +143,7 @@ GTD Space is designed from the ground up around David Allen's Getting Things Don
   - See all actions directly in the sidebar
   - Example content is created on first run to help you get started
 - **Actions** - Concrete next steps within projects
-  - Interactive Status tracking (In Progress, Waiting, Complete) via single-select dropdowns
+  - Interactive Status tracking (In Progress, Waiting, Completed) via single-select dropdowns
   - Interactive Effort estimates (Small <30min, Medium 30-90min, Large >90min, Extra Large >3hr) via single-select dropdowns
   - Optional focus dates (when to work on) and due dates (deadlines)
   - References to Cabinet and Someday Maybe pages for context and supporting materials
@@ -165,30 +171,31 @@ See [GTD Implementation](docs/GTD_IMPLEMENTATION.md) for detailed usage.
 
 ## Keyboard Shortcuts
 
-| Action                | Shortcut           |
-| --------------------- | ------------------ |
-| Save                  | `Ctrl/Cmd+S`       |
-| New File              | `Ctrl/Cmd+N`       |
-| Open Folder           | `Ctrl/Cmd+O`       |
-| Close Tab             | `Ctrl/Cmd+W`       |
-| Search                | `Ctrl/Cmd+F`       |
-| Settings              | `Ctrl/Cmd+,`       |
-| Insert Status Field   | `Ctrl/Cmd+Alt+S`   |
-| Insert Effort Field   | `Ctrl/Cmd+Alt+E`   |
-| Insert Project Status | `Ctrl/Cmd+Alt+P`   |
-| Insert Habit Frequency| `Ctrl/Cmd+Alt+F`   |
-| Insert Habit Status   | `Ctrl/Cmd+Alt+H`   |
-| Insert Due Date       | `Ctrl/Cmd+Alt+D`   |
-| Insert Focus DateTime | `Ctrl/Cmd+Alt+T`   |
-| Insert Created Date   | `Ctrl/Cmd+Alt+C`   |
-| Insert References     | `Ctrl/Cmd+Alt+R`   |
-| Insert Areas Ref      | `Ctrl/Cmd+Alt+A`   |
-| Insert Goals Ref      | `Ctrl/Cmd+Alt+G`   |
-| Insert Vision Ref     | `Ctrl/Cmd+Alt+V`   |
-| Insert Purpose Ref    | `Ctrl/Cmd+Alt+U`   |
-| Next Tab              | `Ctrl/Cmd+Tab`     |
-| Previous Tab          | `Ctrl/Cmd+Shift+Tab`|
-| Tab by Number         | `Ctrl/Cmd+1-9`     |
+| Action                 | Shortcut             |
+| ---------------------- | -------------------- |
+| Save                   | `Ctrl/Cmd+S`         |
+| New File               | `Ctrl/Cmd+N`         |
+| Open Folder            | `Ctrl/Cmd+O`         |
+| Close Tab              | `Ctrl/Cmd+W`         |
+| Search                 | `Ctrl/Cmd+F`         |
+| Settings               | `Ctrl/Cmd+,`         |
+| Insert Status Field    | `Ctrl/Cmd+Alt+S`     |
+| Insert Effort Field    | `Ctrl/Cmd+Alt+E`     |
+| Insert Project Status  | `Ctrl/Cmd+Alt+P`     |
+| Insert Habit Frequency | `Ctrl/Cmd+Alt+F`     |
+| Insert Habit Status    | `Ctrl/Cmd+Alt+H`     |
+| Insert Due Date        | `Ctrl/Cmd+Alt+D`     |
+| Insert Focus DateTime  | `Ctrl/Cmd+Alt+T`     |
+| Insert Created Date    | `Ctrl/Cmd+Alt+C`     |
+| Insert Contexts Field  | `Ctrl/Cmd+Shift+C`   |
+| Insert References      | `Ctrl/Cmd+Alt+R`     |
+| Insert Areas Ref       | `Ctrl/Cmd+Alt+A`     |
+| Insert Goals Ref       | `Ctrl/Cmd+Alt+G`     |
+| Insert Vision Ref      | `Ctrl/Cmd+Alt+V`     |
+| Insert Purpose Ref     | `Ctrl/Cmd+Alt+U`     |
+| Next Tab               | `Ctrl/Cmd+Tab`       |
+| Previous Tab           | `Ctrl/Cmd+Shift+Tab` |
+| Tab by Number          | `Ctrl/Cmd+1-9`       |
 
 ## Contributing
 

@@ -34,7 +34,7 @@ import {
 import { useGTDSpace } from '@/hooks/useGTDSpace';
 import type { GTDSpace, GTDProject } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 
 /**
  * GTD workspace information display
@@ -96,7 +96,7 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
   // Load default workspace from settings
   const loadDefaultWorkspace = React.useCallback(async () => {
     try {
-      const settings = await invoke<{ default_gtd_space?: string }>('load_settings');
+      const settings = await safeInvoke<{ default_gtd_space?: string }>('load_settings', undefined, {});
       if (settings?.default_gtd_space) {
         setDefaultWorkspace(settings.default_gtd_space);
       }
@@ -134,7 +134,7 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
   const handleOpenFolder = async () => {
     if (gtdSpace?.root_path) {
       try {
-        await invoke('open_folder_in_explorer', { path: gtdSpace.root_path });
+        await safeInvoke('open_folder_in_explorer', { path: gtdSpace.root_path }, null);
       } catch (error) {
         // Failed to open folder
       }
@@ -150,13 +150,13 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
     try {
       // Initialize the GTD space with proper error handling
       try {
-        await invoke('initialize_gtd_space', { spacePath: pendingWorkspacePath });
+        await safeInvoke('initialize_gtd_space', { spacePath: pendingWorkspacePath }, null);
 
         // Add a small delay to ensure file system operations complete
         await new Promise(resolve => setTimeout(resolve, 500));
 
         // Verify the workspace was created successfully
-        const isValid = await invoke<boolean>('check_is_gtd_space', { path: pendingWorkspacePath });
+        const isValid = await safeInvoke<boolean>('check_is_gtd_space', { path: pendingWorkspacePath }, false);
 
         if (!isValid) {
           throw new Error('Workspace initialization incomplete - GTD structure not detected');
@@ -221,7 +221,7 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
       setIsLoadingWorkspaces(true);
 
       // Check if it's a valid GTD space
-      const isGTDSpace = await invoke<boolean>('check_is_gtd_space', { path: workspacePath });
+      const isGTDSpace = await safeInvoke<boolean>('check_is_gtd_space', { path: workspacePath }, false);
 
       if (!isGTDSpace) {
         // Show confirmation dialog instead of using window.confirm
@@ -269,9 +269,9 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
   const handleSetDefault = async (path: string) => {
     try {
       // Save to settings
-      await invoke('save_settings', {
+      await safeInvoke('save_settings', {
         settings: { default_gtd_space: path }
-      });
+      }, null);
 
       setDefaultWorkspace(path);
 
@@ -315,13 +315,13 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
         // Creating new workspace logic
         // Initialize as GTD space with proper error handling
         try {
-          await invoke('initialize_gtd_space', { spacePath: selected });
+          await safeInvoke('initialize_gtd_space', { spacePath: selected }, null);
 
           // Add a small delay to ensure file system operations complete
           await new Promise(resolve => setTimeout(resolve, 500));
 
           // Verify the workspace was created successfully
-          const isValid = await invoke<boolean>('check_is_gtd_space', { path: selected });
+          const isValid = await safeInvoke<boolean>('check_is_gtd_space', { path: selected }, false);
 
           if (!isValid) {
             throw new Error('Workspace initialization incomplete - GTD structure not detected');
@@ -358,7 +358,7 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
         let isGTDSpace = false;
         try {
           // First check if the directory exists
-          const dirExists = await invoke<boolean>('check_directory_exists', { path: selected });
+          const dirExists = await safeInvoke<boolean>('check_directory_exists', { path: selected }, false);
           
           if (!dirExists) {
             toast({
@@ -370,7 +370,7 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
             return;
           }
           
-          isGTDSpace = await invoke<boolean>('check_is_gtd_space', { path: selected });
+          isGTDSpace = await safeInvoke<boolean>('check_is_gtd_space', { path: selected }, false);
         } catch (error) {
           // If validation fails, show proper dialog instead of native confirm
           setPendingWorkspacePath(selected);

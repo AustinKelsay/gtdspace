@@ -10,6 +10,19 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 
+// Helper function to sanitize option values for use as IDs
+const sanitizeOptionId = (value: string, index: number): string => {
+  // Normalize to lower-case, replace non-alphanumeric with hyphens, collapse, trim
+  const sanitized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-') // Replace non-alphanumeric (excluding hyphen) with hyphen
+    .replace(/-+/g, '-') // Collapse consecutive hyphens
+    .replace(/^-|-$/g, ''); // Trim leading/trailing hyphens
+
+  // Prepend stable prefix and append index for uniqueness
+  return `option-${sanitized}-${index}`;
+};
+
 export interface Option {
   value: string
   label: string
@@ -34,6 +47,7 @@ export interface MultiSelectProps {
  * Renders a single option item with consistent styling and behavior
  */
 interface OptionItemProps {
+  id?: string
   option: Option
   isSelected: boolean
   isActive: boolean
@@ -42,9 +56,13 @@ interface OptionItemProps {
   onMouseEnter: () => void
 }
 
-function OptionItem({ option, isSelected, isActive, isDisabled, onSelect, onMouseEnter }: OptionItemProps) {
+function OptionItem({ id, option, isSelected, isActive, isDisabled, onSelect, onMouseEnter }: OptionItemProps) {
   return (
     <div
+      id={id}
+      role="option"
+      aria-selected={isSelected}
+      aria-disabled={isDisabled || undefined}
       className={cn(
         "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
         isDisabled && "pointer-events-none opacity-50",
@@ -87,6 +105,7 @@ const MultiSelect = React.forwardRef<
     const [search, setSearch] = React.useState("")
     const [activeIndex, setActiveIndex] = React.useState(-1)
     const inputRef = React.useRef<HTMLInputElement>(null)
+    const listboxId = React.useId()
 
     const selected = React.useMemo(
       () => options.filter((option) => value.includes(option.value)),
@@ -168,6 +187,15 @@ const MultiSelect = React.forwardRef<
       return opts
     }, [groupedOptions])
 
+    // Clamp activeIndex when selectableOptions changes
+    React.useEffect(() => {
+      if (selectableOptions.length === 0) {
+        setActiveIndex(-1)
+      } else if (activeIndex >= selectableOptions.length) {
+        setActiveIndex(selectableOptions.length - 1)
+      }
+    }, [selectableOptions.length, activeIndex])
+
     // Keyboard navigation
     React.useEffect(() => {
       if (!open) {
@@ -234,7 +262,8 @@ const MultiSelect = React.forwardRef<
     ) : (
       <Button
         variant="outline"
-        role="combobox"
+        aria-haspopup="listbox"
+        aria-controls={listboxId}
         aria-expanded={open}
         className={cn("w-full justify-between", className)}
         disabled={disabled}
@@ -269,13 +298,13 @@ const MultiSelect = React.forwardRef<
     )
 
     return (
-      <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+      <PopoverPrimitive.Root open={open} onOpenChange={setOpen} modal={false}>
         <PopoverPrimitive.Trigger ref={ref} asChild disabled={disabled} {...props}>
           {triggerContent}
         </PopoverPrimitive.Trigger>
-        <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Portal container={typeof document !== 'undefined' ? document.body : undefined}>
           <PopoverPrimitive.Content
-            className="w-full p-0 z-50"
+            className="z-[70] p-0"
             align="start"
             sideOffset={4}
             style={{
@@ -283,18 +312,21 @@ const MultiSelect = React.forwardRef<
               maxWidth: "var(--radix-popover-trigger-width)",
             }}
           >
-            <div className="rounded-md border bg-popover text-popover-foreground shadow-md outline-none animate-in fade-in-0 zoom-in-95">
+            <div className="rounded-md border bg-popover text-popover-foreground shadow-md outline-none animate-in fade-in-0 zoom-in-95 pointer-events-auto">
               <div className="flex items-center border-b px-3">
                 <input
                   ref={inputRef}
                   className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Filter options"
+                  aria-controls={listboxId}
+                  aria-activedescendant={activeIndex >= 0 && activeIndex < selectableOptions.length ? sanitizeOptionId(selectableOptions[activeIndex].value, activeIndex) : undefined}
                   placeholder={searchPlaceholder}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={handleKeyDown}
                 />
               </div>
-              <ScrollArea className="max-h-60">
+              <ScrollArea className="max-h-[300px]">
                 <div className="p-1">
                   {filteredOptions.length > 0 && (
                     <>
@@ -309,8 +341,13 @@ const MultiSelect = React.forwardRef<
                     </>
                   )}
 
-                  {groupedOptions.ungrouped.length > 0 && (
-                    <div className="py-1">
+                  <div
+                    id={listboxId}
+                    role="listbox"
+                    aria-multiselectable="true"
+                  >
+                    {groupedOptions.ungrouped.length > 0 && (
+                      <div className="py-1">
                       {groupedOptions.ungrouped.map((option, _index) => {
                         const optionIndex = selectableOptions.findIndex(
                           o => o.value === option.value
@@ -320,6 +357,7 @@ const MultiSelect = React.forwardRef<
                         return (
                           <OptionItem
                             key={option.value}
+                            id={sanitizeOptionId(option.value, optionIndex)}
                             option={option}
                             isSelected={value.includes(option.value)}
                             isActive={isActive}
@@ -332,12 +370,12 @@ const MultiSelect = React.forwardRef<
                     </div>
                   )}
 
-                  {Object.entries(groupedOptions.groups).map(([group, groupOptions]) => (
-                    <div key={group}>
-                      <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">
-                        {group}
-                      </div>
-                      <div className="py-1">
+                    {Object.entries(groupedOptions.groups).map(([group, groupOptions]) => (
+                      <div key={group} role="group" aria-label={group}>
+                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">
+                          {group}
+                        </div>
+                        <div className="py-1">
                         {groupOptions.map((option) => {
                           const optionIndex = selectableOptions.findIndex(
                             o => o.value === option.value
@@ -347,6 +385,7 @@ const MultiSelect = React.forwardRef<
                           return (
                             <OptionItem
                               key={option.value}
+                              id={sanitizeOptionId(option.value, optionIndex)}
                               option={option}
                               isSelected={value.includes(option.value)}
                               isActive={isActive}
@@ -356,9 +395,10 @@ const MultiSelect = React.forwardRef<
                             />
                           )
                         })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
 
                   {filteredOptions.length === 0 && (
                     <div className="py-6 text-center text-sm text-muted-foreground">

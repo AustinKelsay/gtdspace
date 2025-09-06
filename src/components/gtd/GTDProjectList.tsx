@@ -11,14 +11,18 @@ interface GTDProjectListProps {
   onCreateAction: (project: GTDProject) => void;
 }
 
+// Parse date-only string (YYYY-MM-DD) as local date to avoid timezone issues
+const parseLocalDate = (dateStr: string): Date => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 export const GTDProjectList: React.FC<GTDProjectListProps> = ({
   projects,
   onSelectProject,
   onCreateAction,
 }) => {
-  const getStatusColor = (statuses: string[]) => {
-    // Get color based on first status (for display)
-    const status = statuses[0] || 'in-progress';
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'in-progress':
         return 'bg-green-500/10 text-green-700 dark:text-green-400';
@@ -26,6 +30,8 @@ export const GTDProjectList: React.FC<GTDProjectListProps> = ({
         return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400';
       case 'completed':
         return 'bg-blue-500/10 text-blue-700 dark:text-blue-400';
+      case 'cancelled':
+        return 'bg-red-500/10 text-red-700 dark:text-red-400';
       default:
         return 'bg-gray-500/10 text-gray-700 dark:text-gray-400';
     }
@@ -53,20 +59,20 @@ export const GTDProjectList: React.FC<GTDProjectListProps> = ({
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <h3 className="font-medium">{project.name}</h3>
-                {project.status.map((s, idx) => (
-                  <Badge key={idx} className={getStatusColor(project.status)} variant="secondary">
-                    {s}
+                {project.status && (
+                  <Badge className={getStatusColor(project.status)} variant="secondary">
+                    {project.status}
                   </Badge>
-                ))}
+                )}
               </div>
               <p className="text-sm text-muted-foreground line-clamp-2">
                 {project.description}
               </p>
               <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                {project.due_date && (
+                {project.dueDate && (
                   <div className="flex items-center gap-1">
                     <Calendar className="h-3 w-3" />
-                    {new Date(project.due_date).toLocaleDateString()}
+                    {parseLocalDate(project.dueDate).toLocaleDateString()}
                   </div>
                 )}
                 <div>

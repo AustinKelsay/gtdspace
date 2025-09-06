@@ -27,29 +27,32 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 }) => {
   if (!event) return null;
 
-  const formatEventTime = (date: string | undefined, time: string | undefined) => {
-    if (!date && !time) return 'No time specified';
+  const formatEventTime = (dateTime: string | null | undefined) => {
+    if (!dateTime) return 'No time specified';
 
-    if (time) {
-      // Parse the time and format it nicely
-      try {
-        const dateTime = new Date(`${date || '2024-01-01'}T${time}`);
-        return format(dateTime, 'h:mm a');
-      } catch {
-        return time;
+    try {
+      // Check if it's a date-only format (YYYY-MM-DD)
+      const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dateTime);
+      
+      if (isDateOnly) {
+        // Parse as local date to avoid timezone issues
+        const [year, month, day] = dateTime.split('-').map(Number);
+        const d = new Date(year, month - 1, day);
+        return format(d, 'PPP'); // Date only
       }
+      
+      // Parse as full datetime
+      const d = new Date(dateTime);
+      
+      // Check if it has an explicit time component (not just midnight)
+      const hasExplicitTime = /T\d{2}:\d{2}/.test(dateTime);
+      const isMidnight = /T00:00(:00(\.\d{3})?)?(Z|[+-]\d{2}:\d{2})?$/.test(dateTime);
+      
+      // Show time if explicitly set and not midnight
+      return hasExplicitTime && !isMidnight ? format(d, 'PPP p') : format(d, 'PPP');
+    } catch {
+      return dateTime;
     }
-
-    if (date) {
-      try {
-        const dateObj = new Date(date);
-        return format(dateObj, 'PPP');
-      } catch {
-        return date;
-      }
-    }
-
-    return 'No time specified';
   };
 
   const getEventTypeColor = (type: string) => {
@@ -102,16 +105,24 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({
 
           {/* Dates */}
           <div className="space-y-2">
-            {(event.focus_date || event.due_date) && (
-              <div className="flex items-center gap-2 text-sm">
-                <Calendar className="w-4 h-4 text-muted-foreground" />
-                <span>
-                  {event.focus_date ? formatEventTime(event.focus_date, undefined) : null}
-                  {event.focus_date && event.due_date ? ' - ' : null}
-                  {event.due_date ? formatEventTime(event.due_date, undefined) : null}
-                </span>
-              </div>
-            )}
+            {/* Derive local variables to handle both camelCase and snake_case */}
+            {(() => {
+              const focusDate = event.focusDate ?? (event as unknown as Record<string, unknown>).focus_date as string | undefined;
+              const dueDate = event.dueDate ?? (event as unknown as Record<string, unknown>).due_date as string | undefined;
+
+              if (!focusDate && !dueDate) return null;
+
+              return (
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <span>
+                    {focusDate ? formatEventTime(focusDate) : null}
+                    {focusDate && dueDate ? ' - ' : null}
+                    {dueDate ? formatEventTime(dueDate) : null}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Project Name (for actions) */}

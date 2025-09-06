@@ -22,14 +22,15 @@ These are your ongoing responsibilities—the roles you play and standards you m
 
 /// Template for individual Area of Focus pages with references
 pub fn generate_area_of_focus_template_with_refs(
-    name: &str, 
-    description: &str, 
+    name: &str,
+    description: &str,
     standards: &str,
     goals_refs: &str,
     vision_refs: &str,
-    purpose_refs: &str
+    purpose_refs: &str,
 ) -> String {
-    format!(r#"# {}
+    format!(
+        r#"# {}
 
 {}
 
@@ -47,7 +48,9 @@ pub fn generate_area_of_focus_template_with_refs(
 
 ## References
 [!references:]
-"#, name, description, standards, goals_refs, vision_refs, purpose_refs)
+"#,
+        name, description, standards, goals_refs, vision_refs, purpose_refs
+    )
 }
 
 /// Template for Goals overview page
@@ -67,17 +70,22 @@ These accomplishments will require multiple projects to complete. They provide f
 
 /// Template for individual Goal pages with references
 pub fn generate_goal_template_with_refs(
-    name: &str, 
-    target_date: &str, 
+    name: &str,
+    target_date: Option<&str>,
     outcome: &str,
     vision_refs: &str,
-    purpose_refs: &str
+    purpose_refs: &str,
 ) -> String {
-    format!(r#"# {}
+    let target_section = if let Some(date) = target_date {
+        format!("**Target:** [!datetime:due_date:{}]\n\n", date)
+    } else {
+        String::new()
+    };
 
-**Target:** [!datetime:due_date:{}]
+    format!(
+        r#"# {}
 
-## Successful Outcome
+{}## Successful Outcome
 {}
 
 ## Aligned With
@@ -90,7 +98,9 @@ pub fn generate_goal_template_with_refs(
 
 ## References
 [!references:]
-"#, name, target_date, outcome, vision_refs, purpose_refs)
+"#,
+        name, target_section, outcome, vision_refs, purpose_refs
+    )
 }
 
 /// Template for Vision folder
@@ -106,7 +116,8 @@ Revisit each year to recalibrate based on progress and life changes.
 
 /// Template for main Vision document with references
 pub fn generate_vision_document_template_with_refs(purpose_refs: &str) -> String {
-    format!(r#"# 3-5 Year Vision
+    format!(
+        r#"# 3-5 Year Vision
 
 **Living My Purpose**
 [!purpose-references:{}]
@@ -133,9 +144,14 @@ I've mastered [skills/knowledge]. I'm exploring [new areas]. I contribute by [te
 ## Supporting Elements
 [!goals-areas-list]
 
+## Active Projects
+[!projects-list]
+
 ## References
 [!references:]
-"#, purpose_refs)
+"#,
+        purpose_refs
+    )
 }
 
 /// Template for Purpose & Principles folder
@@ -333,13 +349,13 @@ pub const CABINET_GTD_PRINCIPLES_TEMPLATE: &str = r#"# GTD Quick Reference
 5. What's the next action? (Next step)
 "#;
 
-
 /// Generate a Weekly Review habit template with next Sunday
 pub fn generate_weekly_review_habit() -> String {
+    let now = Local::now();
     // Find next Sunday at 2 PM
-    let mut next_sunday = Local::now();
+    let mut next_sunday = now;
     while next_sunday.weekday() != Weekday::Sun {
-        next_sunday = next_sunday + chrono::Duration::days(1);
+        next_sunday += chrono::Duration::days(1);
     }
     next_sunday = next_sunday
         .with_hour(14)
@@ -348,14 +364,20 @@ pub fn generate_weekly_review_habit() -> String {
         .unwrap()
         .with_second(0)
         .unwrap();
-    
-    format!(r#"# Weekly Review
+
+    // If we're already past Sunday 2pm, advance to next Sunday
+    if next_sunday <= now {
+        next_sunday += chrono::Duration::days(7);
+    }
+
+    format!(
+        r#"# Weekly Review
 ## Frequency
 [!singleselect:habit-frequency:weekly]
 ## Status
 [!checkbox:habit-status:false]
-## Focus Time
-[!datetime:focus_date_time:{}]
+## Focus Date
+[!datetime:focus_date:{}]
 ## Notes
 Complete weekly GTD review:
 - Process all inboxes to zero
@@ -366,26 +388,49 @@ Complete weekly GTD review:
 ---
 Created: {}"#,
         next_sunday.to_rfc3339(),
-        Local::now().format("%Y-%m-%d")
+        now.to_rfc3339()
     )
 }
 
+/// Parameters for generating a project README with references
+pub struct ProjectReadmeParams<'a> {
+    pub name: &'a str,
+    pub description: &'a str,
+    pub due_date: Option<String>,
+    pub status: &'a str,
+    pub areas_refs: &'a str,
+    pub goals_refs: &'a str,
+    pub vision_refs: &'a str,
+    pub purpose_refs: &'a str,
+    pub general_refs: &'a str,
+}
+
 /// Template for project README.md file
-pub fn generate_project_readme(name: &str, description: &str, due_date: Option<String>, status: &str) -> String {
-    generate_project_readme_with_refs(name, description, due_date, status, "", "", "")
+pub fn generate_project_readme(
+    name: &str,
+    description: &str,
+    due_date: Option<String>,
+    status: &str,
+) -> String {
+    let params = ProjectReadmeParams {
+        name,
+        description,
+        due_date,
+        status,
+        areas_refs: "",
+        goals_refs: "",
+        vision_refs: "",
+        purpose_refs: "",
+        general_refs: "",
+    };
+    generate_project_readme_with_refs(params)
 }
 
 /// Template for project README.md file with references
-pub fn generate_project_readme_with_refs(
-    name: &str, 
-    description: &str, 
-    due_date: Option<String>, 
-    status: &str,
-    areas_refs: &str,
-    goals_refs: &str,
-    general_refs: &str
-) -> String {
-    let due_date_str = due_date.as_deref().unwrap_or("Not set");
+pub fn generate_project_readme_with_refs(params: ProjectReadmeParams) -> String {
+    // Always include the due date section, even if empty, so users can fill it in later
+    let due_date_value = params.due_date.unwrap_or_default();
+
     format!(
         r#"# {}
 
@@ -399,15 +444,22 @@ pub fn generate_project_readme_with_refs(
 [!datetime:due_date:{}]
 
 ## Created
-[!datetime:created_date:{}]
+[!datetime:created_date_time:{}]
 
 ## Horizon References
 [!areas-references:{}]
 
 [!goals-references:{}]
 
+[!vision-references:{}]
+
+[!purpose-references:{}]
+
 ## Actions
 Actions for this project are stored as individual markdown files in this directory.
+
+## Related Habits
+[!habits-list]
 
 ## Notes
 <!-- Add any additional notes, context, or resources for this project here -->
@@ -415,34 +467,90 @@ Actions for this project are stored as individual markdown files in this directo
 ## References
 [!references:{}]
 "#,
-        name,
-        description,
-        status,
-        if due_date_str != "Not set" { due_date_str } else { "" },
-        Local::now().format("%Y-%m-%d"),
-        areas_refs,
-        goals_refs,
-        general_refs
+        params.name,
+        params.description,
+        params.status,
+        due_date_value,
+        Local::now().to_rfc3339(),
+        params.areas_refs,
+        params.goals_refs,
+        params.vision_refs,
+        params.purpose_refs,
+        params.general_refs
     )
 }
 
 /// Template for action file
-pub fn generate_action_template(name: &str, status: &str, focus_date: Option<String>, due_date: Option<String>, effort: &str) -> String {
-    format!(
+pub fn generate_action_template(
+    name: &str,
+    status: &str,
+    focus_date: Option<String>,
+    due_date: Option<String>,
+    effort: &str,
+    contexts: Option<Vec<String>>,
+) -> String {
+    let mut template = format!(
         r#"# {}
 
 ## Status
 [!singleselect:status:{}]
+"#,
+        name, status
+    );
 
+    // Always add focus date section (with value if provided, empty if not)
+    let focus_value = focus_date.unwrap_or_default();
+    template.push_str(&format!(
+        r#"
 ## Focus Date
-[!datetime:focus_date_time:{}]
+[!datetime:focus_date:{}]
+"#,
+        focus_value
+    ));
 
+    // Always add due date section (with value if provided, empty if not)
+    let due_value = due_date.map_or_else(String::new, |d| {
+        // Attempt to parse as RFC3339 and format to YYYY-MM-DD
+        if let Ok(datetime) = chrono::DateTime::parse_from_rfc3339(&d) {
+            datetime.format("%Y-%m-%d").to_string()
+        } else {
+            // If parsing fails, it might already be in a date-like format or empty.
+            // We'll take the first 10 chars if it looks like a date.
+            d.chars().take(10).collect()
+        }
+    });
+    template.push_str(&format!(
+        r#"
 ## Due Date
 [!datetime:due_date:{}]
+"#,
+        due_value
+    ));
 
+    template.push_str(&format!(
+        r#"
 ## Effort
 [!singleselect:effort:{}]
+"#,
+        effort
+    ));
 
+    // Add contexts multiselect field (supports multiple contexts)
+    let contexts_value = if let Some(ctx_vec) = contexts {
+        ctx_vec.join(",")
+    } else {
+        String::new() // Empty for multiselect - users can add contexts later
+    };
+    template.push_str(&format!(
+        r#"
+## Contexts
+[!multiselect:contexts:{}]
+"#,
+        contexts_value
+    ));
+
+    template.push_str(&format!(
+        r#"
 ## References
 [!references:]
 
@@ -450,14 +558,11 @@ pub fn generate_action_template(name: &str, status: &str, focus_date: Option<Str
 <!-- Add any additional notes or details about this action here -->
 
 ---
+## Created
 [!datetime:created_date_time:{}]
 "#,
-        name,
-        status,
-        focus_date.as_deref().unwrap_or(""),
-        due_date.as_deref().unwrap_or(""),
-        effort,
         Local::now().to_rfc3339()
-    )
-}
+    ));
 
+    template
+}

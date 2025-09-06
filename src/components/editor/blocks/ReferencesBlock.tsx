@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import { invoke } from '@tauri-apps/api/core';
+import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import {
   FileText,
   Plus,
@@ -62,24 +62,43 @@ export const ReferencesBlock = createReactBlockSpec(
     content: 'none' as const,
   },
   {
-    render: ReferencesBlockRenderer,
+    render: (props) => <ReferencesBlockRenderer {...props} />,
     toExternalHTML: () => {
       // For blocks with no content, return null to skip HTML serialization
       // The actual markdown conversion happens in the editor's markdown exporter
       return null;
     },
     parse: (element) => {
-      // Parse the element to extract references data
-      const textContent = element.textContent || '';
-      const match = textContent.match(/\[!references:([^\]]*)\]/);
-      if (match) {
-        return {
-          references: match[1] || ''
-        };
+      // Normalize tag name for robust comparisons
+      const tag = (element.tagName || '').toUpperCase();
+
+      // 1) Never parse inside tables — let native table parsing handle these nodes
+      const tableElements = ['TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD'];
+      if (tableElements.includes(tag)) return undefined;
+      // Also skip if the element is nested anywhere inside a table
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let parent: any = element.parentElement;
+      while (parent) {
+        const pTag = (parent.tagName || '').toUpperCase();
+        if (tableElements.includes(pTag)) return undefined;
+        parent = parent.parentElement;
       }
-      return {
-        references: ''
-      };
+
+      // 2) Only consider paragraph elements for marker-style parsing
+      if (tag !== 'P') return undefined;
+
+      // 3) Parse only if the exact marker exists; otherwise return undefined
+      const text = element.textContent || '';
+      const prefix = '[!references:';
+      const start = text.indexOf(prefix);
+      const end = text.lastIndexOf(']');
+      if (start === -1 || end <= start + prefix.length) return undefined;
+      const raw = text.slice(start + prefix.length, end);
+      try {
+        return { references: decodeURIComponent(raw) };
+      } catch {
+        return { references: raw };
+      }
     },
   }
 );
@@ -95,7 +114,7 @@ interface ReferencesRenderProps {
   };
 }
 
-function ReferencesBlockRenderer(props: ReferencesRenderProps) {
+const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(props: ReferencesRenderProps) {
   const { block, editor } = props;
   const { references } = block.props;
 
@@ -104,14 +123,19 @@ function ReferencesBlockRenderer(props: ReferencesRenderProps) {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
 
-  const parsedReferences = references ? references.split(',').filter(Boolean) : [];
+  const parsedReferences = React.useMemo(() =>
+    references ? references.split(',').map(s => s.trim()).filter(Boolean) : [],
+    [references]
+  );
 
   const loadAvailableFiles = React.useCallback(async () => {
     setIsLoading(true);
     try {
       const spacePath = window.localStorage.getItem('gtdspace-current-path') || '';
 
-      console.log('ReferencesBlock: Loading files, spacePath:', spacePath);
+      if (import.meta.env.VITE_DEBUG_BLOCKNOTE) {
+        console.log('ReferencesBlock: Loading files, spacePath:', spacePath);
+      }
 
       if (!spacePath) {
         console.warn('No GTD space path found in localStorage');
@@ -122,31 +146,43 @@ function ReferencesBlockRenderer(props: ReferencesRenderProps) {
       const cabinetPath = `${spacePath}/Cabinet`;
       const somedayPath = `${spacePath}/Someday Maybe`;
 
-      console.log('ReferencesBlock: Loading from paths:', { cabinetPath, somedayPath });
+      if (import.meta.env.VITE_DEBUG_BLOCKNOTE) {
+        console.log('ReferencesBlock: Loading from paths:', { cabinetPath, somedayPath });
+      }
+
+      // Guard Tauri-only APIs for web/dev builds
+      const inTauriContext = await checkTauriContextAsync();
+      if (!inTauriContext) {
+        console.warn('[ReferencesBlock] Not in Tauri context; skipping filesystem listing');
+        setAvailableFiles([]);
+        return;
+      }
+
+      // Dynamically import Tauri core only when in Tauri context
+      const core = await import('@tauri-apps/api/core');
+      const invoke = core.invoke as <T>(cmd: string, args: unknown) => Promise<T>;
 
       let cabinetFiles: MarkdownFile[] = [];
       let somedayFiles: MarkdownFile[] = [];
 
       try {
-        console.log('ReferencesBlock: Invoking list_markdown_files for Cabinet...');
         cabinetFiles = await invoke<MarkdownFile[]>('list_markdown_files', { path: cabinetPath });
-        console.log('ReferencesBlock: Cabinet files loaded:', cabinetFiles.length, cabinetFiles);
       } catch (err) {
         console.error('Failed to load Cabinet files:', err);
       }
 
       try {
-        console.log('ReferencesBlock: Invoking list_markdown_files for Someday Maybe...');
         somedayFiles = await invoke<MarkdownFile[]>('list_markdown_files', { path: somedayPath });
-        console.log('ReferencesBlock: Someday files loaded:', somedayFiles.length, somedayFiles);
       } catch (err) {
         console.error('Failed to load Someday Maybe files:', err);
       }
 
-      console.log('ReferencesBlock: Total loaded files:', {
-        cabinet: cabinetFiles.length,
-        someday: somedayFiles.length
-      });
+      if (import.meta.env.VITE_DEBUG_BLOCKNOTE) {
+        console.log('ReferencesBlock: Total loaded files:', {
+          cabinet: cabinetFiles.length,
+          someday: somedayFiles.length
+        });
+      }
 
       const files: ReferenceFile[] = [
         ...cabinetFiles.map(f => ({
@@ -226,10 +262,24 @@ function ReferencesBlockRenderer(props: ReferencesRenderProps) {
   };
 
   const handleReferenceClick = (path: string) => {
-    window.dispatchEvent(new CustomEvent('open-reference-file', { detail: { path } }));
+    // Defensive check: if path looks like a JSON array, parse it
+    let finalPath = path;
+    if (path.startsWith('[') && path.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(path);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          finalPath = parsed[0];
+          console.warn('[ReferencesBlock] Path was JSON array, extracted first element:', finalPath);
+        }
+      } catch {
+        // Not valid JSON, use as-is
+      }
+    }
+    
+    window.dispatchEvent(new CustomEvent('open-reference-file', { detail: { path: finalPath } }));
   };
 
-  const getReferenceInfo = (path: string): { name: string; type: 'cabinet' | 'someday' } => {
+  const getReferenceInfo = React.useCallback((path: string): { name: string; type: 'cabinet' | 'someday' } => {
     const file = availableFiles.find((f) => f.path === path);
     const normalized = path.replace(/\\/g, '/');
     const name = normalized.split('/').pop()?.replace(/\.md$/i, '') || 'Unknown';
@@ -241,7 +291,7 @@ function ReferencesBlockRenderer(props: ReferencesRenderProps) {
           ? 'someday'
           : 'cabinet');
     return { name, type };
-  };
+  }, [availableFiles]);
 
   return (
     <div className="my-2">
@@ -383,4 +433,4 @@ function ReferencesBlockRenderer(props: ReferencesRenderProps) {
       </Dialog>
     </div>
   );
-}
+});

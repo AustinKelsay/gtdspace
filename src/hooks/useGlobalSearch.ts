@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import type { SearchResponse, SearchFilters, SearchResult } from '@/types';
 
 export interface UseGlobalSearchResult {
@@ -78,11 +78,14 @@ export function useGlobalSearch(): UseGlobalSearchResult {
       setIsSearching(true);
       setError(null);
 
-      const response = await invoke<SearchResponse>('search_files', {
+      const response = await safeInvoke<SearchResponse>('search_files', {
         query: queryToUse,
         directory,
         filters,
-      });
+      }, { results: [], total_matches: 0, files_searched: 0, duration_ms: 0, truncated: false });
+      if (!response) {
+        throw new Error('Search failed');
+      }
 
       setResults(response.results);
       setMetadata({

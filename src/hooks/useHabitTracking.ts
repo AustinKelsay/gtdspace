@@ -5,7 +5,7 @@
  */
 
 import { useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import { useErrorHandler } from './useErrorHandler';
 import { useToast } from './useToast';
 
@@ -17,13 +17,16 @@ export function useHabitTracking() {
    * Updates a habit's status and records it in the history
    */
   const updateHabitStatus = useCallback(
-    async (habitPath: string, newStatus: 'todo' | 'complete') => {
+    async (habitPath: string, newStatus: 'todo' | 'completed') => {
       const result = await withErrorHandling(
         async () => {
-          await invoke('update_habit_status', {
+          const result = await safeInvoke('update_habit_status', {
             habitPath,
             newStatus,
-          });
+          }, null);
+          if (result === null) {
+            throw new Error('Failed to update habit status');
+          }
           return true;
         },
         'Failed to update habit status',
@@ -31,7 +34,7 @@ export function useHabitTracking() {
       );
 
       if (result) {
-        showSuccess(`Habit marked as ${newStatus === 'complete' ? 'complete' : 'to do'}`);
+        showSuccess(`Habit marked as ${newStatus === 'completed' ? 'completed' : 'to do'}`);
       }
 
       return result;
@@ -46,9 +49,12 @@ export function useHabitTracking() {
     async (spacePath: string) => {
       const result = await withErrorHandling(
         async () => {
-          const resetHabits = await invoke<string[]>('check_and_reset_habits', {
+          const resetHabits = await safeInvoke<string[]>('check_and_reset_habits', {
             spacePath,
-          });
+          }, []);
+          if (resetHabits === null) {
+            throw new Error('Failed to check and reset habits');
+          }
           return resetHabits;
         },
         'Failed to check habits',

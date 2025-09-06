@@ -5,8 +5,9 @@
  * @phase 2 - Tab management and multi-file state
  */
 
-import { useState, useCallback, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { safeInvoke } from '@/utils/safe-invoke';
+import debounce from 'lodash.debounce';
 // Memory leak prevention removed during simplification
 import type { 
   MarkdownFile, 
@@ -16,6 +17,7 @@ import type {
 } from '@/types';
 import { extractMetadata, getMetadataChanges } from '@/utils/metadata-extractor';
 import { emitContentChange, emitContentSaved, emitMetadataChange } from '@/utils/content-event-bus';
+import { migrateMarkdownContent, needsMigration } from '@/utils/data-migration';
 
 // Extend the global Window interface to include our custom callback
 declare global {
@@ -42,6 +44,18 @@ export const useTabManager = () => {
     maxTabs: 10,
     recentlyClosed: [],
   });
+
+  // Store for debounced metadata processing
+  const metadataProcessingRef = useRef<Map<string, ReturnType<typeof debounce>>>(new Map());
+  
+  // Remove auto-save activity tracking refs - manual save only now
+  
+  // Debounced state update for content changes
+  const debouncedStateUpdateRef = useRef<Map<string, ReturnType<typeof debounce>>>(new Map());
+
+  // === MANUAL SAVE ONLY - NO AUTO-SAVE ===
+  // Auto-save removed - users now have full control over when content is saved
+  // GTD fields still auto-save immediately when changed via emitMetadataChange()
 
   // === UTILITY FUNCTIONS ===
 
@@ -106,7 +120,8 @@ export const useTabManager = () => {
       for (const tabInfo of persistedState.openTabs || []) {
         try {
           // Check if file still exists and get updated metadata
-          const fileContent = await invoke<string>('read_file', { path: tabInfo.filePath });
+          const fileContent = await safeInvoke<string>('read_file', { path: tabInfo.filePath }, null);
+          if (fileContent === null || fileContent === undefined) continue;
           
           // Create a minimal MarkdownFile object (we might not have all metadata)
           const file: MarkdownFile = {
@@ -192,7 +207,42 @@ export const useTabManager = () => {
       } else {
         // Normal file - load content
         console.log('Loading file content for new tab:', file.path);
-        content = await invoke<string>('read_file', { path: file.path });
+        content = await safeInvoke<string>('read_file', { path: file.path }, '') || '';
+        
+        // Apply migrations if needed
+        if (needsMigration(content)) {
+          console.log('useTabManager: Applying data migrations to file:', file.path);
+          let migrationApplied = false;
+          try {
+            const migratedContent = migrateMarkdownContent(content);
+            // Create a backup before auto-saving migrated content
+            await safeInvoke<void>('save_file', { path: `${file.path}.backup`, content }, null);
+            await safeInvoke<void>('save_file', { path: file.path, content: migratedContent }, null);
+            content = migratedContent;
+            migrationApplied = true;
+          } catch (migrationError) {
+            console.error('Migration failed:', migrationError);
+            // Continue with original content without emitting saved events
+          }
+          
+          if (migrationApplied) {
+            // Emit events to update UI with migrated content
+            const newMetadata = extractMetadata(content);
+            emitContentSaved({
+              filePath: file.path,
+              fileName: file.name,
+              content: content,
+              metadata: newMetadata
+            });
+            emitMetadataChange({
+              filePath: file.path,
+              fileName: file.name,
+              content: content,
+              metadata: newMetadata
+            });
+          }
+        }
+        
         originalContent = content;
         console.log('useTabManager: File content loaded, length:', content.length);
       }
@@ -274,6 +324,19 @@ export const useTabManager = () => {
     const tab = tabState.openTabs.find(t => t.id === tabId);
     if (!tab) return false;
 
+    // Clean up debounced functions for this tab
+    const debouncedFn = metadataProcessingRef.current.get(tabId);
+    if (debouncedFn) {
+      debouncedFn.cancel();
+      metadataProcessingRef.current.delete(tabId);
+    }
+    
+    const debouncedStateUpdate = debouncedStateUpdateRef.current.get(tabId);
+    if (debouncedStateUpdate) {
+      debouncedStateUpdate.cancel();
+      debouncedStateUpdateRef.current.delete(tabId);
+    }
+
     // If tab has unsaved changes, we should ask for confirmation
     // For now, we'll just close it (confirmation can be added later)
     if (tab.hasUnsavedChanges) {
@@ -312,57 +375,92 @@ export const useTabManager = () => {
   }, [tabState.openTabs]);
 
   /**
-   * Update content for a specific tab and emit change events
+   * Process metadata changes with debouncing to avoid performance issues
+   */
+  const processMetadataDebounced = useCallback((tabId: string, filePath: string, fileName: string, oldContent: string, newContent: string) => {
+    // Skip for special tabs
+    if (filePath === '::calendar::') {
+      return;
+    }
+    
+    // Get or create debounced function for this tab
+    let debouncedFn = metadataProcessingRef.current.get(tabId);
+    if (!debouncedFn) {
+      debouncedFn = debounce((oldC: string, newC: string, fp: string, fnm: string) => {
+        // Extract metadata from old and new content
+        const oldMetadata = extractMetadata(oldC);
+        const newMetadata = extractMetadata(newC);
+        const metadataChanges = getMetadataChanges(oldMetadata, newMetadata);
+        
+        // Only emit specific events based on what actually changed
+        if (Object.keys(metadataChanges).length > 0) {
+          console.log('[TabManager] Metadata changed:', metadataChanges, 'for file:', fp);
+          // Emit metadata change event (which will also trigger content:changed via the event bus)
+          emitMetadataChange({
+            filePath: fp,
+            fileName: fnm,
+            content: newC,
+            metadata: newMetadata,
+            changedFields: metadataChanges
+          });
+        } else {
+          // Only content changed, not metadata
+          emitContentChange({
+            filePath: fp,
+            fileName: fnm,
+            content: newC,
+            metadata: newMetadata,
+            changedFields: metadataChanges
+          });
+        }
+      }, 500); // 500ms debounce for metadata processing
+      
+      metadataProcessingRef.current.set(tabId, debouncedFn);
+    }
+    
+    // Pass current filePath and fileName as parameters to avoid stale closure
+    debouncedFn(oldContent, newContent, filePath, fileName);
+  }, []);
+
+  /**
+   * Update content for a specific tab with debounced state updates
+   * Now manual save only - no auto-save interference with typing
    */
   const updateTabContent = useCallback((tabId: string, content: string) => {
-    // Get the current tab to compare metadata
+    // Get the current tab to process metadata
     const currentTab = tabState.openTabs.find(t => t.id === tabId);
     
     if (currentTab) {
-      // Skip updating content for special tabs
-      if (currentTab.file.path === '::calendar::') {
-        return;
-      }
-      // Extract metadata from old and new content
-      const oldMetadata = extractMetadata(currentTab.content);
-      const newMetadata = extractMetadata(content);
-      const metadataChanges = getMetadataChanges(oldMetadata, newMetadata);
-      
-      // Emit content change event
-      emitContentChange({
-        filePath: currentTab.file.path,
-        fileName: currentTab.file.name,
-        content,
-        metadata: newMetadata,
-        changedFields: metadataChanges
-      });
-      
-      // If metadata changed, emit specific metadata change event
-      if (Object.keys(metadataChanges).length > 0) {
-        console.log('[TabManager] Metadata changed:', metadataChanges, 'for file:', currentTab.file.path);
-        emitMetadataChange({
-          filePath: currentTab.file.path,
-          fileName: currentTab.file.name,
-          content,
-          metadata: newMetadata,
-          changedFields: metadataChanges
-        });
-      }
+      // Process metadata changes with debouncing (GTD fields still auto-save)
+      processMetadataDebounced(tabId, currentTab.file.path, currentTab.file.name, currentTab.content || '', content);
     }
     
-    setTabState(prev => ({
-      ...prev,
-      openTabs: prev.openTabs.map(tab => 
-        tab.id === tabId
-          ? { 
-              ...tab, 
-              content,
-              hasUnsavedChanges: (tab.originalContent || tab.content) !== content,
-            }
-          : tab
-      ),
-    }));
-  }, [tabState.openTabs]);
+    // Get or create debounced function for this tab
+    let debouncedUpdate = debouncedStateUpdateRef.current.get(tabId);
+    if (!debouncedUpdate) {
+      debouncedUpdate = debounce((newContent: string) => {
+        setTabState(prev => ({
+          ...prev,
+          openTabs: prev.openTabs.map(tab => 
+            tab.id === tabId
+              ? { 
+                  ...tab, 
+                  content: newContent,
+                  hasUnsavedChanges: (tab.originalContent ?? tab.content) !== newContent,
+                }
+              : tab
+          ),
+        }));
+      }, 150); // 150ms debounce for state updates
+      
+      debouncedStateUpdateRef.current.set(tabId, debouncedUpdate);
+    }
+    
+    // Apply debounced state update (tracks unsaved changes automatically)
+    debouncedUpdate(content);
+    
+    // No auto-save - user must manually save (Cmd+S) or GTD field changes will auto-save
+  }, [tabState.openTabs, processMetadataDebounced]);
 
 
   /**
@@ -379,10 +477,13 @@ export const useTabManager = () => {
 
     try {
       console.log('Saving tab content:', tab.file.path);
-      await invoke<string>('save_file', {
+      const result = await safeInvoke<string>('save_file', {
         path: tab.file.path,
         content: tab.content,
-      });
+      }, null);
+      if (result === null) {
+        throw new Error('Failed to save file');
+      }
 
       // Mark tab as saved and update originalContent
       setTabState(prev => ({
@@ -432,9 +533,12 @@ export const useTabManager = () => {
 
     try {
       // Read the current file content from disk
-      const currentFileContent = await invoke<string>('read_file', { 
+      const currentFileContent = await safeInvoke<string>('read_file', { 
         path: tab.file.path 
-      });
+      }, null);
+      if (currentFileContent === null || currentFileContent === undefined) {
+        throw new Error('Failed to read file');
+      }
 
       // Compare with original content when the tab was opened
       const originalContent = tab.originalContent || tab.content;
@@ -453,7 +557,11 @@ export const useTabManager = () => {
     if (!tab) return null;
 
     try {
-      return await invoke<string>('read_file', { path: tab.file.path });
+      const content = await safeInvoke<string>('read_file', { path: tab.file.path }, null);
+      if (content === null || content === undefined) {
+        throw new Error('Failed to read file');
+      }
+      return content;
     } catch (error) {
       console.error('Failed to read external content:', error);
       return null;
@@ -587,6 +695,13 @@ export const useTabManager = () => {
    * Close all tabs
    */
   const closeAllTabs = useCallback(async () => {
+    // Cancel all debounced functions
+    metadataProcessingRef.current.forEach(fn => fn.cancel());
+    metadataProcessingRef.current.clear();
+    
+    debouncedStateUpdateRef.current.forEach(fn => fn.cancel());
+    debouncedStateUpdateRef.current.clear();
+    
     for (const tab of tabState.openTabs) {
       await closeTab(tab.id);
     }
@@ -657,46 +772,11 @@ export const useTabManager = () => {
   }, [tabState, saveTabsToStorage, clearPersistedTabs]);
 
   /**
-   * Auto-save tabs with unsaved changes after 2 seconds of no edits
+   * Typing-aware auto-save system - triggers only when user becomes idle
    */
-  useEffect(() => {
-    const tabsWithUnsavedChanges = tabState.openTabs.filter(tab => tab.hasUnsavedChanges);
-    
-    if (tabsWithUnsavedChanges.length === 0) {
-      return;
-    }
+  // Removed idle detection - no more auto-save on idle
 
-    const timeoutId = setTimeout(async () => {
-      console.log('Auto-saving tabs with unsaved changes...');
-      // Run saves in parallel; handle failures per-tab so one failure doesn't block others
-      const MAX_PARALLEL_SAVES = 8; // optional limiter for very large numbers of tabs
-
-      if (tabsWithUnsavedChanges.length <= MAX_PARALLEL_SAVES) {
-        const results = await Promise.allSettled(
-          tabsWithUnsavedChanges.map(tab => saveTab(tab.id))
-        );
-        results.forEach((result, index) => {
-          const tab = tabsWithUnsavedChanges[index];
-          if (result.status === 'rejected') {
-            console.error('Auto-save failed for tab:', tab.file.path, result.reason);
-          }
-        });
-      } else {
-        for (let i = 0; i < tabsWithUnsavedChanges.length; i += MAX_PARALLEL_SAVES) {
-          const batch = tabsWithUnsavedChanges.slice(i, i + MAX_PARALLEL_SAVES);
-          const batchResults = await Promise.allSettled(batch.map(tab => saveTab(tab.id)));
-          batchResults.forEach((result, index) => {
-            const tab = batch[index];
-            if (result.status === 'rejected') {
-              console.error('Auto-save failed for tab:', tab.file.path, result.reason);
-            }
-          });
-        }
-      }
-    }, 2000); // 2 second debounce as per CLAUDE.md
-
-    return () => clearTimeout(timeoutId);
-  }, [tabState.openTabs, saveTab]);
+  // Removed pending auto-save processing - manual save only now
 
   /**
    * Save tabs before page unload
@@ -939,6 +1019,8 @@ export const useTabManager = () => {
     closeAllTabs,
     saveAllTabs,
     reorderTabs,
+    
+    // Auto-save functions removed - manual save only now
     
     // Conflict resolution
     checkForConflicts,

@@ -1,0 +1,318 @@
+---
+name: Build and Release
+
+"on":
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release/version to build (e.g., v1.2.3). Leave blank to auto-detect"
+        required: false
+        default: ""
+        type: string
+      logLevel:
+        description: "Log level"
+        required: true
+        default: "warning"
+        type: choice
+        options:
+          - info
+          - warning
+          - debug
+
+# Cancel in-progress runs when a new run is triggered
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  create-release:
+    # Only run on main or staging branches for workflow_dispatch
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'staging'))
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: get-version
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION="v0.1.0-dev"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+      - name: Create release
+        id: create-release
+        if: github.event_name == 'push' || github.event.inputs.version != ''
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get-version.outputs.version }}
+          release_name: GTD Space ${{ steps.get-version.outputs.version }}
+          draft: true
+          prerelease: false
+          body: |
+            # GTD Space ${{ steps.get-version.outputs.version }}
+
+            ## What's New
+            - Initial release
+
+            ## Installation
+
+            Download the appropriate installer for your platform below:
+            - **Windows**: `.msi` installer or `.exe` (NSIS) installer
+            - **macOS Intel**: `.dmg` for Intel Macs
+            - **macOS Apple Silicon**: `.dmg` for M1/M2/M3 Macs
+            - **Linux**: `.AppImage` (universal) or `.deb` (Debian/Ubuntu)
+
+            ## Notes
+            - First-time users: The app will automatically create
+              your GTD Space at `~/GTD Space`
+            - Google Calendar integration requires setting up OAuth credentials
+
+  build-tauri:
+    # Only run on main or staging branches for workflow_dispatch
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'staging'))
+    needs: create-release
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest" # ARM (M1/M2/M3)
+            rust-targets: "aarch64-apple-darwin"
+            args: "--target aarch64-apple-darwin"
+            artifact-name: "macos-aarch64"
+            artifact-ext: ".dmg"
+
+          - platform: "macos-13" # Intel
+            rust-targets: "x86_64-apple-darwin"
+            args: "--target x86_64-apple-darwin"
+            artifact-name: "macos-x64"
+            artifact-ext: ".dmg"
+
+          - platform: "ubuntu-24.04"
+            rust-targets: "x86_64-unknown-linux-gnu"
+            args: ""
+            artifact-name: "linux-x64"
+            artifact-ext: ".AppImage"
+
+          - platform: "windows-latest"
+            rust-targets: "x86_64-pc-windows-msvc"
+            args: ""
+            artifact-name: "windows-x64"
+            artifact-ext: ".msi"
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-24.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Generate Icons
+        run: npm run icons:generate
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: >-
+            ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: >-
+            ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          args: ${{ matrix.args }}
+
+      - name: List built artifacts
+        shell: bash
+        run: |
+          echo "Contents of src-tauri/target:"
+          if [ "${{ matrix.platform }}" == "windows-latest" ]; then
+            ls -la src-tauri/target/release/bundle/
+            ls -la src-tauri/target/release/bundle/msi/ || true
+            ls -la src-tauri/target/release/bundle/nsis/ || true
+          elif [ "${{ matrix.platform }}" == "ubuntu-24.04" ]; then
+            ls -la src-tauri/target/release/bundle/
+            ls -la src-tauri/target/release/bundle/appimage/ || true
+            ls -la src-tauri/target/release/bundle/deb/ || true
+          else
+            ls -la src-tauri/target/*/release/bundle/ || true
+            ls -la src-tauri/target/*/release/bundle/dmg/ || true
+          fi
+
+      - name: Find and prepare artifacts (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Prefer MSI from the known bundle directory
+          ARTIFACT_FILE=$(find src-tauri/target/release/bundle/msi \
+            -type f -name "*.msi" 2>/dev/null | head -n 1 || true)
+          ARTIFACT_EXT="${{ matrix.artifact-ext }}"
+          if [ -z "$ARTIFACT_FILE" ]; then
+            echo "No MSI file found, searching for NSIS .exe..."
+            # Fallback to NSIS .exe from the nsis bundle directory
+            ARTIFACT_FILE=$(find src-tauri/target/release/bundle/nsis \
+              -type f -name "*.exe" 2>/dev/null | head -n 1 || true)
+            ARTIFACT_EXT=".exe"
+            if [ -z "$ARTIFACT_FILE" ]; then
+              echo "No MSI or NSIS .exe file found!"
+              exit 1
+            fi
+            echo "Found NSIS installer: $ARTIFACT_FILE"
+          else
+            echo "Found MSI installer: $ARTIFACT_FILE"
+          fi
+
+          # Create artifacts directory
+          mkdir -p artifacts
+
+          # Copy and rename with version
+          VERSION="${{ needs.create-release.outputs.version }}"
+          cp "$ARTIFACT_FILE" \
+            "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${ARTIFACT_EXT}"
+
+          echo "Artifact prepared:"
+          ls -la artifacts/
+
+      - name: Find and prepare artifacts (macOS)
+        if: startsWith(matrix.platform, 'macos')
+        shell: bash
+        run: |
+          # Find the DMG file based on target architecture
+          if [[ "${{ matrix.rust-targets }}" == "aarch64-apple-darwin" ]]; then
+            DMG_FILE=$(find \
+              src-tauri/target/aarch64-apple-darwin/release/bundle \
+              -name "*.dmg" | head -n 1)
+          else
+            DMG_FILE=$(find \
+              src-tauri/target/x86_64-apple-darwin/release/bundle \
+              -name "*.dmg" | head -n 1)
+          fi
+
+          if [ -z "$DMG_FILE" ]; then
+            echo "No DMG file found!"
+            exit 1
+          fi
+          echo "Found DMG: $DMG_FILE"
+
+          # Create artifacts directory
+          mkdir -p artifacts
+
+          # Copy and rename with version
+          VERSION="${{ needs.create-release.outputs.version }}"
+          cp "$DMG_FILE" \
+            "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}${{ matrix.artifact-ext }}"
+
+          echo "Artifact prepared:"
+          ls -la artifacts/
+
+      - name: Find and prepare artifacts (Linux)
+        if: matrix.platform == 'ubuntu-24.04'
+        shell: bash
+        run: |
+          # Find AppImage and Deb files
+          APPIMAGE_FILE=$(find src-tauri/target/release/bundle \
+            -name "*.AppImage" | head -n 1)
+          DEB_FILE=$(find src-tauri/target/release/bundle \
+            -name "*.deb" | head -n 1)
+
+          # Create artifacts directory
+          mkdir -p artifacts
+
+          VERSION="${{ needs.create-release.outputs.version }}"
+
+          # Copy AppImage if found
+          if [ -n "$APPIMAGE_FILE" ]; then
+            echo "Found AppImage: $APPIMAGE_FILE"
+            cp "$APPIMAGE_FILE" \
+              "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}.AppImage"
+          fi
+
+          # Copy Deb if found
+          if [ -n "$DEB_FILE" ]; then
+            echo "Found Deb: $DEB_FILE"
+            cp "$DEB_FILE" \
+              "artifacts/GTDSpace_${VERSION}_${{ matrix.artifact-name }}.deb"
+          fi
+
+          # Fail if neither artifact was produced
+          if [ -z "$APPIMAGE_FILE" ] && [ -z "$DEB_FILE" ]; then
+            echo "No artifacts produced" >&2
+            exit 1
+          fi
+
+          echo "Artifacts prepared:"
+          ls -la artifacts/
+
+      - name: Upload artifacts to workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtdspace-${{ matrix.artifact-name }}
+          path: artifacts/*
+          retention-days: 7
+
+  finalize-release:
+    needs: [create-release, build-tauri]
+    # Only run on main or staging branches for workflow_dispatch
+    if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' && (github.ref_name == 'main' || github.ref_name == 'staging'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all workflow artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts-download
+
+      - name: Upload release assets and Publish
+        uses: softprops/action-gh-release@v2
+        if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '')
+        with:
+          files: artifacts-download/**/*
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ needs.create-release.outputs.version }}
+          draft: false
+          prerelease: false

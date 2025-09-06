@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { Calendar as CalendarIcon, X } from 'lucide-react';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, parse } from 'date-fns';
 
 // Component for the DateTimeSelect block
 interface DateTimeSelectComponentProps {
@@ -22,25 +22,31 @@ interface DateTimeSelectComponentProps {
       type: string;
       value: string;
       label?: string;
-      includeTime?: boolean;
       optional?: boolean;
     };
   };
   editor: {
-    updateBlock: (id: string, block: unknown) => void;
+    updateBlock: (block: unknown, update: { props: Record<string, unknown> }) => void;
   };
 }
 
-const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) => {
-  const { type, value, label, includeTime, optional } = props.block.props;
-  
+const DateTimeSelectComponent = React.memo<DateTimeSelectComponentProps>(function DateTimeSelectComponent(props) {
+  const { type, value, label, optional } = props.block.props;
+
+  // Determine if field is date-only (no time component allowed)
+  const isDateOnlyField = React.useMemo(() => {
+    // Date-only fields
+    return type === 'due_date' || type === 'modified_date' || type === 'completed_date';
+  }, [type]);
+
   const [open, setOpen] = React.useState(false);
   const [timeValue, setTimeValue] = React.useState('12:00');
   const [localTimeEnabled, setLocalTimeEnabled] = React.useState(() => {
-    // Initialize based on whether the value has time
-    return includeTime || (value && value.includes('T'));
+    // Initialize based solely on whether the current value has time
+    // Date-only fields never have time enabled
+    return !isDateOnlyField && Boolean(value && value.includes('T'));
   });
-  
+
   // Parse the ISO date value - handle empty strings gracefully
   let dateValue: Date | null = null;
   if (value && value.trim() !== '') {
@@ -55,21 +61,31 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
     }
   }
   const isValidDate = dateValue !== null && isValid(dateValue);
-  
-  // Extract time if value includes it
+
+  // Sync localTimeEnabled with value changes and extract time if present
   React.useEffect(() => {
-    if (isValidDate && value && value.includes('T')) {
+    // Date-only fields never have time enabled
+    if (isDateOnlyField) {
+      setLocalTimeEnabled(false);
+      return;
+    }
+
+    // Update localTimeEnabled based on whether value contains time
+    const hasTime = Boolean(value && value.includes('T'));
+    setLocalTimeEnabled(hasTime);
+
+    // Extract time if value includes it
+    if (isValidDate && hasTime) {
       const date = new Date(value);
-      const hours = date.getUTCHours().toString().padStart(2, '0');
-      const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
       setTimeValue(`${hours}:${minutes}`);
     }
-  }, [value, isValidDate]);
-  
-  const updateBlockValue = (newValue: string) => {
+  }, [value, isValidDate, isDateOnlyField]);
+
+  const updateBlockValue = React.useCallback((newValue: string) => {
     try {
-      props.editor.updateBlock(props.block.id, {
-        type: 'datetime',
+      props.editor.updateBlock(props.block, {
         props: {
           ...props.block.props,
           value: newValue,
@@ -78,83 +94,132 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
     } catch (error) {
       console.error('Error updating datetime block:', error);
     }
-  };
-  
-  const handleDateChange = (newDate: Date | undefined) => {
+  }, [props.editor, props.block]);
+
+  const handleDateChange = React.useCallback((newDate: Date | undefined) => {
     if (!newDate) return;
-    
+
     let isoString: string;
-    if (localTimeEnabled) {
-      // Parse time value and create UTC date with time
-      const [hours, minutes] = timeValue.split(':').map(Number);
-      const utcDate = new Date(Date.UTC(
+    // For date-only fields, always emit date string without time
+    if (isDateOnlyField || !localTimeEnabled) {
+      // Create local date string without time component
+      const year = newDate.getFullYear();
+      const month = (newDate.getMonth() + 1).toString().padStart(2, '0');
+      const day = newDate.getDate().toString().padStart(2, '0');
+      isoString = `${year}-${month}-${day}`;
+    } else {
+      // Parse time value and create local date with time
+      const parts = (timeValue || '').split(':');
+      let hours = Number(parts[0]);
+      let minutes = Number(parts[1]);
+      hours = isNaN(hours) ? 0 : hours;
+      minutes = isNaN(minutes) ? 0 : minutes;
+      const localDate = new Date(
         newDate.getFullYear(),
         newDate.getMonth(),
         newDate.getDate(),
-        hours || 0,
-        minutes || 0,
+        hours,
+        minutes,
         0,
         0
-      ));
-      isoString = utcDate.toISOString();
-    } else {
-      // Create UTC date at midnight
-      const utcDate = new Date(Date.UTC(
-        newDate.getFullYear(),
-        newDate.getMonth(),
-        newDate.getDate(),
-        0, 0, 0, 0
-      ));
-      isoString = utcDate.toISOString().slice(0, 10);
+      );
+      isoString = localDate.toISOString();
     }
-    
+
     updateBlockValue(isoString);
-  };
-  
-  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  }, [isDateOnlyField, localTimeEnabled, timeValue, updateBlockValue]);
+
+  const handleTimeChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    // Skip time updates for date-only fields
+    if (isDateOnlyField) return;
+
     const newTime = e.target.value;
+
+    // Validate time format
+    if (!newTime) {
+      setTimeValue('');
+      return;
+    }
+
+    // Check time format (HH:MM)
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
+    if (!timeRegex.test(newTime)) {
+      console.warn('Invalid time format:', newTime);
+      return; // Don't update if invalid format
+    }
+
     setTimeValue(newTime);
-    
+
     if (isValidDate && localTimeEnabled) {
       const [hours, minutes] = newTime.split(':').map(Number);
-      const utcDate = new Date(Date.UTC(
-        dateValue.getFullYear(),
-        dateValue.getMonth(),
-        dateValue.getDate(),
+
+      // Additional validation for parsed values
+      if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        console.warn('Invalid time values:', { hours, minutes });
+        return;
+      }
+
+      // If the raw value is date-only, parse it properly to avoid timezone shifts
+      let year: number, month: number, day: number;
+      if (!value.includes('T')) {
+        // Parse the date-only string to get correct local values
+        const parts = value.split('-').map(Number);
+        if (parts.length !== 3 || parts.some(isNaN)) {
+          console.error('Invalid date format:', value);
+          return;
+        }
+        year = parts[0];
+        month = parts[1] - 1; // Month is 0-indexed for Date constructor
+        day = parts[2];
+      } else {
+        // Use the existing dateValue getters for datetime values
+        year = dateValue.getFullYear();
+        month = dateValue.getMonth();
+        day = dateValue.getDate();
+      }
+
+      const localDate = new Date(
+        year,
+        month,
+        day,
         hours || 0,
         minutes || 0,
         0,
         0
-      ));
-      updateBlockValue(utcDate.toISOString());
+      );
+      updateBlockValue(localDate.toISOString());
     }
-  };
-  
-  const handleClear = () => {
+  }, [isDateOnlyField, localTimeEnabled, isValidDate, value, dateValue, updateBlockValue]);
+
+  const handleClear = React.useCallback(() => {
     updateBlockValue('');
     setOpen(false);
-  };
-  
+  }, [updateBlockValue]);
+
   // Format display text based on type and value
   const displayText = React.useMemo(() => {
     if (!isValidDate) {
       return '';
     }
-    
-    if (value.includes('T')) {
+
+    if (!isDateOnlyField && value.includes('T')) {
       return format(dateValue, 'MMM dd, yyyy h:mm a');
     } else {
-      return format(dateValue, 'MMM dd, yyyy');
+      // Parse as local date to avoid TZ shift
+      const localOnly = parse(value, 'yyyy-MM-dd', new Date());
+      return format(localOnly, 'MMM dd, yyyy');
     }
-  }, [isValidDate, value, dateValue]);
-  
-  const handleTimeToggle = (checked: boolean) => {
+  }, [isValidDate, value, dateValue, isDateOnlyField]);
+
+  const handleTimeToggle = React.useCallback((checked: boolean) => {
+    // Date-only fields cannot have time enabled
+    if (isDateOnlyField) return;
     setLocalTimeEnabled(checked);
-  };
-  
+  }, [isDateOnlyField]);
+
   const placeholderText = React.useMemo(() => {
     switch (type) {
-      case 'created_date':
+      case 'created_date_time':
         return 'No date set';
       case 'modified_date':
         return 'No date set';
@@ -168,12 +233,12 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
         return 'No date';
     }
   }, [type]);
-  
+
   const fieldLabel = React.useMemo(() => {
     if (label) return label;
-    
+
     switch (type) {
-      case 'created_date':
+      case 'created_date_time':
         return 'Created';
       case 'modified_date':
         return 'Modified';
@@ -187,11 +252,11 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
         return 'Date';
     }
   }, [type, label]);
-  
+
   // Determine field styles based on type
   const fieldStyles = React.useMemo(() => {
     let baseClasses = 'inline-flex items-center gap-2 px-2 py-1 rounded-md text-sm border-0 outline-none ring-0 ';
-    
+
     switch (type) {
       case 'due_date':
         if (isValidDate && dateValue < new Date()) {
@@ -209,7 +274,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       default:
         baseClasses += 'bg-muted/50 dark:bg-muted/20 text-foreground';
     }
-    
+
     return baseClasses;
   }, [type, isValidDate, dateValue]);
 
@@ -218,35 +283,30 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       <Popover open={open} onOpenChange={(newOpen) => {
         if (newOpen) {
           // When opening, sync local state with current value
-          const currentHasTime = value && value.includes('T');
-          setLocalTimeEnabled(currentHasTime || includeTime);
+          // Date-only fields never have time
+          const currentHasTime = !!(!isDateOnlyField && value && value.includes('T'));
+          setLocalTimeEnabled(currentHasTime);
         } else if (!newOpen && isValidDate) {
           // When closing, update the value if time toggle was changed
-          const currentHasTime = value && value.includes('T');
-          if (localTimeEnabled !== currentHasTime) {
+          const currentHasTime = !!(value && value.includes('T'));
+          if (localTimeEnabled !== currentHasTime && !isDateOnlyField) {
             let isoString: string;
             if (localTimeEnabled) {
-              // Add time to existing date using UTC
-              const [hours, minutes] = timeValue.split(':').map(Number);
-              const utcDate = new Date(Date.UTC(
-                dateValue.getFullYear(),
-                dateValue.getMonth(),
-                dateValue.getDate(),
-                hours || 0,
-                minutes || 0,
-                0,
-                0
-              ));
-              isoString = utcDate.toISOString();
+              // Add time to existing date using local time
+              const parts = (timeValue || '').split(':');
+              let hours = Number(parts[0]);
+              let minutes = Number(parts[1]);
+              hours = isNaN(hours) ? 0 : hours;
+              minutes = isNaN(minutes) ? 0 : minutes;
+              const localDate = new Date(dateValue);
+              localDate.setHours(hours, minutes, 0, 0);
+              isoString = localDate.toISOString();
             } else {
-              // Remove time from existing date - use UTC date at midnight
-              const utcDate = new Date(Date.UTC(
-                dateValue.getFullYear(),
-                dateValue.getMonth(),
-                dateValue.getDate(),
-                0, 0, 0, 0
-              ));
-              isoString = utcDate.toISOString().slice(0, 10);
+              // Remove time from existing date - construct date string from local parts
+              const year = dateValue.getFullYear();
+              const month = (dateValue.getMonth() + 1).toString().padStart(2, '0');
+              const day = dateValue.getDate().toString().padStart(2, '0');
+              isoString = `${year}-${month}-${day}`;
             }
             updateBlockValue(isoString);
           }
@@ -269,9 +329,9 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
             </span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent 
-          className="w-[320px] p-0" 
-          align="start" 
+        <PopoverContent
+          className="w-[320px] p-0"
+          align="start"
           sideOffset={5}
           onOpenAutoFocus={(e) => e.preventDefault()}>
           <div className="flex flex-col">
@@ -282,31 +342,33 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
               className="rounded-md border-0 w-full"
               defaultMonth={isValidDate ? dateValue : undefined}
             />
-            
-            {/* Time toggle */}
-            <div className="p-3 border-t">
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  id="include-time"
-                  checked={localTimeEnabled}
-                  onChange={(e) => handleTimeToggle(e.target.checked)}
-                  className="rounded border-gray-300"
-                />
-                <label htmlFor="include-time" className="text-sm font-medium">
-                  Include time
-                </label>
+
+            {/* Time toggle - hide for date-only fields */}
+            {!isDateOnlyField && (
+              <div className="p-3 border-t">
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id={`${props.block.id}-include-time`}
+                    checked={localTimeEnabled}
+                    onChange={(e) => handleTimeToggle(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor={`${props.block.id}-include-time`} className="text-sm font-medium">
+                    Include time
+                  </label>
+                </div>
+                {localTimeEnabled && (
+                  <input
+                    type="time"
+                    value={timeValue}
+                    onChange={handleTimeChange}
+                    className="w-full px-3 py-2 border border-input rounded-md text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                )}
               </div>
-              {localTimeEnabled && (
-                <input
-                  type="time"
-                  value={timeValue}
-                  onChange={handleTimeChange}
-                  className="w-full px-3 py-2 border border-input rounded-md text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              )}
-            </div>
-            
+            )}
+
             {/* Clear button */}
             {optional && isValidDate && (
               <div className="p-3 border-t">
@@ -326,7 +388,7 @@ const DateTimeSelectComponent: React.FC<DateTimeSelectComponentProps> = (props) 
       </Popover>
     </div>
   );
-};
+});
 
 // Define the datetime block spec
 export const DateTimeSelectBlock = createReactBlockSpec(
@@ -335,7 +397,7 @@ export const DateTimeSelectBlock = createReactBlockSpec(
     propSchema: {
       type: {
         default: 'due_date',
-        values: ['created_date', 'modified_date', 'due_date', 'focus_date', 'completed_date'],
+        values: ['due_date', 'focus_date', 'completed_date', 'created_date_time', 'modified_date', 'custom'],
       },
       value: {
         default: '',
@@ -365,7 +427,6 @@ export const DateTimeSelectBlock = createReactBlockSpec(
             type: data.type || 'due_date',
             value: data.value || '',
             label: data.label || '',
-            includeTime: data.includeTime || false,
             optional: data.optional !== undefined ? data.optional : true,
           };
         } catch (e) {
@@ -375,10 +436,20 @@ export const DateTimeSelectBlock = createReactBlockSpec(
       }
     },
     toExternalHTML: (props) => {
-      const block = props.block as {props: {type: string; value: string; includeTime?: boolean}};
-      const { type, value, includeTime } = block.props;
+      const block = props.block as { props: { type: string; value: string } };
+      const { type, value } = block.props;
       // Return the markdown format that can be parsed back
-      const fieldType = includeTime ? `${type}_time` : type;
+      // Determine if value contains time to decide on field type
+      const hasTime = (value || '').includes('T');
+      // Special case for focus_date - always keep as 'focus_date'
+      let fieldType: string;
+      if (type === 'focus_date') {
+        fieldType = 'focus_date';
+      } else if (type.endsWith('_time')) {
+        fieldType = type;
+      } else {
+        fieldType = hasTime ? `${type}_time` : type;
+      }
       const markdownFormat = `[!datetime:${fieldType}:${value || ''}]`;
       // Return raw markdown string instead of JSX
       return markdownFormat;

@@ -10,7 +10,7 @@ All new projects and actions are automatically created with single-select fields
 - **Status**: Project status (in-progress, waiting, completed)
 
 ### Actions  
-- **Status**: Action status (in-progress, waiting, complete)
+- **Status**: Action status (in-progress, waiting, completed)
 - **Effort**: Time estimate (small <30min, medium 30-90min, large >90min, extra-large >3hrs)
 
 ## Markdown Syntax
@@ -37,10 +37,25 @@ You can manually insert single-select fields using keyboard shortcuts:
 3. When saved, the selected value is preserved in the markdown using the marker syntax
 4. This ensures fields cannot be accidentally overwritten with plain text
 
-## Legacy MultiSelect Support
-The system still supports multi-select fields for backwards compatibility:
-- `[!multiselect:tags:value1,value2]` - For tags and categories
-- These are primarily used for legacy content and specific use cases where multiple selections are needed
+## Legacy MultiSelect Support and Migration
+
+The system continues to support `[!multiselect:tags:value1,value2]` for tags and categories, primarily for legacy content and specific use cases where multiple selections are genuinely needed.
+
+**Automatic Migration of Legacy MultiSelect Markers**
+The system automatically migrates legacy `[!multiselect]` markers for `status`, `effort`, and `project-status` to the new `[!singleselect]` format. The migration utility uses the **first value** listed in the legacy marker.
+
+**Before and After Migration Example:**
+If your markdown contains a legacy marker with multiple values:
+```
+[!multiselect:status:in-progress,waiting]
+```
+It will be automatically converted to a `singleselect` marker using the first value:
+```
+[!singleselect:status:in-progress]
+```
+
+**Migration Guidance:**
+Because the automatic migration only preserves the first value, it is important to **verify your data** after the migration. If a different value was intended, you can manually adjust it using the dropdown in the editor. For example, if `waiting` was the desired status in the example above, you would need to manually change it from `in-progress` to `waiting`.
 
 ## Real-time Updates
 - Status changes are immediately reflected in the sidebar

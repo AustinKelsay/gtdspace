@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import { openDialogWithTimeout } from '@/utils/tauri-ready';
 import { Folder, FolderOpen, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -99,7 +99,10 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
 
     try {
       // Test if we can list files in this directory
-      await invoke('list_markdown_files', { path: manualPath.trim() });
+      const result = await safeInvoke('list_markdown_files', { path: manualPath.trim() }, null);
+      if (result === null) {
+        throw new Error('Directory not accessible');
+      }
       onFolderSelect(manualPath.trim());
       setShowManualInput(false);
       setPathError(null);

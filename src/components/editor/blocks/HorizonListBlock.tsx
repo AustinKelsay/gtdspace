@@ -10,7 +10,8 @@ import { PropSchema } from '@blocknote/core';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
+import debounce from 'lodash.debounce';
 import {
   List,
   FileText,
@@ -90,7 +91,7 @@ function toHorizonListBlockRenderProps(
   return {
     block: {
       id: p.block.id,
-      props: { 
+      props: {
         listType: p.block.props?.listType,
         currentPath: p.block.props?.currentPath
       },
@@ -123,65 +124,62 @@ interface HorizonListRendererProps {
   compact?: boolean;
 }
 
-function HorizonListRenderer(props: HorizonListRendererProps) {
+const HorizonListRenderer = React.memo(function HorizonListRenderer(props: HorizonListRendererProps) {
   const { listType, label, compact = false } = props;
   const [items, setItems] = React.useState<ListItem[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isExpanded, setIsExpanded] = React.useState(true);
   const [lastRefreshTime, setLastRefreshTime] = React.useState<Date | null>(null);
 
-  // Get the current file path from the active tab
+  // Get the current file path from the active tab - memoized with no dependencies since it reads from localStorage
   const getCurrentFilePath = React.useCallback((): string | null => {
     // First try to get from the blocknote-specific key (most reliable)
     const blocknotePath = localStorage.getItem('blocknote-current-file');
     if (blocknotePath) {
-      console.log('HorizonList: Using blocknote-current-file path:', blocknotePath);
       return blocknotePath;
     }
-    
+
     // Fallback: Try to get from localStorage (active tab info)
     const tabsJson = localStorage.getItem('gtdspace-tabs');
     if (tabsJson) {
       try {
         const tabsData = JSON.parse(tabsJson);
-        
+
         // Validate the structure before accessing nested properties
         if (!tabsData || typeof tabsData !== 'object') {
-          console.warn('HorizonList: Invalid tabs data structure');
           return null;
         }
-        
+
         // Ensure openTabs is an array before trying to use find
         if (!Array.isArray(tabsData.openTabs)) {
-          console.warn('HorizonList: openTabs is not an array');
           return null;
         }
-        
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const activeTab = tabsData.openTabs.find((t: any) => 
+        const activeTab = tabsData.openTabs.find((t: any) =>
           t && typeof t === 'object' && t.id === tabsData.activeTabId
         );
-        
-        if (activeTab?.path && typeof activeTab.path === 'string') {
-          console.log('HorizonList: Using tab path as fallback:', activeTab.path);
+
+        // Check filePath first (preferred), fallback to path if not available
+        if (activeTab?.filePath && typeof activeTab.filePath === 'string') {
+          return activeTab.filePath;
+        } else if (activeTab?.path && typeof activeTab.path === 'string') {
           return activeTab.path;
         }
       } catch (e) {
-        console.error('HorizonList: Failed to parse tabs data:', e);
+        // Silent fail - this is a fallback
       }
     }
-    
-    console.warn('HorizonList: No file path available from any source');
+
     return null;
   }, []);
 
-  // Load items that reference the current page
+  // Load items that reference the current page - debounced to prevent excessive calls
   const loadItems = React.useCallback(async () => {
     setIsLoading(true);
     try {
       const currentPath = getCurrentFilePath();
       if (!currentPath) {
-        console.warn('HorizonList: No current file path available');
         setItems([]);
         return;
       }
@@ -189,30 +187,19 @@ function HorizonListRenderer(props: HorizonListRendererProps) {
       // Get GTD space path
       const spacePath = localStorage.getItem('gtdspace-current-path');
       if (!spacePath) {
-        console.warn('HorizonList: No GTD space path found');
         setItems([]);
         return;
       }
 
-      // Debug logging
-      console.log('HorizonList: Loading items for', {
-        currentPath,
-        spacePath,
-        filterType: listType
-      });
-      
       // Call backend to find reverse relationships
-      console.log('HorizonList: Calling find_reverse_relationships...');
-      const relationships = await invoke<ReverseRelationship[]>('find_reverse_relationships', {
-        targetPath: currentPath,    // Use camelCase - Tauri auto-converts to snake_case
-        spacePath: spacePath,        // Use camelCase - Tauri auto-converts to snake_case
-        filterType: listType         // Use camelCase - Tauri auto-converts to snake_case
-      }).catch(error => {
+      const relationships = await safeInvoke<ReverseRelationship[]>('find_reverse_relationships', {
+        targetPath: currentPath,
+        spacePath: spacePath,
+        filterType: listType
+      }, []).catch(error => {
         console.error('HorizonList: Backend call failed:', error);
-        throw error;
+        return [];
       });
-      
-      console.log('HorizonList: Found relationships:', relationships);
 
       // Transform relationships to list items
       const listItems: ListItem[] = relationships.map(rel => ({
@@ -232,30 +219,55 @@ function HorizonListRenderer(props: HorizonListRendererProps) {
     }
   }, [getCurrentFilePath, listType]);
 
+  // Debounced version to prevent excessive API calls
+  const debouncedLoadItems = React.useMemo(
+    () => debounce(loadItems, 300),
+    [loadItems]
+  );
+
   // Load items on mount and when list type changes
   React.useEffect(() => {
-    loadItems();
-  }, [loadItems]);
+    debouncedLoadItems();
+    
+    // Cleanup: cancel any pending debounced calls on unmount
+    return () => {
+      debouncedLoadItems.cancel();
+    };
+  }, [debouncedLoadItems, listType]);
 
-  // Refresh when file references are updated
+  // Refresh when file references are updated - use debounced version
   React.useEffect(() => {
     const handleReferenceUpdate = () => {
-      // Small delay to allow the file to be saved
-      setTimeout(loadItems, 500);
+      // Use debounced version to prevent excessive updates
+      debouncedLoadItems();
     };
 
     window.addEventListener('reference-updated', handleReferenceUpdate);
     window.addEventListener('file-saved', handleReferenceUpdate);
-    
+
     return () => {
       window.removeEventListener('reference-updated', handleReferenceUpdate);
       window.removeEventListener('file-saved', handleReferenceUpdate);
     };
-  }, [loadItems]);
+  }, [debouncedLoadItems]);
 
   const handleItemClick = (path: string) => {
+    // Defensive check: if path looks like a JSON array, parse it
+    let finalPath = path;
+    if (path.startsWith('[') && path.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(path);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          finalPath = parsed[0];
+          console.warn('[HorizonListBlock] Path was JSON array, extracted first element:', finalPath);
+        }
+      } catch {
+        // Not valid JSON, use as-is
+      }
+    }
+    
     window.dispatchEvent(new CustomEvent('open-reference-file', {
-      detail: { path }
+      detail: { path: finalPath }
     }));
   };
 
@@ -270,14 +282,13 @@ function HorizonListRenderer(props: HorizonListRendererProps) {
   }, [items]);
 
   const itemTypes = listType === 'projects' ? ['project'] :
-                    listType === 'areas' ? ['area'] :
-                    listType === 'goals' ? ['goal'] :
-                    listType === 'visions' ? ['vision'] : [];
+    listType === 'areas' ? ['area'] :
+      listType === 'goals' ? ['goal'] :
+        listType === 'visions' ? ['vision'] : [];
 
   return (
-    <div className={`${compact ? '' : 'my-3'} border border-border rounded-lg transition-all ${
-      isExpanded ? (compact ? 'p-3' : 'p-4') : 'p-2 bg-muted/30'
-    }`}>
+    <div className={`${compact ? '' : 'my-3'} border border-border rounded-lg transition-all ${isExpanded ? (compact ? 'p-3' : 'p-4') : 'p-2 bg-muted/30'
+      }`}>
       <div className={`flex items-center justify-between ${isExpanded ? 'mb-3' : ''}`}>
         <div className="flex items-center gap-2">
           <button
@@ -285,16 +296,15 @@ function HorizonListRenderer(props: HorizonListRendererProps) {
             className="p-0.5 hover:bg-accent rounded transition-colors"
             aria-label={isExpanded ? "Collapse list" : "Expand list"}
           >
-            <ChevronRight 
-              className={`h-4 w-4 text-muted-foreground transition-transform ${
-                isExpanded ? 'rotate-90' : ''
-              }`} 
+            <ChevronRight
+              className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''
+                }`}
             />
           </button>
           <List className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-medium">{label}</span>
-          <Badge 
-            variant={items.length > 0 ? "outline" : "secondary"} 
+          <Badge
+            variant={items.length > 0 ? "outline" : "secondary"}
             className={`ml-2 ${!isExpanded && items.length > 0 ? 'animate-pulse' : ''}`}
           >
             {items.length}
@@ -305,7 +315,7 @@ function HorizonListRenderer(props: HorizonListRendererProps) {
             </span>
           )}
         </div>
-        
+
         <Button
           onClick={loadItems}
           variant="ghost"
@@ -401,7 +411,7 @@ function HorizonListRenderer(props: HorizonListRendererProps) {
       )}
     </div>
   );
-}
+});
 
 // Define prop schema for list blocks
 const horizonListPropSchema = {
@@ -569,11 +579,13 @@ export const ProjectsAndAreasListBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: () => {
-      return <p>[!projects-areas-list]</p>;
+      return <p>[!projects-and-areas-list]</p>;
     },
     parse: (element) => {
       const textContent = element.textContent || '';
-      if (textContent.includes('[!projects-areas-list]')) {
+      // Check for both new and legacy tokens for backward compatibility
+      if (textContent.includes('[!projects-and-areas-list]') || 
+          textContent.includes('[!projects-areas-list]')) {
         // Return a value that represents the combined nature
         return { listType: 'projects-areas' };
       }
@@ -612,11 +624,13 @@ export const GoalsAndAreasListBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: () => {
-      return <p>[!goals-areas-list]</p>;
+      return <p>[!goals-and-areas-list]</p>;
     },
     parse: (element) => {
       const textContent = element.textContent || '';
-      if (textContent.includes('[!goals-areas-list]')) {
+      // Check for both new and legacy tokens for backward compatibility
+      if (textContent.includes('[!goals-and-areas-list]') || 
+          textContent.includes('[!goals-areas-list]')) {
         // Return a value that represents the combined nature
         return { listType: 'goals-areas' };
       }
@@ -655,11 +669,13 @@ export const VisionsAndGoalsListBlock = createReactBlockSpec(
       );
     },
     toExternalHTML: () => {
-      return <p>[!visions-goals-list]</p>;
+      return <p>[!visions-and-goals-list]</p>;
     },
     parse: (element) => {
       const textContent = element.textContent || '';
-      if (textContent.includes('[!visions-goals-list]')) {
+      // Check for both new and legacy tokens for backward compatibility
+      if (textContent.includes('[!visions-and-goals-list]') || 
+          textContent.includes('[!visions-goals-list]')) {
         // Return a value that represents the combined nature
         return { listType: 'visions-goals' };
       }

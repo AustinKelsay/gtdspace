@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { readFileText } from '@/hooks/useFileManager';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -92,10 +93,23 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   onSelectFile,
   className = ''
 }) => {
+  // Debug: Track renders
+  const renderCountRef = React.useRef(0);
+  renderCountRef.current++;
+  console.log(`[GTDDashboard] Render #${renderCountRef.current}`, {
+    currentFolder,
+    hasGtdSpace: !!gtdSpace,
+    projectCount: gtdSpace?.projects?.length || 0,
+    timestamp: new Date().toISOString()
+  });
   // Fallback to local hook if parent didn't provide the shared one
   const { isLoading: hookIsLoading, loadProjects: hookLoadProjects } = useGTDSpace();
   const isLoading = isLoadingProp ?? hookIsLoading;
-  const loadProjects = loadProjectsProp ?? hookLoadProjects;
+  // Memoize loadProjects to prevent unnecessary re-renders
+  const loadProjects = React.useMemo(
+    () => loadProjectsProp ?? hookLoadProjects,
+    [loadProjectsProp, hookLoadProjects]
+  );
   const { updateHabitStatus } = useHabitTracking();
   const [showProjectDialog, setShowProjectDialog] = React.useState(false);
   const [showActionDialog, setShowActionDialog] = React.useState(false);
@@ -103,12 +117,11 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   const [activeTab, setActiveTab] = React.useState('overview');
   const [habits, setHabits] = React.useState<GTDHabit[]>([]);
   const [horizonFileCounts, setHorizonFileCounts] = React.useState<Record<string, number>>({});
-  const [, setLocalProjects] = React.useState<GTDProject[]>([]);
   const [actionSummary, setActionSummary] = React.useState({
     total: 0,
     inProgress: 0,
+    completed: 0,
     waiting: 0,
-    complete: 0,
     upcomingDue: 0,
   });
   const [expandedHorizon, setExpandedHorizon] = React.useState<Record<string, boolean>>({});
@@ -127,120 +140,216 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     }
   }, [gtdSpace?.root_path, horizonFilesList]);
 
+  // Track if we've already loaded data for this path
+  const loadedPathRef = React.useRef<string | null>(null);
+
   // Batch all initial data loading into one effect to reduce re-renders
   React.useEffect(() => {
+    console.log('[GTDDashboard] Main data loading effect triggered', {
+      root_path: gtdSpace?.root_path,
+      previousLoadedPath: loadedPathRef.current,
+      willLoad: gtdSpace?.root_path && loadedPathRef.current !== gtdSpace.root_path
+    });
+
     const loadAllData = async () => {
       if (!gtdSpace?.root_path) return;
 
-      // Use Promise.allSettled to load all data in parallel
-      await Promise.allSettled([
-        // Load projects if needed
-        (async () => {
-          // Avoid redundant reloads if projects already present
-          if (Array.isArray(gtdSpace.projects) && gtdSpace.projects.length > 0) return;
-          try {
-            const projects = await loadProjects(gtdSpace.root_path);
-            setLocalProjects(projects);
-          } catch (error) {
-            setLocalProjects([]);
-          }
-        })(),
+      // Skip if we already loaded data for this path
+      if (loadedPathRef.current === gtdSpace.root_path) {
+        console.log('[GTDDashboard] Skipping data load - already loaded for this path');
+        return;
+      }
 
-        // Load habits
-        (async () => {
-          try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            const habitsPath = `${gtdSpace.root_path}/Habits`;
-            const habitFiles = await invoke<MarkdownFile[]>('list_markdown_files', {
-              path: habitsPath
-            });
+      console.log('[GTDDashboard] Loading data for path:', gtdSpace.root_path);
 
-            const loadedHabits: GTDHabit[] = await Promise.all(
-              habitFiles.map(async (file) => {
-                try {
-                  const content = await invoke<string>('read_file', { path: file.path });
-                  const frequencyMatch = content.match(/\[!singleselect:habit-frequency:([^\]]+)\]/);
-                  const checkboxStatus = content.match(/\[!checkbox:habit-status:(true|false)\]/);
-                  const singleselectStatus = content.match(/\[!singleselect:habit-status:([^\]]+)\]/);
-                  
-                  let createdDate: string | undefined = undefined;
-                  const createdBlock = content.match(/\[!datetime:created_date:([^\]]+)\]/i);
-                  if (createdBlock) {
-                    createdDate = createdBlock[1].split('T')[0];
-                  } else {
-                    const createdSection = content.match(/##\s*Created\n([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
-                    if (createdSection) createdDate = createdSection[1];
+      try {
+        // Use Promise.allSettled to load all data in parallel
+        await Promise.allSettled([
+          // Load projects
+          (async () => {
+            try {
+              console.log('[GTDDashboard] Calling loadProjects');
+              await loadProjects(gtdSpace.root_path);
+              console.log('[GTDDashboard] loadProjects completed');
+            } catch (error) {
+              console.log('[GTDDashboard] loadProjects error:', error);
+              // Error already handled by loadProjects
+            }
+          })(),
+
+          // Load habits
+          (async () => {
+            try {
+              const { invoke } = await import('@tauri-apps/api/core');
+              const habitsPath = `${gtdSpace.root_path}/Habits`;
+              const habitFiles = await invoke<MarkdownFile[]>('list_markdown_files', {
+                path: habitsPath
+              });
+
+              const loadedHabits: GTDHabit[] = await Promise.all(
+                habitFiles.map(async (file) => {
+                  try {
+                    const content = await readFileText(file.path);
+                    const frequencyMatch = content.match(/\[!singleselect:habit-frequency:([^\]]+)\]/);
+                    const checkboxStatus = content.match(/\[!checkbox:habit-status:(true|false)\]/);
+                    const singleselectStatus = content.match(/\[!singleselect:habit-status:([^\]]+)\]/);
+
+                    let createdDateTime: string | undefined;
+
+                    // Step 1: Try to parse from [!datetime:created_date_time:...] block
+                    const createdBlock = content.match(/\[!datetime:created_date_time:([^\]]+)\]/i);
+                    if (createdBlock && createdBlock[1]) {
+                      const raw = createdBlock[1].trim();
+                      if (raw) {
+                        const parsed = new Date(raw);
+                        if (!isNaN(parsed.getTime())) {
+                          createdDateTime = parsed.toISOString();
+                        }
+                      }
+                    }
+
+                    // Step 2: If not found, try to parse from ## Created header
+                    if (!createdDateTime) {
+                      const hdr = content.match(
+                        /##\s*Created\s*(?:\r?\n|\s+)\s*([0-9]{4})-([0-9]{2})-([0-9]{2})(?:\s+([0-9]{1,2}):([0-9]{2})(?:\s*(AM|PM))?)?/i
+                      );
+                      if (hdr) {
+                        const y = parseInt(hdr[1], 10),
+                          mo = parseInt(hdr[2], 10),
+                          d = parseInt(hdr[3], 10);
+                        let hh = hdr[4] ? parseInt(hdr[4], 10) : 0;
+                        const mm = hdr[5] ? parseInt(hdr[5], 10) : 0;
+                        const mer = (hdr[6] || '').toUpperCase();
+
+                        // Adjust hours for AM/PM
+                        if (mer === 'PM' && hh < 12) hh += 12;
+                        if (mer === 'AM' && hh === 12) hh = 0;
+
+                        // Validate and construct date
+                        if (
+                          mo >= 1 && mo <= 12 &&
+                          d >= 1 && d <= 31 &&
+                          hh >= 0 && hh <= 23 &&
+                          mm >= 0 && mm <= 59
+                        ) {
+                          createdDateTime = new Date(Date.UTC(y, mo - 1, d, hh, mm)).toISOString();
+                        }
+                      }
+                    }
+
+                    // Step 3: If still not found, try to use file.last_modified
+                    if (!createdDateTime && file.last_modified != null) {
+                      const lastModTimestamp = Number(file.last_modified);
+                      if (Number.isFinite(lastModTimestamp) && lastModTimestamp > 0) {
+                        // Convert seconds to milliseconds if needed
+                        const timestampMs = lastModTimestamp < 1e12 ? lastModTimestamp * 1000 : lastModTimestamp;
+                        const lastModDate = new Date(timestampMs);
+                        if (!isNaN(lastModDate.getTime())) {
+                          createdDateTime = lastModDate.toISOString();
+                        }
+                      }
+                    }
+
+                    // Validate and normalize last_modified for last_updated field
+                    let lastUpdatedTime: string | undefined;
+                    if (file.last_modified != null) {
+                      const lastModTimestamp = Number(file.last_modified);
+                      if (Number.isFinite(lastModTimestamp) && lastModTimestamp > 0) {
+                        // Convert seconds to milliseconds if needed
+                        const timestampMs = lastModTimestamp < 1e12 ? lastModTimestamp * 1000 : lastModTimestamp;
+                        const lastModDate = new Date(timestampMs);
+                        if (!isNaN(lastModDate.getTime())) {
+                          lastUpdatedTime = lastModDate.toISOString();
+                        }
+                      }
+                    }
+
+                    const rawStatus = checkboxStatus
+                      ? (checkboxStatus[1] === 'true' ? 'completed' : 'todo')
+                      : (singleselectStatus?.[1] || 'todo');
+
+                    return {
+                      name: file.name.replace('.md', ''),
+                      frequency: (frequencyMatch?.[1] || 'daily') as GTDHabit['frequency'],
+                      status: (rawStatus === 'completed' || rawStatus === 'todo') ? rawStatus : 'todo',
+                      path: file.path,
+                      last_updated: lastUpdatedTime || new Date().toISOString(),
+                      createdDateTime: createdDateTime || lastUpdatedTime || new Date().toISOString()
+                    };
+                  } catch (error) {
+                    return null;
                   }
+                })
+              );
+              setHabits(loadedHabits.filter((h): h is GTDHabit => h !== null));
+            } catch (error) {
+              setHabits([]);
+            }
+          })(),
 
-                  return {
-                    name: file.name.replace('.md', ''),
-                    frequency: (frequencyMatch?.[1] || 'daily') as GTDHabit['frequency'],
-                    status: checkboxStatus
-                      ? (checkboxStatus[1] === 'true' ? 'complete' : 'todo')
-                      : ((singleselectStatus?.[1] || 'todo') as 'todo' | 'complete'),
-                    path: file.path,
-                    last_updated: new Date(file.last_modified).toISOString(),
-                    created_date: createdDate
-                  };
-                } catch (error) {
-                  return null;
-                }
-              })
-            );
-            setHabits(loadedHabits.filter((h): h is GTDHabit => h !== null));
-          } catch (error) {
-            setHabits([]);
-          }
-        })(),
+          // Load horizon counts
+          (async () => {
+            try {
+              const { invoke } = await import('@tauri-apps/api/core');
+              const horizons = [
+                'Purpose & Principles',
+                'Vision',
+                'Goals',
+                'Areas of Focus',
+                'Someday Maybe',
+                'Cabinet'
+              ];
 
-        // Load horizon counts
-        (async () => {
-          try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            const horizons = [
-              'Purpose & Principles',
-              'Vision',
-              'Goals',
-              'Areas of Focus',
-              'Someday Maybe',
-              'Cabinet'
-            ];
+              const counts: Record<string, number> = {};
+              await Promise.all(
+                horizons.map(async (horizon) => {
+                  try {
+                    const horizonPath = `${gtdSpace.root_path}/${horizon}`;
+                    const files = await invoke<MarkdownFile[]>('list_markdown_files', {
+                      path: horizonPath
+                    });
+                    counts[horizon] = files.length;
+                  } catch (error) {
+                    counts[horizon] = 0;
+                  }
+                })
+              );
+              setHorizonFileCounts(counts);
+            } catch (error) {
+              // Failed to load horizon counts
+            }
+          })()
+        ]);
 
-            const counts: Record<string, number> = {};
-            await Promise.all(
-              horizons.map(async (horizon) => {
-                try {
-                  const horizonPath = `${gtdSpace.root_path}/${horizon}`;
-                  const files = await invoke<MarkdownFile[]>('list_markdown_files', {
-                    path: horizonPath
-                  });
-                  counts[horizon] = files.length;
-                } catch (error) {
-                  counts[horizon] = 0;
-                }
-              })
-            );
-            setHorizonFileCounts(counts);
-          } catch (error) {
-            // Failed to load horizon counts
-          }
-        })()
-      ]);
+        // Only mark as loaded after successful completion
+        loadedPathRef.current = gtdSpace.root_path;
+        console.log('[GTDDashboard] Successfully loaded data for path:', gtdSpace.root_path);
+      } catch (error) {
+        // Don't set loadedPathRef.current on failure so it can be retried
+        console.error('[GTDDashboard] Failed to load data:', error);
+        // Explicitly clear to ensure retry on next attempt
+        loadedPathRef.current = null;
+      }
     };
 
     loadAllData();
-  }, [gtdSpace?.root_path, gtdSpace?.projects, loadProjects]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gtdSpace?.root_path]); // Only re-run when root_path changes, not when loadProjects changes
 
   // Load action summary across all projects
   React.useEffect(() => {
+    console.log('[GTDDashboard] Action summary effect triggered', {
+      projectCount: gtdSpace?.projects?.length || 0
+    });
+
     const loadActions = async () => {
       if (!gtdSpace?.projects || gtdSpace.projects.length === 0) {
-        setActionSummary({ total: 0, inProgress: 0, waiting: 0, complete: 0, upcomingDue: 0 });
+        setActionSummary({ total: 0, inProgress: 0, completed: 0, waiting: 0, upcomingDue: 0 });
         return;
       }
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        let total = 0, inProgress = 0, waiting = 0, complete = 0, upcomingDue = 0;
+        let total = 0, inProgress = 0, completed = 0, waiting = 0, upcomingDue = 0;
         const now = new Date();
 
         await Promise.all(gtdSpace.projects.map(async (project) => {
@@ -249,13 +358,26 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
             total += files.length;
             await Promise.all(files.map(async (file) => {
               try {
-                const content = await invoke<string>('read_file', { path: file.path });
-                const statusMatch = content.match(/\[!singleselect:status:(in-progress|waiting|completed?|done)\]/i);
-                const raw = (statusMatch?.[1] || 'in-progress').toLowerCase();
-                const normalized = raw === 'completed' || raw === 'done' ? 'complete' : raw;
-                if (normalized === 'in-progress') inProgress++;
-                else if (normalized === 'waiting') waiting++;
-                else if (normalized === 'complete') complete++;
+                const content = await readFileText(file.path);
+                // Match any status value, including legacy ones
+                const statusMatch = content.match(/\[!singleselect:status:([^\]]+)\]/i);
+                const raw = (statusMatch?.[1] || 'in-progress').toLowerCase().trim();
+
+                // Map legacy values to canonical ones
+                if (raw === 'in-progress' || raw === 'active' || raw === 'planning' || raw === 'not-started') {
+                  inProgress++;
+                } else if (raw === 'waiting' || raw === 'on-hold' || raw === 'waiting-for') {
+                  waiting++;
+                } else if (raw === 'completed' || raw === 'done' || raw === 'complete') {
+                  completed++;
+                } else if (raw === 'cancelled' || raw === 'canceled') {
+                  // Cancelled is excluded from completed count
+                  // Not counted in any bucket - effectively ignored
+                } else {
+                  // Default unmapped values to in-progress
+                  inProgress++;
+                }
+
 
                 const dueMatch = content.match(/\[!datetime:due_date:([^\]]*)\]/i);
                 const dueStr = dueMatch?.[1]?.trim();
@@ -272,9 +394,9 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           }
         }));
 
-        setActionSummary({ total, inProgress, waiting, complete, upcomingDue });
+        setActionSummary({ total, inProgress, completed, waiting, upcomingDue });
       } catch (e) {
-        setActionSummary({ total: 0, inProgress: 0, waiting: 0, complete: 0, upcomingDue: 0 });
+        setActionSummary({ total: 0, inProgress: 0, completed: 0, waiting: 0, upcomingDue: 0 });
       }
     };
     loadActions();
@@ -316,11 +438,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     };
 
     gtdSpace.projects.forEach(project => {
-      // Normalize status coming from backend (string) or frontend (array)
-      const rawStatus = Array.isArray(project.status)
-        ? (project.status[0] || 'in-progress')
-        : ((project.status as unknown as string) || 'in-progress');
-      const primaryStatus = rawStatus === 'complete' ? 'completed' : rawStatus;
+      const primaryStatus = project.status || 'in-progress';
       switch (primaryStatus) {
         case 'in-progress':
           stats.active++;
@@ -337,7 +455,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
       stats.totalActions += project.action_count || 0;
 
       // Check for overdue projects using robust parsing
-      const dueDateParsed = parseProjectDueDate((project as unknown as { due_date?: string }).due_date);
+      const dueDateParsed = parseProjectDueDate((project as unknown as { dueDate?: string }).dueDate);
       if (dueDateParsed && !primaryStatus.includes('completed')) {
         if (dueDateParsed < now) {
           stats.overdueProjects++;
@@ -355,8 +473,21 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
     // Sort upcoming deadlines by date
     stats.upcomingDeadlines.sort((a, b) => {
-      const dateA = new Date(a.due_date!).getTime();
-      const dateB = new Date(b.due_date!).getTime();
+      // Safely parse dates, handling block strings
+      const parseDateSafe = (dateStr: string): number => {
+        let str = dateStr;
+        // Check if it's a block string and extract the value
+        if (str.startsWith('[!datetime:')) {
+          const match = str.match(/\[!datetime:due_date:([^\]]*)\]/i);
+          str = match?.[1] || '';
+        }
+        const parsed = Date.parse(str);
+        // Return Infinity for invalid dates so they sort to the end
+        return isNaN(parsed) ? Infinity : parsed;
+      };
+
+      const dateA = parseDateSafe(a.dueDate!);
+      const dateB = parseDateSafe(b.dueDate!);
       return dateA - dateB;
     });
 
@@ -375,7 +506,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
       };
     }
 
-    const completedToday = habits.filter(h => h.status === 'complete').length;
+    const completedToday = habits.filter(h => h.status === 'completed').length;
 
     return {
       total: habits.length,
@@ -386,18 +517,10 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     };
   }, [habits]);
 
-  // Refresh data
-  React.useEffect(() => {
-    if (currentFolder && gtdSpace?.isGTDSpace) {
-      loadProjects(currentFolder);
-      // TODO: Load habits when habit loading is implemented
-    }
-  }, [currentFolder, gtdSpace?.isGTDSpace, loadProjects]);
+  // Removed duplicate useEffect - data loading is already handled in the main effect above
 
   const getProjectCompletion = (project: GTDProject): number => {
-    const statusStr = Array.isArray(project.status)
-      ? (project.status[0] || '')
-      : (project.status as unknown as string) || '';
+    const statusStr = project.status || '';
     if (statusStr.includes('completed')) return 100;
     if (statusStr.includes('in-progress')) return 50;
     if (statusStr.includes('waiting')) return 25;
@@ -421,7 +544,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   function parseProjectDueDate(value?: string | null): Date | null {
     if (!value) return null;
     let raw = value.trim();
-    const block = raw.match(/\[!datetime:due_date:([^\]]+)\]/i);
+    const block = raw.match(/\[!datetime:due_date:([^\]]*)\]/i);
     if (block) raw = block[1].trim();
     const d = new Date(raw);
     if (!isNaN(d.getTime())) return d;
@@ -443,25 +566,15 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   };
 
   const handleHabitToggle = async (habit: GTDHabit) => {
-    const newStatus = habit.status === 'complete' ? 'todo' : 'complete';
+    const newStatus = habit.status === 'completed' ? 'todo' : 'completed';
     await updateHabitStatus(
-      `${currentFolder}/Habits/${habit.name}.md`,
+      `${gtdSpace.root_path}/Habits/${habit.name}.md`,
       newStatus
     );
   };
 
-  // Debug logging
-  console.log('[GTDDashboard] Render check:', {
-    currentFolder,
-    gtdSpace,
-    isGTDSpace: gtdSpace?.isGTDSpace,
-    projects: gtdSpace?.projects?.length,
-    root_path: gtdSpace?.root_path,
-    is_initialized: gtdSpace?.is_initialized
-  });
 
   if (!currentFolder || !gtdSpace?.isGTDSpace) {
-    console.log('[GTDDashboard] Showing no space message - currentFolder:', currentFolder, 'isGTDSpace:', gtdSpace?.isGTDSpace, 'gtdSpace:', gtdSpace);
     return (
       <div className={`flex items-center justify-center h-full ${className}`}>
         <Card className="max-w-md">
@@ -537,8 +650,17 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     </div>
                     <TrendingUp className="h-4 w-4 text-blue-500" />
                   </div>
-                  <p className="text-3xl font-bold">{stats.active}</p>
-                  <p className="text-sm text-muted-foreground">Active Projects</p>
+                  {isLoading ? (
+                    <div className="space-y-2">
+                      <div className="h-8 w-12 bg-muted rounded animate-pulse" />
+                      <div className="h-3 w-20 bg-muted rounded animate-pulse" />
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-bold">{stats.active}</p>
+                      <p className="text-sm text-muted-foreground">Active Projects</p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 
@@ -550,8 +672,17 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     </div>
                     <Heart className="h-4 w-4 text-green-500" />
                   </div>
-                  <p className="text-3xl font-bold">{stats.completed}</p>
-                  <p className="text-sm text-muted-foreground">Completed</p>
+                  {isLoading ? (
+                    <div className="space-y-2">
+                      <div className="h-8 w-12 bg-muted rounded animate-pulse" />
+                      <div className="h-3 w-20 bg-muted rounded animate-pulse" />
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-bold">{stats.completed}</p>
+                      <p className="text-sm text-muted-foreground">Completed</p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 
@@ -563,22 +694,39 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     </div>
                     <BarChart3 className="h-4 w-4 text-purple-500" />
                   </div>
-                  <p className="text-3xl font-bold">{actionSummary.total}</p>
-                  <p className="text-sm text-muted-foreground">Total Actions</p>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-                    <div>
-                      <div className="font-semibold">{actionSummary.inProgress}</div>
-                      <div>In Progress</div>
+                  {isLoading ? (
+                    <div className="space-y-2">
+                      <div className="h-8 w-12 bg-muted rounded animate-pulse" />
+                      <div className="h-3 w-20 bg-muted rounded animate-pulse" />
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                        {[...Array(3)].map((_, i) => (
+                          <div key={i} className="space-y-1">
+                            <div className="h-4 w-6 bg-muted rounded animate-pulse" />
+                            <div className="h-3 w-12 bg-muted rounded animate-pulse" />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-semibold">{actionSummary.waiting}</div>
-                      <div>Waiting</div>
-                    </div>
-                    <div>
-                      <div className="font-semibold">{actionSummary.complete}</div>
-                      <div>Complete</div>
-                    </div>
-                  </div>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-bold">{actionSummary.total}</p>
+                      <p className="text-sm text-muted-foreground">Total Actions</p>
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                        <div>
+                          <div className="font-semibold">{actionSummary.inProgress}</div>
+                          <div>In Progress</div>
+                        </div>
+                        <div>
+                          <div className="font-semibold">{actionSummary.waiting}</div>
+                          <div>Waiting</div>
+                        </div>
+                        <div>
+                          <div className="font-semibold">{actionSummary.completed}</div>
+                          <div>Completed</div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -723,14 +871,14 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                             className="flex items-center gap-2 p-2 rounded hover:bg-accent cursor-pointer"
                             onClick={() => handleHabitToggle(habit)}
                           >
-                            {habit.status === 'complete' ? (
+                            {habit.status === 'completed' ? (
                               <CheckSquare className="h-4 w-4 text-green-600" />
                             ) : (
                               <Square className="h-4 w-4 text-muted-foreground" />
                             )}
                             <span className={cn(
                               "text-sm",
-                              habit.status === 'complete' && "line-through text-muted-foreground"
+                              habit.status === 'completed' && "line-through text-muted-foreground"
                             )}>
                               {habit.name}
                             </span>
@@ -769,7 +917,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                         </div>
                       ) : (
                         gtdSpace.projects
-                          ?.filter(p => (Array.isArray(p.status) ? p.status.includes('in-progress') : String(p.status).includes('in-progress')))
+                          ?.filter(p => p.status === 'in-progress')
                           .map(project => (
                             <div
                               key={project.path}
@@ -816,7 +964,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                                   {project.action_count || 0} actions
                                 </span>
                                 {(() => {
-                                  const d = parseProjectDueDate((project as unknown as { due_date?: string }).due_date); return d ? (
+                                  const d = parseProjectDueDate((project as unknown as { dueDate?: string }).dueDate); return d ? (
                                     <span className={cn(
                                       "flex items-center gap-1",
                                       d < new Date() ? "text-destructive" : "text-orange-600"
@@ -929,8 +1077,8 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                         <div className="space-y-2">
                           {gtdSpace.projects
                             ?.filter(p => {
-                              const due = parseProjectDueDate((p as unknown as { due_date?: string }).due_date);
-                              const statusStr = Array.isArray(p.status) ? (p.status[0] || '') : (p.status as unknown as string) || '';
+                              const due = parseProjectDueDate((p as unknown as { dueDate?: string }).dueDate);
+                              const statusStr = p.status || '';
                               return due && due < new Date() && !statusStr.includes('completed');
                             })
                             .map(project => (
@@ -955,7 +1103,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                                 <div className="flex items-center justify-between">
                                   <span className="font-medium">{project.name}</span>
                                   <Badge variant="destructive" className="text-xs">
-                                    {(() => { const d = parseProjectDueDate((project as unknown as { due_date?: string }).due_date); return d ? formatDate(d.toISOString()) : 'Due date'; })()}
+                                    {(() => { const d = parseProjectDueDate((project as unknown as { dueDate?: string }).dueDate); return d ? formatDate(d.toISOString()) : 'Due date'; })()}
                                   </Badge>
                                 </div>
                                 <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
@@ -994,11 +1142,19 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                             >
                               <div className="flex items-center justify-between">
                                 <span className="font-medium">{project.name}</span>
-                                {project.due_date && project.due_date.includes('T') && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {formatTime(project.due_date)}
-                                  </Badge>
-                                )}
+                                {project.dueDate && project.dueDate.includes('T') && (() => {
+                                  const raw = project.dueDate as string;
+                                  // Extract ISO from block syntax like "[!datetime:...ISO...]" or "[!datetime:due_date:...ISO...]"
+                                  const match = raw.match(/\[!datetime:(?:[^:\]]*:)?([^\]]+)\]/i);
+                                  const normalized = match && match[1] ? match[1].trim() : raw;
+                                  const parsed = new Date(normalized);
+                                  if (isNaN(parsed.getTime())) return null;
+                                  return (
+                                    <Badge variant="outline" className="text-xs">
+                                      {formatTime(parsed.toISOString())}
+                                    </Badge>
+                                  );
+                                })()}
                               </div>
                               <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
                               <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
@@ -1045,7 +1201,16 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                                 <div className="flex items-center justify-between">
                                   <span className="font-medium">{project.name}</span>
                                   <Badge variant="outline" className="text-xs">
-                                    {formatDate(project.due_date!)}
+                                    {(() => {
+                                      let dateStr = project.dueDate!;
+                                      // Check if it's a block string and extract the value
+                                      if (dateStr.startsWith('[!datetime:')) {
+                                        const match = dateStr.match(/\[!datetime:due_date:([^\]]*)\]/i);
+                                        dateStr = match?.[1] || '';
+                                      }
+                                      // Only format if we have a valid date string
+                                      return dateStr ? formatDate(dateStr) : 'No date';
+                                    })()}
                                   </Badge>
                                 </div>
                                 <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
@@ -1094,7 +1259,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                         >
                           <div className="flex items-center gap-3">
                             <div className="flex-shrink-0">
-                              {habit.status === 'complete' ? (
+                              {habit.status === 'completed' ? (
                                 <div className="p-2 rounded-full bg-green-500/10">
                                   <CheckCircle2 className="h-5 w-5 text-green-600" />
                                 </div>
@@ -1107,7 +1272,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                             <div className="flex-1">
                               <p className={cn(
                                 "font-medium",
-                                habit.status === 'complete' && "line-through text-muted-foreground"
+                                habit.status === 'completed' && "line-through text-muted-foreground"
                               )}>
                                 {habit.name}
                               </p>
@@ -1115,7 +1280,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                                 <Badge variant="outline" className="text-xs">
                                   {habit.frequency}
                                 </Badge>
-                                {habit.status === 'complete' && (
+                                {habit.status === 'completed' && (
                                   <span className="text-xs text-green-600">Completed today</span>
                                 )}
                               </div>

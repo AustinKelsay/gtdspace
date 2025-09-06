@@ -37,21 +37,52 @@ export const convertToSingleValue = (multiValue: string[] | string): string => {
   return multiValue || '';
 };
 
+// Normalize status strings to canonical form
+const normalizeStatusString = (status: string): string => {
+  const normalized = status.trim().toLowerCase().replace(/\s+/g, '-');
+  // Map both spellings of canceled/cancelled to canonical "cancelled"
+  if (normalized === 'canceled') {
+    return 'cancelled';
+  }
+  return normalized;
+};
+
 // Map status values for consistency
 export const mapStatusValue = (status: string): string => {
+  // Normalize the input status first
+  const normalized = normalizeStatusString(status);
+  
   const statusMap: Record<string, string> = {
-    'Not Started': 'in-progress',  // Map old "Not Started" to new default "in-progress"
-    'In Progress': 'in-progress',
-    'Waiting': 'waiting',
-    'Complete': 'complete',
-    'Active': 'in-progress',
-    'Planning': 'in-progress',
-    'On Hold': 'waiting',
-    'Completed': 'completed',
-    'Cancelled': 'completed',
+    'not-started': 'in-progress',  // Map old "Not Started" to new default "in-progress"
+    'in-progress': 'in-progress',
+    'waiting': 'waiting',
+    'completed': 'completed',
+    'cancelled': 'cancelled',  // Preserve cancelled as its own status
+    'active': 'in-progress',
+    'planning': 'in-progress',
+    'on-hold': 'waiting',
+    'done': 'completed',
+    'complete': 'completed',
+    'todo': 'in-progress',
   };
   
-  return statusMap[status] || status.toLowerCase().replace(/\s+/g, '-');
+  const mapped = statusMap[normalized];
+  if (mapped) {
+    return mapped;
+  }
+  
+  // Log unmapped values for diagnostics
+  // Guard access to debug env var to prevent runtime errors outside Vite
+  try {
+    if (import.meta.env.VITE_DEBUG_BLOCKNOTE) {
+      console.warn(`[SingleSelect] Unmapped status value encountered: "${status}" (normalized: "${normalized}"), defaulting to "in-progress"`);
+    }
+  } catch {
+    // Silently ignore if import.meta is not available (non-Vite environments)
+  }
+  
+  // Always return safe default for unknown values
+  return 'in-progress';
 };
 
 // Map effort values for consistency

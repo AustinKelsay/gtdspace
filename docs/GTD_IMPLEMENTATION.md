@@ -82,7 +82,16 @@ YYYY-MM-DD or "Not set"
 
 ## Status
 
-Active | On Hold | Complete | Cancelled
+A project uses a SingleSelect block to track its status. The block stores a canonical token representing the status.
+
+The canonical status tokens are:
+- `in-progress`
+- `waiting`
+- `completed`
+
+Example: `[!singleselect:project-status:in-progress]`
+
+**Note:** The UI may display more user-friendly labels (e.g., "Active" for `in-progress`). The code should map these display labels to the correct canonical tokens to ensure data consistency, as seen in hooks like `useCalendarData`.
 
 ## Actions
 
@@ -103,7 +112,7 @@ Use the GTD Project dialog or create manually:
 - Name: Clear, outcome-focused title
 - Description: Desired end result
 - Due Date: Optional deadline
-- Status: Automatically set to "Active"
+- Status: Automatically set to "Active" (canonical token: `in-progress`)
 ```
 
 ## Actions
@@ -117,7 +126,8 @@ Actions are concrete next steps that move projects forward.
 
 ## Status
 
-Not Started | In Progress | Complete
+Canonical tokens: `in-progress` | `waiting` | `completed`
+Note: The UI should map display labels (e.g., "In Progress") to/from these canonical tokens.
 
 ## Focus Date
 
@@ -195,13 +205,17 @@ create_gtd_project(
     space_path: String,
     project_name: String,
     description: String,
-    due_date: Option<String>
+    due_date: Option<String>,
+    // Must be one of: "in-progress", "waiting", "completed"
+    status: Option<String>
 ) -> Result<String, String>
 
 // Create new action
 create_gtd_action(
     project_path: String,
     action_name: String,
+    // Must be one of the canonical tokens: "in-progress", "waiting", "completed".
+    // The UI is responsible for mapping display labels (e.g., "In Progress") to these tokens.
     status: String,
     focus_date: Option<String>,
     due_date: Option<String>,
@@ -224,6 +238,7 @@ await invoke('create_gtd_project', {
   projectName,
   description,
   dueDate,
+  status: 'in-progress',
 });
 
 // Create new action
@@ -254,7 +269,7 @@ interface GTDProject {
   due_date?: string | null; // snake_case to match Rust
   status: GTDProjectStatus;
   path: string;
-  created_date: string; // snake_case to match Rust
+  created_date_time: string; // snake_case to match Rust
   action_count?: number; // snake_case to match Rust
 }
 
@@ -267,7 +282,7 @@ interface GTDAction {
   due_date?: string | null; // snake_case to match Rust, ISO date
   effort: GTDActionEffort;
   notes?: string;
-  created_date: string; // snake_case to match Rust
+  created_date_time: string; // snake_case to match Rust
   project_path: string; // snake_case to match Rust
 }
 ```
@@ -463,7 +478,7 @@ Description and details about the habit
 
 ### Habit System Features
 
-1. **Two-State System**: Habits have only 'todo' and 'complete' status
+1. **Two-State System**: Habits have only 'todo' and 'completed' status
 2. **Automatic Reset**: Status resets to 'todo' based on frequency at 00:01 daily
 3. **History Tracking**: Every status change is recorded in a markdown table
 4. **Self-Contained**: Each habit file contains its complete history
@@ -507,7 +522,7 @@ When you change a habit's status through the UI:
 // Automatic backend call when status changes
 await invoke('update_habit_status', {
   habitPath,
-  newStatus: 'complete' // or 'todo'
+  newStatus: 'completed' // or 'todo'
 });
 ```
 
@@ -527,7 +542,7 @@ The application handles habit resets in two ways:
 - Ensures habits are always current regardless of app uptime
 
 The reset logic:
-1. Only resets habits currently marked as 'complete'
+1. Only resets habits currently marked as 'completed'
 2. Checks time since last action (not just resets)
 3. Respects the frequency interval (daily, weekly, etc.)
 4. Records all resets with timestamp for full traceability

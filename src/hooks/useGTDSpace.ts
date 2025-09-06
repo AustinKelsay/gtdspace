@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
+import { safeInvoke } from '@/utils/safe-invoke';
+import debounce from 'lodash.debounce';
 import { useErrorHandler } from './useErrorHandler';
 import { useToast } from './useToast';
 import {
@@ -8,6 +9,7 @@ import {
   GTDProjectCreate,
   GTDActionCreate,
 } from '@/types';
+import { migrateGTDObjects } from '@/utils/data-migration';
 
 /**
  * Hook for managing GTD space operations
@@ -46,7 +48,7 @@ export function useGTDSpace() {
             expectedDirs.map(async (dirName) => {
               try {
                 const dirPath = `${spacePath}/${dirName}`;
-                const result = await invoke<boolean>('check_directory_exists', { path: dirPath });
+                const result = await safeInvoke<boolean>('check_directory_exists', { path: dirPath }, false);
                 return { dirName, exists: result };
               } catch (error) {
                 return { dirName, exists: false };
@@ -90,41 +92,47 @@ export function useGTDSpace() {
       
       setIsLoading(true);
       
-      const result = await withErrorHandling(
-        async () => {
-          const message = await invoke<string>('initialize_gtd_space', { spacePath });
-          
-          // Wait for directory structure to be fully created
-          try {
-            await waitForDirectoryStructure(spacePath);
-          } catch (error) {
-            // Continue anyway - the user can refresh manually if needed
-          }
-          
-          // Store the GTD space path for references component
-          localStorage.setItem('gtdspace-current-path', spacePath);
-          
-          // Update state with initialized space
-          setGTDSpace({
-            root_path: spacePath,
-            is_initialized: true,
-            isGTDSpace: true,
-            projects: [],
-            total_actions: 0,
-          });
-          
-          return message;
-        },
-        'Failed to initialize GTD space',
-        'gtd'
-      );
+      try {
+        const result = await withErrorHandling(
+          async () => {
+            const message = await safeInvoke<string>('initialize_gtd_space', { spacePath }, null);
+            if (!message) {
+              throw new Error('Failed to initialize GTD space');
+            }
+            
+            // Wait for directory structure to be fully created
+            try {
+              await waitForDirectoryStructure(spacePath);
+            } catch (error) {
+              // Continue anyway - the user can refresh manually if needed
+            }
+            
+            // Store the GTD space path for references component
+            localStorage.setItem('gtdspace-current-path', spacePath);
+            
+            // Update state with initialized space
+            setGTDSpace({
+              root_path: spacePath,
+              is_initialized: true,
+              isGTDSpace: true,
+              projects: [],
+              total_actions: 0,
+            });
+            
+            return message;
+          },
+          'Failed to initialize GTD space',
+          'gtd'
+        );
 
-      if (result) {
-        showSuccess(result);
+        if (result) {
+          showSuccess(result);
+        }
+        
+        return result != null; // Checks for both null and undefined
+      } finally {
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
-      return result !== null;
     },
     [withErrorHandling, showSuccess, waitForDirectoryStructure]
   );
@@ -136,54 +144,61 @@ export function useGTDSpace() {
     async (params: GTDProjectCreate) => {
       setIsLoading(true);
       
-      const result = await withErrorHandling(
-        async () => {
-          const projectPath = await invoke<string>('create_gtd_project', {
-            spacePath: params.space_path,
-            projectName: params.project_name,
-            description: params.description,
-            dueDate: params.due_date || undefined,
-            status: params.status || 'in-progress',
-          });
-          
-          // Create project object for state update
-          const newProject: GTDProject = {
-            name: params.project_name,
-            description: params.description,
-            due_date: params.due_date,
-            status: [params.status || 'in-progress'],
-            path: projectPath,
-            created_date: new Date().toISOString().split('T')[0],
-            action_count: 0,
-          };
-          
-          // Update space state if it exists
-          if (gtdSpace) {
-            setGTDSpace({
-              ...gtdSpace,
-              projects: [...(gtdSpace.projects || []), newProject],
+      try {
+        const result = await withErrorHandling(
+          async () => {
+            const projectPath = await safeInvoke<string>('create_gtd_project', {
+              spacePath: params.spacePath,
+              projectName: params.projectName,
+              description: params.description,
+              dueDate: params.dueDate || undefined,
+              status: params.status || 'in-progress',
+            }, null);
+            if (!projectPath) {
+              throw new Error('Failed to create project');
+            }
+            
+            // Create project object for state update
+            const newProject: GTDProject = {
+              name: params.projectName,
+              description: params.description,
+              dueDate: params.dueDate,
+              status: params.status || 'in-progress',
+              path: projectPath,
+              createdDateTime: new Date().toISOString(),
+              action_count: 0,
+            };
+            
+            // Update space state using functional form to avoid stale closure
+            setGTDSpace(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                projects: [...(prev.projects || []), newProject],
+              };
             });
-          }
-          
-          return projectPath;
-        },
-        'Failed to create project',
-        'gtd'
-      );
+            
+            return projectPath;
+          },
+          'Failed to create project',
+          'gtd'
+        );
 
-      if (result) {
-        showSuccess(`Project "${params.project_name}" created successfully`);
+        if (result) {
+          showSuccess(`Project "${params.projectName}" created successfully`);
+          
+          // Emit custom event to trigger sidebar refresh
+          window.dispatchEvent(new CustomEvent('gtd-project-created', {
+            detail: { projectPath: result, projectName: params.projectName }
+          }));
+        }
         
-        // Emit custom event to trigger sidebar refresh
-        window.dispatchEvent(new CustomEvent('gtd-project-created', {
-          detail: { projectPath: result, projectName: params.project_name }
-        }));
+        return result;
+      } finally {
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
-      return result;
     },
-    [gtdSpace, withErrorHandling, showSuccess]
+    [withErrorHandling, showSuccess]
   );
 
   /**
@@ -193,55 +208,69 @@ export function useGTDSpace() {
     async (params: GTDActionCreate) => {
       setIsLoading(true);
       
-      const result = await withErrorHandling(
-        async () => {
-          const actionPath = await invoke<string>('create_gtd_action', {
-            projectPath: params.project_path,
-            actionName: params.action_name,
-            status: params.status,
-            focusDate: params.focus_date || undefined,
-            dueDate: params.due_date || undefined,
-            effort: params.effort,
-          });
-          
-          return actionPath;
-        },
-        'Failed to create action',
-        'gtd'
-      );
-
-      if (result) {
-        showSuccess(`Action "${params.action_name}" created successfully`);
-        
-        // Update project action count if space is loaded
-        if (gtdSpace && gtdSpace.projects) {
-          const updatedProjects = gtdSpace.projects.map(project => {
-            if (project.path === params.project_path) {
-              return {
-                ...project,
-                action_count: (project.action_count || 0) + 1,
-              };
+      try {
+        const result = await withErrorHandling(
+          async () => {
+            // Pass the full contexts array to support multiselect
+            const contextsArray = params.contexts && params.contexts.length > 0 
+              ? params.contexts 
+              : undefined;
+            
+            const actionPath = await safeInvoke<string>('create_gtd_action', {
+              projectPath: params.project_path,
+              actionName: params.action_name,
+              status: params.status,
+              dueDate: params.dueDate || undefined,
+              focusDate: params.focusDate || undefined,
+              effort: params.effort,
+              contexts: contextsArray,
+            }, null);
+            if (!actionPath) {
+              throw new Error('Failed to create action');
             }
-            return project;
+            
+            return actionPath;
+          },
+          'Failed to create action',
+          'gtd'
+        );
+
+        if (result) {
+          showSuccess(`Action "${params.action_name}" created successfully`);
+          
+          // Update project action count using functional state update
+          setGTDSpace(prev => {
+            if (!prev || !prev.projects) return prev;
+            
+            const updatedProjects = prev.projects.map(project => {
+              if (project.path === params.project_path) {
+                return {
+                  ...project,
+                  action_count: (project.action_count || 0) + 1,
+                };
+              }
+              return project;
+            });
+            
+            return {
+              ...prev,
+              projects: updatedProjects,
+              total_actions: (prev.total_actions || 0) + 1,
+            };
           });
           
-          setGTDSpace({
-            ...gtdSpace,
-            projects: updatedProjects,
-            total_actions: (gtdSpace.total_actions || 0) + 1,
-          });
+          // Emit custom event to trigger sidebar refresh
+          window.dispatchEvent(new CustomEvent('gtd-action-created', {
+            detail: { actionPath: result, actionName: params.action_name, projectPath: params.project_path }
+          }));
         }
         
-        // Emit custom event to trigger sidebar refresh
-        window.dispatchEvent(new CustomEvent('gtd-action-created', {
-          detail: { actionPath: result, actionName: params.action_name, projectPath: params.project_path }
-        }));
+        return result;
+      } finally {
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
-      return result;
     },
-    [gtdSpace, withErrorHandling, showSuccess]
+    [withErrorHandling, showSuccess]
   );
 
   /**
@@ -255,7 +284,7 @@ export function useGTDSpace() {
             const requiredDirs = ['Projects', 'Habits', 'Someday Maybe', 'Cabinet'];
             for (const dir of requiredDirs) {
               try {
-                await invoke('list_markdown_files', { path: `${path}/${dir}` });
+                await safeInvoke('list_markdown_files', { path: `${path}/${dir}` }, []);
               } catch {
                 return false;
               }
@@ -285,46 +314,127 @@ export function useGTDSpace() {
   );
 
   /**
-   * Load projects from a GTD space
+   * Internal implementation of loadProjects
    */
-  const loadProjects = useCallback(
+  const loadProjectsInternal = useCallback(
     async (spacePath: string) => {
-      // Debug: project load
+      console.log('[useGTDSpace] loadProjectsInternal called for path:', spacePath);
       setIsLoading(true);
+      let result: GTDProject[] | undefined;
+      try {
+        result = await withErrorHandling(
+          async () => {
+            let projects = await safeInvoke<GTDProject[]>('list_gtd_projects', {
+              spacePath: spacePath,
+            }, []);
+            
+            // Apply migrations to ensure backward compatibility
+            projects = migrateGTDObjects(projects);
+            
+            // Calculate total actions
+            const totalActions = projects.reduce((sum, project) => sum + (project.action_count || 0), 0);
+            
+            // Update space state with loaded projects - use functional update to preserve other state
+            console.log('[useGTDSpace] Updating GTDSpace state with', projects.length, 'projects');
+            setGTDSpace(prev => {
+              // If no previous state, we need to initialize it
+              if (!prev) {
+                console.log('[useGTDSpace] No previous state - initializing with projects');
+                return {
+                  root_path: spacePath,
+                  is_initialized: true,
+                  isGTDSpace: true,
+                  projects,
+                  total_actions: totalActions,
+                };
+              }
+              
+              // If the path doesn't match, skip update (wrong space)
+              if (prev.root_path !== spacePath) {
+                console.log('[useGTDSpace] Skipping state update - path mismatch');
+                return prev;
+              }
+              
+              // Check if the data has actually changed
+              const projectsChanged = 
+                prev.projects?.length !== projects.length ||
+                prev.total_actions !== totalActions ||
+                JSON.stringify(prev.projects) !== JSON.stringify(projects);
+              
+              if (!projectsChanged) {
+                console.log('[useGTDSpace] Skipping state update - data unchanged');
+                return prev;
+              }
+              
+              console.log('[useGTDSpace] Previous state:', prev);
+              const newState = {
+                ...prev,
+                // Don't update root_path - it's already set and updating it causes re-renders
+                is_initialized: true,
+                isGTDSpace: true,
+                projects,
+                total_actions: totalActions,
+              };
+              console.log('[useGTDSpace] New state:', newState);
+              return newState;
+            });
+            
+            return projects;
+          },
+          'Failed to load projects',
+          'gtd'
+        );
+      } finally {
+        setIsLoading(false);
+      }
       
-      const result = await withErrorHandling(
-        async () => {
-          const projects = await invoke<GTDProject[]>('list_gtd_projects', {
-            spacePath: spacePath,
-          });
-          
-          // Loaded projects count
-          
-          // Calculate total actions
-          const totalActions = projects.reduce((sum, project) => sum + (project.action_count || 0), 0);
-          
-          // Update space state with loaded projects
-          setGTDSpace({
-            root_path: spacePath,
-            is_initialized: true,
-            isGTDSpace: true,
-            projects,
-            total_actions: totalActions,
-          });
-          
-          // State updated
-          
-          return projects;
-        },
-        'Failed to load projects',
-        'gtd'
-      );
-      
-      setIsLoading(false);
-      // Completed project load
+      console.log('[useGTDSpace] loadProjectsInternal completed, returning', result?.length || 0, 'projects');
       return result || [];
     },
     [withErrorHandling]
+  );
+
+  // Track the last spacePath to avoid redundant calls
+  const lastLoadedPath = useRef<string>('');
+  const loadPromise = useRef<Promise<GTDProject[]> | null>(null);
+
+  /**
+   * Debounced version of loadProjects to prevent rapid re-renders
+   */
+  const debouncedLoadProjects = useMemo(
+    () => debounce(
+      async (spacePath: string) => {
+        // Skip if we're already loading the same path
+        if (lastLoadedPath.current === spacePath && loadPromise.current) {
+          console.log('[useGTDSpace] Skipping loadProjects - already loading path:', spacePath);
+          return loadPromise.current;
+        }
+
+        lastLoadedPath.current = spacePath;
+        loadPromise.current = loadProjectsInternal(spacePath);
+        
+        try {
+          const result = await loadPromise.current;
+          return result;
+        } finally {
+          loadPromise.current = null;
+        }
+      },
+      500, // 500ms debounce to batch rapid calls
+      { leading: true, trailing: true, maxWait: 1000 } // Run immediately and flush the last call within the window
+    ),
+    [loadProjectsInternal]
+  );
+
+  /**
+   * Load projects from a GTD space (debounced)
+   */
+  const loadProjects = useCallback(
+    async (spacePath: string) => {
+      console.log('[useGTDSpace] loadProjects called for path:', spacePath);
+      return debouncedLoadProjects(spacePath);
+    },
+    [debouncedLoadProjects]
   );
 
   /**
@@ -340,7 +450,10 @@ export function useGTDSpace() {
 
     setIsInitializing(true);
     const result = await withErrorHandling(async () => {
-      const path = await invoke<string>('initialize_default_gtd_space');
+      const path = await safeInvoke<string>('initialize_default_gtd_space', undefined, null);
+      if (!path) {
+        throw new Error('Failed to initialize default GTD space');
+      }
       return path;
     }, 'Failed to initialize default GTD space', 'gtd');
     setIsInitializing(false);
@@ -353,6 +466,13 @@ export function useGTDSpace() {
       await loadProjects(gtdSpace.root_path);
     }
   }, [gtdSpace?.root_path, checkGTDSpace, loadProjects]);
+
+  // Cleanup debounced function on unmount
+  React.useEffect(() => {
+    return () => {
+      debouncedLoadProjects.cancel();
+    };
+  }, [debouncedLoadProjects]);
 
   /**
    * Initialize and load a GTD space - used for switching workspaces

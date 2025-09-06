@@ -5,8 +5,9 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import type { GTDSpace, MarkdownFile } from '@/types';
+import { migrateMarkdownContent, needsMigration } from '@/utils/data-migration';
 
 export interface CalendarItem {
   id: string;
@@ -15,12 +16,12 @@ export interface CalendarItem {
   type: 'project' | 'action' | 'habit' | 'google-event';
   source?: 'gtd' | 'google';
   status?: string;
-  due_date?: string;
-  focus_date?: string;
-  end_date?: string; // For Google events
+  dueDate?: string;
+  focusDate?: string;
+  endDate?: string; // For Google events
   projectName?: string;
   frequency?: string; // For habits
-  createdDate?: string; // For habits
+  createdDateTime?: string; // For habits
   effort?: string; // For actions
   // Google Calendar specific fields
   googleEventId?: string;
@@ -107,6 +108,19 @@ const parseCheckboxField = (content: string, fieldName: string): boolean => {
   return match ? match[1] === 'true' : false;
 };
 
+// Helper function to convert file.last_modified to ISO string
+const fileLastModifiedToISO = (lastModified: number | undefined, habitName: string): string | undefined => {
+  if (typeof lastModified === 'number' && Number.isFinite(lastModified)) {
+    // Detect if file.last_modified is in seconds or milliseconds
+    // TODO: Standardize all MarkdownFile.last_modified producers to emit seconds consistently
+    const timestamp = lastModified >= 1e12 ? lastModified : lastModified * 1000;
+    return new Date(timestamp).toISOString();
+  } else {
+    console.warn(`[CalendarData] Invalid file.last_modified for habit ` + `"` + `${habitName}` + `"` + `, skipping timestamp`);
+    return undefined;
+  }
+};
+
 export const useCalendarData = (
   spacePath: string, 
   gtdSpace?: GTDSpace | null,
@@ -165,11 +179,31 @@ export const useCalendarData = (
       if (files) {
         for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
           const file = files[fileIndex];
-          // Check if it's a project README
-          if (file.path.includes('/Projects/') && file.path.endsWith('README.md')) {
+          // Normalize path for cross-platform compatibility (Windows uses backslashes)
+          const normalizedPath = file.path.replace(/\\/g, '/');
+          // Create lowercase version for case-insensitive comparisons
+          const normalizedPathLower = normalizedPath.toLowerCase();
+          
+          // Check if it's a project README (case-insensitive check)
+          if (normalizedPathLower.includes('/projects/') && normalizedPathLower.endsWith('readme.md')) {
             try {
-              const content = await invoke<string>('read_file', { path: file.path });
-              const projectName = file.path.split('/Projects/')[1]?.split('/')[0] || '';
+              let content = await safeInvoke<string>('read_file', { path: file.path }, '');
+              
+              // Apply migrations in-memory only (don't auto-save to avoid file churn)
+              if (needsMigration(content)) {
+                content = migrateMarkdownContent(content);
+                // Note: Migration is applied for display only, not saved to disk
+              }
+              
+              // Extract project name using case-insensitive search but preserving original casing
+              const projectsIndex = normalizedPathLower.indexOf('/projects/');
+              let projectName = '';
+              if (projectsIndex !== -1) {
+                const startIndex = projectsIndex + '/projects/'.length;
+                const pathAfterProjects = normalizedPath.slice(startIndex);
+                const segments = pathAfterProjects.split('/');
+                projectName = segments[0] || '';
+              }
               
               // Parse dates from project README
               const dueDate = parseDateTimeField(content, 'due_date');
@@ -184,8 +218,8 @@ export const useCalendarData = (
                   path: file.path,
                   type: 'project',
                   status: status,
-                  due_date: dueDate,
-                  focus_date: undefined,
+                  dueDate: dueDate,
+                  focusDate: undefined,
                   projectName: undefined
                 });
               }
@@ -194,22 +228,38 @@ export const useCalendarData = (
             }
           }
           
-          // Check if it's an action file (in Projects but not README)
-          if (file.path.includes('/Projects/') && !file.path.includes('README') && file.path.endsWith('.md')) {
+          // Check if it's an action file (in Projects but not README) - case-insensitive check
+          if (normalizedPathLower.includes('/projects/') && !normalizedPathLower.includes('readme') && normalizedPathLower.endsWith('.md')) {
             try {
-              const content = await invoke<string>('read_file', { path: file.path });
-              const pathParts = file.path.split('/');
-              const projectName = file.path.split('/Projects/')[1]?.split('/')[0] || '';
-              const actionName = pathParts[pathParts.length - 1].replace('.md', '');
+              let content = await safeInvoke<string>('read_file', { path: file.path }, '');
               
-              // Parse all possible date fields
-              const focusDateTime = parseDateTimeField(content, 'focus_date_time');
-              const focusDate = parseDateTimeField(content, 'focus_date');
+              // Apply migrations in-memory only (don't auto-save to avoid file churn)
+              if (needsMigration(content)) {
+                content = migrateMarkdownContent(content);
+                // Note: Migration is applied for display only, not saved to disk
+              }
+              
+              const pathParts = normalizedPath.split('/');
+              // Find project name using case-insensitive lookup but preserve original casing
+              const projectsIndex = normalizedPathLower.indexOf('/projects/');
+              let projectName = '';
+              if (projectsIndex !== -1) {
+                const startIndex = projectsIndex + '/projects/'.length;
+                const pathAfterProjects = normalizedPath.slice(startIndex);
+                const segments = pathAfterProjects.split('/');
+                projectName = segments[0] || '';
+              }
+              const actionName = pathParts[pathParts.length - 1].replace('.md', '') || '';
+              
+              // Parse focus date field (can include time)
+              // Try both field names for backward compatibility
+              const focusDate = parseDateTimeField(content, 'focus_date') || 
+                                parseDateTimeField(content, 'focus_date_time');
               const dueDate = parseDateTimeField(content, 'due_date');
               const status = parseSingleSelectField(content, 'status') || 'in-progress';
               const effort = parseSingleSelectField(content, 'effort');
               
-              const finalFocusDate = focusDateTime || focusDate;
+              const finalFocusDate = focusDate;
               
               console.log(`[CalendarData] Action ${actionName}: focus=${finalFocusDate}, due=${dueDate}, effort=${effort}`);
               
@@ -220,8 +270,8 @@ export const useCalendarData = (
                   path: file.path,
                   type: 'action',
                   status: status,
-                  due_date: dueDate,
-                  focus_date: finalFocusDate,
+                  dueDate: dueDate,
+                  focusDate: finalFocusDate,
                   projectName: projectName,
                   effort: effort
                 });
@@ -231,45 +281,165 @@ export const useCalendarData = (
             }
           }
           
-          // Check if it's a habit file
-          if (file.path.includes('/Habits/') && file.path.endsWith('.md')) {
+          // Check if it's a habit file - case-insensitive check
+          if (normalizedPathLower.includes('/habits/') && normalizedPathLower.endsWith('.md')) {
             try {
-              const content = await invoke<string>('read_file', { path: file.path });
-              const habitName = file.path.split('/').pop()?.replace('.md', '') || '';
+              let content = await safeInvoke<string>('read_file', { path: file.path }, '');
               
-              // Parse habit fields
-              const habitStatus = parseCheckboxField(content, 'habit-status') ? 'complete' : 'todo';
-              const frequency = parseSingleSelectField(content, 'habit-frequency') || 'daily';
-              
-              // Parse focus time for the habit
-              const focusDateTime = parseDateTimeField(content, 'focus_date_time');
-              
-              // Parse created date using the existing DateTime parser
-              let createdDate: string;
-              const createdDateRaw = parseDateTimeField(content, 'created_date');
-              if (createdDateRaw) {
-                // Extract just the date part (YYYY-MM-DD) from the parsed value
-                createdDate = createdDateRaw.split('T')[0];
-              } else {
-                // Fallback to current date if not found
-                createdDate = new Date().toISOString().split('T')[0];
+              // Apply migrations in-memory only (don't auto-save to avoid file churn)
+              if (needsMigration(content)) {
+                content = migrateMarkdownContent(content);
+                // Note: Migration is applied for display only, not saved to disk
               }
               
-              console.log(`[CalendarData] Habit ${habitName}: freq=${frequency}, created=${createdDate}, focus=${focusDateTime}`);
+              const habitName = normalizedPath.split('/').pop()?.replace('.md', '') || '';
               
-              // Add the habit with frequency and created date info
-              allItems.push({
-                id: `habit-${habitName}-${fileIndex}`,
-                name: habitName,
-                path: file.path,
-                type: 'habit',
-                status: habitStatus,
-                due_date: undefined,
-                focus_date: focusDateTime, // Now includes the parsed focus time
-                projectName: undefined,
-                frequency: frequency,
-                createdDate: createdDate
-              });
+              // Parse habit fields
+              // First check if habit-status is a singleselect field (newer format)
+              let habitStatus: 'completed' | 'todo' = 'todo';
+              const singleSelectStatus = parseSingleSelectField(content, 'habit-status');
+              if (singleSelectStatus) {
+                // Normalize singleselect values to 'completed' or 'todo'
+                // Accept both 'complete' and 'completed' for backward compatibility
+                habitStatus = (singleSelectStatus.toLowerCase() === 'complete' || singleSelectStatus.toLowerCase() === 'completed') ? 'completed' : 'todo';
+              } else {
+                // Fall back to checkbox field (older format)
+                habitStatus = parseCheckboxField(content, 'habit-status') ? 'completed' : 'todo';
+              }
+              const frequency = parseSingleSelectField(content, 'habit-frequency') || 'daily';
+              
+              // Parse focus date for the habit (can include time)
+              const focusDate = parseDateTimeField(content, 'focus_date');
+              
+              // Parse created date using the existing DateTime parser
+              let createdDateTime: string | undefined;
+              const createdDateTimeRaw = parseDateTimeField(content, 'created_date_time');
+              if (createdDateTimeRaw) {
+                // Parse and normalize to ISO format
+                try {
+                  let parsed: Date;
+                  
+                  // Check if it's a numeric timestamp
+                  const timestamp = Number(createdDateTimeRaw);
+                  if (!isNaN(timestamp) && /^\d+$/.test(createdDateTimeRaw)) {
+                    // Only treat as timestamp if it's exactly 10 or 13 digits
+                    const digitCount = createdDateTimeRaw.length;
+                    if (digitCount === 10) {
+                      // Unix timestamp in seconds
+                      parsed = new Date(timestamp * 1000);
+                    } else if (digitCount === 13) {
+                      // Unix timestamp in milliseconds
+                      parsed = new Date(timestamp);
+                    } else {
+                      // Not a standard timestamp format, parse as date string
+                      parsed = new Date(createdDateTimeRaw);
+                    }
+                  } else {
+                    // Parse as date string
+                    parsed = new Date(createdDateTimeRaw);
+                  }
+                    
+                  if (!isNaN(parsed.getTime())) {
+                    createdDateTime = parsed.toISOString();
+                  } else {
+                    // Invalid date - log warning and use file.last_modified
+                    console.warn(`[CalendarData] Invalid created_date_time value in habit "${habitName}": "${createdDateTimeRaw}" - using file.last_modified`);
+                    const fallback = fileLastModifiedToISO(file.last_modified, habitName);
+                    if (fallback) {
+                      createdDateTime = fallback;
+                    }
+                  }
+                } catch (error) {
+                  // Parsing threw an error - use file.last_modified
+                  console.warn(`[CalendarData] Failed to parse created_date_time in habit "${habitName}": "${createdDateTimeRaw}" - ${error} - using file.last_modified`);
+                  const fallback = fileLastModifiedToISO(file.last_modified, habitName);
+                  if (fallback) {
+                    createdDateTime = fallback;
+                  }
+                }
+              } else {
+                // Try to parse from ## Created header as fallback
+                const createdHeaderMatch = content.match(/##\s*Created\s*\r?\n\s*(\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)?)/i);
+                if (createdHeaderMatch && createdHeaderMatch[1]) {
+                  try {
+                    const dateStr = createdHeaderMatch[1].trim();
+                    
+                    // Parse date components explicitly for cross-browser consistency
+                    // Format: YYYY-MM-DD [HH:MM [AM/PM]]
+                    const dateTimeRegex = /^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{1,2}):(\d{2})(?:\s*(AM|PM))?)?$/i;
+                    const match = dateStr.match(dateTimeRegex);
+                    
+                    if (!match) {
+                      throw new Error('Invalid date format');
+                    }
+                    
+                    const year = parseInt(match[1], 10);
+                    const month = parseInt(match[2], 10);
+                    const day = parseInt(match[3], 10);
+                    let hour = match[4] ? parseInt(match[4], 10) : 0;
+                    const minute = match[5] ? parseInt(match[5], 10) : 0;
+                    const meridiem = match[6]?.toUpperCase();
+                    
+                    // Validate ranges
+                    if (year < 1900 || year > 2100 || 
+                        month < 1 || month > 12 || 
+                        day < 1 || day > 31 ||
+                        hour < 0 || hour > 23 ||
+                        minute < 0 || minute > 59) {
+                      throw new Error('Invalid date components');
+                    }
+                    
+                    // Convert 12-hour to 24-hour format if AM/PM is present
+                    if (meridiem) {
+                      if (hour < 1 || hour > 12) {
+                        throw new Error('Invalid hour for 12-hour format');
+                      }
+                      if (meridiem === 'PM' && hour !== 12) {
+                        hour += 12;
+                      } else if (meridiem === 'AM' && hour === 12) {
+                        hour = 0;
+                      }
+                    }
+                    
+                    // Create date using UTC to ensure consistency
+                    const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+                    if (isNaN(utcDate.getTime())) {
+                      throw new Error('Invalid date');
+                    }
+                    
+                    createdDateTime = utcDate.toISOString();
+                  } catch {
+                    // If parsing fails, use file.last_modified
+                    const fallback = fileLastModifiedToISO(file.last_modified, habitName);
+                    if (fallback) {
+                      createdDateTime = fallback;
+                    }
+                  }
+                } else {
+                  // No created date found in content, use file.last_modified
+                  const fallback = fileLastModifiedToISO(file.last_modified, habitName);
+                  if (fallback) {
+                    createdDateTime = fallback;
+                  }
+                }
+              }
+
+              
+              // Only add habits if we have a valid createdDateTime
+              if (createdDateTime) {
+                allItems.push({
+                  id: `habit-${habitName}-${fileIndex}`,
+                  name: habitName,
+                  path: file.path,
+                  type: 'habit',
+                  status: habitStatus,
+                  dueDate: undefined,
+                  focusDate: focusDate, // Can include time if specified
+                  projectName: undefined,
+                  frequency: frequency,
+                  createdDateTime: createdDateTime
+                });
+              }
             } catch (err) {
               console.error(`[CalendarData] Failed to read habit ${file.path}:`, err);
             }
@@ -281,7 +451,7 @@ export const useCalendarData = (
       if (gtdSpace?.projects) {
         let gtdProjectIndex = 0;
         for (const project of gtdSpace.projects) {
-          if (project.due_date && !allItems.some(item => 
+          if (project.dueDate && !allItems.some(item => 
             item.type === 'project' && item.name === project.name
           )) {
             console.log(`[CalendarData] Adding project from gtdSpace: ${project.name}`);
@@ -290,9 +460,9 @@ export const useCalendarData = (
               name: project.name,
               path: project.path,
               type: 'project',
-              status: project.status?.[0] || 'in-progress',
-              due_date: project.due_date,
-              focus_date: undefined,
+              status: project.status || 'in-progress',
+              dueDate: project.dueDate,
+              focusDate: undefined,
               projectName: undefined
             });
             gtdProjectIndex++;
@@ -311,9 +481,9 @@ export const useCalendarData = (
           type: 'google-event',
           source: 'google',
           status: 'confirmed',
-          due_date: event.end || event.start, // Use end time, fallback to start
-          focus_date: event.start,
-          end_date: event.end, // Add end_date for duration calculation
+          dueDate: event.end || event.start, // Use end time, fallback to start
+          focusDate: event.start,
+          endDate: event.end, // Add end_date for duration calculation
           googleEventId: event.id,
           attendees: event.attendees,
           location: event.location,
@@ -326,8 +496,8 @@ export const useCalendarData = (
           ts: new Date().toISOString(),
           event: 'add_google_event',
           name: calendarItem.name,
-          focus_date: calendarItem.focus_date,
-          end_date: calendarItem.end_date,
+          focusDate: calendarItem.focusDate,
+          endDate: calendarItem.endDate,
           source: 'CalendarData'
         });
         allItems.push(calendarItem);

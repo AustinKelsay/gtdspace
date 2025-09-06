@@ -1,93 +1,95 @@
 /**
  * @fileoverview Hook for inserting multiselect fields in BlockNote
+ * Note: Status, Effort, and Project Status now use SingleSelectBlock
+ * This hook is for fields that support multiple values (tags, contexts, etc.)
  * @author Development Team
  * @created 2025-01-XX
  */
 
-import { useEffect } from 'react';
+import { useCallback } from 'react';
+import { useHotkeys } from 'react-hotkeys-hook';
 import { createMultiSelectBlock } from '@/utils/multiselect-block-helpers';
 
 // Using any type for editor due to complex type constraints with custom schema
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useMultiSelectInsertion(editor: any) {
-  useEffect(() => {
-    if (!editor) return;
+  const handleInsertContext = useCallback(
+    (event: KeyboardEvent) => {
+      if (!editor) {
+        return;
+      }
 
-    // Add keyboard shortcuts for multiselect fields
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Check if we're in the editor
+      // Check if we're in the editor.
       const isInEditor = document.activeElement?.closest('.bn-editor');
-      if (!isInEditor) return;
-
-      // Use Cmd key on Mac, Ctrl on other platforms
-      const isMac = navigator.platform.toLowerCase().includes('mac');
-      const modKey = isMac ? e.metaKey : e.ctrlKey;
-
-      // Cmd+Shift+S (Mac) or Ctrl+Shift+S (Windows/Linux) for Status field
-      if (modKey && e.shiftKey && e.key === 's') {
-        e.preventDefault();
-        const block = createMultiSelectBlock('status', 'Status', ['not-started']);
-        const currentBlock = editor.getTextCursorPosition().block;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        editor.insertBlocks([block as any], currentBlock, 'after');
+      if (!isInEditor) {
+        return;
       }
 
-      // Cmd+Shift+E (Mac) or Ctrl+Shift+E (Windows/Linux) for Effort field
-      if (modKey && e.shiftKey && e.key === 'e') {
-        e.preventDefault();
-        const block = createMultiSelectBlock('effort', 'Effort', ['medium']);
-        const currentBlock = editor.getTextCursorPosition().block;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        editor.insertBlocks([block as any], currentBlock, 'after');
+      // Prevent default browser behavior
+      event.preventDefault();
+
+      const block = createMultiSelectBlock('contexts', 'Contexts', []);
+      // Safely resolve current block from cursor position with fallbacks
+      let cursorPos: unknown;
+      try {
+        cursorPos = editor.getTextCursorPosition?.();
+      } catch {
+        cursorPos = undefined;
       }
 
-      // Cmd+Shift+P (Mac) or Ctrl+Shift+P (Windows/Linux) for Project Status field
-      if (modKey && e.shiftKey && e.key === 'p') {
-        e.preventDefault();
-        const block = createMultiSelectBlock('project-status', 'Project Status', ['active']);
-        const currentBlock = editor.getTextCursorPosition().block;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        editor.insertBlocks([block as any], currentBlock, 'after');
-      }
+      // Prefer the cursor block, then root block, then last document block
+      const currentBlock = (cursorPos as { block?: unknown } | undefined)?.block
+        ?? editor.getRootBlock?.()
+        ?? editor.document?.[editor.document.length - 1]
+        ?? undefined;
 
-      // Cmd+Shift+C (Mac) or Ctrl+Shift+C (Windows/Linux) for Contexts field
-      if (modKey && e.shiftKey && e.key === 'c') {
-        e.preventDefault();
-        const block = createMultiSelectBlock('contexts', 'Contexts', []);
-        const currentBlock = editor.getTextCursorPosition().block;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        editor.insertBlocks([block as any], currentBlock, 'after');
-      }
-    };
+      if (!currentBlock) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      editor.insertBlocks([block as any], currentBlock, 'after');
+    },
+    [editor],
+  );
 
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
+  useHotkeys('mod+shift+c', handleInsertContext, {
+    enableOnContentEditable: true,
+    enableOnFormTags: true,
   }, [editor]);
 
   // Function to manually insert multiselect blocks
-  const insertMultiSelect = (type: 'status' | 'effort' | 'project-status' | 'contexts') => {
+  const insertMultiSelect = (type: 'contexts' | 'tags' | 'categories') => {
     if (!editor) return;
 
     let block;
     switch (type) {
-      case 'status':
-        block = createMultiSelectBlock('status', 'Status', ['not-started']);
-        break;
-      case 'effort':
-        block = createMultiSelectBlock('effort', 'Effort', ['medium']);
-        break;
-      case 'project-status':
-        block = createMultiSelectBlock('project-status', 'Project Status', ['active']);
-        break;
       case 'contexts':
         block = createMultiSelectBlock('contexts', 'Contexts', []);
         break;
+      case 'tags':
+        block = createMultiSelectBlock('tags', 'Tags', []);
+        break;
+      case 'categories':
+        block = createMultiSelectBlock('categories', 'Categories', []);
+        break;
+      default:
+        console.warn(`MultiSelect: Type '${type}' is not supported. Use SingleSelectBlock for status/effort/project-status.`);
+        return;
     }
 
-    const currentBlock = editor.getTextCursorPosition().block;
+    // Safely resolve current block from cursor position with fallbacks
+    let cursorPos: unknown;
+    try {
+      cursorPos = editor.getTextCursorPosition?.();
+    } catch {
+      cursorPos = undefined;
+    }
+
+    // Prefer the cursor block, then root block, then last document block
+    const currentBlock = (cursorPos as { block?: unknown } | undefined)?.block
+      ?? editor.getRootBlock?.()
+      ?? editor.document?.[editor.document.length - 1]
+      ?? undefined;
+
+    if (!currentBlock) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     editor.insertBlocks([block as any], currentBlock, 'after');
   };

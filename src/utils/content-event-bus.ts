@@ -28,6 +28,8 @@ class ContentEventBus {
   private listeners: Map<ContentEventType, Set<EventCallback>> = new Map();
   private fileMetadataCache: Map<string, FileMetadata> = new Map();
   private isEmitting = false;
+  private pendingCascades = new Map<string, boolean>(); // Track pending cascades per file
+  private recentEvents = new Map<string, number>(); // Track recent events to prevent cascading
 
   /**
    * Subscribe to content events
@@ -46,7 +48,7 @@ class ContentEventBus {
   }
 
   /**
-   * Emit a content event
+   * Emit a content event with cascade prevention
    */
   emit(eventType: ContentEventType, event: ContentChangeEvent): void {
     // Prevent recursive emissions
@@ -54,9 +56,35 @@ class ContentEventBus {
       return;
     }
     
-    // Store metadata in cache
-    if (event.metadata) {
-      this.fileMetadataCache.set(event.filePath, event.metadata);
+    const now = Date.now();
+    
+    // Store metadata in cache (skip on deletions and clone defensively)
+    if (event.metadata && eventType !== 'file:deleted') {
+      let clonedMetadata: FileMetadata;
+      try {
+        if (typeof structuredClone !== 'undefined') {
+          clonedMetadata = structuredClone(event.metadata);
+        } else {
+          // Fallback deep clone
+          clonedMetadata = JSON.parse(JSON.stringify(event.metadata)) as FileMetadata;
+        }
+      } catch {
+        // Safety fallback
+        clonedMetadata = JSON.parse(JSON.stringify(event.metadata)) as FileMetadata;
+      }
+      this.fileMetadataCache.set(event.filePath, clonedMetadata);
+    }
+    
+    // Apply deduplication early for content:changed events (before notifying listeners)
+    if (eventType === 'content:changed') {
+      const eventKey = `${eventType}:${event.filePath}`;
+      const lastEmissionTime = this.recentEvents.get(eventKey);
+      if (lastEmissionTime && (now - lastEmissionTime) < 100) {
+        // Skip emission if we've emitted the same event within 100ms
+        return;
+      }
+      // Store this emission time immediately to gate rapid cascades
+      this.recentEvents.set(eventKey, now);
     }
     
     const wasEmitting = this.isEmitting;
@@ -74,9 +102,39 @@ class ContentEventBus {
       });
     }
     
+    // Clean up old entries (older than 1 second)
+    for (const [key, time] of this.recentEvents.entries()) {
+      if (now - time > 1000) {
+        this.recentEvents.delete(key);
+      }
+    }
+    
     // Also emit to general content:changed for any content change
+    // Track pending cascades per file to avoid dropping concurrent events
     if (eventType !== 'content:changed' && eventType.startsWith('content:')) {
-      this.emit('content:changed', event);
+      const cascadeKey = `content:changed:${event.filePath}`;
+      if (!this.pendingCascades.get(cascadeKey)) {
+        this.pendingCascades.set(cascadeKey, true);
+        // Create an immutable snapshot of the event to prevent mutation
+        let eventSnapshot: ContentChangeEvent;
+        try {
+          // Try structuredClone first (most efficient for deep cloning)
+          if (typeof structuredClone !== 'undefined') {
+            eventSnapshot = structuredClone(event);
+          } else {
+            // Fallback to shallow copy to preserve types
+            eventSnapshot = { ...event };
+          }
+        } catch {
+          // If structuredClone throws, use shallow copy
+          eventSnapshot = { ...event };
+        }
+        // Use queueMicrotask for minimal delay while ensuring async execution
+        queueMicrotask(() => {
+          this.emit('content:changed', eventSnapshot);
+          this.pendingCascades.delete(cascadeKey);
+        });
+      }
     }
     
     this.isEmitting = wasEmitting;

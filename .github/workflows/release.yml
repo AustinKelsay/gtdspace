@@ -84,6 +84,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push tags
+        if: startsWith(github.ref, 'refs/heads/') && github.event_name == 'workflow_dispatch'
         run: |
           # Only push tags that point at HEAD
           tags_at_head=$(git tag --points-at HEAD)

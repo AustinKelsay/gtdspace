@@ -10,7 +10,7 @@ import { PropSchema } from '@blocknote/core';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import debounce from 'lodash.debounce';
 import {
   CheckCircle2,
@@ -135,10 +135,10 @@ function HabitsListBlockComponent(incomingProps: unknown) {
       setError(null);
 
       const spacePath = localStorage.getItem('gtdspace-current-path') || '';
-      const result = await invoke<HabitItem[]>('find_habits_referencing', {
+      const result = await safeInvoke<HabitItem[]>('find_habits_referencing', {
         targetPath: currentPath,
         spacePath: spacePath,
-      });
+      }, []);
 
       setHabits(result || []);
     } catch (err) {
@@ -165,9 +165,23 @@ function HabitsListBlockComponent(incomingProps: unknown) {
   // Function to open a habit file
   const openHabit = async (habitPath: string) => {
     try {
+      // Defensive check: if path looks like a JSON array, parse it
+      let finalPath = habitPath;
+      if (habitPath.startsWith('[') && habitPath.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(habitPath);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            finalPath = parsed[0];
+            console.warn('[HabitsListBlock] Path was JSON array, extracted first element:', finalPath);
+          }
+        } catch {
+          // Not valid JSON, use as-is
+        }
+      }
+      
       // Dispatch event to open file
       const event = new CustomEvent('open-reference-file', {
-        detail: { path: habitPath }
+        detail: { path: finalPath }
       });
       window.dispatchEvent(event);
     } catch (err) {
@@ -238,7 +252,7 @@ function HabitsListBlockComponent(incomingProps: unknown) {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        {habit.status === 'complete' ? (
+                        {habit.status === 'completed' ? (
                           <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
                         ) : (
                           <Circle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />

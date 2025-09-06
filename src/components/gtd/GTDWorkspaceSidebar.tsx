@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { flushSync } from 'react-dom';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import { readFileText } from '@/hooks/useFileManager';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -239,9 +239,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         return sectionFiles[sectionPath] || [];
       }
       loadingSectionsRef.current.add(sectionPath);
-      const files = await invoke<MarkdownFile[]>('list_markdown_files', {
+      const files = await safeInvoke<MarkdownFile[]>('list_markdown_files', {
         path: sectionPath
-      });
+      }, []);
 
       // Sort files alphabetically by default
       const sortedFiles = files.sort((a, b) => {
@@ -292,9 +292,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       // Use dedicated backend command to list actions only
       let files: MarkdownFile[] = [];
       try {
-        files = await invoke<MarkdownFile[]>('list_project_actions', { projectPath });
+        files = await safeInvoke<MarkdownFile[]>('list_project_actions', { projectPath }, []);
       } catch (e) {
-        const all = await invoke<MarkdownFile[]>('list_markdown_files', { path: projectPath });
+        const all = await safeInvoke<MarkdownFile[]>('list_markdown_files', { path: projectPath }, []);
         files = all.filter(f => f.name !== 'README.md');
       }
 
@@ -538,10 +538,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           if (currentProjectName && currentProjectName !== newTitle) {
 
             // Call rename synchronously to avoid issues with async event handlers
-            invoke<string>('rename_gtd_project', {
+            safeInvoke<string>('rename_gtd_project', {
               oldProjectPath: projectPath,
               newProjectName: newTitle
-            })
+            }, null)
               .then(async (newProjectPath) => {
 
                 // Only update UI after successful rename
@@ -641,10 +641,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           if (currentActionName && currentActionName !== newTitle) {
 
             // Call rename_gtd_action command
-            invoke<string>('rename_gtd_action', {
+            safeInvoke<string>('rename_gtd_action', {
               oldActionPath: filePath,
               newActionName: newTitle
-            })
+            }, null)
               .then(async (newActionPath) => {
 
                 // Update local state with new path
@@ -706,10 +706,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             if (currentFileName && currentFileName !== newTitle) {
 
               // Call rename_gtd_action command (works for any markdown file)
-              invoke<string>('rename_gtd_action', {
+              safeInvoke<string>('rename_gtd_action', {
                 oldActionPath: filePath,
                 newActionName: newTitle
-              })
+              }, null)
                 .then(async (newFilePath) => {
 
                   // Update local state with new path
@@ -999,7 +999,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
   const handleSelectFolder = async () => {
     try {
-      const folderPath = await invoke<string>('select_folder');
+      const folderPath = await safeInvoke<string>('select_folder', undefined, null);
+      if (!folderPath) {
+        throw new Error('No folder selected');
+      }
       onFolderSelect(folderPath);
     } catch (error) {
       // Silently handle folder selection errors (user cancelled)
@@ -1012,7 +1015,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     try {
       if (deleteItem.type === 'project') {
         // For projects, we need to delete the entire folder
-        const result = await invoke<{ success: boolean; path?: string | null; message?: string | null }>('delete_folder', { path: deleteItem.path });
+        const result = await safeInvoke<{ success: boolean; path?: string | null; message?: string | null }>('delete_folder', { path: deleteItem.path }, { success: false, message: 'Failed to delete folder' });
 
         if (!result || !result.success) {
           alert(`Failed to delete project: ${result?.message || 'Unknown error'}`);
@@ -1044,7 +1047,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
         try {
           // Add a timeout to the invoke call
-          const deletePromise = invoke<{ success: boolean; path?: string | null; message?: string | null }>('delete_file', { path: deleteItem.path });
+          const deletePromise = safeInvoke<{ success: boolean; path?: string | null; message?: string | null }>('delete_file', { path: deleteItem.path }, { success: false, message: 'Failed to delete file' });
 
           // Create a timeout promise
           const timeoutPromise = new Promise((_, reject) => {
@@ -1130,7 +1133,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     if (!currentFolder) return;
 
     try {
-      await invoke('open_folder_in_explorer', { path: currentFolder });
+      await safeInvoke('open_folder_in_explorer', { path: currentFolder }, null);
     } catch (error) {
       // Silently handle explorer open errors
     }
@@ -1542,7 +1545,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                             onClick={async (e) => {
                                               e.stopPropagation();
                                               try {
-                                                await invoke('open_file_location', { file_path: project.path });
+                                                await safeInvoke('open_file_location', { file_path: project.path }, null);
                                               } catch (error) {
                                                 // Silently handle file location open errors
                                               }
@@ -1632,7 +1635,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                       onClick={async (e) => {
                                                         e.stopPropagation();
                                                         try {
-                                                          await invoke('open_file_location', { file_path: currentPath });
+                                                          await safeInvoke('open_file_location', { file_path: currentPath }, null);
                                                         } catch (error) {
                                                           // Silently handle file location open errors
                                                         }
@@ -1790,7 +1793,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                       onClick={async (e) => {
                                         e.stopPropagation();
                                         try {
-                                          await invoke('open_file_location', { file_path: currentPath });
+                                          await safeInvoke('open_file_location', { file_path: currentPath }, null);
                                         } catch (error) {
                                           // Silently handle file location open errors
                                         }
@@ -1962,9 +1965,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             // Sync with actual files from disk after a short delay
             setTimeout(async () => {
               try {
-                const _files = await invoke<MarkdownFile[]>('list_markdown_files', {
+                const _files = await safeInvoke<MarkdownFile[]>('list_markdown_files', {
                   path: habitsPath
-                });
+                }, []);
                 setSectionFiles(prev => ({
                   ...prev,
                   [habitsPath]: _files

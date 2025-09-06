@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -29,52 +29,80 @@ export const GoogleCalendarSettings: React.FC = () => {
     checkAuthStatus();
   }, []);
 
-  const checkAuthStatus = async () => {
+  /**
+   * Checks whether the user is authenticated with Google Calendar.
+   * Updates the local sync status when authenticated and returns a boolean result.
+   */
+  const checkAuthStatus = async (): Promise<boolean> => {
     try {
-      const isAuthenticated = await invoke<boolean>('google_calendar_is_authenticated');
+      const isAuthenticated = await safeInvoke<boolean>('google_calendar_is_authenticated', undefined, false);
       console.log('[GoogleCalendarSettings] Authentication status:', isAuthenticated);
 
       if (isAuthenticated) {
-        // Load last sync time from localStorage
         const lastSync = localStorage.getItem('google-calendar-last-sync');
-
         setSyncStatus({
           isConnected: true,
           lastSync: lastSync,
           syncInProgress: false,
           error: null
         });
+        return true;
       }
+      return false;
     } catch (error) {
       console.error('[GoogleCalendarSettings] Failed to check auth status:', error);
+      return false;
     }
   };
 
 
+  /**
+   * Initiates the OAuth flow. Marks progress, then verifies auth via checkAuthStatus.
+   * Only sets connected when verification succeeds; otherwise clears progress and sets error.
+   */
   const handleConnect = async () => {
     console.log('[GoogleCalendarSettings] Starting connection process...');
 
     setIsConnecting(true);
     try {
       console.log('[GoogleCalendarSettings] Invoking google_calendar_start_auth command...');
-      const result = await invoke<string>('google_calendar_start_auth');
+      const result = await safeInvoke<string>('google_calendar_start_auth', undefined, null);
+      if (!result) {
+        throw new Error('Failed to start authentication');
+      }
       console.log('[GoogleCalendarSettings] Auth started:', result);
 
-      // Mark as connected in the UI
-      setSyncStatus({
-        isConnected: true,
+      // Indicate auth is in progress via sync status until verified
+      setSyncStatus(prev => prev ? {
+        ...prev,
+        syncInProgress: true,
+        error: null
+      } : {
+        isConnected: false,
         lastSync: null,
-        syncInProgress: false,
+        syncInProgress: true,
         error: null
       });
 
-      toast({
-        title: 'Google Calendar Connected',
-        description: result,
-      });
-
-      // Reload auth status after successful connection
-      await checkAuthStatus();
+      // Verify authentication status before marking connected
+      const authenticated = await checkAuthStatus();
+      if (authenticated) {
+        toast({
+          title: 'Google Calendar Connected',
+          description: result,
+        });
+      } else {
+        setSyncStatus(prev => prev ? {
+          ...prev,
+          syncInProgress: false,
+          error: 'Authorization not completed. Please finish signing in via your browser.'
+        } : {
+          isConnected: false,
+          lastSync: null,
+          syncInProgress: false,
+          error: 'Authorization not completed. Please finish signing in via your browser.'
+        });
+      }
     } catch (error) {
       console.error('[GoogleCalendarSettings] Connection failed:', error);
 
@@ -115,7 +143,7 @@ export const GoogleCalendarSettings: React.FC = () => {
 
   const handleDisconnect = async () => {
     try {
-      await invoke('google_calendar_disconnect_simple');
+      await safeInvoke('google_calendar_disconnect_simple', undefined, null);
 
       // Clear local state
       setSyncStatus({
@@ -144,7 +172,7 @@ export const GoogleCalendarSettings: React.FC = () => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const events = await invoke('google_calendar_fetch_events');
+      const events = await safeInvoke('google_calendar_fetch_events', undefined, null);
       console.log('[GoogleCalendarSettings] Fetched events:', events);
 
       // Store events in localStorage for now (until we have proper state management)

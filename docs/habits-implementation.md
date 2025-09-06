@@ -48,7 +48,7 @@ When a habit references a Project or Horizon item:
 
 **Examples**:
 - **Daily habit in New York**: Resets at 12:00 AM EST/EDT
-- **Weekly habit during DST change**: Still resets exactly 7 days later at local midnight
+- **Weekly habit during DST change**: Still resets exactly 7 days later at the same local time
 - **Monthly habit**: Jan 15 3:00 PM → Feb 15 3:00 PM (same local time)
 
 ### Automatic Tracking

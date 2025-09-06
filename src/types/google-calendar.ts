@@ -44,14 +44,16 @@ export function mapGoogleCalendarSyncStatus(status: GoogleCalendarSyncStatus): S
 }
 
 // GTD task/project statuses
-export type GtdTaskStatus = 
+export type GtdTaskStatus =
   | 'in-progress'
   | 'completed'
-  | 'todo'
   | 'waiting';
 
+// Habit statuses
+export type HabitStatus = 'todo' | 'completed';
+
 // Google Calendar event statuses
-export type GoogleEventStatus = 
+export type GoogleEventStatus =
   | 'confirmed'
   | 'tentative'
   | 'cancelled';

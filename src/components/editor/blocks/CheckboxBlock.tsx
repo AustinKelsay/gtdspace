@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { emitMetadataChange } from '@/utils/content-event-bus';
 import { useFilePath } from '../FilePathContext';
-import { checkTauriContextAsync } from '@/utils/tauri-ready';
+import { safeInvoke } from '@/utils/safe-invoke';
 import { toast } from '@/hooks/use-toast';
 
 // Memoized renderer component for checkbox blocks
@@ -100,58 +100,28 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
           const result = await withErrorHandling(
             async () => {
               // Convert checkbox state to status values for backend
-              const statusValue = checkedVal ? 'complete' : 'todo';
+              const statusValue = checkedVal ? 'completed' : 'todo';
 
-              // Gracefully bail out if not in Tauri/browser-only envs
-              try {
-                const inTauriContext = await checkTauriContextAsync();
-                if (!inTauriContext) {
-                  console.warn('[CheckboxBlock] Not in Tauri context; reverting UI/doc and skipping backend update');
-                  setLocalChecked(prevChecked);
-                  try { 
-                    const targetBlock = findBlockInDocument(block.id);
-                    if (targetBlock) {
-                      props.editor.updateBlock(targetBlock, { props: { checked: prevChecked } });
-                    }
-                  } catch { /* ignore error */ }
-                  return null; // signal "not applied"
-                }
+              // Use safeInvoke which handles non-Tauri environments gracefully
+              const invokeResult = await safeInvoke('update_habit_status', {
+                habitPath: filePath,
+                newStatus: statusValue,
+              }, null);
 
-                const core = await import('@tauri-apps/api/core');
-                const invoke = (core as unknown as { invoke?: unknown }).invoke as
-                  | ((cmd: string, args: unknown) => Promise<unknown>)
-                  | undefined;
-
-                if (typeof invoke !== 'function') {
-                  console.warn('[CheckboxBlock] Tauri invoke unavailable; reverting UI/doc and skipping backend update');
-                  setLocalChecked(prevChecked);
-                  try { 
-                    const targetBlock = findBlockInDocument(block.id);
-                    if (targetBlock) {
-                      props.editor.updateBlock(targetBlock, { props: { checked: prevChecked } });
-                    }
-                  } catch { /* ignore error */ }
-                  return null;
-                }
-
-                
-                await invoke('update_habit_status', {
-                  habitPath: filePath,
-                  newStatus: statusValue,
-                });
-
-                return { statusValue };
-              } catch (e) {
-                console.warn('[CheckboxBlock] Failed to call backend; reverting UI/doc and skipping update', e);
+              if (invokeResult === null) {
+                // Not in Tauri context or invoke failed - revert changes
+                console.warn('[CheckboxBlock] Failed to update habit status; reverting UI/doc');
                 setLocalChecked(prevChecked);
                 try { 
-              const targetBlock = findBlockInDocument(block.id);
-              if (targetBlock) {
-                props.editor.updateBlock(targetBlock, { props: { checked: prevChecked } });
-              }
-            } catch { /* ignore error */ }
+                  const targetBlock = findBlockInDocument(block.id);
+                  if (targetBlock) {
+                    props.editor.updateBlock(targetBlock, { props: { checked: prevChecked } });
+                  }
+                } catch { /* ignore error */ }
                 return null;
               }
+
+              return { statusValue };
             },
             'Failed to update habit status'
           );

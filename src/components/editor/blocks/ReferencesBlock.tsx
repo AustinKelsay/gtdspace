@@ -88,11 +88,17 @@ export const ReferencesBlock = createReactBlockSpec(
       if (tag !== 'P') return undefined;
 
       // 3) Parse only if the exact marker exists; otherwise return undefined
-      const textContent = element.textContent || '';
-      const match = textContent.match(/\[!references:([^\]]*)\]/);
-      if (!match) return undefined;
-
-      return { references: match[1] || '' };
+      const text = element.textContent || '';
+      const prefix = '[!references:';
+      const start = text.indexOf(prefix);
+      const end = text.lastIndexOf(']');
+      if (start === -1 || end <= start + prefix.length) return undefined;
+      const raw = text.slice(start + prefix.length, end);
+      try {
+        return { references: decodeURIComponent(raw) };
+      } catch {
+        return { references: raw };
+      }
     },
   }
 );
@@ -118,7 +124,7 @@ const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(prop
   const [isLoading, setIsLoading] = React.useState(false);
 
   const parsedReferences = React.useMemo(() =>
-    references ? references.split(',').filter(Boolean) : [],
+    references ? references.split(',').map(s => s.trim()).filter(Boolean) : [],
     [references]
   );
 
@@ -256,7 +262,21 @@ const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(prop
   };
 
   const handleReferenceClick = (path: string) => {
-    window.dispatchEvent(new CustomEvent('open-reference-file', { detail: { path } }));
+    // Defensive check: if path looks like a JSON array, parse it
+    let finalPath = path;
+    if (path.startsWith('[') && path.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(path);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          finalPath = parsed[0];
+          console.warn('[ReferencesBlock] Path was JSON array, extracted first element:', finalPath);
+        }
+      } catch {
+        // Not valid JSON, use as-is
+      }
+    }
+    
+    window.dispatchEvent(new CustomEvent('open-reference-file', { detail: { path: finalPath } }));
   };
 
   const getReferenceInfo = React.useCallback((path: string): { name: string; type: 'cabinet' | 'someday' } => {

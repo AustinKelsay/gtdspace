@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import {
   Plus,
   X,
@@ -97,13 +97,15 @@ function parseHorizonMarker(element: Element, marker: 'projects' | 'areas' | 'go
   const tag = (element.tagName || '').toUpperCase();
   if (tag !== 'P') return undefined;
   const text = element.textContent || '';
-  const regex = new RegExp(`\\[!${marker}-references:([^\\]]*)\\]`);
-  const match = text.match(regex);
-  if (!match) return undefined;
+  const prefix = `[!${marker}-references:`;
+  const start = text.indexOf(prefix);
+  const end = text.lastIndexOf(']');
+  if (start === -1 || end <= start + prefix.length) return undefined;
+  const raw = text.slice(start + prefix.length, end);
   try {
-    return { references: decodeURIComponent(match[1] || '') };
+    return { references: decodeURIComponent(raw) };
   } catch {
-    return { references: match[1] || '' };
+    return { references: raw };
   }
 }
 
@@ -334,19 +336,28 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
         try {
           if (horizon === 'projects') {
             // For projects, we need to list project folders
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const projects = await invoke<any[]>('list_gtd_projects', { spacePath });
+            const projects = await safeInvoke<{ name: string; description: string; due_date?: string | null }[]>('list_gtd_projects', { spacePath }, []);
             if (projects) {
-              const projectFiles = projects.map(p => ({
-                path: p.path,
-                name: p.name,
-                horizon: 'projects' as const
-              }));
-              allFiles.push(...projectFiles);
+              const projectsBasePath = safeJoinWithinBase(spacePath, HORIZON_DIRS.projects);
+              if (projectsBasePath) {
+                const projectFiles = projects.map(p => {
+                  const projectPath = safeJoinWithinBase(projectsBasePath, p.name);
+                  if (!projectPath) {
+                    console.warn(`[HorizonReferences] Could not construct safe path for project '${p.name}'`);
+                    return null;
+                  }
+                  return {
+                    path: projectPath,
+                    name: p.name,
+                    horizon: 'projects' as const
+                  };
+                }).filter((p): p is { path: string; name: string; horizon: 'projects' } => !!p);
+                allFiles.push(...projectFiles);
+              }
             }
           } else {
             // For other horizons, list .md files directly
-            const files = await invoke<MarkdownFile[]>('list_markdown_files', { path: horizonPath });
+            const files = await safeInvoke<MarkdownFile[]>('list_markdown_files', { path: horizonPath }, []);
             const horizonFiles = files
               .filter(f => !f.name.toLowerCase().includes('readme'))
               .map(f => ({
@@ -559,8 +570,22 @@ const HorizonReferencesRenderer = React.memo(function HorizonReferencesRenderer(
   }, [parsedReferences, block.id, horizonType, updateReferences]);
 
   const handleReferenceClick = React.useCallback((path: string) => {
+    // Defensive check: if path looks like a JSON array, parse it
+    let finalPath = path;
+    if (path.startsWith('[') && path.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(path);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          finalPath = parsed[0];
+          console.warn('[HorizonReferences] Path was JSON array, extracted first element:', finalPath);
+        }
+      } catch {
+        // Not valid JSON, use as-is
+      }
+    }
+    
     window.dispatchEvent(new CustomEvent('open-reference-file', {
-      detail: { path }
+      detail: { path: finalPath }
     }));
   }, []);
 

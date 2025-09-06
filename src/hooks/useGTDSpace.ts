@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import debounce from 'lodash.debounce';
 import { useErrorHandler } from './useErrorHandler';
 import { useToast } from './useToast';
@@ -48,7 +48,7 @@ export function useGTDSpace() {
             expectedDirs.map(async (dirName) => {
               try {
                 const dirPath = `${spacePath}/${dirName}`;
-                const result = await invoke<boolean>('check_directory_exists', { path: dirPath });
+                const result = await safeInvoke<boolean>('check_directory_exists', { path: dirPath }, false);
                 return { dirName, exists: result };
               } catch (error) {
                 return { dirName, exists: false };
@@ -95,7 +95,10 @@ export function useGTDSpace() {
       try {
         const result = await withErrorHandling(
           async () => {
-            const message = await invoke<string>('initialize_gtd_space', { spacePath });
+            const message = await safeInvoke<string>('initialize_gtd_space', { spacePath }, null);
+            if (!message) {
+              throw new Error('Failed to initialize GTD space');
+            }
             
             // Wait for directory structure to be fully created
             try {
@@ -144,13 +147,16 @@ export function useGTDSpace() {
       try {
         const result = await withErrorHandling(
           async () => {
-            const projectPath = await invoke<string>('create_gtd_project', {
+            const projectPath = await safeInvoke<string>('create_gtd_project', {
               spacePath: params.spacePath,
               projectName: params.projectName,
               description: params.description,
               dueDate: params.dueDate || undefined,
               status: params.status || 'in-progress',
-            });
+            }, null);
+            if (!projectPath) {
+              throw new Error('Failed to create project');
+            }
             
             // Create project object for state update
             const newProject: GTDProject = {
@@ -210,7 +216,7 @@ export function useGTDSpace() {
               ? params.contexts 
               : undefined;
             
-            const actionPath = await invoke<string>('create_gtd_action', {
+            const actionPath = await safeInvoke<string>('create_gtd_action', {
               projectPath: params.project_path,
               actionName: params.action_name,
               status: params.status,
@@ -218,7 +224,10 @@ export function useGTDSpace() {
               focusDate: params.focusDate || undefined,
               effort: params.effort,
               contexts: contextsArray,
-            });
+            }, null);
+            if (!actionPath) {
+              throw new Error('Failed to create action');
+            }
             
             return actionPath;
           },
@@ -275,7 +284,7 @@ export function useGTDSpace() {
             const requiredDirs = ['Projects', 'Habits', 'Someday Maybe', 'Cabinet'];
             for (const dir of requiredDirs) {
               try {
-                await invoke('list_markdown_files', { path: `${path}/${dir}` });
+                await safeInvoke('list_markdown_files', { path: `${path}/${dir}` }, []);
               } catch {
                 return false;
               }
@@ -315,9 +324,9 @@ export function useGTDSpace() {
       try {
         result = await withErrorHandling(
           async () => {
-            let projects = await invoke<GTDProject[]>('list_gtd_projects', {
+            let projects = await safeInvoke<GTDProject[]>('list_gtd_projects', {
               spacePath: spacePath,
-            });
+            }, []);
             
             // Apply migrations to ensure backward compatibility
             projects = migrateGTDObjects(projects);
@@ -441,7 +450,10 @@ export function useGTDSpace() {
 
     setIsInitializing(true);
     const result = await withErrorHandling(async () => {
-      const path = await invoke<string>('initialize_default_gtd_space');
+      const path = await safeInvoke<string>('initialize_default_gtd_space', undefined, null);
+      if (!path) {
+        throw new Error('Failed to initialize default GTD space');
+      }
       return path;
     }, 'Failed to initialize default GTD space', 'gtd');
     setIsInitializing(false);

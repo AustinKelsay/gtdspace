@@ -297,8 +297,7 @@ async function main() {
       if (flags.has('--dry-run')) {
         log('⚠ Dry run: Skipping git push commands.', 'yellow');
       } else {
-        execCommandFile('git', ['push', 'origin', 'HEAD']);
-        execCommandFile('git', ['push', 'origin', `refs/tags/${tagName}`]);
+        execCommandFile('git', ['push', '--follow-tags', 'origin', currentBranch]);
         log('✓ Pushed commits and tags to remote', 'green');
       }
     } finally {

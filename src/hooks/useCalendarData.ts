@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import type { GTDSpace, MarkdownFile } from '@/types';
 import { migrateMarkdownContent, needsMigration } from '@/utils/data-migration';
 
@@ -187,7 +187,7 @@ export const useCalendarData = (
           // Check if it's a project README (case-insensitive check)
           if (normalizedPathLower.includes('/projects/') && normalizedPathLower.endsWith('readme.md')) {
             try {
-              let content = await invoke<string>('read_file', { path: file.path });
+              let content = await safeInvoke<string>('read_file', { path: file.path }, '');
               
               // Apply migrations in-memory only (don't auto-save to avoid file churn)
               if (needsMigration(content)) {
@@ -231,7 +231,7 @@ export const useCalendarData = (
           // Check if it's an action file (in Projects but not README) - case-insensitive check
           if (normalizedPathLower.includes('/projects/') && !normalizedPathLower.includes('readme') && normalizedPathLower.endsWith('.md')) {
             try {
-              let content = await invoke<string>('read_file', { path: file.path });
+              let content = await safeInvoke<string>('read_file', { path: file.path }, '');
               
               // Apply migrations in-memory only (don't auto-save to avoid file churn)
               if (needsMigration(content)) {
@@ -284,7 +284,7 @@ export const useCalendarData = (
           // Check if it's a habit file - case-insensitive check
           if (normalizedPathLower.includes('/habits/') && normalizedPathLower.endsWith('.md')) {
             try {
-              let content = await invoke<string>('read_file', { path: file.path });
+              let content = await safeInvoke<string>('read_file', { path: file.path }, '');
               
               // Apply migrations in-memory only (don't auto-save to avoid file churn)
               if (needsMigration(content)) {

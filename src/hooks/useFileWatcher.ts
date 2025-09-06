@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useCallback, useState, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import { listen } from '@tauri-apps/api/event';
 // Memory leak prevention removed during simplification
 import type { FileChangeEvent } from '@/types';
@@ -88,7 +88,7 @@ export function useFileWatcher(): FileWatcherHookResult {
       
       // Stop the backend watcher
       if (state.isWatching) {
-        await invoke('stop_file_watcher');
+        await safeInvoke('stop_file_watcher', undefined, null);
       }
       
       setState(prev => ({
@@ -126,7 +126,7 @@ export function useFileWatcher(): FileWatcherHookResult {
       }));
       
       // Start the backend file watcher
-      await invoke('start_file_watcher', { folderPath });
+      await safeInvoke('start_file_watcher', { folderPath }, null);
       
       // Listen for file change events
       const unlisten = await listen<FileChangeEvent>('file-changed', (event) => {

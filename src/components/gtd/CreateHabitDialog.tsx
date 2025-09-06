@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import {
   Dialog,
   DialogContent,
@@ -27,7 +27,6 @@ import {
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useToast } from '@/hooks/useToast';
 import { RefreshCw, Clock } from 'lucide-react';
-import { checkTauriContextAsync } from '@/utils/tauri-ready';
 
 interface CreateHabitDialogProps {
   isOpen: boolean;
@@ -73,19 +72,16 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
 
     const result = await withErrorHandling(
       async () => {
-        // Guard invoke in non-Tauri contexts
-        const inTauri = await checkTauriContextAsync();
-        if (!inTauri) {
-          throw new Error('Tauri environment not detected. Creating habits requires the desktop app.');
-        }
-
-        const habitPath = await invoke<string>('create_gtd_habit', {
+        const habitPath = await safeInvoke<string>('create_gtd_habit', {
           spacePath: spacePath,
           habitName: habitName.trim(),
           frequency: frequency,
           status: 'todo', // Always start habits as 'todo'
           focusTime: focusTime.trim() || null, // Optional focus time
-        });
+        }, null);
+        if (!habitPath) {
+          throw new Error('Failed to create habit');
+        }
         return habitPath;
       },
       'Failed to create habit',

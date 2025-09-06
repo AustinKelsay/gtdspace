@@ -357,6 +357,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         const isCustomBlockType = (type: string): boolean => {
           return (
             type === 'references' ||
+            type === 'projects-references' ||
             type === 'areas-references' ||
             type === 'goals-references' ||
             type === 'vision-references' ||
@@ -387,6 +388,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
             const fullText = getParagraphPlainText(block).trim();
             const isMarker = (
               /^\[!references:[^\]]*\]$/.test(fullText) ||
+              /^\[!projects-references:[^\]]*\]$/.test(fullText) ||
               /^\[!areas-references:[^\]]*\]$/.test(fullText) ||
               /^\[!goals-references:[^\]]*\]$/.test(fullText) ||
               /^\[!vision-references:[^\]]*\]$/.test(fullText) ||

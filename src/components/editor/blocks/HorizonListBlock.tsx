@@ -10,7 +10,7 @@ import { PropSchema } from '@blocknote/core';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import debounce from 'lodash.debounce';
 import {
   List,
@@ -192,11 +192,11 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
       }
 
       // Call backend to find reverse relationships
-      const relationships = await invoke<ReverseRelationship[]>('find_reverse_relationships', {
+      const relationships = await safeInvoke<ReverseRelationship[]>('find_reverse_relationships', {
         targetPath: currentPath,
         spacePath: spacePath,
         filterType: listType
-      }).catch(error => {
+      }, []).catch(error => {
         console.error('HorizonList: Backend call failed:', error);
         return [];
       });
@@ -252,8 +252,22 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
   }, [debouncedLoadItems]);
 
   const handleItemClick = (path: string) => {
+    // Defensive check: if path looks like a JSON array, parse it
+    let finalPath = path;
+    if (path.startsWith('[') && path.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(path);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          finalPath = parsed[0];
+          console.warn('[HorizonListBlock] Path was JSON array, extracted first element:', finalPath);
+        }
+      } catch {
+        // Not valid JSON, use as-is
+      }
+    }
+    
     window.dispatchEvent(new CustomEvent('open-reference-file', {
-      detail: { path }
+      detail: { path: finalPath }
     }));
   };
 

@@ -2610,7 +2610,7 @@ pub fn find_habits_referencing(
 
                         // Extract status (checkbox value)
                         let status = if content.contains("[!checkbox:habit-status:true]") {
-                            "complete".to_string()
+                            "completed".to_string()
                         } else {
                             "todo".to_string()
                         };

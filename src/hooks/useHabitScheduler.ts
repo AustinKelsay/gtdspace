@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import { useErrorHandler } from './useErrorHandler';
 
 /**
@@ -28,9 +28,9 @@ export const useHabitScheduler = (spacePath: string | null, enabled: boolean = t
       const result = await withErrorHandling(
         async () => {
           try {
-            const resetHabits = await invoke<string[]>('check_and_reset_habits', {
+            const resetHabits = await safeInvoke<string[]>('check_and_reset_habits', {
               spacePath: spacePath,
-            });
+            }, []);
             
             if (resetHabits && resetHabits.length > 0) {
               

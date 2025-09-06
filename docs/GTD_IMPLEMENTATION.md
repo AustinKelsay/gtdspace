@@ -478,7 +478,7 @@ Description and details about the habit
 
 ### Habit System Features
 
-1. **Two-State System**: Habits have only 'todo' and 'complete' status
+1. **Two-State System**: Habits have only 'todo' and 'completed' status
 2. **Automatic Reset**: Status resets to 'todo' based on frequency at 00:01 daily
 3. **History Tracking**: Every status change is recorded in a markdown table
 4. **Self-Contained**: Each habit file contains its complete history
@@ -522,7 +522,7 @@ When you change a habit's status through the UI:
 // Automatic backend call when status changes
 await invoke('update_habit_status', {
   habitPath,
-  newStatus: 'complete' // or 'todo'
+  newStatus: 'completed' // or 'todo'
 });
 ```
 
@@ -542,7 +542,7 @@ The application handles habit resets in two ways:
 - Ensures habits are always current regardless of app uptime
 
 The reset logic:
-1. Only resets habits currently marked as 'complete'
+1. Only resets habits currently marked as 'completed'
 2. Checks time since last action (not just resets)
 3. Respects the frequency interval (daily, weekly, etc.)
 4. Records all resets with timestamp for full traceability

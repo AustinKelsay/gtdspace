@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import debounce from 'lodash.debounce';
 // Memory leak prevention removed during simplification
 import type { 
@@ -120,7 +120,8 @@ export const useTabManager = () => {
       for (const tabInfo of persistedState.openTabs || []) {
         try {
           // Check if file still exists and get updated metadata
-          const fileContent = await invoke<string>('read_file', { path: tabInfo.filePath });
+          const fileContent = await safeInvoke<string>('read_file', { path: tabInfo.filePath }, null);
+          if (!fileContent) continue;
           
           // Create a minimal MarkdownFile object (we might not have all metadata)
           const file: MarkdownFile = {
@@ -206,7 +207,7 @@ export const useTabManager = () => {
       } else {
         // Normal file - load content
         console.log('Loading file content for new tab:', file.path);
-        content = await invoke<string>('read_file', { path: file.path });
+        content = await safeInvoke<string>('read_file', { path: file.path }, '') || '';
         
         // Apply migrations if needed
         if (needsMigration(content)) {
@@ -215,8 +216,8 @@ export const useTabManager = () => {
           try {
             const migratedContent = migrateMarkdownContent(content);
             // Create a backup before auto-saving migrated content
-            await invoke<void>('save_file', { path: `${file.path}.backup`, content });
-            await invoke<void>('save_file', { path: file.path, content: migratedContent });
+            await safeInvoke<void>('save_file', { path: `${file.path}.backup`, content }, null);
+            await safeInvoke<void>('save_file', { path: file.path, content: migratedContent }, null);
             content = migratedContent;
             migrationApplied = true;
           } catch (migrationError) {
@@ -476,10 +477,13 @@ export const useTabManager = () => {
 
     try {
       console.log('Saving tab content:', tab.file.path);
-      await invoke<string>('save_file', {
+      const result = await safeInvoke<string>('save_file', {
         path: tab.file.path,
         content: tab.content,
-      });
+      }, null);
+      if (result === null) {
+        throw new Error('Failed to save file');
+      }
 
       // Mark tab as saved and update originalContent
       setTabState(prev => ({
@@ -529,9 +533,12 @@ export const useTabManager = () => {
 
     try {
       // Read the current file content from disk
-      const currentFileContent = await invoke<string>('read_file', { 
+      const currentFileContent = await safeInvoke<string>('read_file', { 
         path: tab.file.path 
-      });
+      }, null);
+      if (!currentFileContent) {
+        throw new Error('Failed to read file');
+      }
 
       // Compare with original content when the tab was opened
       const originalContent = tab.originalContent || tab.content;
@@ -550,7 +557,11 @@ export const useTabManager = () => {
     if (!tab) return null;
 
     try {
-      return await invoke<string>('read_file', { path: tab.file.path });
+      const content = await safeInvoke<string>('read_file', { path: tab.file.path }, null);
+      if (!content) {
+        throw new Error('Failed to read file');
+      }
+      return content;
     } catch (error) {
       console.error('Failed to read external content:', error);
       return null;

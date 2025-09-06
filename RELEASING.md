@@ -19,7 +19,7 @@ This command automates the entire process:
 1.  Runs pre-flight checks (clean git status, up-to-date branch, tests, linting).
 2.  Bumps the version in `package.json`, `Cargo.toml`, and `tauri.conf.json`.
 3.  Creates a Git commit and a version tag (e.g., `v0.1.1`).
-4.  **Pushes the commit and tag to the remote `origin` repository.**
+4.  **Pushes the commit and its associated tag to the remote `origin` repository using `git push --follow-tags`.**
 5.  This push automatically triggers the GitHub Actions release workflow.
 
 ### Semi-Automated Release (Manual Push)

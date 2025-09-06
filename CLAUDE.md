@@ -2,267 +2,137 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Quick Reference
-
-**Start Development:** `npm run tauri:dev`  
-**Run Tests Before Commit:** `npm run type-check && npm run lint` (also run `cargo check && cargo clippy` in src-tauri/)  
-**Build Production:** `npm run tauri:build`  
-**Main Entry Points:** `src/App.tsx` (frontend), `src-tauri/src/lib.rs` (backend setup)  
-**GTD Logic:** `src/hooks/useGTDSpace.ts`, `src-tauri/src/commands/mod.rs`
-
 ## Essential Commands
 
 ```bash
 # Development
-npm run tauri:dev      # Full dev environment (frontend + backend with hot reload)
-npm run dev            # Frontend only on port 1420 (limited - no file operations)
+npm run tauri:dev      # Primary dev server with hot reload
 
 # Code Quality - ALWAYS RUN BEFORE COMMITTING
-npm run type-check     # TypeScript validation (strict: false)
-npm run lint           # ESLint check (max-warnings: 0 - CI will fail on warnings)
-npm run lint:fix       # Auto-fix linting issues
+npm run type-check     # TypeScript validation
+npm run lint           # ESLint check (CI fails on warnings)
+cd src-tauri && cargo check && cargo clippy  # Rust checks
 
-# Rust backend checks (run from src-tauri/)
-cd src-tauri && cargo check   # Fast compilation check
-cd src-tauri && cargo clippy  # Rust linting (CI enforces -D warnings)
-cd src-tauri && cargo fmt     # Format Rust code (CI enforces --check)
+# Production Build
+npm run tauri:build    # Creates platform-specific installer
 
-# Building & Release
-npm run tauri:build    # Production build
-npm run release:patch  # Full release process with safety checks (0.1.0 → 0.1.1)
-npm run release:minor  # Minor release (0.1.0 → 0.2.0)
-npm run release:major  # Major release (0.1.0 → 1.0.0)
-npm run icons:generate # Icon generation (automated in build)
+# Release (includes version bumping and git tags)
+npm run release:patch  # 0.1.0 → 0.1.1
+npm run release:minor  # 0.1.0 → 0.2.0
+npm run release:major  # 0.1.0 → 1.0.0
 ```
 
-## Prerequisites
+## Architecture Overview
 
-- **Node.js**: v20+ required
-- **Rust**: Latest stable toolchain
-- **Platform-specific**: See `docs/build-setup.md`
+**Frontend**: React 18 + TypeScript + Vite + BlockNote editor (v0.35 pinned) + Tailwind/shadcn  
+**Backend**: Rust + Tauri 2.x with Tokio async runtime  
+**State**: Custom hooks pattern - no Redux/Zustand  
+**Entry Points**: `src/App.tsx` (frontend), `src-tauri/src/lib.rs` (backend)
 
-## High-Level Architecture
-
-### Tech Stack
-
-- **Frontend**: React 18 + TypeScript (strict: false) + Vite + Tailwind CSS + shadcn/ui
-- **Editor**: BlockNote v0.35 (pinned) with custom GTD blocks
-- **Backend**: Rust + Tauri 2.x
-- **State Management**: Custom hooks pattern (no Redux/Zustand)
-- **File Watching**: Rust notify crate (500ms debounce)
-- **Async Runtime**: Tokio for backend operations
-
-### Frontend-Backend Communication
-
-All Tauri commands follow this pattern:
+### Tauri Command Pattern
 
 ```typescript
 import { invoke } from "@tauri-apps/api/core";
 import { withErrorHandling } from "@/hooks/useErrorHandler";
 
+// Frontend camelCase → Backend snake_case (auto-converted)
 const result = await withErrorHandling(
   async () => await invoke<ReturnType>("command_name", { param }),
-  "User-friendly error message"
+  "Error message"
 );
 ```
 
-**Important:** Frontend uses `camelCase`, backend expects `snake_case` - Tauri auto-converts.
-
-**Safe Invocation:** For commands during app init or in web contexts, use `safeInvoke()` from `@/utils/safe-invoke.ts` which gracefully handles non-Tauri environments.
+Use `safeInvoke()` from `@/utils/safe-invoke.ts` during app init or web contexts.
 
 ### GTD Directory Structure
 
-The app auto-creates and manages this structure at `~/GTD Space`:
+Auto-created at `~/GTD Space`:
 
 ```
-gtd-space/
-├── Purpose & Principles/  # 50,000 ft - Life mission
-├── Vision/               # 40,000 ft - 3-5 year view
-├── Goals/                # 30,000 ft - 1-2 year objectives
-├── Areas of Focus/       # 20,000 ft - Ongoing responsibilities
-├── Projects/             # 10,000 ft - Multi-step outcomes (folders with README.md)
-│   └── [Project]/
-│       ├── README.md     # Project metadata
-│       └── *.md          # Individual actions
-├── Habits/               # Recurring routines with auto-reset & bidirectional references
-├── Someday Maybe/        # Future possibilities
+├── Purpose & Principles/  # 50,000 ft
+├── Vision/               # 40,000 ft  
+├── Goals/                # 30,000 ft
+├── Areas of Focus/       # 20,000 ft
+├── Projects/             # 10,000 ft - Folders with README.md + action files
+├── Habits/               # Recurring routines with auto-reset
+├── Someday Maybe/        
 └── Cabinet/              # Reference materials
 ```
 
-### Custom BlockNote Fields
-
-The editor uses these custom markdown markers:
+### Custom Markdown Fields
 
 ```markdown
-# Single Select
-[!singleselect:status:in-progress] # Action status: in-progress|waiting|completed
-[!singleselect:effort:medium] # Effort: small|medium|large|extra-large
-[!singleselect:project-status:waiting] # Project status
-[!singleselect:habit-frequency:daily] # Habit frequency
-
-# DateTime
-[!datetime:due_date:2025-01-20] # Date only
-[!datetime:focus_date:2025-01-20T14:30:00] # Date with time
-[!datetime:created_date_time:2025-01-17T10:00:00Z] # ISO 8601
-
-# References & Lists
-[!references:path1.md,path2.md] # Links to Cabinet/Someday
-[!areas-references:path1.md] # Links to Areas
-[!goals-references:path1.md] # Links to Goals
-[!vision-references:path1.md] # Links to Vision
-[!purpose-references:path1.md] # Links to Purpose
-[!projects-list] # Dynamic list of referencing projects
-[!habits-list] # Dynamic list of referencing habits
-
-# Multi Select (Contexts/Tags)
-[!multiselect:contexts:home,work,errand] # Multiple contexts
-
-# Checkbox (Habits)
-[!checkbox:habit-status:false] # Todo/complete state
+[!singleselect:status:in-progress]        # in-progress|waiting|completed
+[!singleselect:effort:medium]              # small|medium|large|extra-large
+[!datetime:due_date:2025-01-20]           # Date/time fields
+[!references:file1.md,file2.md]           # Cabinet/Someday links
+[!areas-references:path.md]               # Horizon references
+[!multiselect:contexts:home,work]         # Tags/contexts
+[!checkbox:habit-status:false]            # Habit tracking
+[!projects-list]                          # Dynamic lists
 ```
 
-### Critical Event Flow
+### Key Event Flows
 
-1. **Project Creation**:
-   - `useGTDSpace.createProject()` → `invoke('create_gtd_project')` → dispatches `gtd-project-created` event
-   - `GTDWorkspaceSidebar` listens for event → reloads projects
+**Project Creation**: `useGTDSpace.createProject()` → Tauri command → `gtd-project-created` event → UI refresh  
+**Content Updates**: Editor → `useTabManager` → `content-event-bus` → Components update  
+**File Watch**: External change → File watcher (500ms debounce) → UI refresh  
+**Data Migration**: In-memory only during reads via `migrateMarkdownContent()`
 
-2. **Content Updates**:
-   - Editor change → `useTabManager` → `content-event-bus` → UI components update
+### Performance Optimizations
 
-3. **File Operations**:
-   - UI action → Tauri command → File system → File watcher (500ms) → UI refresh
+- Parallel file reads in `useCalendarData`  
+- Debouncing: Auto-save (2s), metadata save (500ms), file watcher (500ms)  
+- Calendar renders only visible date range  
+- Pre-compiled regex patterns for metadata extraction
 
-4. **Data Migration**:
-   - Files are migrated in-memory only during reads (not auto-saved)
-   - `needsMigration()` checks for old field formats
-   - `migrateMarkdownContent()` updates to current format
+### Core Hooks
 
-### Performance Patterns
+- `useGTDSpace` - Project/action CRUD, workspace init
+- `useTabManager` - Multi-tab editing with manual save
+- `useFileManager` - File operations via Tauri
+- `useFileWatcher` - External change detection
+- `useCalendarData` - Aggregates dated items
+- `useHabitTracking` - Habit status and auto-reset
+- `useErrorHandler` - Centralized error handling
 
-- **Parallel Operations**: File reads run concurrently in `useCalendarData`
-- **Debouncing**: Auto-save (2s), manual save (500ms for metadata), file watcher (500ms), habit scheduler (1min)
-- **Calendar Optimization**: Only generates dates in current view window
-- **Regex Caching**: Metadata patterns pre-compiled for performance
-
-### Habits System
-
-The habit tracking system provides automatic recurring task management:
-
-- **Frequency Options**: Daily, Weekdays, Every Other Day, Twice Weekly, Weekly, Biweekly, Monthly, 5 Minutes (testing)
-- **Auto-Reset**: Uses system local time (not UTC), resets at midnight for daily habits
-- **History Tracking**: Maintains complete timestamped history of status changes
-- **Backfilling**: Automatically creates entries for missed periods when app was offline
-- **Bidirectional References**: Habits can reference and be referenced by Projects/Areas/Goals/Vision/Purpose
-- **Real-time Updates**: Toast notifications on status changes with visual feedback
-
-### State Management Hooks
-
-Key hooks and their responsibilities:
-
-- `useGTDSpace` - Workspace initialization, project/action CRUD operations
-- `useTabManager` - Multi-tab editing with manual save (debounced, 500ms for metadata)
-- `useFileManager` - File system operations via Tauri
-- `useFileWatcher` - External change detection (500ms debounce)
-- `useCalendarData` - Aggregates all dated items (parallel reads)
-- `useHabitTracking` - Habit status updates and reset scheduling
-- `useHabitScheduler` - Manages habit reset timers (1min check interval)
-- `useErrorHandler` - Centralized error handling with toast notifications
-
-### Google Calendar Integration
-
-OAuth2 setup in `.env`:
-
-```
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-client-secret
-```
-
-- OAuth server runs on port 9898
-- Redirect URI must be `http://localhost:9898/callback`
-- Tokens stored in Tauri app data directory
-- Sync runs with 30-day past, 90-day future window
-
-## Common Development Tasks
-
-### Adding a New GTD Field Type
+### Adding a New GTD Field
 
 1. Create BlockNote component in `src/components/editor/blocks/`
 2. Add insertion hook in `src/hooks/use[FieldName]Insertion.ts`
 3. Update `preprocessMarkdownForBlockNote()` in `src/utils/blocknote-preprocessing.ts`
 4. Add extraction regex in `src/utils/metadata-extractor.ts`
-5. Register keyboard shortcut in `src/hooks/useKeyboardShortcuts.ts`
+5. Register shortcut in `src/hooks/useKeyboardShortcuts.ts`
 
 ### Adding a Tauri Command
 
 1. Implement in `src-tauri/src/commands/mod.rs`
-2. Add to command list in `src-tauri/src/lib.rs` (not main.rs)
-3. Create frontend wrapper with `withErrorHandling()`
-4. Test with both Tauri context and web-only mode
+2. Register in `src-tauri/src/lib.rs` (not main.rs)
+3. Frontend wrapper with `withErrorHandling()`
 
-## Important Constraints
+## Key Constraints
 
-- **TypeScript**: Strict mode disabled - be careful with null checks
-- **File Size**: Max 10MB per file
-- **Open Tabs**: Max 10 simultaneous
-- **ESLint**: Max warnings: 0 (CI will fail on any warnings), `@typescript-eslint/no-unused-vars` with `argsIgnorePattern: "^_"`
-- **BlockNote**: Version pinned at 0.35 for stability
-- **Rust**: Must pass `cargo check`, `cargo clippy -D warnings`, and `cargo fmt --check`
-- **Node Version**: Requires Node 20+
-- **Testing**: Limited test infrastructure - no unit test framework currently implemented
-- **Port Requirements**: Google OAuth server requires port 9898 to be available
+- **TypeScript**: Strict mode disabled
+- **ESLint**: Zero warnings allowed (CI enforced)
+- **Rust**: Must pass `cargo clippy -D warnings` and `cargo fmt --check`
+- **BlockNote**: v0.35 pinned for stability
+- **Node**: v20+ required
+- **Limits**: Max 10MB files, max 10 open tabs
+- **Google OAuth**: Port 9898 required (`.env` config needed)
 
-## CI/CD Quality Gates
+## CI/CD & Release
 
-GitHub Actions enforce these requirements:
+**GitHub Actions** enforce TypeScript, ESLint, and Rust checks across Ubuntu/macOS/Windows.
 
-- **TypeScript**: `npm run type-check` must pass
-- **ESLint**: Zero warnings allowed (`max-warnings: 0`)
-- **Rust Format**: `cargo fmt --check` must pass
-- **Rust Linting**: `cargo clippy -D warnings` must pass
-- **Cross-platform**: Builds tested on Ubuntu, macOS (Intel + Apple Silicon), Windows
-- **Concurrency**: In-progress runs cancelled when new runs triggered on same ref
-- **Branch Protection**: main/develop/staging with workflow dispatch on main/staging only
-- **Release Safety**: Scripts include git status checks, version validation, and tag verification
-
-## Release Process Details
-
-The release scripts (`scripts/safe-release.js`) include safety checks:
-
-1. Verifies clean git status (no uncommitted changes)
-2. Ensures on correct branch (main/staging)
-3. Validates version bump type (patch/minor/major) or explicit semver (e.g., 1.2.3, 1.2.3-beta.1)
-4. Updates version in package.json, Cargo.toml, and src-tauri/tauri.conf.json
-5. Creates git tag only at HEAD (format: v0.1.0)
-6. Triggers GitHub Actions for multi-platform builds
-
-**Semi-automated option:** Use `npm run version:*` commands to bump version locally, then `git push --follow-tags` manually
+**Release Process** (`scripts/safe-release.js`):
+1. Verifies clean git status
+2. Updates version in package.json, Cargo.toml, tauri.conf.json
+3. Creates git tag (format: v0.1.0)
+4. Triggers multi-platform builds
 
 ## Known Issues
 
-### Sidebar Not Updating
-Projects may not appear immediately after creation. The event system (`gtd-project-created`) may have timing issues. Workaround: Collapse/expand Projects section.
-
-### Google Calendar Auth
-If authentication fails:
-1. Check `.env` file exists with valid credentials:
-   - `GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com`
-   - `GOOGLE_CLIENT_SECRET=your-client-secret`
-2. Verify redirect URI is `http://localhost:9898/callback`
-3. Ensure port 9898 is free
-4. Check Google Cloud Console for OAuth consent screen configuration
-5. OAuth tokens stored in Tauri app data directory
-
-### Large File Performance
-Files over 1MB may cause editor performance issues. The app uses manual save (debounced, 500ms for metadata) to mitigate.
-
-### Test Coverage
-No automated testing framework is currently implemented. Manual testing is required before releases.
-
-### BlockNote Formatting Limitations
-Due to BlockNote's `blocksToMarkdownLossy` conversion, some rich text formatting is lost when saving:
-- Text colors and highlighting are not preserved
-- Advanced text styling may be simplified
-- Complex nested structures may be flattened
-
-This is a known limitation of converting rich text to markdown format. The app prioritizes markdown compatibility over full formatting preservation.
+- **Sidebar refresh**: Projects may not appear immediately after creation
+- **Large files**: >1MB may cause editor lag
+- **BlockNote formatting**: Rich text features lost when converting to markdown
+- **No test framework**: Manual testing required

@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke } from '@/utils/safe-invoke';
 import { checkTauriContextAsync, isTauriContext } from '@/utils/tauri-ready';
 import {
   Dialog,
@@ -59,18 +59,21 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
           // First check if the directory exists and create if needed
           try {
             console.log('Checking if directory exists:', directory);
-            const directoryExistsBefore = await invoke<boolean>('check_directory_exists', { path: directory });
+            const directoryExistsBefore = await safeInvoke<boolean>('check_directory_exists', { path: directory }, false);
             console.log('Directory exists before:', directoryExistsBefore);
             if (!directoryExistsBefore) {
               let createResponse: unknown;
               try {
-                createResponse = await invoke<string>('create_directory', { path: directory });
+                createResponse = await safeInvoke<string>('create_directory', { path: directory }, null);
+                if (!createResponse) {
+                  throw new Error('Failed to create directory');
+                }
               } catch (err) {
                 const detail = err instanceof Error ? err.message : String(err);
                 throw new Error(`Failed to create directory at '${directory}': ${detail}`);
               }
 
-              const directoryExistsAfter = await invoke<boolean>('check_directory_exists', { path: directory });
+              const directoryExistsAfter = await safeInvoke<boolean>('check_directory_exists', { path: directory }, false);
               if (!directoryExistsAfter) {
                 throw new Error(`Directory '${directory}' does not exist after creation attempt. Response: ${String(createResponse)}`);
               }
@@ -86,10 +89,10 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
           console.log('Creating file with name:', fileName);
 
           // Create the file - using FileOperationResult type
-          const createResult = await invoke<{ success: boolean; path?: string; message?: string }>('create_file', {
+          const createResult = await safeInvoke<{ success: boolean; path?: string; message?: string }>('create_file', {
             directory,
             name: fileName,
-          });
+          }, { success: false, message: 'Failed to create file' });
 
           if (!createResult.success) {
             throw new Error(createResult.message || 'Failed to create file');

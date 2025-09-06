@@ -535,9 +535,11 @@ export const App: React.FC = () => {
       // Check if the updated habit is currently open in the editor
       if (norm(activeTab?.filePath) === norm(event.detail.habitPath)) {
         // Reload the file content from disk
-        safeInvoke<string>('read_file', { path: event.detail.habitPath }, '')
+        safeInvoke<string>('read_file', { path: event.detail.habitPath }, null)
           .then(freshContent => {
-            if (freshContent != null) updateTabContent(activeTab.id, freshContent);
+            if (freshContent !== null && freshContent !== undefined) {
+              updateTabContent(activeTab.id, freshContent);
+            }
           })
           .catch(error => {
             console.error('Failed to refresh habit after status update:', error);
@@ -556,9 +558,11 @@ export const App: React.FC = () => {
 
       // If the changed file is the currently active tab, reload its content
       if (norm(activeTab?.filePath) === norm(filePath)) {
-        safeInvoke<string>('read_file', { path: filePath }, '')
+        safeInvoke<string>('read_file', { path: filePath }, null)
           .then(freshContent => {
-            if (freshContent != null) updateTabContent(activeTab.id, freshContent);
+            if (freshContent !== null && freshContent !== undefined) {
+              updateTabContent(activeTab.id, freshContent);
+            }
           })
           .catch(error => {
             console.error('Failed to reload habit content:', error);
@@ -620,8 +624,10 @@ export const App: React.FC = () => {
           if (isHabitPath(currentTab?.filePath)) {
             // Reload the file content from disk
             try {
-              const freshContent = await safeInvoke<string>('read_file', { path: currentTab.filePath }, '');
-              if (freshContent != null) updateTabContentRef.current(currentTab.id, freshContent);
+              const freshContent = await safeInvoke<string>('read_file', { path: currentTab.filePath }, null);
+              if (freshContent !== null && freshContent !== undefined) {
+                updateTabContentRef.current(currentTab.id, freshContent);
+              }
             } catch (error) {
               console.error('Failed to refresh habit tab:', error);
             }

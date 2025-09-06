@@ -543,6 +543,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
               newProjectName: newTitle
             }, null)
               .then(async (newProjectPath) => {
+                // Check that we got a valid project path back
+                if (!newProjectPath || typeof newProjectPath !== 'string') {
+                  console.warn('Project rename failed - no valid path returned');
+                  return;
+                }
 
                 // Only update UI after successful rename
                 // Update local state - keep both old and new paths until projects reload
@@ -646,6 +651,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
               newActionName: newTitle
             }, null)
               .then(async (newActionPath) => {
+                // Check that we got a valid action path back
+                if (!newActionPath || typeof newActionPath !== 'string') {
+                  console.warn('Action rename failed - no valid path returned');
+                  return;
+                }
 
                 // Update local state with new path
                 setActionMetadata(prev => {
@@ -711,6 +721,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                 newActionName: newTitle
               }, null)
                 .then(async (newFilePath) => {
+                  // Check that we got a valid file path back
+                  if (!newFilePath || typeof newFilePath !== 'string') {
+                    console.warn('File rename failed - no valid path returned');
+                    return;
+                  }
 
                   // Update local state with new path
                   setSectionFileMetadata(prev => {

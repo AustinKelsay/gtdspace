@@ -121,7 +121,7 @@ export const useTabManager = () => {
         try {
           // Check if file still exists and get updated metadata
           const fileContent = await safeInvoke<string>('read_file', { path: tabInfo.filePath }, null);
-          if (!fileContent) continue;
+          if (fileContent === null || fileContent === undefined) continue;
           
           // Create a minimal MarkdownFile object (we might not have all metadata)
           const file: MarkdownFile = {
@@ -536,7 +536,7 @@ export const useTabManager = () => {
       const currentFileContent = await safeInvoke<string>('read_file', { 
         path: tab.file.path 
       }, null);
-      if (!currentFileContent) {
+      if (currentFileContent === null || currentFileContent === undefined) {
         throw new Error('Failed to read file');
       }
 
@@ -558,7 +558,7 @@ export const useTabManager = () => {
 
     try {
       const content = await safeInvoke<string>('read_file', { path: tab.file.path }, null);
-      if (!content) {
+      if (content === null || content === undefined) {
         throw new Error('Failed to read file');
       }
       return content;

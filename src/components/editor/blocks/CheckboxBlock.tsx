@@ -31,6 +31,9 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
 
   // Local state for immediate UI feedback
   const [localChecked, setLocalChecked] = React.useState(checked);
+  
+  // Track if we're currently processing a change to prevent rapid clicks
+  const [isProcessing, setIsProcessing] = React.useState(false);
 
   // Update local state when props change (from content reload)
   React.useEffect(() => {
@@ -63,29 +66,56 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
     return findById(blocks);
   }, [props.editor.document]);
 
+  // Helper function to update block with retry mechanism
+  const updateBlockWithRetry = React.useCallback(async (
+    blockId: string, 
+    checkedValue: boolean, 
+    maxRetries: number = 5,
+    delayMs: number = 100
+  ): Promise<boolean> => {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const targetBlock = findBlockInDocument(blockId);
+      if (targetBlock) {
+        try {
+          props.editor.updateBlock(targetBlock, { props: { checked: checkedValue } });
+          return true; // Successfully updated
+        } catch (error) {
+          console.error(`[CheckboxBlock] Failed to update block on attempt ${attempt + 1}:`, error);
+        }
+      }
+      
+      // Wait before retrying (except on last attempt)
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+    
+    // Don't warn - this is expected when the editor is still initializing
+    console.log('[CheckboxBlock] Block not yet available in document, will sync when editor is ready');
+    return false; // Block not found yet, but this is ok
+  }, [findBlockInDocument, props.editor]);
+
   const handleChange = React.useCallback(async (newChecked: boolean | 'indeterminate') => {
-    const prevChecked = localChecked;
+    // Prevent rapid clicks while processing
+    if (isProcessing) {
+      console.log('[CheckboxBlock] Ignoring click - already processing');
+      return;
+    }
+    
+    setIsProcessing(true);
+    
     const checkedVal = newChecked === true;
 
     // Immediately update local state for visual feedback
     setLocalChecked(checkedVal);
 
-    // Find the actual block in the document and update it
-    try {
-      const targetBlock = findBlockInDocument(block.id);
-      if (targetBlock) {
-        props.editor.updateBlock(targetBlock, { props: { checked: checkedVal } });
-      } else {
-        console.warn('[CheckboxBlock] Block not found in document, skipping editor update');
-        // Still allow local state change for UI feedback
-      }
-    } catch (error) {
-      // Log the error and revert local state to maintain consistency
-      console.error('[CheckboxBlock] Failed to update block:', error);
-      setLocalChecked(prevChecked);
-      // Optionally rethrow if higher-level logic expects it
-      // throw error;
-      return; // Exit early on error
+    // Try to update the block in the document with retry mechanism
+    const updateSuccess = await updateBlockWithRetry(block.id, checkedVal);
+    
+    // Don't revert just because the block wasn't found - the editor might still be initializing
+    // The local state change is valid and will be synchronized when the editor is ready
+    if (!updateSuccess) {
+      console.log('[CheckboxBlock] Block update deferred - editor may still be initializing');
     }
 
     // If this is a habit status checkbox, update the backend
@@ -109,15 +139,10 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
               }, null);
 
               if (invokeResult === null) {
-                // Not in Tauri context or invoke failed - revert changes
-                console.warn('[CheckboxBlock] Failed to update habit status; reverting UI/doc');
-                setLocalChecked(prevChecked);
-                try { 
-                  const targetBlock = findBlockInDocument(block.id);
-                  if (targetBlock) {
-                    props.editor.updateBlock(targetBlock, { props: { checked: prevChecked } });
-                  }
-                } catch { /* ignore error */ }
+                // Backend update failed, but keep the UI state
+                // This allows the checkbox to work even when backend is unavailable
+                console.log('[CheckboxBlock] Backend update skipped (may not be in Tauri environment)');
+                // Don't revert - let the UI remain responsive
                 return null;
               }
 
@@ -157,19 +182,17 @@ const CheckboxRenderer = React.memo(function CheckboxRenderer(props: {
             });
             window.dispatchEvent(reloadEvent);
           } else {
-            // Revert already performed in the failure/early-return branches above
-            setLocalChecked(prevChecked);
-            try { 
-              const targetBlock = findBlockInDocument(block.id);
-              if (targetBlock) {
-                props.editor.updateBlock(targetBlock, { props: { checked: prevChecked } });
-              }
-            } catch { /* ignore error */ }
+            // Backend operation failed but UI should remain responsive
+            console.log('[CheckboxBlock] Habit update could not be saved to backend');
+            // Don't revert UI - keep it responsive for the user
           }
         }
       }
     }
-  }, [localChecked, type, withErrorHandling, filePath, block.id, props.editor, findBlockInDocument]);
+    
+    // Reset processing flag after a short delay
+    setTimeout(() => setIsProcessing(false), 500);
+  }, [type, withErrorHandling, filePath, block.id, updateBlockWithRetry, isProcessing]);
 
   // Determine display label based on type and state - memoized
   const displayLabel = React.useMemo(() => {

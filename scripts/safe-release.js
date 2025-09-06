@@ -212,6 +212,17 @@ async function main() {
     }
   }
 
+  // Step 6.5: Run build
+  if (packageJson.scripts && packageJson.scripts.build) {
+    log('\n🏗️ Running build...', 'yellow');
+    try {
+      execCommand('npm run build');
+      log('✓ Build successful', 'green');
+    } catch (error) {
+      exitWithError('Build failed. Please fix the build before releasing');
+    }
+  }
+
   // Step 7: Get current version
   const currentVersion = packageJson.version;
   log(`\n📦 Current version: ${currentVersion}`, 'blue');

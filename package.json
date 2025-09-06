@@ -50,7 +50,7 @@
     "@radix-ui/react-tabs": "^1.1.12",
     "@radix-ui/react-toast": "^1.1.14",
     "@radix-ui/react-tooltip": "^1.2.7",
-    "@shikijs/langs-precompiled": "^3.8.1",
+    "@shikijs/langs-precompiled": "^3.12.2",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.3.3",
     "class-variance-authority": "^0.7.1",

@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # Development
 npm run tauri:dev      # Primary dev server with hot reload
+npm run tauri          # Run Tauri CLI commands directly
 npm run dev            # Vite dev server only (frontend)
 npm run preview        # Preview built frontend
 
@@ -18,15 +19,17 @@ cd src-tauri && cargo check && cargo clippy  # Rust checks
 cd src-tauri && cargo fmt --check  # Rust formatting check
 
 # Production Build
-npm run tauri:build    # Creates platform-specific installer
+npm run tauri:build    # Creates platform-specific installer (runs pretauri:build automatically)
 npm run build          # Build frontend only
 
 # Version Management (updates versions only)
+npm run version:bump   # Alias for version:patch (default bump)
 npm run version:patch  # Bump patch version
 npm run version:minor  # Bump minor version
 npm run version:major  # Bump major version
 
 # Release (full release: version bump + git tag + commit)
+npm run release        # Alias for release:patch (default release)
 npm run release:patch  # 0.1.0 → 0.1.1 with git operations
 npm run release:minor  # 0.1.0 → 0.2.0 with git operations
 npm run release:major  # 0.1.0 → 1.0.0 with git operations

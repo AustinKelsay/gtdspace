@@ -36,6 +36,11 @@ npm run release:major  # 0.1.0 → 1.0.0 with git operations
 
 # Utilities
 npm run icons:generate # Generate app icons for all platforms
+
+# Testing (manual only - no framework configured)
+# 1. Test frontend changes with npm run tauri:dev
+# 2. Test production build with npm run tauri:build
+# 3. Verify GTD operations in sidebar and editor
 ```
 
 ## Before First Run
@@ -46,7 +51,9 @@ npm run icons:generate # Generate app icons for all platforms
    - **WARNING**: Never put secrets in `VITE_*` environment variables as they are exposed to the frontend
    - Use PKCE (Proof Key for Code Exchange) flow in the Vite frontend with only a public client ID
    - If a client secret is required, it must be handled on the Tauri (Rust) backend and stored securely in the OS keychain
-   - Create `.env` with only:
+   - Create `.env.local` with only the public client ID (ensure `.env*` is git-ignored):
+     - Add redirect URI `http://localhost:9898` in Google Cloud Console
+     - Never commit `.env*` files; confirm `.gitignore` excludes them
    ```
    VITE_GOOGLE_CLIENT_ID=your_client_id
    ```
@@ -58,6 +65,14 @@ npm run icons:generate # Generate app icons for all platforms
 **Backend**: Rust + Tauri 2.x with Tokio async runtime  
 **State**: Custom hooks pattern - no Redux/Zustand  
 **Entry Points**: `src/App.tsx` (frontend), `src-tauri/src/lib.rs` (backend)
+
+### Key Directories
+
+- `src/components/` - React components (editor, sidebar, calendar, settings)
+- `src/hooks/` - Custom React hooks for state and business logic
+- `src/utils/` - Helper functions (markdown processing, metadata extraction)
+- `src-tauri/src/commands/` - Rust backend commands exposed to frontend
+- `scripts/` - Build and release automation scripts
 
 ### Tauri Command Pattern
 
@@ -111,6 +126,13 @@ Auto-created at `~/GTD Space`:
 **Save Flow**: Manual save (Cmd/Ctrl+S) → `saveTab()` → Tauri `write_file` → Success notification  
 **Data Migration**: In-memory only during reads via `migrateMarkdownContent()`
 
+### UI Components
+
+- **Sidebar**: Scrollable with independent scroll areas for each section (Projects, Habits, etc.)
+- **Editor**: BlockNote-based with custom GTD field components
+- **Calendar**: Week/month views with event filtering and Google Calendar integration
+- **Settings**: Theme selection, Google Calendar auth, preferences persistence
+
 ### Performance Optimizations
 
 - Parallel file reads in `useCalendarData`  
@@ -121,12 +143,13 @@ Auto-created at `~/GTD Space`:
 ### Core Hooks
 
 - `useGTDSpace` - Project/action CRUD, workspace init
-- `useTabManager` - Multi-tab editing with manual save
+- `useTabManager` - Multi-tab editing with manual save (Cmd/Ctrl+S)
 - `useFileManager` - File operations via Tauri
-- `useFileWatcher` - External change detection
-- `useCalendarData` - Aggregates dated items
-- `useHabitTracking` - Habit status and auto-reset
-- `useErrorHandler` - Centralized error handling
+- `useFileWatcher` - External change detection (500ms debounce)
+- `useCalendarData` - Aggregates dated items from projects/actions/habits
+- `useHabitTracking` - Habit status tracking with automatic reset
+- `useErrorHandler` - Centralized error handling with toast notifications
+- `useKeyboardShortcuts` - Global keyboard shortcut management
 
 ### Adding a New GTD Field
 
@@ -155,13 +178,16 @@ Auto-created at `~/GTD Space`:
 
 ## CI/CD & Release
 
-**GitHub Actions** enforce TypeScript, ESLint, and Rust checks across Ubuntu/macOS/Windows.
+**GitHub Actions** (.github/workflows/):
+- `ci.yml` - Enforces TypeScript, ESLint, and Rust checks on all PRs
+- `build.yml` - Tests multi-platform builds (Ubuntu/macOS/Windows)  
+- `release.yml` - Triggered by version tags to create releases
 
 **Release Process** (`scripts/safe-release.js`):
-1. Verifies clean git status
+1. Verifies clean git status and main branch
 2. Updates version in package.json, Cargo.toml, tauri.conf.json
-3. Creates git tag (format: v0.1.0)
-4. Triggers multi-platform builds
+3. Creates git commit and tag (format: v0.1.0)
+4. Pushes to origin, triggering GitHub Actions builds
 
 ## Debugging Tips
 
@@ -180,7 +206,6 @@ Auto-created at `~/GTD Space`:
 
 ## Known Issues
 
-- **Sidebar refresh**: Projects may not appear immediately after creation
 - **Large files**: >1MB may cause editor lag
 - **BlockNote formatting**: Rich text features lost when converting to markdown
 - **No test framework**: Manual testing required

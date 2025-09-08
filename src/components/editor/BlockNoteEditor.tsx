@@ -33,6 +33,7 @@ import {
   VisionsAndGoalsListBlock
 } from './blocks/HorizonListBlock';
 import { HabitsListBlock } from './blocks/HabitsListBlock';
+import { ActionsListBlock } from './blocks/ActionsListBlock';
 import { postProcessBlockNoteBlocks } from '@/utils/blocknote-preprocessing';
 import { useMultiSelectInsertion } from '@/hooks/useMultiSelectInsertion';
 import { useSingleSelectInsertion } from '@/hooks/useSingleSelectInsertion';
@@ -40,6 +41,7 @@ import { useDateTimeInsertion } from '@/hooks/useDateTimeInsertion';
 import { useReferencesInsertion } from '@/hooks/useReferencesInsertion';
 import { useHorizonReferencesInsertion } from '@/hooks/useHorizonReferencesInsertion';
 import { useHorizonListInsertion } from '@/hooks/useHorizonListInsertion';
+import { useActionsListInsertion } from '@/hooks/useActionsListInsertion';
 import './blocknote-theme.css';
 import { FilePathProvider } from './FilePathContext';
 
@@ -110,6 +112,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       'goals-list': GoalsListBlock,
       'visions-list': VisionsListBlock,
       'habits-list': HabitsListBlock,
+      'actions-list': ActionsListBlock,
       'projects-areas-list': ProjectsAndAreasListBlock,
       'goals-areas-list': GoalsAndAreasListBlock,
       'visions-goals-list': VisionsAndGoalsListBlock,
@@ -140,6 +143,10 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   // Add horizon list insertion capabilities
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useHorizonListInsertion(editor as any);
+
+  // Add actions list insertion capabilities
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  useActionsListInsertion(editor as any);
 
   // Track if initial content has been loaded
   const initialContentLoaded = useRef(false);

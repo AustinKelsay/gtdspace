@@ -174,6 +174,7 @@ Auto-created at `~/GTD Space`:
   - Unused vars config: `argsIgnorePattern`, `varsIgnorePattern`, `caughtErrorsIgnorePattern` all set to `'^_'`
 - **Rust**: Must pass `cargo clippy -D warnings` and `cargo fmt --check`
 - **BlockNote**: v0.37 pinned for stability (DO NOT upgrade without testing)
+- **Tailwind CSS**: v3.x required (v4 incompatible with current PostCSS config)
 - **Node**: v20+ required
 - **Limits**: Max 10MB files, max 10 open tabs
 - **Google OAuth**: Port 9898 required (`.env` config needed)

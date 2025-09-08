@@ -207,6 +207,36 @@ function createContentHash(markdown: string, blockCount: number): string {
 }
 
 /**
+ * Shared list of all custom marker types used in the application
+ * This ensures consistency across all marker-related regex patterns
+ */
+const MARKER_TYPES = [
+  'references',
+  'projects-references',
+  'areas-references',
+  'goals-references',
+  'vision-references',
+  'purpose-references',
+  'habits-references',
+  'multiselect',
+  'singleselect',
+  'checkbox',
+  'datetime',
+  'projects-list',
+  'areas-list',
+  'goals-list',
+  'visions-list',
+  'habits-list',
+  'actions-list',
+  'projects-areas-list',
+  'goals-areas-list',
+  'visions-goals-list',
+  'projects-and-areas-list',
+  'goals-and-areas-list',
+  'visions-and-goals-list'
+];
+
+/**
  * Post-processes BlockNote blocks after markdown parsing to insert custom blocks
  * Now memoized to prevent excessive re-processing during typing
  */
@@ -619,7 +649,10 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
 
       // New: If this paragraph is composed only of our custom markers (possibly multiple),
       // split them into individual custom blocks to prevent them rendering as plain text.
-      const markerTokenRegex = /\[!(references|projects-references|areas-references|goals-references|vision-references|purpose-references|habits-references|multiselect|singleselect|checkbox|datetime|projects-list|areas-list|goals-list|visions-list|habits-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(:[^\]]*)?\](?:\])?/g;
+      const markerTokenRegex = new RegExp(
+        `\\[!(${MARKER_TYPES.join('|')})(:[^\\]]*)?\\](?:\\])?`,
+        'g'
+      );
       const leftoverAfterRemoval = blockText.replace(markerTokenRegex, '');
       const leftoverSanitized = leftoverAfterRemoval.replace(/[\s\u200B-\u200D\uFEFF]/g, '').trim();
       const onlyMarkers = blockText.trim().length > 0 && leftoverSanitized === '';

@@ -327,11 +327,16 @@ const ActionsListRenderer = React.memo(function ActionsListRenderer(props: Actio
         }
         
         // Within same status, sort by due date (earliest first)
-        if (a.dueDate && b.dueDate) {
-          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        const aTime = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+        const bTime = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+        
+        // Handle invalid dates by treating them as Infinity (sort last)
+        const aTimestamp = Number.isFinite(aTime) ? aTime : Infinity;
+        const bTimestamp = Number.isFinite(bTime) ? bTime : Infinity;
+        
+        if (aTimestamp !== bTimestamp) {
+          return aTimestamp - bTimestamp;
         }
-        if (a.dueDate) return -1;
-        if (b.dueDate) return 1;
         
         // Finally, sort by name
         return a.name.localeCompare(b.name);

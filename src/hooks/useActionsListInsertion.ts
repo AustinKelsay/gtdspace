@@ -69,8 +69,8 @@ export function insertActionsList(
 export function isInProjectContext(filePath: string): boolean {
   if (!filePath) return false;
   
-  const normalized = filePath.replace(/\\/g, '/');
-  return normalized.includes('/Projects/');
+  const normalized = filePath.replace(/\\/g, '/').toLowerCase();
+  return normalized.includes('/projects/');
 }
 
 /**
@@ -82,7 +82,7 @@ export function getProjectPathFromFile(filePath: string): string | null {
   if (!filePath) return null;
   
   const normalized = filePath.replace(/\\/g, '/');
-  const match = normalized.match(/(.+\/Projects\/[^/]+)/);
+  const match = normalized.match(/(.+\/Projects\/[^/]+)/i);
   
   return match ? match[1] : null;
 }

@@ -18,7 +18,7 @@ type ToasterToast = ToastProps & {
   onOpenChange?: (open: boolean) => void
 }
 
-const enum ActionType {
+enum ActionType {
   ADD_TOAST = "ADD_TOAST",
   UPDATE_TOAST = "UPDATE_TOAST",
   DISMISS_TOAST = "DISMISS_TOAST",

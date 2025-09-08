@@ -15,14 +15,12 @@ import { extractMetadata } from '@/utils/metadata-extractor';
 import debounce from 'lodash.debounce';
 import {
   List,
-  FileText,
   ChevronRight,
   Loader2,
   RefreshCw,
   Circle,
   CircleDot,
   CheckCircle2,
-  XCircle,
   Calendar,
   Clock
 } from 'lucide-react';
@@ -96,10 +94,11 @@ const normalizeStatus = (status: string | undefined | null): GTDActionStatus => 
     case 'wait':
     case 'blocked':
       return 'waiting';
+    // Cancelled is not a valid GTDActionStatus, treat as completed
     case 'cancelled':
     case 'canceled':
     case 'cancel':
-      return 'cancelled';
+      return 'completed';
     case 'in-progress':
     case 'inprogress':
     case 'active':
@@ -115,7 +114,6 @@ const getActionStatusIcon = (status: GTDActionStatus) => {
     case 'completed': return CheckCircle2;
     case 'waiting': return CircleDot;
     case 'in-progress': return Circle;
-    case 'cancelled': return XCircle;
     default: return Circle;
   }
 };
@@ -126,7 +124,6 @@ const getActionStatusColor = (status: GTDActionStatus) => {
     case 'completed': return 'text-green-600 dark:text-green-500';
     case 'waiting': return 'text-purple-600 dark:text-purple-500';
     case 'in-progress': return 'text-blue-600 dark:text-blue-500';
-    case 'cancelled': return 'text-red-600 dark:text-red-500';
     default: return 'text-gray-600 dark:text-gray-400';
   }
 };
@@ -276,7 +273,14 @@ const ActionsListRenderer = React.memo(function ActionsListRenderer(props: Actio
             focusDate: metadata.focusDate || null,
             dueDate: metadata.dueDate || null,
             effort: (metadata.effort as GTDActionEffort) || 'medium',
-            contexts: metadata.contexts ? (Array.isArray(metadata.contexts) ? metadata.contexts : [metadata.contexts]) : []
+            createdDateTime: (() => {
+              const dt = metadata.createdDateTime || metadata.created_date_time;
+              if (Array.isArray(dt)) {
+                return dt[0] || new Date().toISOString();
+              }
+              return dt || new Date().toISOString();
+            })(),
+            project_path: projectPath
           };
           
           return action;
@@ -290,7 +294,8 @@ const ActionsListRenderer = React.memo(function ActionsListRenderer(props: Actio
             focusDate: null,
             dueDate: null,
             effort: 'medium' as GTDActionEffort,
-            contexts: []
+            createdDateTime: new Date().toISOString(),
+            project_path: projectPath
           };
         }
       });
@@ -310,8 +315,7 @@ const ActionsListRenderer = React.memo(function ActionsListRenderer(props: Actio
         const statusOrder: Record<GTDActionStatus, number> = {
           'in-progress': 0,
           'waiting': 1,
-          'completed': 2,
-          'cancelled': 3
+          'completed': 2
         };
         
         const aStatus = normalizeStatus(a.status);
@@ -393,8 +397,7 @@ const ActionsListRenderer = React.memo(function ActionsListRenderer(props: Actio
     const groups: Record<GTDActionStatus, GTDAction[]> = {
       'in-progress': [],
       'waiting': [],
-      'completed': [],
-      'cancelled': []
+      'completed': []
     };
     
     for (const action of actions) {
@@ -631,8 +634,9 @@ export const ActionsListBlock = createReactBlockSpec(
         />
       );
     },
-    toExternalHTML: (block) => {
+    toExternalHTML: (props) => {
       // Export as markdown marker for persistence
+      const block = props.block as { props: { statusFilter: string } };
       const statusFilter = block.props.statusFilter;
       const marker = statusFilter ? 
         `[!actions-list:${statusFilter}]` : 

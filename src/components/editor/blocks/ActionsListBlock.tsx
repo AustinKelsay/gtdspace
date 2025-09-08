@@ -219,8 +219,11 @@ const ActionsListRenderer = React.memo(function ActionsListRenderer(props: Actio
   // Get project path from current file path
   const getProjectPath = React.useCallback((filePath: string): string | null => {
     // Check if this is a file within a project
-    const projectMatch = filePath.match(/(.+\/Projects\/[^/]+)/);
+    // Normalize path separators and use case-insensitive match
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    const projectMatch = normalizedPath.match(/(.+\/[Pp]rojects\/[^/]+)/i);
     if (projectMatch) {
+      // Return the original match but with normalized separators
       return projectMatch[1];
     }
     return null;

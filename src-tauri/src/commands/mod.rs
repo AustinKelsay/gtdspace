@@ -25,6 +25,7 @@
 //! - `save_settings()` - Save user settings to persistent storage
 
 use chrono::{Datelike, Timelike};
+#[allow(unused_imports)]
 use notify_debouncer_mini::{
     new_debouncer,
     notify::{RecursiveMode, Watcher},

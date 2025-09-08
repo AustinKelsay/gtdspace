@@ -25,7 +25,11 @@
 //! - `save_settings()` - Save user settings to persistent storage
 
 use chrono::{Datelike, Timelike};
-use notify_debouncer_mini::{new_debouncer, notify::{RecursiveMode, Watcher}, DebouncedEventKind};
+use notify_debouncer_mini::{
+    new_debouncer,
+    notify::{RecursiveMode, Watcher},
+    DebouncedEventKind,
+};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};

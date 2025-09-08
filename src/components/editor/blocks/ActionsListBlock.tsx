@@ -30,12 +30,12 @@ import type { GTDAction, GTDActionStatus, GTDActionEffort, MarkdownFile } from '
  * Base props provided to BlockNote React block renderers
  */
 interface ActionsListBlockRenderProps {
-  block: { id: string; props: { statusFilter?: string; currentPath?: string } };
+  block: { id: string; props: { statusFilter?: string } };
   editor: {
     document: unknown;
     updateBlock: (
       id: string,
-      update: { type: string; props: { statusFilter?: string; currentPath?: string } }
+      update: { type: string; props: { statusFilter?: string } }
     ) => void;
   };
   children?: React.ReactNode;
@@ -49,7 +49,7 @@ function toActionsListBlockRenderProps(
   incomingProps: unknown
 ): ActionsListBlockRenderProps {
   const p = incomingProps as {
-    block: { id: string; props?: { statusFilter?: string; currentPath?: string } };
+    block: { id: string; props?: { statusFilter?: string } };
     editor: { document: unknown; updateBlock: (...args: unknown[]) => unknown };
     children?: React.ReactNode;
     className?: string;
@@ -59,8 +59,7 @@ function toActionsListBlockRenderProps(
     block: {
       id: p.block.id,
       props: {
-        statusFilter: p.block.props?.statusFilter,
-        currentPath: p.block.props?.currentPath
+        statusFilter: p.block.props?.statusFilter
       },
     },
     editor: {
@@ -156,12 +155,12 @@ const getEffortColor = (effort: GTDActionEffort) => {
 };
 
 interface ActionsListRendererProps {
-  block: { id: string; props: { statusFilter?: string; currentPath?: string } };
+  block: { id: string; props: { statusFilter?: string } };
   editor: {
     document: unknown;
     updateBlock: (
       id: string,
-      update: { type: string; props: { statusFilter?: string; currentPath?: string } }
+      update: { type: string; props: { statusFilter?: string } }
     ) => void;
   };
   statusFilter?: GTDActionStatus;
@@ -609,9 +608,6 @@ const ActionsListRenderer = React.memo(function ActionsListRenderer(props: Actio
 const actionsListPropSchema = {
   statusFilter: {
     default: '',  // Empty means show all actions
-  },
-  currentPath: {
-    default: '',  // Path of the current document (auto-populated)
   },
 } satisfies PropSchema;
 

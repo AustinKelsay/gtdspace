@@ -165,9 +165,7 @@ function toBase64(str: string): string {
   }
   
   // Fallback to Buffer for Node.js environments
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (typeof globalThis !== 'undefined' && typeof (globalThis as any).Buffer !== 'undefined') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (globalThis as any).Buffer.from(input, 'utf-8').toString('base64');
   }
   

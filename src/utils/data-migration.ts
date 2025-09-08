@@ -115,9 +115,7 @@ export function needsMigration(content: string): boolean {
  * Migrates a GTD object's field names for backward compatibility
  * Used when loading data from backend that might have old field names
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function migrateGTDObject<T extends Record<string, any>>(obj: T): T {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const migrated: any = { ...obj };
   
   // Migrate snake_case to camelCase for date fields
@@ -180,7 +178,6 @@ export function migrateGTDObject<T extends Record<string, any>>(obj: T): T {
 /**
  * Batch migrate an array of GTD objects
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function migrateGTDObjects<T extends Record<string, any>>(objects: T[]): T[] {
   return objects.map(obj => migrateGTDObject(obj));
 }

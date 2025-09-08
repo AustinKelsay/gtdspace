@@ -12,7 +12,6 @@ import { useEffect } from 'react';
  * Listens for Ctrl/Cmd+Alt+R to insert a references block
  */
 // Using any type for editor due to complex type constraints with custom schema
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useReferencesInsertion(editor: any) {
   useEffect(() => {
     if (!editor) return;

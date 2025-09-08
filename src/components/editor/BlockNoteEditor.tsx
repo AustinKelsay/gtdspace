@@ -141,11 +141,9 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   useHorizonReferencesInsertion(editor);
 
   // Add horizon list insertion capabilities
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useHorizonListInsertion(editor as any);
 
   // Add actions list insertion capabilities
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useActionsListInsertion(editor as any);
 
   // Track if initial content has been loaded
@@ -169,10 +167,8 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
           const processedBlocks = postProcessBlockNoteBlocks(parsedBlocks as unknown[], content) as typeof parsedBlocks;
 
           // Log to see if multiselect blocks are being created
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const hasMultiselect = (processedBlocks as any[]).some((b: any) => b.type === 'multiselect');
           if (hasMultiselect && import.meta.env.VITE_DEBUG_BLOCKNOTE) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             console.log('Found multiselect blocks in parsed content:', (processedBlocks as any[]).filter((b: any) => b.type === 'multiselect'));
           }
 
@@ -318,7 +314,6 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
 
     // Helper: get full plain text of a paragraph block
     const getParagraphPlainText = (block: unknown): string => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const b = block as any;
       if (!b?.content) return '';
       if (typeof b.content === 'string') return b.content as string;
@@ -326,7 +321,6 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         return b.content
           .map((item: unknown) => {
             if (typeof item === 'string') return item as string;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const i = item as any;
             return typeof i?.text === 'string' ? (i.text as string) : '';
           })
@@ -346,7 +340,6 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         const blocks = editor.document as unknown[];
 
         // Batch standard blocks to preserve lists/spacing
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let standardBuffer: any[] = [];
         const markdownParts: string[] = [];
 
@@ -385,9 +378,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         };
 
         for (const block of blocks) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const blockType: string = (block as any)?.type;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const props = (block as any)?.props ?? {};
 
           // Paragraph that contains EXACTLY a marker should export as raw marker

@@ -8,7 +8,6 @@ import { useEffect } from 'react';
 import { createDateTimeBlock, type DateTimeFieldType } from '@/utils/datetime-block-helpers';
 
 // Using any type for editor due to complex type constraints with custom schema
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useDateTimeInsertion(editor: any) {
   useEffect(() => {
     if (!editor) return;
@@ -26,7 +25,6 @@ export function useDateTimeInsertion(editor: any) {
     const insertAfterCurrent = (block: unknown) => {
       const anchor = getInsertionAnchor();
       if (!anchor) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       editor.insertBlocks([block as any], anchor, 'after');
     };
 
@@ -110,7 +108,6 @@ export function useDateTimeInsertion(editor: any) {
       ?? undefined;
 
     if (!currentBlock) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     editor.insertBlocks([block as any], currentBlock, 'after');
   };
 

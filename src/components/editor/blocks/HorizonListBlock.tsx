@@ -155,7 +155,6 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
           return null;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const activeTab = tabsData.openTabs.find((t: any) =>
           t && typeof t === 'object' && t.id === tabsData.activeTabId
         );

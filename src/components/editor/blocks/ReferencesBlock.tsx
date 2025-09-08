@@ -76,7 +76,6 @@ export const ReferencesBlock = createReactBlockSpec(
       const tableElements = ['TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD'];
       if (tableElements.includes(tag)) return undefined;
       // Also skip if the element is nested anywhere inside a table
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let parent: any = element.parentElement;
       while (parent) {
         const pTag = (parent.tagName || '').toUpperCase();

@@ -61,7 +61,7 @@ npm run icons:generate # Generate app icons for all platforms
 
 ## Architecture Overview
 
-**Frontend**: React 18 + TypeScript + Vite + BlockNote editor (v0.35 pinned) + Tailwind/shadcn  
+**Frontend**: React 18 + TypeScript + Vite + BlockNote editor (v0.37 pinned) + Tailwind/shadcn  
 **Backend**: Rust + Tauri 2.x with Tokio async runtime  
 **State**: Custom hooks pattern - no Redux/Zustand  
 **Entry Points**: `src/App.tsx` (frontend), `src-tauri/src/lib.rs` (backend)
@@ -115,6 +115,7 @@ Auto-created at `~/GTD Space`:
 [!multiselect:contexts:home,work]         # Tags/contexts
 [!checkbox:habit-status:false]            # Habit tracking
 [!projects-list]                          # Dynamic lists
+[!actions-list]                           # Actions list in project README
 ```
 
 ### Key Event Flows
@@ -150,6 +151,7 @@ Auto-created at `~/GTD Space`:
 - `useHabitTracking` - Habit status tracking with automatic reset
 - `useErrorHandler` - Centralized error handling with toast notifications
 - `useKeyboardShortcuts` - Global keyboard shortcut management
+- `useActionsListInsertion` - Inserts dynamic actions list in project READMEs
 
 ### Adding a New GTD Field
 
@@ -168,9 +170,9 @@ Auto-created at `~/GTD Space`:
 ## Key Constraints
 
 - **TypeScript**: Strict mode disabled
-- **ESLint**: Zero warnings allowed (CI enforced)
+- **ESLint**: v9+ with flat config (`eslint.config.js`), zero warnings allowed (CI enforced)
 - **Rust**: Must pass `cargo clippy -D warnings` and `cargo fmt --check`
-- **BlockNote**: v0.35 pinned for stability (DO NOT upgrade without testing)
+- **BlockNote**: v0.37 pinned for stability (DO NOT upgrade without testing)
 - **Node**: v20+ required
 - **Limits**: Max 10MB files, max 10 open tabs
 - **Google OAuth**: Port 9898 required (`.env` config needed)
@@ -210,3 +212,12 @@ Auto-created at `~/GTD Space`:
 - **BlockNote formatting**: Rich text features lost when converting to markdown
 - **No test framework**: Manual testing required
 - **macOS code signing**: Unsigned builds may require security bypass on first run
+
+## Project-Specific Features
+
+### Actions List in Projects
+- Projects display expandable list of all actions in sidebar
+- Actions show real-time status (in-progress, waiting, completed)
+- Click action to open in editor
+- Auto-updates when actions are added/modified/deleted
+- Insert with `[!actions-list]` in project README

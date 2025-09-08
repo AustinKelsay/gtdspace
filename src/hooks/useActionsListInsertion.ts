@@ -45,12 +45,10 @@ export function insertActionsList(
     // Create the list block with any type for now
     // TypeScript strict typing with BlockNote custom blocks is complex
     const newBlock = {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       type: 'actions-list' as any,
       props: {
         statusFilter: statusFilter || '',
       },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
 
     // Insert the block after current position

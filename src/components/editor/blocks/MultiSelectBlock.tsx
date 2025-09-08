@@ -220,7 +220,6 @@ export const MultiSelectBlock = createReactBlockSpec(
   },
   {
     render: (props) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const block = props.block as any; // Type assertion needed for BlockNote v0.35
       return <MultiSelectRenderer block={block} editor={props.editor} />;
     },
@@ -240,7 +239,6 @@ export const MultiSelectBlock = createReactBlockSpec(
       }
 
       // Also skip if the element is nested anywhere inside a table
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let parent: any = element.parentElement;
       while (parent) {
         const pTag = (parent.tagName || '').toUpperCase();
@@ -310,7 +308,6 @@ export const MultiSelectBlock = createReactBlockSpec(
       }
     },
     toExternalHTML: (props) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const block = props.block as any;
       const { type, value } = block.props;
       // Return the markdown format that can be parsed back

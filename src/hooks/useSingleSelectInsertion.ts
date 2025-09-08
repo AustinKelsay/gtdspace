@@ -8,7 +8,6 @@ import { useEffect } from 'react';
 import { createSingleSelectBlock } from '@/utils/singleselect-block-helpers';
 
 // Using any type for editor due to complex type constraints with custom schema
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useSingleSelectInsertion(editor: any) {
   useEffect(() => {
     if (!editor) return;
@@ -28,7 +27,6 @@ export function useSingleSelectInsertion(editor: any) {
         e.preventDefault();
         const block = createSingleSelectBlock('status', 'Status', 'in-progress');
         const currentBlock = editor.getTextCursorPosition().block;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         editor.insertBlocks([block as any], currentBlock, 'after');
       }
 
@@ -37,7 +35,6 @@ export function useSingleSelectInsertion(editor: any) {
         e.preventDefault();
         const block = createSingleSelectBlock('effort', 'Effort', 'medium');
         const currentBlock = editor.getTextCursorPosition().block;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         editor.insertBlocks([block as any], currentBlock, 'after');
       }
 
@@ -46,7 +43,6 @@ export function useSingleSelectInsertion(editor: any) {
         e.preventDefault();
         const block = createSingleSelectBlock('project-status', 'Project Status', 'in-progress');
         const currentBlock = editor.getTextCursorPosition().block;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         editor.insertBlocks([block as any], currentBlock, 'after');
       }
 
@@ -55,7 +51,6 @@ export function useSingleSelectInsertion(editor: any) {
         e.preventDefault();
         const block = createSingleSelectBlock('habit-frequency', 'Frequency', 'daily');
         const currentBlock = editor.getTextCursorPosition().block;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         editor.insertBlocks([block as any], currentBlock, 'after');
       }
 
@@ -64,7 +59,6 @@ export function useSingleSelectInsertion(editor: any) {
         e.preventDefault();
         const block = createSingleSelectBlock('habit-status', 'Habit Status', 'todo');
         const currentBlock = editor.getTextCursorPosition().block;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         editor.insertBlocks([block as any], currentBlock, 'after');
       }
     };
@@ -100,7 +94,6 @@ export function useSingleSelectInsertion(editor: any) {
     }
 
     const currentBlock = editor.getTextCursorPosition().block;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     editor.insertBlocks([block as any], currentBlock, 'after');
   };
 

@@ -290,7 +290,6 @@ export const HabitsListBlock = createReactBlockSpec(
     content: 'none',
   },
   {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     render: HabitsListBlockComponent as any,
   }
 );

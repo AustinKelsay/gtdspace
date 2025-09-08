@@ -65,7 +65,11 @@ export default [
       ],
       '@typescript-eslint/no-unused-vars': [
         'error',
-        { argsIgnorePattern: '^_' }
+        { 
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_'
+        }
       ],
       'react-hooks/exhaustive-deps': 'warn',
       'prefer-const': 'error',

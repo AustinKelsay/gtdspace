@@ -171,6 +171,7 @@ Auto-created at `~/GTD Space`:
 
 - **TypeScript**: Strict mode disabled
 - **ESLint**: v9+ with flat config (`eslint.config.js`), zero warnings allowed (CI enforced)
+  - Unused vars config: `argsIgnorePattern`, `varsIgnorePattern`, `caughtErrorsIgnorePattern` all set to `'^_'`
 - **Rust**: Must pass `cargo clippy -D warnings` and `cargo fmt --check`
 - **BlockNote**: v0.37 pinned for stability (DO NOT upgrade without testing)
 - **Node**: v20+ required

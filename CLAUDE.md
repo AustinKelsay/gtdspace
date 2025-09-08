@@ -173,6 +173,8 @@ Auto-created at `~/GTD Space`:
 - **ESLint**: v9+ with flat config (`eslint.config.js`), zero warnings allowed (CI enforced)
   - Unused vars config: `argsIgnorePattern`, `varsIgnorePattern`, `caughtErrorsIgnorePattern` all set to `'^_'`
 - **Rust**: Must pass `cargo clippy -D warnings` and `cargo fmt --check`
+  - Uses `notify` through `notify-debouncer-mini` (no direct dependency)
+  - `rand` v0.9 with new API: `rand::rng()` and `random_range()`
 - **BlockNote**: v0.37 pinned for stability (DO NOT upgrade without testing)
 - **Tailwind CSS**: v3.x required (v4 incompatible with current PostCSS config)
 - **Node**: v20+ required

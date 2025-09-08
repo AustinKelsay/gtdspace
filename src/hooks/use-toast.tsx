@@ -39,7 +39,7 @@ type Action =
     }
   | {
       type: ActionType.UPDATE_TOAST
-      toast: Partial<ToasterToast>
+      toast: { id: string } & Partial<Omit<ToasterToast, 'id'>>
     }
   | {
       type: ActionType.DISMISS_TOAST

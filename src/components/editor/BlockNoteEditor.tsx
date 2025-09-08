@@ -373,7 +373,8 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
             type === 'habits-list' ||
             type === 'projects-areas-list' ||
             type === 'goals-areas-list' ||
-            type === 'visions-goals-list'
+            type === 'visions-goals-list' ||
+            type === 'actions-list'
           );
         };
 
@@ -402,7 +403,8 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
               /^\[!habits-list\]$/.test(fullText) ||
               /^\[!projects-areas-list\]$/.test(fullText) ||
               /^\[!goals-areas-list\]$/.test(fullText) ||
-              /^\[!visions-goals-list\]$/.test(fullText)
+              /^\[!visions-goals-list\]$/.test(fullText) ||
+              /^\[!actions-list(?::[^\]]*)?]$/.test(fullText)
             );
 
             if (isMarker) {
@@ -462,6 +464,12 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
               markdownParts.push(`[!goals-areas-list]\n\n`);
             } else if (blockType === 'visions-goals-list') {
               markdownParts.push(`[!visions-goals-list]\n\n`);
+            } else if (blockType === 'actions-list') {
+              const statusFilter = props.statusFilter;
+              const marker = statusFilter ? 
+                `[!actions-list:${statusFilter}]` : 
+                '[!actions-list]';
+              markdownParts.push(`${marker}\n\n`);
             }
           } else {
             // Collect standard blocks to convert together

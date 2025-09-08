@@ -165,7 +165,7 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
         } else if (activeTab?.path && typeof activeTab.path === 'string') {
           return activeTab.path;
         }
-      } catch (e) {
+      } catch (_e) {
         // Silent fail - this is a fallback
       }
     }

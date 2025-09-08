@@ -45,7 +45,7 @@ export const AdvancedSettings: React.FC = () => {
         title: 'Settings Exported',
         description: 'Your settings have been exported successfully',
       });
-    } catch (error) {
+    } catch (_error) {
       toast({
         title: 'Export Failed',
         description: 'Failed to export settings',
@@ -79,7 +79,7 @@ export const AdvancedSettings: React.FC = () => {
       
       // Reset the input
       event.target.value = '';
-    } catch (error) {
+    } catch (_error) {
       toast({
         title: 'Import Failed',
         description: 'Failed to import settings. Please check the file format.',
@@ -129,7 +129,7 @@ export const AdvancedSettings: React.FC = () => {
         title: 'Cache Cleared',
         description: 'Application cache has been cleared successfully',
       });
-    } catch (error) {
+    } catch (_error) {
       toast({
         title: 'Clear Failed',
         description: 'Failed to clear cache',

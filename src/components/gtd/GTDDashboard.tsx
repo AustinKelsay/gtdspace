@@ -134,7 +134,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
         const { invoke } = await import('@tauri-apps/api/core');
         const files = await invoke<MarkdownFile[]>('list_markdown_files', { path: `${gtdSpace.root_path}/${name}` });
         setHorizonFilesList(prev => ({ ...prev, [name]: files }));
-      } catch (e) {
+      } catch (_e) {
         setHorizonFilesList(prev => ({ ...prev, [name]: [] }));
       }
     }
@@ -276,13 +276,13 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                       last_updated: lastUpdatedTime || new Date().toISOString(),
                       createdDateTime: createdDateTime || lastUpdatedTime || new Date().toISOString()
                     };
-                  } catch (error) {
+                  } catch (_error) {
                     return null;
                   }
                 })
               );
               setHabits(loadedHabits.filter((h): h is GTDHabit => h !== null));
-            } catch (error) {
+            } catch (_error) {
               setHabits([]);
             }
           })(),
@@ -309,13 +309,13 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                       path: horizonPath
                     });
                     counts[horizon] = files.length;
-                  } catch (error) {
+                  } catch (_error) {
                     counts[horizon] = 0;
                   }
                 })
               );
               setHorizonFileCounts(counts);
-            } catch (error) {
+            } catch (_error) {
               // Failed to load horizon counts
             }
           })()
@@ -395,7 +395,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
         }));
 
         setActionSummary({ total, inProgress, completed, waiting, upcomingDue });
-      } catch (e) {
+      } catch (_e) {
         setActionSummary({ total: 0, inProgress: 0, completed: 0, waiting: 0, upcomingDue: 0 });
       }
     };

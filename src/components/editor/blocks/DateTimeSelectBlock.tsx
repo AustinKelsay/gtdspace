@@ -56,7 +56,7 @@ const DateTimeSelectComponent = React.memo<DateTimeSelectComponentProps>(functio
       if (isValid(parsed)) {
         dateValue = parsed;
       }
-    } catch (e) {
+    } catch (_e) {
       // Silently handle parse errors
     }
   }

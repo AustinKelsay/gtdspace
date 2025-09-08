@@ -88,7 +88,7 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
         const workspaces = JSON.parse(stored);
         setRecentWorkspaces(workspaces);
       }
-    } catch (error) {
+    } catch (_error) {
       // Failed to load recent workspaces
     }
   }, []);
@@ -100,7 +100,7 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
       if (settings?.default_gtd_space) {
         setDefaultWorkspace(settings.default_gtd_space);
       }
-    } catch (error) {
+    } catch (_error) {
       // Failed to load default workspace
     }
   }, []);
@@ -118,7 +118,7 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
         if (isValid) {
           await loadProjects(currentPath);
         }
-      } catch (error) {
+      } catch (_error) {
         // Failed to load current workspace
       }
     }
@@ -135,7 +135,7 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
     if (gtdSpace?.root_path) {
       try {
         await safeInvoke('open_folder_in_explorer', { path: gtdSpace.root_path }, null);
-      } catch (error) {
+      } catch (_error) {
         // Failed to open folder
       }
     }

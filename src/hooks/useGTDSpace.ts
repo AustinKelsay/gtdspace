@@ -50,7 +50,7 @@ export function useGTDSpace() {
                 const dirPath = `${spacePath}/${dirName}`;
                 const result = await safeInvoke<boolean>('check_directory_exists', { path: dirPath }, false);
                 return { dirName, exists: result };
-              } catch (error) {
+              } catch (_error) {
                 return { dirName, exists: false };
               }
             })
@@ -68,7 +68,7 @@ export function useGTDSpace() {
             // Some directories are still missing, wait for next check
           }
           
-        } catch (error) {
+        } catch (_error) {
           // Silently handle directory check errors
         }
         
@@ -103,7 +103,7 @@ export function useGTDSpace() {
             // Wait for directory structure to be fully created
             try {
               await waitForDirectoryStructure(spacePath);
-            } catch (error) {
+            } catch (_error) {
               // Continue anyway - the user can refresh manually if needed
             }
             

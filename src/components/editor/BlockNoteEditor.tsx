@@ -33,6 +33,7 @@ import {
   VisionsAndGoalsListBlock
 } from './blocks/HorizonListBlock';
 import { HabitsListBlock } from './blocks/HabitsListBlock';
+import { ActionsListBlock } from './blocks/ActionsListBlock';
 import { postProcessBlockNoteBlocks } from '@/utils/blocknote-preprocessing';
 import { useMultiSelectInsertion } from '@/hooks/useMultiSelectInsertion';
 import { useSingleSelectInsertion } from '@/hooks/useSingleSelectInsertion';
@@ -40,6 +41,7 @@ import { useDateTimeInsertion } from '@/hooks/useDateTimeInsertion';
 import { useReferencesInsertion } from '@/hooks/useReferencesInsertion';
 import { useHorizonReferencesInsertion } from '@/hooks/useHorizonReferencesInsertion';
 import { useHorizonListInsertion } from '@/hooks/useHorizonListInsertion';
+import { useActionsListInsertion } from '@/hooks/useActionsListInsertion';
 import './blocknote-theme.css';
 import { FilePathProvider } from './FilePathContext';
 
@@ -110,6 +112,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       'goals-list': GoalsListBlock,
       'visions-list': VisionsListBlock,
       'habits-list': HabitsListBlock,
+      'actions-list': ActionsListBlock,
       'projects-areas-list': ProjectsAndAreasListBlock,
       'goals-areas-list': GoalsAndAreasListBlock,
       'visions-goals-list': VisionsAndGoalsListBlock,
@@ -138,8 +141,10 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   useHorizonReferencesInsertion(editor);
 
   // Add horizon list insertion capabilities
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useHorizonListInsertion(editor as any);
+
+  // Add actions list insertion capabilities
+  useActionsListInsertion(editor as any);
 
   // Track if initial content has been loaded
   const initialContentLoaded = useRef(false);
@@ -162,10 +167,8 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
           const processedBlocks = postProcessBlockNoteBlocks(parsedBlocks as unknown[], content) as typeof parsedBlocks;
 
           // Log to see if multiselect blocks are being created
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const hasMultiselect = (processedBlocks as any[]).some((b: any) => b.type === 'multiselect');
           if (hasMultiselect && import.meta.env.VITE_DEBUG_BLOCKNOTE) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             console.log('Found multiselect blocks in parsed content:', (processedBlocks as any[]).filter((b: any) => b.type === 'multiselect'));
           }
 
@@ -311,7 +314,6 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
 
     // Helper: get full plain text of a paragraph block
     const getParagraphPlainText = (block: unknown): string => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const b = block as any;
       if (!b?.content) return '';
       if (typeof b.content === 'string') return b.content as string;
@@ -319,7 +321,6 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         return b.content
           .map((item: unknown) => {
             if (typeof item === 'string') return item as string;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const i = item as any;
             return typeof i?.text === 'string' ? (i.text as string) : '';
           })
@@ -339,7 +340,6 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
         const blocks = editor.document as unknown[];
 
         // Batch standard blocks to preserve lists/spacing
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let standardBuffer: any[] = [];
         const markdownParts: string[] = [];
 
@@ -373,14 +373,13 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
             type === 'habits-list' ||
             type === 'projects-areas-list' ||
             type === 'goals-areas-list' ||
-            type === 'visions-goals-list'
+            type === 'visions-goals-list' ||
+            type === 'actions-list'
           );
         };
 
         for (const block of blocks) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const blockType: string = (block as any)?.type;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const props = (block as any)?.props ?? {};
 
           // Paragraph that contains EXACTLY a marker should export as raw marker
@@ -404,7 +403,8 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
               /^\[!habits-list\]$/.test(fullText) ||
               /^\[!projects-areas-list\]$/.test(fullText) ||
               /^\[!goals-areas-list\]$/.test(fullText) ||
-              /^\[!visions-goals-list\]$/.test(fullText)
+              /^\[!visions-goals-list\]$/.test(fullText) ||
+              /^\[!actions-list(?::[^\]]*)?]$/.test(fullText)
             );
 
             if (isMarker) {
@@ -464,6 +464,12 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
               markdownParts.push(`[!goals-areas-list]\n\n`);
             } else if (blockType === 'visions-goals-list') {
               markdownParts.push(`[!visions-goals-list]\n\n`);
+            } else if (blockType === 'actions-list') {
+              const statusFilter = props.statusFilter;
+              const marker = statusFilter ? 
+                `[!actions-list:${statusFilter}]` : 
+                '[!actions-list]';
+              markdownParts.push(`${marker}\n\n`);
             }
           } else {
             // Collect standard blocks to convert together

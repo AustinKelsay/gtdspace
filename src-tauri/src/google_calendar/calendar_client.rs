@@ -1,4 +1,3 @@
-use rand::Rng;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -208,7 +207,12 @@ async fn get_with_retries(
                     }
 
                     let backoff_ms = base_delay_ms.saturating_mul(1u64 << (attempt - 1));
-                    let jitter_ms: u64 = rand::thread_rng().gen_range(0..=backoff_ms / 2 + 1);
+                    // Calculate jitter before await to avoid Send issue
+                    let jitter_ms: u64 = {
+                        use rand::Rng;
+                        let mut rng = rand::rng();
+                        rng.random_range(0..=backoff_ms / 2 + 1)
+                    };
                     let sleep_ms = backoff_ms + jitter_ms;
                     println!(
                         "[CalendarClient] Retry {} due to HTTP {} on page {}. Sleeping {} ms...",
@@ -226,8 +230,12 @@ async fn get_with_retries(
                         let is_transient = e.is_timeout() || e.is_connect();
                         if is_transient && attempt < max_attempts {
                             let backoff_ms = base_delay_ms.saturating_mul(1u64 << (attempt - 1));
-                            let jitter_ms: u64 =
-                                rand::thread_rng().gen_range(0..=backoff_ms / 2 + 1);
+                            // Calculate jitter before await to avoid Send issue
+                            let jitter_ms: u64 = {
+                                use rand::Rng;
+                                let mut rng = rand::rng();
+                                rng.random_range(0..=backoff_ms / 2 + 1)
+                            };
                             let sleep_ms = backoff_ms + jitter_ms;
                             println!(
                                 "[CalendarClient] Retry {} due to body/network error on page {}: {}. Sleeping {} ms...",
@@ -256,7 +264,12 @@ async fn get_with_retries(
 
                 if retryable && attempt < max_attempts {
                     let backoff_ms = base_delay_ms.saturating_mul(1u64 << (attempt - 1));
-                    let jitter_ms: u64 = rand::thread_rng().gen_range(0..=backoff_ms / 2 + 1);
+                    // Calculate jitter before await to avoid Send issue
+                    let jitter_ms: u64 = {
+                        use rand::Rng;
+                        let mut rng = rand::rng();
+                        rng.random_range(0..=backoff_ms / 2 + 1)
+                    };
                     let sleep_ms = backoff_ms + jitter_ms;
                     println!(
                         "[CalendarClient] Retry {} due to network error on page {}: {}. Sleeping {} ms...",

@@ -71,9 +71,10 @@ interface ReferencesBlock {
 
 interface ListBlock {
   type: 'projects-list' | 'areas-list' | 'goals-list' | 'visions-list' | 'habits-list' | 
-        'projects-areas-list' | 'goals-areas-list' | 'visions-goals-list';
+        'projects-areas-list' | 'goals-areas-list' | 'visions-goals-list' | 'actions-list';
   props: {
-    listType: string;
+    listType?: string;
+    statusFilter?: string;
     currentPath?: string;
   };
 }
@@ -164,9 +165,7 @@ function toBase64(str: string): string {
   }
   
   // Fallback to Buffer for Node.js environments
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (typeof globalThis !== 'undefined' && typeof (globalThis as any).Buffer !== 'undefined') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (globalThis as any).Buffer.from(input, 'utf-8').toString('base64');
   }
   
@@ -184,7 +183,7 @@ function toBase64(str: string): string {
 // Create a hash of the content for efficient caching - focus on structural elements
 function createContentHash(markdown: string, blockCount: number): string {
   // Extract only GTD field markers and structural elements for stable caching
-  const gtdFieldMarkers = markdown.match(/\[!(?:multiselect|singleselect|checkbox|datetime|references|projects-references|areas-references|goals-references|vision-references|purpose-references|habits-references|projects-list|areas-list|goals-list|visions-list|habits-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(?::[^\]]*)?\]/g) || [];
+  const gtdFieldMarkers = markdown.match(/\[!(?:multiselect|singleselect|checkbox|datetime|references|projects-references|areas-references|goals-references|vision-references|purpose-references|habits-references|projects-list|areas-list|goals-list|visions-list|habits-list|actions-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(?::[^\]]*)?\]/g) || [];
   
   // Create a structural signature based on:
   // 1. Block count (structural changes)
@@ -206,6 +205,36 @@ function createContentHash(markdown: string, blockCount: number): string {
   const contentHash = toBase64(markdown.trim()).slice(0, 8);
   return `${blockCount}-${gtdFieldCount}-${structuralHash}-${contentHash}`;
 }
+
+/**
+ * Shared list of all custom marker types used in the application
+ * This ensures consistency across all marker-related regex patterns
+ */
+const MARKER_TYPES = [
+  'references',
+  'projects-references',
+  'areas-references',
+  'goals-references',
+  'vision-references',
+  'purpose-references',
+  'habits-references',
+  'multiselect',
+  'singleselect',
+  'checkbox',
+  'datetime',
+  'projects-list',
+  'areas-list',
+  'goals-list',
+  'visions-list',
+  'habits-list',
+  'actions-list',
+  'projects-areas-list',
+  'goals-areas-list',
+  'visions-goals-list',
+  'projects-and-areas-list',
+  'goals-and-areas-list',
+  'visions-and-goals-list'
+];
 
 /**
  * Post-processes BlockNote blocks after markdown parsing to insert custom blocks
@@ -268,6 +297,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   const goalsListPattern = /\[!goals-list\]/g;
   const visionsListPattern = /\[!visions-list\]/g;
   const habitsListPattern = /\[!habits-list\]/g;
+  const actionsListPattern = /\[!actions-list(?::([^\]]*))?\]/g;
   const projectsAreasListPattern = /\[!projects-areas-list\]/g;
   const goalsAreasListPattern = /\[!goals-areas-list\]/g;
   const visionsGoalsListPattern = /\[!visions-goals-list\]/g;
@@ -445,7 +475,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   }
   
   // Check for list markers
-  const listBlocks: Array<{ text: string; listType: string; blockType: string }> = [];
+  const listBlocks: Array<{ text: string; listType: string; blockType: string; statusFilter?: string }> = [];
   
   while ((match = projectsListPattern.exec(markdown)) !== null) {
     listBlocks.push({ text: match[0], listType: 'projects', blockType: 'projects-list' });
@@ -465,6 +495,11 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
   
   while ((match = habitsListPattern.exec(markdown)) !== null) {
     listBlocks.push({ text: match[0], listType: 'habits', blockType: 'habits-list' });
+  }
+  
+  while ((match = actionsListPattern.exec(markdown)) !== null) {
+    const statusFilter = match[1] || '';
+    listBlocks.push({ text: match[0], listType: 'actions', blockType: 'actions-list', statusFilter });
   }
   
   while ((match = projectsAreasListPattern.exec(markdown)) !== null) {
@@ -614,7 +649,10 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
 
       // New: If this paragraph is composed only of our custom markers (possibly multiple),
       // split them into individual custom blocks to prevent them rendering as plain text.
-      const markerTokenRegex = /\[!(references|projects-references|areas-references|goals-references|vision-references|purpose-references|habits-references|multiselect|singleselect|checkbox|datetime|projects-list|areas-list|goals-list|visions-list|habits-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(:[^\]]*)?\](?:\])?/g;
+      const markerTokenRegex = new RegExp(
+        `\\[!(${MARKER_TYPES.join('|')})(:[^\\]]*)?\\](?:\\])?`,
+        'g'
+      );
       const leftoverAfterRemoval = blockText.replace(markerTokenRegex, '');
       const leftoverSanitized = leftoverAfterRemoval.replace(/[\s\u200B-\u200D\uFEFF]/g, '').trim();
       const onlyMarkers = blockText.trim().length > 0 && leftoverSanitized === '';
@@ -661,6 +699,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
             kind === 'goals-list' ||
             kind === 'visions-list' ||
             kind === 'habits-list' ||
+            kind === 'actions-list' ||
             kind === 'projects-areas-list' ||
             kind === 'goals-areas-list' ||
             kind === 'visions-goals-list' ||
@@ -668,28 +707,38 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
             kind === 'goals-and-areas-list' ||
             kind === 'visions-and-goals-list'
           ) {
-            // Map to canonical tokens used by HorizonList blocks
-            const listTypeCanonical = (
-              kind === 'projects-list' ? 'projects' :
-              kind === 'areas-list' ? 'areas' :
-              kind === 'goals-list' ? 'goals' :
-              kind === 'visions-list' ? 'visions' :
-              kind === 'habits-list' ? 'habits' :
-              kind === 'projects-areas-list' || kind === 'projects-and-areas-list' ? 'projects-areas' :
-              kind === 'goals-areas-list' || kind === 'goals-and-areas-list' ? 'goals-areas' :
-              /* visions-goals */ 'visions-goals'
-            );
-            // Map legacy "and" versions to registered types
-            const blockType = (
-              kind === 'projects-and-areas-list' ? 'projects-areas-list' :
-              kind === 'goals-and-areas-list' ? 'goals-areas-list' :
-              kind === 'visions-and-goals-list' ? 'visions-goals-list' :
-              kind
-            ) as ListBlock['type'];
-            processedBlocks.push({
-              type: blockType,
-              props: { listType: listTypeCanonical },
-            });
+            // Special handling for actions-list
+            if (kind === 'actions-list') {
+              // Extract status filter if present (e.g., [!actions-list:in-progress])
+              const statusFilter = rest || '';
+              processedBlocks.push({
+                type: 'actions-list',
+                props: { statusFilter },
+              });
+            } else {
+              // Map to canonical tokens used by HorizonList blocks
+              const listTypeCanonical = (
+                kind === 'projects-list' ? 'projects' :
+                kind === 'areas-list' ? 'areas' :
+                kind === 'goals-list' ? 'goals' :
+                kind === 'visions-list' ? 'visions' :
+                kind === 'habits-list' ? 'habits' :
+                kind === 'projects-areas-list' || kind === 'projects-and-areas-list' ? 'projects-areas' :
+                kind === 'goals-areas-list' || kind === 'goals-and-areas-list' ? 'goals-areas' :
+                /* visions-goals */ 'visions-goals'
+              );
+              // Map legacy "and" versions to registered types
+              const blockType = (
+                kind === 'projects-and-areas-list' ? 'projects-areas-list' :
+                kind === 'goals-and-areas-list' ? 'goals-areas-list' :
+                kind === 'visions-and-goals-list' ? 'visions-goals-list' :
+                kind
+              ) as ListBlock['type'];
+              processedBlocks.push({
+                type: blockType,
+                props: { listType: listTypeCanonical },
+              });
+            }
           } else {
             // If we encounter an unknown marker, preserve as paragraph text token for safety
             processedBlocks.push(block);
@@ -841,11 +890,20 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
           // We should only match on the exact text, not on partial matches
           if (listBlock.text && blockText.trim() === listBlock.text.trim()) {
             // Replace this paragraph with a list block
+            const props: ListBlock['props'] = {};
+            
+            // For actions-list, use statusFilter instead of listType
+            if (listBlock.blockType === 'actions-list') {
+              if (listBlock.statusFilter) {
+                props.statusFilter = listBlock.statusFilter;
+              }
+            } else {
+              props.listType = listBlock.listType;
+            }
+            
             processedBlocks.push({
               type: listBlock.blockType as ListBlock['type'],
-              props: {
-                listType: listBlock.listType,
-              },
+              props,
             });
             blockReplaced = true;
             // List block replaced

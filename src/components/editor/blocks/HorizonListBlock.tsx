@@ -155,7 +155,6 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
           return null;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const activeTab = tabsData.openTabs.find((t: any) =>
           t && typeof t === 'object' && t.id === tabsData.activeTabId
         );
@@ -166,7 +165,7 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
         } else if (activeTab?.path && typeof activeTab.path === 'string') {
           return activeTab.path;
         }
-      } catch (e) {
+      } catch (_e) {
         // Silent fail - this is a fallback
       }
     }

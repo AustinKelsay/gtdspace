@@ -46,12 +46,10 @@ export function insertHorizonList(
     // Create the list block with any type for now
     // TypeScript strict typing with BlockNote custom blocks is complex
     const newBlock = {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       type: listType as any,
       props: {
         listType: listType.replace('-list', ''),
       },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
 
     // Insert the block after current position

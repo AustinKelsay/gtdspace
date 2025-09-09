@@ -14,12 +14,17 @@ export function useActionsListInsertion(editor: BlockNoteEditor | null) {
   useEffect(() => {
     if (!editor) return;
     
-    // TODO: Keyboard shortcut (Ctrl+Shift+A) is implemented in useKeyboardShortcuts.ts
-    // This hook is kept for future editor-specific shortcuts or behaviors
-    // Actions list insertion is currently available via:
-    // 1. Slash commands in the editor
-    // 2. Keyboard shortcut Ctrl+Shift+A (see useKeyboardShortcuts.ts)
-    // 3. Programmatically via insertActionsList() function
+    // Listen for the custom event dispatched by the keyboard shortcut handler
+    const handleInsertActionsList = () => {
+      insertActionsList(editor);
+    };
+    
+    window.addEventListener('insert-actions-list', handleInsertActionsList);
+    
+    // Cleanup listener on unmount or editor change
+    return () => {
+      window.removeEventListener('insert-actions-list', handleInsertActionsList);
+    };
   }, [editor]);
 }
 

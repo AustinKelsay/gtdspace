@@ -307,13 +307,8 @@ export const App: React.FC = () => {
     onOpenGlobalSearch: () => openModal('globalSearch'),
     onOpenKeyboardShortcuts: () => openModal('keyboardShortcuts'),
     onInsertActionsList: () => {
-      // TODO: Connect to active editor instance
-      // The editor is managed at the component level, so we need to either:
-      // 1. Pass the editor instance through context
-      // 2. Use an event system to trigger the insertion
-      // 3. Move this handler to the editor component level
-      // For now, this handler is registered but needs proper implementation
-      console.log('Actions list insertion requested via Ctrl+Shift+A');
+      // Dispatch custom event that the editor hook will listen for
+      window.dispatchEvent(new CustomEvent('insert-actions-list'));
     },
   };
 

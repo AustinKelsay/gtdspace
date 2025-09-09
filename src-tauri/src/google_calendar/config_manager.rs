@@ -14,7 +14,6 @@ pub struct GoogleOAuthConfig {
 }
 
 pub struct GoogleConfigManager {
-    app_handle: AppHandle,
     store: Arc<Store<tauri::Wry>>,
 }
 
@@ -25,7 +24,7 @@ impl GoogleConfigManager {
             .store("google-oauth-config.json")
             .map_err(|e| format!("Failed to create store: {}", e))?;
 
-        Ok(Self { app_handle, store })
+        Ok(Self { store })
     }
 
     /// Store Google OAuth configuration securely

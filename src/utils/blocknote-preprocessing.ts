@@ -699,6 +699,7 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
             kind === 'goals-list' ||
             kind === 'visions-list' ||
             kind === 'habits-list' ||
+            kind === 'actions-list' ||
             kind === 'projects-areas-list' ||
             kind === 'goals-areas-list' ||
             kind === 'visions-goals-list' ||
@@ -706,28 +707,38 @@ export function postProcessBlockNoteBlocks(blocks: unknown[], markdown: string):
             kind === 'goals-and-areas-list' ||
             kind === 'visions-and-goals-list'
           ) {
-            // Map to canonical tokens used by HorizonList blocks
-            const listTypeCanonical = (
-              kind === 'projects-list' ? 'projects' :
-              kind === 'areas-list' ? 'areas' :
-              kind === 'goals-list' ? 'goals' :
-              kind === 'visions-list' ? 'visions' :
-              kind === 'habits-list' ? 'habits' :
-              kind === 'projects-areas-list' || kind === 'projects-and-areas-list' ? 'projects-areas' :
-              kind === 'goals-areas-list' || kind === 'goals-and-areas-list' ? 'goals-areas' :
-              /* visions-goals */ 'visions-goals'
-            );
-            // Map legacy "and" versions to registered types
-            const blockType = (
-              kind === 'projects-and-areas-list' ? 'projects-areas-list' :
-              kind === 'goals-and-areas-list' ? 'goals-areas-list' :
-              kind === 'visions-and-goals-list' ? 'visions-goals-list' :
-              kind
-            ) as ListBlock['type'];
-            processedBlocks.push({
-              type: blockType,
-              props: { listType: listTypeCanonical },
-            });
+            // Special handling for actions-list
+            if (kind === 'actions-list') {
+              // Extract status filter if present (e.g., [!actions-list:in-progress])
+              const statusFilter = rest || '';
+              processedBlocks.push({
+                type: 'actions-list',
+                props: { statusFilter },
+              });
+            } else {
+              // Map to canonical tokens used by HorizonList blocks
+              const listTypeCanonical = (
+                kind === 'projects-list' ? 'projects' :
+                kind === 'areas-list' ? 'areas' :
+                kind === 'goals-list' ? 'goals' :
+                kind === 'visions-list' ? 'visions' :
+                kind === 'habits-list' ? 'habits' :
+                kind === 'projects-areas-list' || kind === 'projects-and-areas-list' ? 'projects-areas' :
+                kind === 'goals-areas-list' || kind === 'goals-and-areas-list' ? 'goals-areas' :
+                /* visions-goals */ 'visions-goals'
+              );
+              // Map legacy "and" versions to registered types
+              const blockType = (
+                kind === 'projects-and-areas-list' ? 'projects-areas-list' :
+                kind === 'goals-and-areas-list' ? 'goals-areas-list' :
+                kind === 'visions-and-goals-list' ? 'visions-goals-list' :
+                kind
+              ) as ListBlock['type'];
+              processedBlocks.push({
+                type: blockType,
+                props: { listType: listTypeCanonical },
+              });
+            }
           } else {
             // If we encounter an unknown marker, preserve as paragraph text token for safety
             processedBlocks.push(block);

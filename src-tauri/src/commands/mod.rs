@@ -5154,13 +5154,13 @@ lazy_static! {
 }
 
 /// Helper function to load Google OAuth credentials from secure storage or environment variables.
-/// 
+///
 /// This function consolidates the credential loading logic used across multiple commands.
 /// It first attempts to load from secure storage (for production use), then falls back to
 /// environment variables (for development).
-/// 
+///
 /// # Returns
-/// 
+///
 /// A tuple of (client_id, client_secret) on success, or an error message
 async fn load_google_oauth_credentials(app: AppHandle) -> Result<(String, String), String> {
     use super::google_calendar::config_manager::GoogleConfigManager;
@@ -5175,9 +5175,7 @@ async fn load_google_oauth_credentials(app: AppHandle) -> Result<(String, String
         }
         Ok(None) => {
             // Fallback to environment variables for development
-            println!(
-                "[GoogleCalendar] No stored config found, trying environment variables..."
-            );
+            println!("[GoogleCalendar] No stored config found, trying environment variables...");
             println!(
                 "[GoogleCalendar] Working directory: {:?}",
                 std::env::current_dir()
@@ -5234,9 +5232,7 @@ async fn load_google_oauth_credentials(app: AppHandle) -> Result<(String, String
             println!("[GoogleCalendar] Using environment variables (development mode)");
             Ok((client_id, client_secret))
         }
-        Err(e) => {
-            Err(format!("Failed to load OAuth configuration: {}", e))
-        }
+        Err(e) => Err(format!("Failed to load OAuth configuration: {}", e)),
     }
 }
 

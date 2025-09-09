@@ -16,7 +16,6 @@ import { useEffect } from 'react';
  * - Ctrl/Cmd+Alt+U: Insert Purpose & Principles references (U for "Ultimate")
  */
 // Using any type for editor due to complex type constraints with custom schema
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useHorizonReferencesInsertion(editor: any) {
   useEffect(() => {
     if (!editor) return;
@@ -69,7 +68,6 @@ export function useHorizonReferencesInsertion(editor: any) {
       // Focus on the new block
       setTimeout(() => {
         const blocks = editor.document;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const newBlockIndex = blocks.findIndex((b: any) => b.id === selection.block.id) + 1;
         if (newBlockIndex < blocks.length) {
           editor.setTextCursorPosition(blocks[newBlockIndex], 'end');

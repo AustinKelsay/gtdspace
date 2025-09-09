@@ -260,7 +260,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       setSectionRefreshKey(prev => prev + 1);
 
       return sortedFiles;
-    } catch (error) {
+    } catch (_error) {
       return [];
     } finally {
       loadingSectionsRef.current.delete(sectionPath);
@@ -293,7 +293,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       let files: MarkdownFile[] = [];
       try {
         files = await safeInvoke<MarkdownFile[]>('list_project_actions', { projectPath }, []);
-      } catch (e) {
+      } catch (_e) {
         const all = await safeInvoke<MarkdownFile[]>('list_markdown_files', { path: projectPath }, []);
         files = all.filter(f => f.name !== 'README.md');
       }
@@ -325,7 +325,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             status: normalized,
             due_date: dueDate
           };
-        } catch (error) {
+        } catch (_error) {
           return {
             path: action.path,
             status: 'in-progress'
@@ -354,7 +354,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           }));
         }
       });
-    } catch (error) {
+    } catch (_error) {
       // Silently handle action status loading errors
     }
   }, []);
@@ -1019,7 +1019,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         throw new Error('No folder selected');
       }
       onFolderSelect(folderPath);
-    } catch (error) {
+    } catch (_error) {
       // Silently handle folder selection errors (user cancelled)
     }
   };
@@ -1139,7 +1139,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       }
 
       setDeleteItem(null);
-    } catch (error) {
+    } catch (_error) {
       // Silently handle deletion errors
     }
   };
@@ -1149,7 +1149,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
     try {
       await safeInvoke('open_folder_in_explorer', { path: currentFolder }, null);
-    } catch (error) {
+    } catch (_error) {
       // Silently handle explorer open errors
     }
   };
@@ -1568,7 +1568,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                               e.stopPropagation();
                                               try {
                                                 await safeInvoke('open_file_location', { file_path: project.path }, null);
-                                              } catch (error) {
+                                              } catch (_error) {
                                                 // Silently handle file location open errors
                                               }
                                             }}
@@ -1658,7 +1658,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                         e.stopPropagation();
                                                         try {
                                                           await safeInvoke('open_file_location', { file_path: currentPath }, null);
-                                                        } catch (error) {
+                                                        } catch (_error) {
                                                           // Silently handle file location open errors
                                                         }
                                                       }}
@@ -1816,7 +1816,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                         e.stopPropagation();
                                         try {
                                           await safeInvoke('open_file_location', { file_path: currentPath }, null);
-                                        } catch (error) {
+                                        } catch (_error) {
                                           // Silently handle file location open errors
                                         }
                                       }}
@@ -1994,7 +1994,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                   ...prev,
                   [habitsPath]: _files
                 }));
-              } catch (error) {
+              } catch (_error) {
                 // Silently handle file list sync errors
               }
             }, 500);

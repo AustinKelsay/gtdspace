@@ -11,7 +11,6 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { createMultiSelectBlock } from '@/utils/multiselect-block-helpers';
 
 // Using any type for editor due to complex type constraints with custom schema
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useMultiSelectInsertion(editor: any) {
   const handleInsertContext = useCallback(
     (event: KeyboardEvent) => {
@@ -44,7 +43,6 @@ export function useMultiSelectInsertion(editor: any) {
         ?? undefined;
 
       if (!currentBlock) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       editor.insertBlocks([block as any], currentBlock, 'after');
     },
     [editor],
@@ -90,7 +88,6 @@ export function useMultiSelectInsertion(editor: any) {
       ?? undefined;
 
     if (!currentBlock) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     editor.insertBlocks([block as any], currentBlock, 'after');
   };
 

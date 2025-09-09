@@ -27,6 +27,8 @@ export interface KeyboardShortcutHandlers {
   onOpenHelp?: () => void;
   /** Open keyboard shortcuts reference (Ctrl+Shift+?) */
   onOpenKeyboardShortcuts?: () => void;
+  /** Insert actions list block (Ctrl+Shift+A) */
+  onInsertActionsList?: () => void;
 }
 
 /**
@@ -73,6 +75,14 @@ export function useKeyboardShortcuts(
           } else {
             // Ctrl+S: Save current file
             handlers.onSaveActive?.();
+          }
+          break;
+
+        case 'a':
+          // Ctrl+Shift+A: Insert actions list
+          if (event.shiftKey) {
+            event.preventDefault();
+            handlers.onInsertActionsList?.();
           }
           break;
 

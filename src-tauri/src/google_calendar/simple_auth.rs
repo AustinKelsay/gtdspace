@@ -1,5 +1,4 @@
 use base64::{engine::general_purpose, Engine as _};
-use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -187,8 +186,7 @@ pub fn start_oauth_flow(
     let state = general_purpose::URL_SAFE_NO_PAD.encode(uuid::Uuid::new_v4().as_bytes());
 
     // Generate PKCE code_verifier (cryptographically random, 43-128 chars)
-    let mut code_verifier_bytes = [0u8; 64];
-    OsRng.fill_bytes(&mut code_verifier_bytes);
+    let code_verifier_bytes: [u8; 64] = rand::random();
     let code_verifier = general_purpose::URL_SAFE_NO_PAD.encode(code_verifier_bytes);
 
     // Compute S256 code_challenge (SHA256 then URL_SAFE_NO_PAD base64)

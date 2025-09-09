@@ -456,7 +456,7 @@ pub fn generate_project_readme_with_refs(params: ProjectReadmeParams) -> String 
 [!purpose-references:{}]
 
 ## Actions
-Actions for this project are stored as individual markdown files in this directory.
+[!actions-list]
 
 ## Related Habits
 [!habits-list]

@@ -14,8 +14,8 @@
     "tauri:build": "tauri build",
     "icons:generate": "node scripts/icons-generate.mjs",
     "type-check": "tsc --noEmit",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "lint:fix": "eslint . --ext ts,tsx --fix",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
     "version:bump": "node scripts/bump-version.js",
     "version:major": "node scripts/bump-version.js major",
     "version:minor": "node scripts/bump-version.js minor",
@@ -71,6 +71,7 @@
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.35.0",
     "@tauri-apps/cli": "2.8.4",
     "@types/lodash.debounce": "^4.0.9",
     "@types/node": "^24.3.1",
@@ -84,7 +85,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.6",
     "postcss": "^8.4.35",
-    "tailwindcss": "^4.1.13",
+    "tailwindcss": "^3.4.17",
     "typescript": "^5.9.2",
     "vite": "^7.1.4"
   }

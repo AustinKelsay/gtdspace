@@ -253,7 +253,6 @@ export const CheckboxBlock = createReactBlockSpec(
   },
   {
     render: (props) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const block = props.block as any;
       return <CheckboxRenderer block={block} editor={props.editor} />;
     },
@@ -274,7 +273,6 @@ export const CheckboxBlock = createReactBlockSpec(
       }
     },
     toExternalHTML: (props) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const block = props.block as any;
       const { type, checked } = block.props;
       // Return the markdown format that can be parsed back

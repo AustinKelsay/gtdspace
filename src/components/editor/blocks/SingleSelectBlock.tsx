@@ -353,7 +353,6 @@ export const SingleSelectBlock = createReactBlockSpec(
   },
   {
     render: (props) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const block = props.block as any; // Type assertion needed for BlockNote v0.35
       return <SingleSelectRenderer block={block} editor={props.editor} />;
     },

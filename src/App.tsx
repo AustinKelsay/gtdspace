@@ -306,6 +306,10 @@ export const App: React.FC = () => {
     onOpenFolder: selectFolder,
     onOpenGlobalSearch: () => openModal('globalSearch'),
     onOpenKeyboardShortcuts: () => openModal('keyboardShortcuts'),
+    onInsertActionsList: () => {
+      // Dispatch custom event that the editor hook will listen for
+      window.dispatchEvent(new CustomEvent('insert-actions-list'));
+    },
   };
 
   useKeyboardShortcuts(keyboardHandlers);

@@ -70,7 +70,7 @@ static HABIT_HISTORY_REGEX: Lazy<Regex> = Lazy::new(|| {
 /// Regex for extracting creation date from habit file
 /// Format: ## Created\n[!datetime:created_date_time:YYYY-MM-DDTHH:MM:SS]
 static HABIT_CREATED_DATE_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"## Created\n[!datetime:created_date_time:([^\]]+)]")
+    Regex::new(r"## Created\s*\n\s*\[!datetime:created_date_time:([^\]]+)\]")
         .expect("Invalid habit created date regex pattern")
 });
 
@@ -109,9 +109,16 @@ fn parse_last_habit_action_time(content: &str) -> Option<chrono::NaiveDateTime> 
 
         // Try parsing with 12-hour format first (e.g., "7:26 PM")
         let parsed_time = if time_str.contains("AM") || time_str.contains("PM") {
-            chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %-I:%M %p").or_else(
-                |_| chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %I:%M %p"),
-            )
+            // Handle both padded ("07:26 PM") and unpadded ("7:26 PM") hours
+            // by preprocessing the time string to ensure consistent padding
+            let padded_time = if time_str.len() < 8 && !time_str.starts_with("1") {
+                // Single digit hour like "7:26 PM" -> "07:26 PM"
+                format!("0{}", time_str)
+            } else {
+                time_str.to_string()
+            };
+            let padded_datetime = format!("{} {}", date_str, padded_time);
+            chrono::NaiveDateTime::parse_from_str(&padded_datetime, "%Y-%m-%d %I:%M %p")
         } else {
             // Fall back to 24-hour format
             chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M")
@@ -138,8 +145,43 @@ fn parse_last_habit_action_time(content: &str) -> Option<chrono::NaiveDateTime> 
     if last_action_time.is_none() {
         if let Some(cap) = HABIT_CREATED_DATE_REGEX.captures(content) {
             if let Some(date_str) = cap.get(1) {
-                if let Ok(datetime) = chrono::DateTime::parse_from_rfc3339(date_str.as_str()) {
+                let date_str = date_str.as_str();
+
+                // Try multiple date formats to handle incomplete dates
+                // First try RFC3339
+                if let Ok(datetime) = chrono::DateTime::parse_from_rfc3339(date_str) {
                     last_action_time = Some(datetime.naive_local());
+                    log::debug!(
+                        "[HABIT-PARSE] Parsed created date (RFC3339): {:?}",
+                        datetime
+                    );
+                }
+                // Try with :00:00Z appended for incomplete timestamps like 2025-09-06T15
+                else if let Ok(datetime) =
+                    chrono::DateTime::parse_from_rfc3339(&format!("{}:00:00Z", date_str))
+                {
+                    last_action_time = Some(datetime.naive_local());
+                    log::debug!(
+                        "[HABIT-PARSE] Parsed created date (with :00:00Z): {:?}",
+                        datetime
+                    );
+                }
+                // Try with :00Z for timestamps like 2025-09-06T15:00
+                else if let Ok(datetime) =
+                    chrono::DateTime::parse_from_rfc3339(&format!("{}:00Z", date_str))
+                {
+                    last_action_time = Some(datetime.naive_local());
+                    log::debug!(
+                        "[HABIT-PARSE] Parsed created date (with :00Z): {:?}",
+                        datetime
+                    );
+                }
+                // Try parsing as date only and assume start of day
+                else if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+                    last_action_time = Some(date.and_hms_opt(0, 0, 0).unwrap());
+                    log::debug!("[HABIT-PARSE] Parsed created date (date only): {:?}", date);
+                } else {
+                    log::warn!("[HABIT-PARSE] Failed to parse created date: {}", date_str);
                 }
             }
         }
@@ -3835,10 +3877,22 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
         "Complete"
     };
     // Use table row format for history entry
+    // Format time without leading zero if hour < 10
+    let hour = now.hour();
+    let time_str = if hour == 0 {
+        format!("12:{:02} AM", now.minute())
+    } else if hour < 12 {
+        format!("{}:{:02} AM", hour, now.minute())
+    } else if hour == 12 {
+        format!("12:{:02} PM", now.minute())
+    } else {
+        format!("{}:{:02} PM", hour - 12, now.minute())
+    };
+
     let history_entry = format!(
         "| {} | {} | {} | Manual | Changed from {} |",
         now.format("%Y-%m-%d"),
-        now.format("%-I:%M %p"),
+        time_str,
         status_display,
         old_status_display
     );
@@ -3878,20 +3932,41 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
         "About to write habit file with history entry: {}",
         history_entry
     );
+    log::debug!(
+        "Final content length: {} bytes (original: {} bytes)",
+        final_content.len(),
+        content.len()
+    );
 
     // OLD complex regex code removed - using simpler line-based approach above
 
     // Removed - using simpler line-based approach above
 
     // Write the updated file with proper error handling
-    fs::write(&habit_path, &final_content)
-        .map_err(|e| format!("Failed to write habit file: {}", e))?;
+    match fs::write(&habit_path, &final_content) {
+        Ok(_) => {
+            log::info!(
+                "Successfully wrote habit file: {} ({} bytes)",
+                habit_path,
+                final_content.len()
+            );
 
-    log::info!(
-        "Successfully updated habit status for: {} (wrote {} bytes)",
-        habit_path,
-        final_content.len()
-    );
+            // Verify the write by reading back
+            if let Ok(verify_content) = fs::read_to_string(&habit_path) {
+                if verify_content.contains(&history_entry) {
+                    log::info!("Verified: History entry successfully written to file");
+                } else {
+                    log::error!("WARNING: History entry not found in file after write!");
+                    log::debug!("Expected entry: {}", history_entry);
+                    log::debug!("File content length after write: {}", verify_content.len());
+                }
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to write habit file {}: {}", habit_path, e);
+            return Err(format!("Failed to write habit file: {}", e));
+        }
+    }
     Ok(())
 }
 
@@ -4040,11 +4115,23 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                         let is_catchup = i < periods_to_process.len() - 1;
                         let action_type = if is_catchup { "Backfill" } else { "Auto-Reset" };
 
+                        // Format time without leading zero if hour < 10
+                        let hour = period_time.hour();
+                        let time_str = if hour == 0 {
+                            format!("12:{:02} AM", period_time.minute())
+                        } else if hour < 12 {
+                            format!("{}:{:02} AM", hour, period_time.minute())
+                        } else if hour == 12 {
+                            format!("12:{:02} PM", period_time.minute())
+                        } else {
+                            format!("{}:{:02} PM", hour - 12, period_time.minute())
+                        };
+
                         // Use table row format for history entry
                         let history_entry = format!(
                             "| {} | {} | {} | {} | {} |",
                             period_time.format("%Y-%m-%d"),
-                            period_time.format("%-I:%M %p"),
+                            time_str,
                             period_status,
                             action_type,
                             notes
@@ -4115,6 +4202,7 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
 /// * `Ok(String)` - The updated content with the entry inserted
 /// * `Err(String)` - Error message if insertion fails
 fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
+    log::debug!("[INSERT-HISTORY] Starting to insert entry: {}", entry);
     let lines: Vec<&str> = content.lines().collect();
     let mut last_history_line_idx = None;
     let mut in_history_section = false;
@@ -4252,6 +4340,10 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
         new_lines.join("\n")
     } else if let Some(idx) = history_section_idx {
         // History section exists but no entries yet
+        log::debug!(
+            "[INSERT-HISTORY] Found empty history section at line {}",
+            idx
+        );
         let mut new_lines = lines[..=idx].to_vec();
         new_lines.push("");
         new_lines.push("*Track your habit completions below:*");
@@ -4259,11 +4351,13 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
 
         if !has_table_header {
             // Add table header
+            log::debug!("[INSERT-HISTORY] Adding table header");
             new_lines.push("| Date | Time | Status | Action | Details |");
             new_lines.push("|------|------|--------|--------|---------|");
         }
 
         new_lines.push(entry);
+        log::debug!("[INSERT-HISTORY] Added entry to history section");
 
         // Add remaining content
         let skip_from = idx + 1;
@@ -4285,6 +4379,7 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
         )
     };
 
+    log::debug!("[INSERT-HISTORY] Result length: {} bytes", result.len());
     Ok(result)
 }
 

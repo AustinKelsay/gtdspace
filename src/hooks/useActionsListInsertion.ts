@@ -15,8 +15,11 @@ export function useActionsListInsertion(editor: BlockNoteEditor | null) {
     if (!editor) return;
     
     // Listen for the custom event dispatched by the keyboard shortcut handler
-    const handleInsertActionsList = () => {
-      insertActionsList(editor);
+    const handleInsertActionsList = (event: Event) => {
+      // Cast to CustomEvent to access detail
+      const customEvent = event as CustomEvent<{ statusFilter?: 'in-progress' | 'waiting' | 'completed' | 'cancelled' }>;
+      const statusFilter = customEvent.detail?.statusFilter;
+      insertActionsList(editor, statusFilter);
     };
     
     window.addEventListener('insert-actions-list', handleInsertActionsList);

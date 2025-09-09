@@ -17,6 +17,7 @@ npm run lint           # ESLint check (CI fails on warnings)
 npm run lint:fix       # Auto-fix ESLint issues
 cd src-tauri && cargo check && cargo clippy  # Rust checks
 cd src-tauri && cargo fmt --check  # Rust formatting check
+cd src-tauri && cargo fmt  # Auto-fix Rust formatting
 
 # Production Build
 npm run tauri:build    # Creates platform-specific installer (runs pretauri:build automatically)
@@ -35,7 +36,7 @@ npm run release:minor  # 0.1.0 → 0.2.0 with git operations
 npm run release:major  # 0.1.0 → 1.0.0 with git operations
 
 # Utilities
-npm run icons:generate # Generate app icons for all platforms
+npm run icons:generate # Generate app icons for all platforms (runs automatically before build)
 
 # Testing (manual only - no framework configured)
 # 1. Test frontend changes with npm run tauri:dev
@@ -151,7 +152,7 @@ Auto-created at `~/GTD Space`:
 - `useHabitTracking` - Habit status tracking with automatic reset
 - `useErrorHandler` - Centralized error handling with toast notifications
 - `useKeyboardShortcuts` - Global keyboard shortcut management
-- `useActionsListInsertion` - Inserts dynamic actions list in project READMEs
+- `useActionsListInsertion` - Inserts dynamic actions list in project READMEs (Ctrl/Cmd+Alt+L)
 
 ### Adding a New GTD Field
 
@@ -172,6 +173,7 @@ Auto-created at `~/GTD Space`:
 - **TypeScript**: Strict mode disabled
 - **ESLint**: v9+ with flat config (`eslint.config.js`), zero warnings allowed (CI enforced)
   - Unused vars config: `argsIgnorePattern`, `varsIgnorePattern`, `caughtErrorsIgnorePattern` all set to `'^_'`
+  - Uses `--ext` flag for file extensions (legacy but still functional)
 - **Rust**: Must pass `cargo clippy -D warnings` and `cargo fmt --check`
   - Uses `notify` through `notify-debouncer-mini` (no direct dependency)
   - `rand` v0.9 with new API: `rand::rng()` and `random_range()`
@@ -221,7 +223,10 @@ Auto-created at `~/GTD Space`:
 
 ### Actions List in Projects
 - Projects display expandable list of all actions in sidebar
-- Actions show real-time status (in-progress, waiting, completed)
+- Actions show real-time status (in-progress, waiting, completed, cancelled)
 - Click action to open in editor
 - Auto-updates when actions are added/modified/deleted
-- Insert with `[!actions-list]` in project README
+- Insert with `[!actions-list]` in project README using Ctrl/Cmd+Alt+L
+- Status icons: Circle (pending), CircleDot (in-progress), CheckCircle2 (completed)
+- Shows effort level and due dates for each action
+- Expandable/collapsible view with action counts

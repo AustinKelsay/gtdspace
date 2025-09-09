@@ -109,10 +109,16 @@ fn parse_last_habit_action_time(content: &str) -> Option<chrono::NaiveDateTime> 
 
         // Try parsing with 12-hour format first (e.g., "7:26 PM")
         let parsed_time = if time_str.contains("AM") || time_str.contains("PM") {
-            // Try both formats: with and without leading zero
-            chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %I:%M %p").or_else(
-                |_| chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %l:%M %p"),
-            )
+            // Handle both padded ("07:26 PM") and unpadded ("7:26 PM") hours
+            // by preprocessing the time string to ensure consistent padding
+            let padded_time = if time_str.len() < 8 && !time_str.starts_with("1") {
+                // Single digit hour like "7:26 PM" -> "07:26 PM"
+                format!("0{}", time_str)
+            } else {
+                time_str.to_string()
+            };
+            let padded_datetime = format!("{} {}", date_str, padded_time);
+            chrono::NaiveDateTime::parse_from_str(&padded_datetime, "%Y-%m-%d %I:%M %p")
         } else {
             // Fall back to 24-hour format
             chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M")

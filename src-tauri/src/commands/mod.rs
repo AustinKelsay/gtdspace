@@ -5218,26 +5218,36 @@ pub async fn google_calendar_start_auth(app: AppHandle) -> Result<String, String
 
     println!("[GoogleCalendar] Starting OAuth flow (async command)...");
 
-    // Load credentials
-    let client_id = match std::env::var("GOOGLE_CALENDAR_CLIENT_ID") {
-        Ok(id) => {
-            println!("[GoogleCalendar] Client ID loaded");
-            id
-        }
-        Err(_) => {
-            return Err("Google Calendar client ID not found in environment variables".to_string());
-        }
-    };
+    // Load credentials from secure storage first, fallback to env vars for dev
+    let (client_id, client_secret) = {
+        use super::google_calendar::config_manager::GoogleConfigManager;
 
-    let client_secret = match std::env::var("GOOGLE_CALENDAR_CLIENT_SECRET") {
-        Ok(secret) => {
-            println!("[GoogleCalendar] Client secret loaded");
-            secret
-        }
-        Err(_) => {
-            return Err(
-                "Google Calendar client secret not found in environment variables".to_string(),
-            );
+        let config_manager = GoogleConfigManager::new(app.clone())
+            .map_err(|e| format!("Failed to create config manager: {}", e))?;
+
+        match config_manager.get_config().await {
+            Ok(Some(config)) => {
+                println!("[GoogleCalendar] Using stored OAuth configuration");
+                (config.client_id, config.client_secret)
+            }
+            Ok(None) => {
+                // Fallback to environment variables for development
+                println!(
+                    "[GoogleCalendar] No stored config found, trying environment variables..."
+                );
+
+                let client_id = std::env::var("GOOGLE_CALENDAR_CLIENT_ID")
+                    .map_err(|_| "Google Calendar client ID not found. Please configure OAuth credentials in Settings.".to_string())?;
+
+                let client_secret = std::env::var("GOOGLE_CALENDAR_CLIENT_SECRET")
+                    .map_err(|_| "Google Calendar client secret not found. Please configure OAuth credentials in Settings.".to_string())?;
+
+                println!("[GoogleCalendar] Using environment variables (development mode)");
+                (client_id, client_secret)
+            }
+            Err(e) => {
+                return Err(format!("Failed to load OAuth configuration: {}", e));
+            }
         }
     };
 
@@ -5424,52 +5434,79 @@ pub async fn google_calendar_fetch_events(
 /// Initialize Google Calendar manager with credentials
 async fn init_google_calendar_manager(app: AppHandle) -> Result<(), String> {
     println!("[GoogleCalendar] Attempting to initialize Google Calendar manager...");
-    println!(
-        "[GoogleCalendar] Working directory: {:?}",
-        std::env::current_dir()
-    );
 
-    // Try to load .env file manually from the project root
-    let env_path = std::env::current_dir()
-        .map(|mut p| {
-            // Go up from src-tauri if we're there
-            if p.ends_with("src-tauri") {
-                p.pop();
+    // Load credentials from secure storage first, fallback to env vars for dev
+    let (client_id, client_secret) = {
+        use super::google_calendar::config_manager::GoogleConfigManager;
+
+        let config_manager = GoogleConfigManager::new(app.clone())
+            .map_err(|e| format!("Failed to create config manager: {}", e))?;
+
+        match config_manager.get_config().await {
+            Ok(Some(config)) => {
+                println!("[GoogleCalendar] Using stored OAuth configuration");
+                (config.client_id, config.client_secret)
             }
-            p.push(".env");
-            p
-        })
-        .ok();
+            Ok(None) => {
+                // Fallback to environment variables for development
+                println!(
+                    "[GoogleCalendar] No stored config found, trying environment variables..."
+                );
+                println!(
+                    "[GoogleCalendar] Working directory: {:?}",
+                    std::env::current_dir()
+                );
 
-    if let Some(path) = &env_path {
-        println!("[GoogleCalendar] Looking for .env file at: {:?}", path);
-        if path.exists() {
-            println!("[GoogleCalendar] .env file found, loading...");
-            dotenv::from_path(path).ok();
-        } else {
-            println!("[GoogleCalendar] .env file not found at {:?}", path);
-        }
-    }
+                // Try to load .env file manually from the project root for development
+                let env_path = std::env::current_dir()
+                    .map(|mut p| {
+                        // Go up from src-tauri if we're there
+                        if p.ends_with("src-tauri") {
+                            p.pop();
+                        }
+                        p.push(".env");
+                        p
+                    })
+                    .ok();
 
-    let client_id = std::env::var("GOOGLE_CALENDAR_CLIENT_ID")
-        .or_else(|_| std::env::var("VITE_GOOGLE_CALENDAR_CLIENT_ID"))
-        .map_err(|e| {
-            println!("[GoogleCalendar] Failed to get client ID: {:?}", e);
-            println!("[GoogleCalendar] Available env vars:");
-            for (key, val) in std::env::vars() {
-                if key.contains("GOOGLE") || key.contains("VITE") {
-                    println!("  {} = {}", key, val);
+                if let Some(path) = &env_path {
+                    println!("[GoogleCalendar] Looking for .env file at: {:?}", path);
+                    if path.exists() {
+                        println!("[GoogleCalendar] .env file found, loading...");
+                        dotenv::from_path(path).ok();
+                    } else {
+                        println!("[GoogleCalendar] .env file not found at {:?}", path);
+                    }
                 }
-            }
-            "Google Calendar client ID not found in environment variables"
-        })?;
 
-    let client_secret = std::env::var("GOOGLE_CALENDAR_CLIENT_SECRET")
-        .or_else(|_| std::env::var("VITE_GOOGLE_CALENDAR_CLIENT_SECRET"))
-        .map_err(|e| {
-            println!("[GoogleCalendar] Failed to get client secret: {:?}", e);
-            "Google Calendar client secret not found in environment variables"
-        })?;
+                let client_id = std::env::var("GOOGLE_CALENDAR_CLIENT_ID")
+                    .or_else(|_| std::env::var("VITE_GOOGLE_CALENDAR_CLIENT_ID"))
+                    .map_err(|e| {
+                        println!("[GoogleCalendar] Failed to get client ID: {:?}", e);
+                        println!("[GoogleCalendar] Available env vars:");
+                        for (key, val) in std::env::vars() {
+                            if key.contains("GOOGLE") || key.contains("VITE") {
+                                println!("  {} = {}", key, val);
+                            }
+                        }
+                        "Google Calendar client ID not found. Please configure OAuth credentials in Settings.".to_string()
+                    })?;
+
+                let client_secret = std::env::var("GOOGLE_CALENDAR_CLIENT_SECRET")
+                    .or_else(|_| std::env::var("VITE_GOOGLE_CALENDAR_CLIENT_SECRET"))
+                    .map_err(|e| {
+                        println!("[GoogleCalendar] Failed to get client secret: {:?}", e);
+                        "Google Calendar client secret not found. Please configure OAuth credentials in Settings.".to_string()
+                    })?;
+
+                println!("[GoogleCalendar] Using environment variables (development mode)");
+                (client_id, client_secret)
+            }
+            Err(e) => {
+                return Err(format!("Failed to load OAuth configuration: {}", e));
+            }
+        }
+    };
 
     println!("[GoogleCalendar] Credentials loaded successfully");
 
@@ -5696,4 +5733,118 @@ pub async fn google_calendar_get_cached_events(
         .map_err(|e| format!("Failed to get cached Google Calendar events: {}", e))?;
 
     Ok(events)
+}
+
+// ===== GOOGLE CALENDAR OAUTH CONFIGURATION =====
+
+/// Store Google OAuth configuration securely
+///
+/// Stores the client ID and client secret in the OS keychain for secure access
+/// in production environments where environment variables are not available.
+///
+/// # Arguments
+///
+/// * `client_id` - Google OAuth client ID
+/// * `client_secret` - Google OAuth client secret
+///
+/// # Returns
+///
+/// Success message or error details
+#[tauri::command]
+pub async fn google_oauth_store_config(
+    app: AppHandle,
+    client_id: String,
+    client_secret: String,
+) -> Result<String, String> {
+    use super::google_calendar::config_manager::{GoogleConfigManager, GoogleOAuthConfig};
+
+    let config_manager = GoogleConfigManager::new(app)
+        .map_err(|e| format!("Failed to create config manager: {}", e))?;
+
+    let oauth_config = GoogleOAuthConfig {
+        client_id,
+        client_secret,
+    };
+
+    // Validate configuration before storing
+    GoogleConfigManager::validate_config(&oauth_config)
+        .map_err(|e| format!("Invalid configuration: {}", e))?;
+
+    // Store configuration securely
+    config_manager
+        .store_config(&oauth_config)
+        .await
+        .map_err(|e| format!("Failed to store configuration: {}", e))?;
+
+    Ok("Google OAuth configuration stored securely".to_string())
+}
+
+/// Retrieve Google OAuth configuration from secure storage
+///
+/// Attempts to load the stored OAuth configuration from the OS keychain.
+/// Returns null if no configuration is found.
+///
+/// # Returns
+///
+/// OAuth configuration object or null if not found
+#[tauri::command]
+pub async fn google_oauth_get_config(app: AppHandle) -> Result<Option<serde_json::Value>, String> {
+    use super::google_calendar::config_manager::GoogleConfigManager;
+
+    let config_manager = GoogleConfigManager::new(app)
+        .map_err(|e| format!("Failed to create config manager: {}", e))?;
+
+    match config_manager.get_config().await {
+        Ok(Some(config)) => {
+            // Return config as JSON value for frontend consumption
+            let json_config = serde_json::json!({
+                "client_id": config.client_id,
+                "client_secret": config.client_secret
+            });
+            Ok(Some(json_config))
+        }
+        Ok(None) => Ok(None),
+        Err(e) => Err(format!("Failed to retrieve configuration: {}", e)),
+    }
+}
+
+/// Clear Google OAuth configuration from secure storage
+///
+/// Removes all stored OAuth configuration from the OS keychain.
+/// This will require the user to re-enter their credentials.
+///
+/// # Returns
+///
+/// Success message or error details
+#[tauri::command]
+pub async fn google_oauth_clear_config(app: AppHandle) -> Result<String, String> {
+    use super::google_calendar::config_manager::GoogleConfigManager;
+
+    let config_manager = GoogleConfigManager::new(app)
+        .map_err(|e| format!("Failed to create config manager: {}", e))?;
+
+    config_manager
+        .clear_config()
+        .await
+        .map_err(|e| format!("Failed to clear configuration: {}", e))?;
+
+    Ok("Google OAuth configuration cleared".to_string())
+}
+
+/// Check if Google OAuth configuration exists in secure storage
+///
+/// Quick check to determine if the user has configured OAuth credentials.
+/// Used by the UI to decide whether to show configuration prompts.
+///
+/// # Returns
+///
+/// True if configuration exists, false otherwise
+#[tauri::command]
+pub async fn google_oauth_has_config(app: AppHandle) -> Result<bool, String> {
+    use super::google_calendar::config_manager::GoogleConfigManager;
+
+    let config_manager = GoogleConfigManager::new(app)
+        .map_err(|e| format!("Failed to create config manager: {}", e))?;
+
+    Ok(config_manager.has_config().await)
 }

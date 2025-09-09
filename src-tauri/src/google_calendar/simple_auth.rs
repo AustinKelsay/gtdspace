@@ -1,4 +1,6 @@
 use base64::{engine::general_purpose, Engine as _};
+use rand::rngs::OsRng;
+use rand::TryRngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -185,8 +187,17 @@ pub fn start_oauth_flow(
     // Generate a random state for security
     let state = general_purpose::URL_SAFE_NO_PAD.encode(uuid::Uuid::new_v4().as_bytes());
 
-    // Generate PKCE code_verifier (cryptographically random, 43-128 chars)
-    let code_verifier_bytes: [u8; 64] = rand::random();
+    // Generate PKCE code_verifier (cryptographically random, 43-128 chars) using OS CSPRNG
+    let mut code_verifier_bytes = [0u8; 64];
+    // Fill with cryptographically secure random bytes directly from the OS
+    let mut rng = OsRng;
+    rng.try_fill_bytes(&mut code_verifier_bytes).map_err(|e| {
+        #[allow(clippy::all)]
+        std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to generate random bytes: {}", e),
+        )
+    })?;
     let code_verifier = general_purpose::URL_SAFE_NO_PAD.encode(code_verifier_bytes);
 
     // Compute S256 code_challenge (SHA256 then URL_SAFE_NO_PAD base64)

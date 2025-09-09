@@ -50,18 +50,19 @@ npm run icons:generate # Generate app icons for all platforms (runs automaticall
 2. Rust toolchain: Ensure Rust is installed via [rustup](https://rustup.rs/)
 3. For Google Calendar integration:
    - **OAuth credentials are now configured through the Settings UI** - no environment variables needed
-   - In production, credentials are stored securely using the OS keychain via Tauri's store plugin
+   - In production, credentials are stored using Tauri's store plugin (persisted to local JSON file)
+   - **Security Note**: tauri-plugin-store saves to a local JSON file, not the OS keychain. For enhanced security, consider implementing a system keyring/secret store plugin
    - For development only, fallback to environment variables is supported:
      - Create `.env` file in project root (ensure `.env*` is git-ignored)
      - Add your Google Cloud Console OAuth credentials:
-     ```
+     ```env
      GOOGLE_CALENDAR_CLIENT_ID=your_client_id.apps.googleusercontent.com
      GOOGLE_CALENDAR_CLIENT_SECRET=your_client_secret
      ```
    - OAuth App Setup (for both dev and production):
      - Create OAuth app in Google Cloud Console
-     - Add redirect URI: `http://localhost:9898/callback`
-     - Use "Desktop application" type
+     - Redirect URI used by the app: `http://localhost:9898/callback`
+     - Use "Desktop application" type. (Note: Desktop clients typically use loopback; Google may not require pre-registering redirect URIs.)
 4. First build may take longer due to Rust compilation
 
 ## Architecture Overview

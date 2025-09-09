@@ -1,6 +1,8 @@
 /**
- * @fileoverview Secure configuration manager for Google Calendar OAuth credentials
- * Uses Tauri's store plugin to securely store OAuth client credentials
+ * @fileoverview Configuration manager for Google Calendar OAuth credentials.
+ * This module uses Tauri's store plugin to save credentials to a local JSON file.
+ * It does not use the OS keychain and does not encrypt data at rest, so the
+ * stored credentials are accessible to the local user.
  */
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -19,7 +21,7 @@ pub struct GoogleConfigManager {
 
 impl GoogleConfigManager {
     pub fn new(app_handle: AppHandle) -> Result<Self, Box<dyn std::error::Error>> {
-        // Create a secure store for Google OAuth config
+        // Create a store for Google OAuth config
         let store = app_handle
             .store("google-oauth-config.json")
             .map_err(|e| format!("Failed to create store: {}", e))?;
@@ -27,7 +29,7 @@ impl GoogleConfigManager {
         Ok(Self { store })
     }
 
-    /// Store Google OAuth configuration securely
+    /// Store Google OAuth configuration
     pub async fn store_config(
         &self,
         config: &GoogleOAuthConfig,
@@ -41,11 +43,11 @@ impl GoogleConfigManager {
             .save()
             .map_err(|e| format!("Failed to save OAuth config: {}", e))?;
 
-        println!("[GoogleConfigManager] OAuth configuration stored securely");
+        println!("[GoogleConfigManager] OAuth configuration stored");
         Ok(())
     }
 
-    /// Retrieve Google OAuth configuration from secure storage
+    /// Retrieve Google OAuth configuration from storage
     pub async fn get_config(
         &self,
     ) -> Result<Option<GoogleOAuthConfig>, Box<dyn std::error::Error>> {
@@ -89,13 +91,13 @@ impl GoogleConfigManager {
                 Ok(Some(config))
             }
             _ => {
-                println!("[GoogleConfigManager] No OAuth configuration found in secure storage");
+                println!("[GoogleConfigManager] No OAuth configuration found in storage");
                 Ok(None)
             }
         }
     }
 
-    /// Clear Google OAuth configuration from secure storage
+    /// Clear Google OAuth configuration from storage
     pub async fn clear_config(&self) -> Result<(), Box<dyn std::error::Error>> {
         // Delete the new atomic config
         self.store.delete("oauth_config");
@@ -108,7 +110,7 @@ impl GoogleConfigManager {
             .save()
             .map_err(|e| format!("Failed to save after clearing OAuth config: {}", e))?;
 
-        println!("[GoogleConfigManager] OAuth configuration cleared from secure storage");
+        println!("[GoogleConfigManager] OAuth configuration cleared from storage");
         Ok(())
     }
 

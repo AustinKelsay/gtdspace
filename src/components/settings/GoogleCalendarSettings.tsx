@@ -461,8 +461,8 @@ export const GoogleCalendarSettings: React.FC = () => {
                       <li>Create or select a project</li>
                       <li>Enable the Google Calendar API</li>
                       <li>Go to "Credentials" → "Create Credentials" → "OAuth client ID"</li>
-                      <li>Choose "Desktop application" as the application type</li>
-                      <li>Add <code className="bg-muted px-1 rounded">http://localhost:9898/callback</code> as a redirect URI</li>
+                      <li>Choose "Desktop app" as the application type (this automatically allows localhost redirects)</li>
+                      <li>Note: Desktop apps don't require adding redirect URIs - the app uses <code className="bg-muted px-1 rounded">http://localhost:9898/callback</code></li>
                       <li>Copy the Client ID and Client Secret to the form above</li>
                     </ol>
                   </div>

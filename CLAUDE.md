@@ -49,8 +49,8 @@ npm run icons:generate # Generate app icons for all platforms (runs automaticall
 1. Install dependencies: `npm install`
 2. Rust toolchain: Ensure Rust is installed via [rustup](https://rustup.rs/)
 3. For Google Calendar integration:
-   - **OAuth credentials are now configured through the Settings UI** - no environment variables needed
-   - In production, credentials are stored using Tauri's store plugin (persisted to local JSON file)
+   - **OAuth credentials are configured through the Settings UI** - no environment variables needed
+   - Credentials are stored using Tauri's store plugin (persisted to local JSON file)
    - **Security Note**: tauri-plugin-store saves to a local JSON file, not the OS keychain. For enhanced security, consider implementing a system keyring/secret store plugin
    - For development only, fallback to environment variables is supported:
      - Create `.env` file in project root (ensure `.env*` is git-ignored)
@@ -183,8 +183,8 @@ Auto-created at `~/GTD Space`:
 
 **Configuration Flow**:
 1. User enters OAuth credentials via Settings UI
-2. Credentials stored securely using Tauri store plugin (OS keychain)
-3. Google Calendar commands load credentials from secure storage
+2. Credentials stored using Tauri store plugin (local JSON file)
+3. Google Calendar commands load credentials from storage
 4. Fallback to environment variables in development mode only
 
 ## Key Constraints
@@ -200,7 +200,7 @@ Auto-created at `~/GTD Space`:
 - **Tailwind CSS**: v3.x required (v4 incompatible with current PostCSS config)
 - **Node**: v20+ required
 - **Limits**: Max 10MB files, max 10 open tabs
-- **Google OAuth**: Port 9898 required (`.env` config needed)
+- **Google OAuth**: Port 9898 required for OAuth callback
 - **Testing**: No test framework configured - manual testing required
 
 ## CI/CD & Release

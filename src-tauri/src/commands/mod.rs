@@ -5720,10 +5720,10 @@ pub async fn google_calendar_get_cached_events(
 
 // ===== GOOGLE CALENDAR OAUTH CONFIGURATION =====
 
-/// Store Google OAuth configuration securely
+/// Store Google OAuth configuration
 ///
-/// Stores the client ID and client secret in the OS keychain for secure access
-/// in production environments where environment variables are not available.
+/// Persists client ID and client secret via `tauri-plugin-store` to a local JSON file.
+/// Note: not encrypted at rest; treat as user-local secrets.
 ///
 /// # Arguments
 ///
@@ -5753,18 +5753,18 @@ pub async fn google_oauth_store_config(
     GoogleConfigManager::validate_config(&oauth_config)
         .map_err(|e| format!("Invalid configuration: {}", e))?;
 
-    // Store configuration securely
+    // Store configuration
     config_manager
         .store_config(&oauth_config)
         .await
         .map_err(|e| format!("Failed to store configuration: {}", e))?;
 
-    Ok("Google OAuth configuration stored securely".to_string())
+    Ok("Google OAuth configuration saved".to_string())
 }
 
-/// Retrieve Google OAuth configuration from secure storage
+/// Retrieve Google OAuth configuration from storage
 ///
-/// Attempts to load the stored OAuth configuration from the OS keychain.
+/// Attempts to load the stored OAuth configuration from the local JSON store.
 /// Returns null if no configuration is found.
 ///
 /// # Returns
@@ -5791,9 +5791,9 @@ pub async fn google_oauth_get_config(app: AppHandle) -> Result<Option<serde_json
     }
 }
 
-/// Clear Google OAuth configuration from secure storage
+/// Clear Google OAuth configuration from storage
 ///
-/// Removes all stored OAuth configuration from the OS keychain.
+/// Removes all stored OAuth configuration from the local JSON store.
 /// This will require the user to re-enter their credentials.
 ///
 /// # Returns
@@ -5814,10 +5814,11 @@ pub async fn google_oauth_clear_config(app: AppHandle) -> Result<String, String>
     Ok("Google OAuth configuration cleared".to_string())
 }
 
-/// Check if Google OAuth configuration exists in secure storage
+/// Check if Google OAuth configuration exists in storage
 ///
-/// Quick check to determine if the user has configured OAuth credentials.
-/// Used by the UI to decide whether to show configuration prompts.
+/// Quick check to determine if the user has configured OAuth credentials
+/// in the local JSON store. Used by the UI to decide whether to show
+/// configuration prompts.
 ///
 /// # Returns
 ///

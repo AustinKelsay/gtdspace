@@ -7,6 +7,7 @@ use google_calendar3::{
     CalendarHub,
 };
 use hyper::client::HttpConnector;
+use log::info;
 use std::sync::Arc;
 
 use super::storage::TokenStorage;
@@ -40,16 +41,16 @@ impl GoogleAuthManager {
     }
 
     pub async fn authenticate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        println!("[GoogleAuth] Starting authentication process...");
+        info!("[GoogleAuth] Starting authentication process...");
 
         // Create OAuth2 secret with v2 endpoints
-        println!("[GoogleAuth] Creating OAuth2 secret");
+        info!("[GoogleAuth] Creating OAuth2 secret");
         let auth_uri = "https://accounts.google.com/o/oauth2/v2/auth".to_string();
         let token_uri = "https://oauth2.googleapis.com/token".to_string();
 
-        println!("  auth_uri: {}", auth_uri);
-        println!("  token_uri: {}", token_uri);
-        println!("  redirect_uris: [http://localhost, http://127.0.0.1]");
+        info!("  auth_uri: {}", auth_uri);
+        info!("  token_uri: {}", token_uri);
+        info!("  redirect_uris: [http://localhost, http://127.0.0.1]");
 
         let secret = ApplicationSecret {
             client_id: self.client_id.clone(),
@@ -64,19 +65,19 @@ impl GoogleAuthManager {
         };
 
         // Create authenticator with installed flow
-        println!("[GoogleAuth] Building InstalledFlowAuthenticator...");
+        info!("[GoogleAuth] Building InstalledFlowAuthenticator...");
         let auth =
             InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect)
                 .persist_tokens_to_disk(self.token_storage.get_token_path())
                 .build()
                 .await
                 .map_err(|e| {
-                    println!("[GoogleAuth] Failed to build authenticator: {}", e);
+                    info!("[GoogleAuth] Failed to build authenticator: {}", e);
                     Box::new(e) as Box<dyn std::error::Error>
                 })?;
 
         // Request a token to trigger the authentication flow
-        println!("[GoogleAuth] Requesting token - this should open your browser...");
+        info!("[GoogleAuth] Requesting token - this should open your browser...");
         let token_result = auth
             .token(
                 &["https://www.googleapis.com/auth/calendar.readonly"]
@@ -87,20 +88,20 @@ impl GoogleAuthManager {
             .await;
 
         match &token_result {
-            Ok(_) => println!("[GoogleAuth] Token obtained successfully!"),
-            Err(e) => println!("[GoogleAuth] Failed to obtain token: {}", e),
+            Ok(_) => info!("[GoogleAuth] Token obtained successfully!"),
+            Err(e) => info!("[GoogleAuth] Failed to obtain token: {}", e),
         }
 
         token_result.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
         // The authentication flow will automatically open the browser via the InstalledFlowAuthenticator
-        println!("[GoogleAuth] Authentication flow completed");
+        info!("[GoogleAuth] Authentication flow completed");
 
         // Token is already persisted by InstalledFlowAuthenticator via persist_tokens_to_disk
         // No need for manual save - removing duplicate persistence
         self.authenticator = Some(auth);
 
-        println!("[GoogleAuth] Authentication successful!");
+        info!("[GoogleAuth] Authentication successful!");
         Ok(())
     }
 

@@ -56,7 +56,10 @@ impl GoogleAuthManager {
             client_secret: self.client_secret.clone(),
             auth_uri,
             token_uri,
-            redirect_uris: vec!["http://localhost".to_string(), "http://127.0.0.1".to_string()],
+            redirect_uris: vec![
+                "http://localhost".to_string(),
+                "http://127.0.0.1".to_string(),
+            ],
             ..Default::default()
         };
 
@@ -112,7 +115,10 @@ impl GoogleAuthManager {
                 client_secret: self.client_secret.clone(),
                 auth_uri,
                 token_uri,
-                redirect_uris: vec!["http://localhost".to_string(), "http://127.0.0.1".to_string()],
+                redirect_uris: vec![
+                    "http://localhost".to_string(),
+                    "http://127.0.0.1".to_string(),
+                ],
                 ..Default::default()
             };
 

@@ -48,9 +48,7 @@ impl GoogleConfigManager {
     }
 
     /// Retrieve Google OAuth configuration from storage
-    pub fn get_config(
-        &self,
-    ) -> Result<Option<GoogleOAuthConfig>, Box<dyn std::error::Error>> {
+    pub fn get_config(&self) -> Result<Option<GoogleOAuthConfig>, Box<dyn std::error::Error>> {
         // First try to get the new atomic config
         if let Some(config_value) = self.store.get("oauth_config") {
             let config: GoogleOAuthConfig = serde_json::from_value(config_value.clone())

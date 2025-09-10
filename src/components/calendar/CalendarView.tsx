@@ -43,10 +43,9 @@ import {
   DragEndEvent,
   DragStartEvent,
   DragOverEvent,
-} from '@dnd-kit/core';
-import {
   useDraggable,
   useDroppable,
+  type CollisionDetection,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { safeInvoke } from '@/utils/safe-invoke';
@@ -942,9 +941,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       // Read the file content
       const fileContent = await safeInvoke<string>('read_file', {
         path: activeEvent.path
-      }, '');
+      }, null);
 
-      if (!fileContent) {
+      if (fileContent === null) {
         throw new Error('Failed to read file');
       }
 
@@ -999,9 +998,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       // Read the file content
       const fileContent = await safeInvoke<string>('read_file', {
         path: event.path
-      }, '');
+      }, null);
 
-      if (!fileContent) {
+      if (fileContent === null) {
         throw new Error('Failed to read file');
       }
 
@@ -1065,7 +1064,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   };
 
   // Custom collision detection for better accuracy
-  const collisionDetectionStrategy = (args: any) => {
+  const collisionDetectionStrategy: CollisionDetection = (args) => {
     // First try pointer-based detection for accuracy
     const pointerCollisions = pointerWithin(args);
     

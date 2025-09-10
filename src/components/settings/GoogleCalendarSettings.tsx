@@ -26,7 +26,7 @@ export const GoogleCalendarSettings: React.FC = () => {
   const { toast } = useToast();
 
   // OAuth Configuration state
-  const [oauthConfig, setOauthConfig] = useState<{client_id: string; client_secret: string} | null>(null);
+  const [oauthConfig, setOauthConfig] = useState<{ client_id: string; client_secret: string } | null>(null);
   const [hasConfig, setHasConfig] = useState(false);
   const [isConfiguring, setIsConfiguring] = useState(false);
   const [showClientSecret, setShowClientSecret] = useState(false);
@@ -50,10 +50,10 @@ export const GoogleCalendarSettings: React.FC = () => {
   const isFormValid = (): boolean => {
     const clientId = formData.client_id.trim();
     const clientSecret = formData.client_secret.trim();
-    
+
     if (!clientId || !clientSecret) return false;
     if (!clientId.endsWith('.apps.googleusercontent.com')) return false;
-    
+
     return true;
   };
 
@@ -70,9 +70,9 @@ export const GoogleCalendarSettings: React.FC = () => {
     try {
       const hasConfigResult = await safeInvoke<boolean>('google_oauth_has_config', undefined, false);
       setHasConfig(hasConfigResult);
-      
+
       if (hasConfigResult) {
-        const config = await safeInvoke<{client_id: string; client_secret: string} | null>('google_oauth_get_config', undefined, null);
+        const config = await safeInvoke<{ client_id: string; client_secret: string } | null>('google_oauth_get_config', undefined, null);
         if (config) {
           setOauthConfig(config);
           setFormData({
@@ -92,7 +92,7 @@ export const GoogleCalendarSettings: React.FC = () => {
   const handleSaveConfig = async () => {
     const clientId = formData.client_id.trim();
     const clientSecret = formData.client_secret.trim();
-    
+
     if (!clientId || !clientSecret) {
       toast({
         title: 'Validation Error',
@@ -101,7 +101,7 @@ export const GoogleCalendarSettings: React.FC = () => {
       });
       return;
     }
-    
+
     // Basic validation for Google OAuth Client ID format
     if (!clientId.endsWith('.apps.googleusercontent.com')) {
       toast({
@@ -147,7 +147,7 @@ export const GoogleCalendarSettings: React.FC = () => {
     setIsConfiguring(true);
     try {
       await safeInvoke('google_oauth_clear_config');
-      
+
       setOauthConfig(null);
       setHasConfig(false);
       setFormData({
@@ -403,7 +403,7 @@ export const GoogleCalendarSettings: React.FC = () => {
                   <p className="text-sm text-muted-foreground">
                     To connect your Google Calendar, you need to provide OAuth credentials from your Google Cloud Console.
                   </p>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="client_id">Client ID</Label>
                     <Input
@@ -411,7 +411,7 @@ export const GoogleCalendarSettings: React.FC = () => {
                       type="text"
                       placeholder="123456789012-abcdefghijk.apps.googleusercontent.com"
                       value={formData.client_id}
-                      onChange={(e) => setFormData(prev => ({...prev, client_id: e.target.value}))}
+                      onChange={(e) => setFormData(prev => ({ ...prev, client_id: e.target.value }))}
                       disabled={isConfiguring}
                     />
                   </div>
@@ -424,7 +424,7 @@ export const GoogleCalendarSettings: React.FC = () => {
                         type={showClientSecret ? "text" : "password"}
                         placeholder="Enter your OAuth client secret"
                         value={formData.client_secret}
-                        onChange={(e) => setFormData(prev => ({...prev, client_secret: e.target.value}))}
+                        onChange={(e) => setFormData(prev => ({ ...prev, client_secret: e.target.value }))}
                         disabled={isConfiguring}
                       />
                       <Button
@@ -462,7 +462,7 @@ export const GoogleCalendarSettings: React.FC = () => {
                       <li>Enable the Google Calendar API</li>
                       <li>Go to "Credentials" → "Create Credentials" → "OAuth client ID"</li>
                       <li>Choose "Desktop app" as the application type (this automatically allows localhost redirects)</li>
-                      <li>Note: Desktop apps don't require adding redirect URIs - the app uses <code className="bg-muted px-1 rounded">http://localhost:9898/callback</code></li>
+                      <li>Note: Desktop apps don't require adding redirect URIs - the app uses a loopback redirect with a dynamic port (e.g., <code className="bg-muted px-1 rounded">http://localhost:&lt;port&gt;</code>)</li>
                       <li>Copy the Client ID and Client Secret to the form above</li>
                     </ol>
                   </div>
@@ -481,7 +481,7 @@ export const GoogleCalendarSettings: React.FC = () => {
                     Configured
                   </Badge>
                 </div>
-                
+
                 <Button
                   variant="outline"
                   size="sm"

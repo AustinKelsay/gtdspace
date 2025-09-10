@@ -32,6 +32,7 @@ pub struct OAuthCallbackServer {
 }
 
 impl OAuthCallbackServer {
+    #[allow(dead_code)]
     pub fn new(port: u16) -> Self {
         Self {
             port,
@@ -39,6 +40,7 @@ impl OAuthCallbackServer {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn start_and_wait_for_code_with_state(
         &self,
         expected_state: Option<String>,
@@ -589,14 +591,13 @@ impl OAuthCallbackServer {
 }
 
 // Async function to start server and get code
+#[allow(dead_code)]
 pub async fn run_oauth_server(
-    expected_state: Option<String>,
+    _expected_state: Option<String>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    println!("[OAuthServer] Setting up OAuth callback server...");
-
-    let server = OAuthCallbackServer::new(9898);
-
-    server
-        .start_and_wait_for_code_with_state(expected_state)
-        .await
+    // Deprecated: The OAuth server is no longer needed when using
+    // InstalledFlowReturnMethod::HTTPRedirect with the google-apis-rs client.
+    Err(Box::new(std::io::Error::other(
+        "run_oauth_server is unused; InstalledFlowAuthenticator handles redirect server",
+    )))
 }

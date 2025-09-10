@@ -61,7 +61,7 @@ npm run icons:generate # Generate app icons for all platforms (runs automaticall
      ```
    - OAuth App Setup (for both dev and production):
      - Create OAuth app in Google Cloud Console
-     - Redirect URI used by the app: `http://localhost:9898/callback`
+     - Redirect URI used by the app: generic loopback (the app uses `http://localhost` / `http://127.0.0.1` and a dynamic port chosen at runtime)
      - Use "Desktop application" type. (Note: Desktop clients typically use loopback; Google may not require pre-registering redirect URIs.)
 4. First build may take longer due to Rust compilation
 
@@ -101,27 +101,27 @@ Auto-created at `~/GTD Space`:
 
 ```
 ├── Purpose & Principles/  # 50,000 ft
-├── Vision/               # 40,000 ft  
+├── Vision/               # 40,000 ft
 ├── Goals/                # 30,000 ft
 ├── Areas of Focus/       # 20,000 ft
 ├── Projects/             # 10,000 ft - Folders with README.md + action files
 ├── Habits/               # Recurring routines with auto-reset
-├── Someday Maybe/        
+├── Someday Maybe/
 └── Cabinet/              # Reference materials
 ```
 
 ### Custom Markdown Fields
 
 ```markdown
-[!singleselect:status:in-progress]        # in-progress|waiting|completed
-[!singleselect:effort:medium]              # small|medium|large|extra-large
-[!datetime:due_date:2025-01-20]           # Date/time fields
-[!references:file1.md,file2.md]           # Cabinet/Someday links
-[!areas-references:path.md]               # Horizon references
-[!multiselect:contexts:home,work]         # Tags/contexts
-[!checkbox:habit-status:false]            # Habit tracking
-[!projects-list]                          # Dynamic lists
-[!actions-list]                           # Actions list in project README
+[!singleselect:status:in-progress] # in-progress|waiting|completed
+[!singleselect:effort:medium] # small|medium|large|extra-large
+[!datetime:due_date:2025-01-20] # Date/time fields
+[!references:file1.md,file2.md] # Cabinet/Someday links
+[!areas-references:path.md] # Horizon references
+[!multiselect:contexts:home,work] # Tags/contexts
+[!checkbox:habit-status:false] # Habit tracking
+[!projects-list] # Dynamic lists
+[!actions-list] # Actions list in project README
 ```
 
 ### Key Event Flows
@@ -142,9 +142,9 @@ Auto-created at `~/GTD Space`:
 
 ### Performance Optimizations
 
-- Parallel file reads in `useCalendarData`  
-- Debouncing: Auto-save (2s), metadata save (500ms), file watcher (500ms)  
-- Calendar renders only visible date range  
+- Parallel file reads in `useCalendarData`
+- Debouncing: Auto-save (2s), metadata save (500ms), file watcher (500ms)
+- Calendar renders only visible date range
 - Pre-compiled regex patterns for metadata extraction
 
 ### Core Hooks
@@ -176,12 +176,14 @@ Auto-created at `~/GTD Space`:
 ### Google Calendar OAuth Configuration
 
 **Available Commands**:
+
 - `google_oauth_store_config(client_id, client_secret)` - Store OAuth credentials securely
-- `google_oauth_get_config()` - Retrieve stored OAuth configuration  
+- `google_oauth_get_config()` - Retrieve stored OAuth configuration
 - `google_oauth_clear_config()` - Remove stored OAuth credentials
 - `google_oauth_has_config()` - Check if OAuth configuration exists
 
 **Configuration Flow**:
+
 1. User enters OAuth credentials via Settings UI
 2. Credentials stored using Tauri store plugin (local JSON file)
 3. Google Calendar commands load credentials from storage
@@ -200,17 +202,19 @@ Auto-created at `~/GTD Space`:
 - **Tailwind CSS**: v3.x required (v4 incompatible with current PostCSS config)
 - **Node**: v20+ required
 - **Limits**: Max 10MB files, max 10 open tabs
-- **Google OAuth**: Port 9898 required for OAuth callback
+- **Google OAuth**: Uses dynamic loopback port for OAuth callback (no fixed port requirement)
 - **Testing**: No test framework configured - manual testing required
 
 ## CI/CD & Release
 
 **GitHub Actions** (.github/workflows/):
+
 - `ci.yml` - Enforces TypeScript, ESLint, and Rust checks on all PRs
-- `build.yml` - Tests multi-platform builds (Ubuntu/macOS/Windows)  
+- `build.yml` - Tests multi-platform builds (Ubuntu/macOS/Windows)
 - `release.yml` - Triggered by version tags to create releases
 
 **Release Process** (`scripts/safe-release.js`):
+
 1. Verifies clean git status and main branch
 2. Updates version in package.json, Cargo.toml, tauri.conf.json
 3. Creates git commit and tag (format: v0.1.0)
@@ -227,7 +231,7 @@ Auto-created at `~/GTD Space`:
 
 - **"Cannot find module"**: Run `npm install` and restart dev server
 - **Rust compilation errors**: Update Rust toolchain with `rustup update`
-- **Calendar sync fails**: Check `.env` configuration and port 9898 availability
+- **Calendar sync fails**: Check `.env` configuration; OAuth uses a dynamic loopback port
 - **Editor not loading**: Clear browser cache in dev tools
 - **File changes not detected**: Check file watcher is running (see console logs)
 
@@ -241,6 +245,7 @@ Auto-created at `~/GTD Space`:
 ## Project-Specific Features
 
 ### Actions List in Projects
+
 - Projects display expandable list of all actions in sidebar
 - Actions show real-time status (in-progress, waiting, completed, cancelled)
 - Click action to open in editor

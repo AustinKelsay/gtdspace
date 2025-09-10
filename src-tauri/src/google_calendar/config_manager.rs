@@ -30,7 +30,7 @@ impl GoogleConfigManager {
     }
 
     /// Store Google OAuth configuration
-    pub async fn store_config(
+    pub fn store_config(
         &self,
         config: &GoogleOAuthConfig,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -48,7 +48,7 @@ impl GoogleConfigManager {
     }
 
     /// Retrieve Google OAuth configuration from storage
-    pub async fn get_config(
+    pub fn get_config(
         &self,
     ) -> Result<Option<GoogleOAuthConfig>, Box<dyn std::error::Error>> {
         // First try to get the new atomic config
@@ -98,7 +98,7 @@ impl GoogleConfigManager {
     }
 
     /// Clear Google OAuth configuration from storage
-    pub async fn clear_config(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn clear_config(&self) -> Result<(), Box<dyn std::error::Error>> {
         // Delete the new atomic config
         self.store.delete("oauth_config");
         // Also clean up legacy keys if they exist
@@ -115,7 +115,7 @@ impl GoogleConfigManager {
     }
 
     /// Check if OAuth configuration is stored
-    pub async fn has_config(&self) -> bool {
+    pub fn has_config(&self) -> bool {
         // Check for new atomic config first
         if self.store.get("oauth_config").is_some() {
             return true;

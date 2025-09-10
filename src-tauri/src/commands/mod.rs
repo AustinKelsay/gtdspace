@@ -5162,13 +5162,13 @@ lazy_static! {
 /// # Returns
 ///
 /// A tuple of (client_id, client_secret) on success, or an error message
-async fn load_google_oauth_credentials(app: AppHandle) -> Result<(String, String), String> {
+fn load_google_oauth_credentials(app: AppHandle) -> Result<(String, String), String> {
     use super::google_calendar::config_manager::GoogleConfigManager;
 
     let config_manager = GoogleConfigManager::new(app.clone())
         .map_err(|e| format!("Failed to create config manager: {}", e))?;
 
-    match config_manager.get_config().await {
+    match config_manager.get_config() {
         Ok(Some(config)) => {
             println!("[GoogleCalendar] Using stored OAuth configuration");
             Ok((config.client_id, config.client_secret))
@@ -5293,21 +5293,19 @@ pub fn google_calendar_test() -> Result<String, String> {
 /// - Token storage failure
 #[tauri::command]
 pub async fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
-    use super::google_calendar::oauth_server::run_oauth_server;
     use super::google_calendar::simple_auth::{
         start_oauth_flow, BrowserOpenError, SimpleAuthConfig,
     };
-    use super::google_calendar::token_manager::{StoredTokens, TokenManager};
 
     println!("[GoogleCalendar] Starting OAuth flow (async command)...");
 
     // Load credentials from secure storage first, fallback to env vars for dev
-    let (client_id, client_secret) = load_google_oauth_credentials(app.clone()).await?;
+    let (client_id, client_secret) = load_google_oauth_credentials(app.clone())?;
 
     let config = SimpleAuthConfig {
         client_id: client_id.clone(),
         client_secret: client_secret.clone(),
-        redirect_uri: "http://localhost:9898/callback".to_string(),
+        redirect_uri: "http://localhost".to_string(),
         auth_uri: "https://accounts.google.com/o/oauth2/v2/auth".to_string(),
         token_uri: "https://oauth2.googleapis.com/token".to_string(),
     };
@@ -5348,63 +5346,10 @@ pub async fn google_calendar_start_auth(app: AppHandle) -> Result<String, String
         }
     };
 
-    // Restart the server with the expected state so CSRF can be validated
-    let state = start_result.state().to_string();
-    let code_verifier = start_result.code_verifier().to_string();
-    let server_handle = tokio::spawn(async move {
-        println!("[GoogleCalendar] Restarting OAuth callback server with expected state...");
-        run_oauth_server(Some(state))
-            .await
-            .map_err(|e| e.to_string())
-    });
-
-    // Wait for the OAuth server to receive the code (with timeout)
-    println!("[GoogleCalendar] Waiting for OAuth callback...");
-
-    match server_handle.await {
-        Ok(Ok(code)) => {
-            println!("[GoogleCalendar] Received authorization code!");
-
-            // Exchange code for tokens
-            let token_response = config.exchange_code(&code, &code_verifier).await;
-
-            match token_response {
-                Ok(tokens) => {
-                    println!("[GoogleCalendar] Token exchange successful!");
-
-                    // Store tokens
-                    let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
-                    let stored_tokens = StoredTokens {
-                        access_token: tokens.access_token.clone(),
-                        refresh_token: tokens.refresh_token.clone(),
-                        expires_at: Some(chrono::Utc::now().timestamp() + tokens.expires_in),
-                    };
-
-                    token_manager
-                        .save_tokens(&stored_tokens)
-                        .map_err(|e| e.to_string())?;
-                    println!("[GoogleCalendar] Tokens saved successfully!");
-
-                    Ok(
-                        "Authentication successful! You can now sync your Google Calendar."
-                            .to_string(),
-                    )
-                }
-                Err(e) => {
-                    eprintln!("[GoogleCalendar] Failed to exchange code: {}", e);
-                    Err(format!("Failed to exchange authorization code: {}", e))
-                }
-            }
-        }
-        Ok(Err(e)) => {
-            eprintln!("[GoogleCalendar] OAuth server error: {}", e);
-            Err(format!("OAuth callback failed: {}", e))
-        }
-        Err(e) => {
-            eprintln!("[GoogleCalendar] OAuth server task join error: {}", e);
-            Err("OAuth server task failed".to_string())
-        }
-    }
+    let _state = start_result.state().to_string();
+    let _code_verifier = start_result.code_verifier().to_string();
+    // This command no longer completes the flow. Direct users to use the manager-driven connect.
+    Err("Legacy OAuth flow disabled; use Connect to start auth".to_string())
 }
 
 // Async test command to verify async commands work
@@ -5489,7 +5434,7 @@ async fn init_google_calendar_manager(app: AppHandle) -> Result<(), String> {
     println!("[GoogleCalendar] Attempting to initialize Google Calendar manager...");
 
     // Load credentials from secure storage first, fallback to env vars for dev
-    let (client_id, client_secret) = load_google_oauth_credentials(app.clone()).await?;
+    let (client_id, client_secret) = load_google_oauth_credentials(app.clone())?;
 
     println!("[GoogleCalendar] Credentials loaded successfully");
 
@@ -5756,7 +5701,6 @@ pub async fn google_oauth_store_config(
     // Store configuration
     config_manager
         .store_config(&oauth_config)
-        .await
         .map_err(|e| format!("Failed to store configuration: {}", e))?;
 
     Ok("Google OAuth configuration saved".to_string())
@@ -5777,12 +5721,13 @@ pub async fn google_oauth_get_config(app: AppHandle) -> Result<Option<serde_json
     let config_manager = GoogleConfigManager::new(app)
         .map_err(|e| format!("Failed to create config manager: {}", e))?;
 
-    match config_manager.get_config().await {
+    match config_manager.get_config() {
         Ok(Some(config)) => {
             // Return config as JSON value for frontend consumption
+            // Never expose the actual client_secret to the frontend
             let json_config = serde_json::json!({
                 "client_id": config.client_id,
-                "client_secret": config.client_secret
+                "has_secret": !config.client_secret.is_empty()
             });
             Ok(Some(json_config))
         }
@@ -5800,7 +5745,7 @@ pub async fn google_oauth_get_config(app: AppHandle) -> Result<Option<serde_json
 ///
 /// Success message or error details
 #[tauri::command]
-pub async fn google_oauth_clear_config(app: AppHandle) -> Result<String, String> {
+pub fn google_oauth_clear_config(app: AppHandle) -> Result<String, String> {
     use super::google_calendar::config_manager::GoogleConfigManager;
 
     let config_manager = GoogleConfigManager::new(app)
@@ -5808,7 +5753,6 @@ pub async fn google_oauth_clear_config(app: AppHandle) -> Result<String, String>
 
     config_manager
         .clear_config()
-        .await
         .map_err(|e| format!("Failed to clear configuration: {}", e))?;
 
     Ok("Google OAuth configuration cleared".to_string())
@@ -5830,5 +5774,5 @@ pub async fn google_oauth_has_config(app: AppHandle) -> Result<bool, String> {
     let config_manager = GoogleConfigManager::new(app)
         .map_err(|e| format!("Failed to create config manager: {}", e))?;
 
-    Ok(config_manager.has_config().await)
+    Ok(config_manager.has_config())
 }

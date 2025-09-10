@@ -46,18 +46,17 @@ impl GoogleAuthManager {
         println!("[GoogleAuth] Creating OAuth2 secret");
         let auth_uri = "https://accounts.google.com/o/oauth2/v2/auth".to_string();
         let token_uri = "https://oauth2.googleapis.com/token".to_string();
-        let redirect_uri = "http://localhost:9898/callback".to_string();
 
         println!("  auth_uri: {}", auth_uri);
         println!("  token_uri: {}", token_uri);
-        println!("  redirect_uri: {}", redirect_uri);
+        println!("  redirect_uris: [http://localhost, http://127.0.0.1]");
 
         let secret = ApplicationSecret {
             client_id: self.client_id.clone(),
             client_secret: self.client_secret.clone(),
             auth_uri,
             token_uri,
-            redirect_uris: vec![redirect_uri],
+            redirect_uris: vec!["http://localhost".to_string(), "http://127.0.0.1".to_string()],
             ..Default::default()
         };
 
@@ -107,14 +106,13 @@ impl GoogleAuthManager {
             // Use v2 OAuth endpoints
             let auth_uri = "https://accounts.google.com/o/oauth2/v2/auth".to_string();
             let token_uri = "https://oauth2.googleapis.com/token".to_string();
-            let redirect_uri = "http://localhost:9898/callback".to_string();
 
             let secret = ApplicationSecret {
                 client_id: self.client_id.clone(),
                 client_secret: self.client_secret.clone(),
                 auth_uri,
                 token_uri,
-                redirect_uris: vec![redirect_uri],
+                redirect_uris: vec!["http://localhost".to_string(), "http://127.0.0.1".to_string()],
                 ..Default::default()
             };
 

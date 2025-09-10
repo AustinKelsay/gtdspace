@@ -24,7 +24,7 @@ impl GoogleConfigManager {
         // Create a store for Google OAuth config
         let store = app_handle
             .store("google-oauth-config.json")
-            .map_err(|e| format!("Failed to create store: {}", e))?;
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
         Ok(Self { store })
     }
@@ -41,7 +41,7 @@ impl GoogleConfigManager {
         // Save the store to persist changes
         self.store
             .save()
-            .map_err(|e| format!("Failed to save OAuth config: {}", e))?;
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
         println!("[GoogleConfigManager] OAuth configuration stored");
         Ok(())
@@ -51,8 +51,7 @@ impl GoogleConfigManager {
     pub fn get_config(&self) -> Result<Option<GoogleOAuthConfig>, Box<dyn std::error::Error>> {
         // First try to get the new atomic config
         if let Some(config_value) = self.store.get("oauth_config") {
-            let config: GoogleOAuthConfig = serde_json::from_value(config_value.clone())
-                .map_err(|e| format!("Failed to deserialize OAuth config: {}", e))?;
+            let config: GoogleOAuthConfig = serde_json::from_value(config_value.clone())?;
             return Ok(Some(config));
         }
 
@@ -62,10 +61,8 @@ impl GoogleConfigManager {
 
         match (client_id, client_secret) {
             (Some(id_value), Some(secret_value)) => {
-                let client_id: String = serde_json::from_value(id_value.clone())
-                    .map_err(|e| format!("Failed to deserialize client_id: {}", e))?;
-                let client_secret: String = serde_json::from_value(secret_value.clone())
-                    .map_err(|e| format!("Failed to deserialize client_secret: {}", e))?;
+                let client_id: String = serde_json::from_value(id_value.clone())?;
+                let client_secret: String = serde_json::from_value(secret_value.clone())?;
 
                 let config = GoogleOAuthConfig {
                     client_id,
@@ -84,7 +81,7 @@ impl GoogleConfigManager {
                 // Save the migration
                 self.store
                     .save()
-                    .map_err(|e| format!("Failed to save migrated OAuth config: {}", e))?;
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
                 Ok(Some(config))
             }
@@ -106,7 +103,7 @@ impl GoogleConfigManager {
         // Save the store to persist changes
         self.store
             .save()
-            .map_err(|e| format!("Failed to save after clearing OAuth config: {}", e))?;
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
         println!("[GoogleConfigManager] OAuth configuration cleared from storage");
         Ok(())

@@ -46,6 +46,7 @@ impl SimpleAuthConfig {
         Ok(url.to_string())
     }
 
+    #[allow(dead_code)]
     pub async fn exchange_code(
         &self,
         code: &str,

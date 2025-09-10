@@ -12,8 +12,9 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarIcon, RefreshCw, Link2, Link2Off, Clock, AlertCircle } from 'lucide-react';
+import { CalendarIcon, RefreshCw, Link2, Link2Off, Clock, AlertCircle, Settings, Eye, EyeOff } from 'lucide-react';
 import type { SyncStatus } from '@/types/google-calendar';
 import { cn } from '@/lib/utils';
 
@@ -24,10 +25,150 @@ export const GoogleCalendarSettings: React.FC = () => {
   const [autoSync, setAutoSync] = useState(false);
   const { toast } = useToast();
 
-  // Load status on mount
+  // OAuth Configuration state
+  const [oauthConfig, setOauthConfig] = useState<{ client_id: string; client_secret: string } | null>(null);
+  const [hasConfig, setHasConfig] = useState(false);
+  const [isConfiguring, setIsConfiguring] = useState(false);
+  const [showClientSecret, setShowClientSecret] = useState(false);
+  const [formData, setFormData] = useState({
+    client_id: '',
+    client_secret: ''
+  });
+
+  /**
+   * Safely truncate a string to a maximum length, only adding ellipsis when needed
+   */
+  const truncateString = (str: string | undefined, maxLength: number): string => {
+    if (!str) return '';
+    if (str.length <= maxLength) return str;
+    return `${str.slice(0, maxLength)}...`;
+  };
+
+  /**
+   * Validate form data for OAuth configuration
+   */
+  const isFormValid = (): boolean => {
+    const clientId = formData.client_id.trim();
+    const clientSecret = formData.client_secret.trim();
+
+    if (!clientId || !clientSecret) return false;
+    if (!clientId.endsWith('.apps.googleusercontent.com')) return false;
+
+    return true;
+  };
+
+  // Load status and config on mount
   useEffect(() => {
     checkAuthStatus();
+    loadOAuthConfig();
   }, []);
+
+  /**
+   * Load OAuth configuration from secure storage
+   */
+  const loadOAuthConfig = async () => {
+    try {
+      const hasConfigResult = await safeInvoke<boolean>('google_oauth_has_config', undefined, false);
+      setHasConfig(hasConfigResult);
+
+      if (hasConfigResult) {
+        const config = await safeInvoke<{ client_id: string; client_secret: string } | null>('google_oauth_get_config', undefined, null);
+        if (config) {
+          setOauthConfig(config);
+          setFormData({
+            client_id: config.client_id,
+            client_secret: config.client_secret
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[GoogleCalendarSettings] Failed to load OAuth config:', error);
+    }
+  };
+
+  /**
+   * Save OAuth configuration to secure storage
+   */
+  const handleSaveConfig = async () => {
+    const clientId = formData.client_id.trim();
+    const clientSecret = formData.client_secret.trim();
+
+    if (!clientId || !clientSecret) {
+      toast({
+        title: 'Validation Error',
+        description: 'Both Client ID and Client Secret are required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Basic validation for Google OAuth Client ID format
+    if (!clientId.endsWith('.apps.googleusercontent.com')) {
+      toast({
+        title: 'Validation Error',
+        description: 'Invalid Client ID format. Expected format: xxx.apps.googleusercontent.com',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsConfiguring(true);
+    try {
+      await safeInvoke('google_oauth_store_config', {
+        clientId: clientId,
+        clientSecret: clientSecret
+      });
+
+      setOauthConfig({
+        client_id: clientId,
+        client_secret: clientSecret
+      });
+      setHasConfig(true);
+
+      toast({
+        title: 'Configuration Saved',
+        description: 'Google OAuth credentials have been stored securely.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Save Failed',
+        description: error as string,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsConfiguring(false);
+    }
+  };
+
+  /**
+   * Clear OAuth configuration from secure storage
+   */
+  const handleClearConfig = async () => {
+    setIsConfiguring(true);
+    try {
+      await safeInvoke('google_oauth_clear_config');
+
+      setOauthConfig(null);
+      setHasConfig(false);
+      setFormData({
+        client_id: '',
+        client_secret: ''
+      });
+
+      toast({
+        title: 'Configuration Cleared',
+        description: 'Google OAuth credentials have been removed.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Clear Failed',
+        description: error as string,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsConfiguring(false);
+    }
+  };
 
   /**
    * Checks whether the user is authenticated with Google Calendar.
@@ -244,6 +385,116 @@ export const GoogleCalendarSettings: React.FC = () => {
           </p>
         </div>
 
+        {/* OAuth Configuration Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              OAuth Configuration
+            </CardTitle>
+            <CardDescription>
+              Configure your Google OAuth credentials for secure authentication
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!hasConfig ? (
+              <>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    To connect your Google Calendar, you need to provide OAuth credentials from your Google Cloud Console.
+                  </p>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="client_id">Client ID</Label>
+                    <Input
+                      id="client_id"
+                      type="text"
+                      placeholder="123456789012-abcdefghijk.apps.googleusercontent.com"
+                      value={formData.client_id}
+                      onChange={(e) => setFormData(prev => ({ ...prev, client_id: e.target.value }))}
+                      disabled={isConfiguring}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="client_secret">Client Secret</Label>
+                    <div className="relative">
+                      <Input
+                        id="client_secret"
+                        type={showClientSecret ? "text" : "password"}
+                        placeholder="Enter your OAuth client secret"
+                        value={formData.client_secret}
+                        onChange={(e) => setFormData(prev => ({ ...prev, client_secret: e.target.value }))}
+                        disabled={isConfiguring}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowClientSecret(!showClientSecret)}
+                        disabled={isConfiguring}
+                      >
+                        {showClientSecret ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={handleSaveConfig}
+                    disabled={isConfiguring || !isFormValid()}
+                    className="w-full"
+                  >
+                    {isConfiguring ? 'Saving...' : 'Save Configuration'}
+                  </Button>
+                </div>
+
+                <div className="pt-4 border-t">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium">How to get OAuth credentials:</h4>
+                    <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                      <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google Cloud Console</a></li>
+                      <li>Create or select a project</li>
+                      <li>Enable the Google Calendar API</li>
+                      <li>Go to "Credentials" → "Create Credentials" → "OAuth client ID"</li>
+                      <li>Choose "Desktop app" as the application type (this automatically allows localhost redirects)</li>
+                      <li>Note: Desktop apps don't require adding redirect URIs - the app uses a loopback redirect with a dynamic port (e.g., <code className="bg-muted px-1 rounded">http://localhost:&lt;port&gt;</code>)</li>
+                      <li>Copy the Client ID and Client Secret to the form above</li>
+                    </ol>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">OAuth Configuration Active</p>
+                    <p className="text-xs text-muted-foreground">
+                      Client ID: {oauthConfig?.client_id ? truncateString(oauthConfig.client_id, 20) : 'Configured'}
+                    </p>
+                  </div>
+                  <Badge variant="default" className="bg-green-600">
+                    Configured
+                  </Badge>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearConfig}
+                  disabled={isConfiguring}
+                >
+                  {isConfiguring ? 'Clearing...' : 'Clear Configuration'}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Connection Status Card */}
         <Card>
           <CardHeader>
@@ -285,13 +536,23 @@ export const GoogleCalendarSettings: React.FC = () => {
                   variant="default"
                   size="sm"
                   onClick={handleConnect}
-                  disabled={isConnecting}
+                  disabled={isConnecting || !hasConfig}
+                  title={!hasConfig ? 'Configure OAuth credentials first' : ''}
                 >
                   <Link2 className="h-4 w-4 mr-2" />
                   {isConnecting ? 'Connecting...' : 'Connect'}
                 </Button>
               )}
             </div>
+
+            {!hasConfig && !syncStatus?.isConnected && (
+              <div className="flex items-start gap-2 p-3 bg-muted/50 rounded-md">
+                <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <p className="text-sm text-muted-foreground">
+                  Configure your OAuth credentials above before connecting to Google Calendar.
+                </p>
+              </div>
+            )}
 
             {syncStatus?.isConnected && (
               <>

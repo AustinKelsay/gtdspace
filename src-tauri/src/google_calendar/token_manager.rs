@@ -77,6 +77,7 @@ impl TokenManager {
         Ok(Self { storage_path })
     }
 
+    #[allow(dead_code)]
     pub fn save_tokens(&self, tokens: &StoredTokens) -> Result<(), Box<dyn std::error::Error>> {
         let json = serde_json::to_string_pretty(tokens)?;
 

@@ -6,11 +6,15 @@ use tokio::sync::Mutex;
 
 pub mod auth;
 pub mod calendar_client;
+pub mod config_manager;
 pub mod oauth_server;
 pub mod simple_auth;
 pub mod storage;
 pub mod sync;
 pub mod token_manager;
+
+// Re-export the config from config_manager to avoid duplication
+pub use config_manager::GoogleOAuthConfig as GoogleCalendarConfig;
 
 use auth::GoogleAuthManager;
 use storage::TokenStorage;
@@ -28,15 +32,6 @@ pub struct GoogleCalendarEvent {
     pub meeting_link: Option<String>,
     pub status: String,
     pub color_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GoogleCalendarConfig {
-    pub client_id: String,
-    pub client_secret: String,
-    pub redirect_uri: String,
-    pub auth_uri: String,
-    pub token_uri: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,17 +56,15 @@ impl GoogleCalendarManager {
         client_id: String,
         client_secret: String,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        // Create config with OAuth v2 endpoints
         let config = GoogleCalendarConfig {
             client_id: client_id.clone(),
             client_secret: client_secret.clone(),
-            redirect_uri: "http://localhost:9898/callback".to_string(),
-            auth_uri: "https://accounts.google.com/o/oauth2/auth".to_string(),
-            token_uri: "https://oauth2.googleapis.com/token".to_string(),
         };
 
         let token_storage = Arc::new(TokenStorage::new(app_handle.clone()));
         let auth_manager = Arc::new(Mutex::new(
-            GoogleAuthManager::new(config.clone(), token_storage.clone()).await?,
+            GoogleAuthManager::new(client_id, client_secret, token_storage.clone()).await?,
         ));
         let sync_manager = Arc::new(Mutex::new(CalendarSyncManager::new(app_handle.clone())));
 

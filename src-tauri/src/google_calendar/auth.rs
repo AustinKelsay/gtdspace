@@ -9,21 +9,24 @@ use google_calendar3::{
 use hyper::client::HttpConnector;
 use std::sync::Arc;
 
-use super::{storage::TokenStorage, GoogleCalendarConfig};
+use super::storage::TokenStorage;
 
 pub struct GoogleAuthManager {
-    config: GoogleCalendarConfig,
+    client_id: String,
+    client_secret: String,
     token_storage: Arc<TokenStorage>,
     authenticator: Option<Authenticator<hyper_rustls::HttpsConnector<HttpConnector>>>,
 }
 
 impl GoogleAuthManager {
     pub async fn new(
-        config: GoogleCalendarConfig,
+        client_id: String,
+        client_secret: String,
         token_storage: Arc<TokenStorage>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut manager = Self {
-            config,
+            client_id,
+            client_secret,
             token_storage,
             authenticator: None,
         };
@@ -39,18 +42,22 @@ impl GoogleAuthManager {
     pub async fn authenticate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         println!("[GoogleAuth] Starting authentication process...");
 
-        // Create OAuth2 secret
+        // Create OAuth2 secret with v2 endpoints
         println!("[GoogleAuth] Creating OAuth2 secret");
-        println!("  auth_uri: {}", self.config.auth_uri);
-        println!("  token_uri: {}", self.config.token_uri);
-        println!("  redirect_uri: {}", self.config.redirect_uri);
+        let auth_uri = "https://accounts.google.com/o/oauth2/v2/auth".to_string();
+        let token_uri = "https://oauth2.googleapis.com/token".to_string();
+        let redirect_uri = "http://localhost:9898/callback".to_string();
+
+        println!("  auth_uri: {}", auth_uri);
+        println!("  token_uri: {}", token_uri);
+        println!("  redirect_uri: {}", redirect_uri);
 
         let secret = ApplicationSecret {
-            client_id: self.config.client_id.clone(),
-            client_secret: self.config.client_secret.clone(),
-            auth_uri: self.config.auth_uri.clone(),
-            token_uri: self.config.token_uri.clone(),
-            redirect_uris: vec![self.config.redirect_uri.clone()],
+            client_id: self.client_id.clone(),
+            client_secret: self.client_secret.clone(),
+            auth_uri,
+            token_uri,
+            redirect_uris: vec![redirect_uri],
             ..Default::default()
         };
 
@@ -97,12 +104,17 @@ impl GoogleAuthManager {
 
     pub async fn load_authenticator(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.token_storage.has_token().await {
+            // Use v2 OAuth endpoints
+            let auth_uri = "https://accounts.google.com/o/oauth2/v2/auth".to_string();
+            let token_uri = "https://oauth2.googleapis.com/token".to_string();
+            let redirect_uri = "http://localhost:9898/callback".to_string();
+
             let secret = ApplicationSecret {
-                client_id: self.config.client_id.clone(),
-                client_secret: self.config.client_secret.clone(),
-                auth_uri: self.config.auth_uri.clone(),
-                token_uri: self.config.token_uri.clone(),
-                redirect_uris: vec![self.config.redirect_uri.clone()],
+                client_id: self.client_id.clone(),
+                client_secret: self.client_secret.clone(),
+                auth_uri,
+                token_uri,
+                redirect_uris: vec![redirect_uri],
                 ..Default::default()
             };
 

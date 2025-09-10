@@ -49,15 +49,20 @@ npm run icons:generate # Generate app icons for all platforms (runs automaticall
 1. Install dependencies: `npm install`
 2. Rust toolchain: Ensure Rust is installed via [rustup](https://rustup.rs/)
 3. For Google Calendar integration:
-   - **WARNING**: Never put secrets in `VITE_*` environment variables as they are exposed to the frontend
-   - Use PKCE (Proof Key for Code Exchange) flow in the Vite frontend with only a public client ID
-   - If a client secret is required, it must be handled on the Tauri (Rust) backend and stored securely in the OS keychain
-   - Create `.env.local` with only the public client ID (ensure `.env*` is git-ignored):
-     - Add redirect URI `http://localhost:9898` in Google Cloud Console
-     - Never commit `.env*` files; confirm `.gitignore` excludes them
-   ```
-   VITE_GOOGLE_CLIENT_ID=your_client_id
-   ```
+   - **OAuth credentials are now configured through the Settings UI** - no environment variables needed
+   - In production, credentials are stored using Tauri's store plugin (persisted to local JSON file)
+   - **Security Note**: tauri-plugin-store saves to a local JSON file, not the OS keychain. For enhanced security, consider implementing a system keyring/secret store plugin
+   - For development only, fallback to environment variables is supported:
+     - Create `.env` file in project root (ensure `.env*` is git-ignored)
+     - Add your Google Cloud Console OAuth credentials:
+     ```env
+     GOOGLE_CALENDAR_CLIENT_ID=your_client_id.apps.googleusercontent.com
+     GOOGLE_CALENDAR_CLIENT_SECRET=your_client_secret
+     ```
+   - OAuth App Setup (for both dev and production):
+     - Create OAuth app in Google Cloud Console
+     - Redirect URI used by the app: `http://localhost:9898/callback`
+     - Use "Desktop application" type. (Note: Desktop clients typically use loopback; Google may not require pre-registering redirect URIs.)
 4. First build may take longer due to Rust compilation
 
 ## Architecture Overview
@@ -167,6 +172,20 @@ Auto-created at `~/GTD Space`:
 1. Implement in `src-tauri/src/commands/mod.rs`
 2. Register in `src-tauri/src/lib.rs` (not main.rs)
 3. Frontend wrapper with `withErrorHandling()`
+
+### Google Calendar OAuth Configuration
+
+**Available Commands**:
+- `google_oauth_store_config(client_id, client_secret)` - Store OAuth credentials securely
+- `google_oauth_get_config()` - Retrieve stored OAuth configuration  
+- `google_oauth_clear_config()` - Remove stored OAuth credentials
+- `google_oauth_has_config()` - Check if OAuth configuration exists
+
+**Configuration Flow**:
+1. User enters OAuth credentials via Settings UI
+2. Credentials stored securely using Tauri store plugin (OS keychain)
+3. Google Calendar commands load credentials from secure storage
+4. Fallback to environment variables in development mode only
 
 ## Key Constraints
 

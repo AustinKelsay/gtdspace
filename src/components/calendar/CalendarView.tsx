@@ -14,7 +14,8 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
-  Cloud
+  Cloud,
+  CheckCircle2
 } from 'lucide-react';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval,
@@ -30,6 +31,33 @@ import type { GoogleCalendarSyncStatus, SyncStatus, CalendarItemStatus } from '@
 import { mapGoogleCalendarSyncStatus } from '@/types/google-calendar';
 import { cn } from '@/lib/utils';
 import { EventDetailModal } from './EventDetailModal';
+import {
+  DndContext,
+  DragOverlay,
+  pointerWithin,
+  rectIntersection,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverEvent,
+} from '@dnd-kit/core';
+import {
+  useDraggable,
+  useDroppable,
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import { safeInvoke } from '@/utils/safe-invoke';
+import { 
+  updateMarkdownDate, 
+  updateMarkdownEffort,
+  getDateFieldForEventType, 
+  formatDateForMarkdown,
+  getEffortFromHeight
+} from '@/utils/update-markdown-fields';
+import { useToast } from '@/hooks/use-toast';
 
 // Helper to detect if a date has a time component
 // - For strings: return false when the time portion is zero (e.g., "T00:00:00", with optional fractional seconds and timezone)
@@ -87,17 +115,25 @@ async function getTauriInvoke(): Promise<(<T>(cmd: string, args?: unknown) => Pr
 }
 
 
-const getEventColorClass = (type: 'project' | 'action' | 'habit' | 'google-event', eventType: 'due' | 'focus' | 'habit' | 'google') => {
+const getEventColorClass = (type: 'project' | 'action' | 'habit' | 'google-event', eventType: 'due' | 'focus' | 'habit' | 'google', isCompleted?: boolean) => {
+  let baseClass = '';
+  
   if (type === 'google-event' || eventType === 'google') {
-    return 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-300 dark:border-purple-700';
+    baseClass = 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 border-purple-300 dark:border-purple-700';
+  } else if (type === 'habit') {
+    baseClass = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-300 dark:border-green-700';
+  } else if (eventType === 'due') {
+    baseClass = 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-300 dark:border-orange-700';
+  } else {
+    baseClass = 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-700';
   }
-  if (type === 'habit') {
-    return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-300 dark:border-green-700';
+  
+  // Add completed styling: reduced opacity and strikethrough
+  if (isCompleted) {
+    return `${baseClass} opacity-50 line-through`;
   }
-  if (eventType === 'due') {
-    return 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border-orange-300 dark:border-orange-700';
-  }
-  return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-700';
+  
+  return baseClass;
 };
 
 // Map effort levels to duration in minutes for calendar display
@@ -268,6 +304,170 @@ const generateHabitDates = (
 
 type ViewMode = 'month' | 'week';
 
+// Resizable Event Component
+interface ResizableEventProps {
+  event: CalendarEvent;
+  children: React.ReactNode;
+  onResize?: (newEffort: 'small' | 'medium' | 'large' | 'extra-large') => void;
+  isResizable?: boolean;
+}
+
+const ResizableEvent: React.FC<ResizableEventProps> = ({ 
+  event: _event, 
+  children, 
+  onResize,
+  isResizable = false 
+}) => {
+  const [isResizing, setIsResizing] = useState(false);
+  const [startY, setStartY] = useState(0);
+  const [startHeight, setStartHeight] = useState(0);
+  const [currentHeight, setCurrentHeight] = useState<number | null>(null);
+  const [showHandle, setShowHandle] = useState(false);
+  
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setIsResizing(true);
+    setStartY(e.clientY);
+    const element = (e.target as HTMLElement).parentElement;
+    if (element) {
+      const height = element.offsetHeight;
+      setStartHeight(height);
+      setCurrentHeight(height);
+    }
+  };
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaY = e.clientY - startY;
+      const newHeight = Math.max(20, Math.min(240, startHeight + deltaY)); // Min 20px, max 240px (3 hours)
+      setCurrentHeight(newHeight);
+    };
+
+    const handleMouseUp = () => {
+      if (currentHeight && onResize) {
+        const newEffort = getEffortFromHeight(currentHeight);
+        onResize(newEffort);
+      }
+      setIsResizing(false);
+      setCurrentHeight(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, startY, startHeight, currentHeight, onResize]);
+
+  return (
+    <div 
+      className="relative"
+      style={{ 
+        height: currentHeight || undefined,
+        transition: isResizing ? 'none' : 'height 200ms ease'
+      }}
+      onMouseEnter={() => setShowHandle(true)}
+      onMouseLeave={() => !isResizing && setShowHandle(false)}
+    >
+      {children}
+      {isResizable && showHandle && (
+        <div
+          className={cn(
+            "absolute bottom-0 left-0 right-0 h-1 cursor-ns-resize",
+            "bg-gray-400 dark:bg-gray-600 opacity-0 hover:opacity-50 transition-opacity",
+            isResizing && "opacity-50"
+          )}
+          onMouseDown={handleResizeStart}
+          style={{ touchAction: 'none' }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Draggable Event Component
+interface DraggableEventProps {
+  event: CalendarEvent;
+  children: React.ReactNode;
+}
+
+const DraggableEvent: React.FC<DraggableEventProps> = ({ event, children }) => {
+  const isDraggable = event.type !== 'google-event';
+  const [isHovered, setIsHovered] = useState(false);
+  
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({
+    id: event.id,
+    disabled: !isDraggable,
+  });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.3 : 1, // More transparent when dragging
+    cursor: isDraggable ? (isDragging ? 'grabbing' : (isHovered ? 'grab' : 'pointer')) : 'pointer',
+    transition: isDragging ? 'none' : 'opacity 200ms ease',
+    position: 'relative' as const,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      {...(isDraggable ? listeners : {})}
+      {...(isDraggable ? attributes : {})}
+    >
+      {/* Show drag indicator on hover for draggable events */}
+      {isDraggable && isHovered && !isDragging && (
+        <div 
+          className="absolute left-0 top-0 bottom-0 w-1 bg-gray-400 dark:bg-gray-600 opacity-50 rounded-l"
+          style={{ pointerEvents: 'none' }}
+        />
+      )}
+      {children}
+    </div>
+  );
+};
+
+// Droppable Cell Component
+interface DroppableCellProps {
+  id: string;
+  children: React.ReactNode;
+  className?: string;
+}
+
+const DroppableCell: React.FC<DroppableCellProps> = ({ id, children, className }) => {
+  const {
+    isOver,
+    setNodeRef,
+  } = useDroppable({
+    id,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        className,
+        isOver && "bg-blue-100/30 dark:bg-blue-900/20 ring-2 ring-blue-400 dark:ring-blue-600"
+      )}
+    >
+      {children}
+    </div>
+  );
+};
+
 export const CalendarView: React.FC<CalendarViewProps> = ({
   onFileSelect,
   spacePath,
@@ -280,6 +480,25 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const [currentTime, setCurrentTime] = useState(new Date());
   const [googleSyncStatus, setGoogleSyncStatus] = useState<SyncStatus | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  
+  // Drag and drop state
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [_overId, setOverId] = useState<string | null>(null);
+  
+  // Toast hook
+  const { toast } = useToast();
+  
+  // Setup drag sensors with improved accuracy
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 4, // Reduced for more precise control
+        delay: 100,  // Small delay to prevent accidental drags
+        tolerance: 5, // Tolerance for slight movements
+      },
+    }),
+    useSensor(KeyboardSensor)
+  );
 
   // Modal and filter state
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -651,6 +870,172 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     setIsModalOpen(false);
   };
 
+  // Find the active event being dragged
+  const activeEvent = useMemo(() => {
+    if (!activeId) return null;
+    return filteredEvents.find(event => event.id === activeId);
+  }, [activeId, filteredEvents]);
+
+  // Drag and drop handlers
+  const handleDragStart = (event: DragStartEvent) => {
+    const draggedEvent = filteredEvents.find(e => e.id === event.active.id);
+    // Only allow dragging non-Google events
+    if (draggedEvent && draggedEvent.type !== 'google-event') {
+      setActiveId(event.active.id as string);
+    }
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    setOverId(event.over?.id as string | null);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active: _active, over } = event;
+    
+    if (!over || !activeEvent || activeEvent.type === 'google-event') {
+      setActiveId(null);
+      setOverId(null);
+      return;
+    }
+
+    const droppedOnId = over.id as string;
+    
+    // Parse the drop target ID to get the date
+    // Format: "drop-YYYY-MM-DD" for month view or "drop-YYYY-MM-DD-HH" for week view
+    const dropParts = droppedOnId.split('-');
+    if (dropParts[0] !== 'drop' || dropParts.length < 4) {
+      setActiveId(null);
+      setOverId(null);
+      return;
+    }
+
+    const year = parseInt(dropParts[1]);
+    const month = parseInt(dropParts[2]) - 1; // JavaScript months are 0-indexed
+    const day = parseInt(dropParts[3]);
+    const hour = dropParts.length > 4 ? parseInt(dropParts[4]) : undefined;
+
+    // Create the new date
+    const newDate = new Date(year, month, day);
+    const includeTime = hour !== undefined && viewMode === 'week';
+    
+    if (includeTime) {
+      // If dropping in week view on a specific hour, set the time
+      newDate.setHours(hour, 0, 0, 0);
+    } else if (activeEvent.time && viewMode === 'month') {
+      // Preserve existing time when dropping in month view if event had time
+      const oldDate = activeEvent.date;
+      newDate.setHours(oldDate.getHours(), oldDate.getMinutes(), 0, 0);
+    }
+
+    // Check if actually moving to a different date
+    const oldDateStr = formatDateForMarkdown(activeEvent.date, false);
+    const newDateStr = formatDateForMarkdown(newDate, false);
+    
+    if (oldDateStr === newDateStr && !includeTime) {
+      // Same date and not updating time
+      setActiveId(null);
+      setOverId(null);
+      return;
+    }
+
+    try {
+      // Read the file content
+      const fileContent = await safeInvoke<string>('read_file', {
+        path: activeEvent.path
+      }, '');
+
+      if (!fileContent) {
+        throw new Error('Failed to read file');
+      }
+
+      // Determine which field to update
+      const fieldType = getDateFieldForEventType(activeEvent.eventType);
+      
+      // Format the new date for markdown
+      const formattedDate = formatDateForMarkdown(newDate, includeTime || !!activeEvent.time);
+      
+      // Update the markdown content
+      const updatedContent = updateMarkdownDate(fileContent, fieldType, formattedDate);
+
+      // Save the updated file
+      const result = await safeInvoke<string>('save_file', {
+        path: activeEvent.path,
+        content: updatedContent
+      }, null);
+
+      if (result === null) {
+        throw new Error('Failed to save file');
+      }
+
+      // Refresh calendar data
+      refresh();
+      
+      // Show success message
+      toast({
+        title: "Event Updated",
+        description: `Updated ${activeEvent.title} ${fieldType.replace('_', ' ')} to ${newDate.toLocaleDateString()}`,
+      });
+    } catch (error) {
+      console.error('Failed to update event date:', error);
+      toast({
+        title: "Update Failed",
+        description: `Failed to update ${activeEvent.title}`,
+        variant: "destructive",
+      });
+    }
+
+    setActiveId(null);
+    setOverId(null);
+  };
+
+  const handleDragCancel = () => {
+    setActiveId(null);
+    setOverId(null);
+  };
+
+  // Handle effort resize
+  const handleEffortResize = async (event: CalendarEvent, newEffort: 'small' | 'medium' | 'large' | 'extra-large') => {
+    try {
+      // Read the file content
+      const fileContent = await safeInvoke<string>('read_file', {
+        path: event.path
+      }, '');
+
+      if (!fileContent) {
+        throw new Error('Failed to read file');
+      }
+
+      // Update the markdown content with new effort
+      const updatedContent = updateMarkdownEffort(fileContent, newEffort);
+
+      // Save the updated file
+      const result = await safeInvoke<string>('save_file', {
+        path: event.path,
+        content: updatedContent
+      }, null);
+
+      if (result === null) {
+        throw new Error('Failed to save file');
+      }
+
+      // Refresh calendar data
+      refresh();
+      
+      // Show success message
+      toast({
+        title: "Effort Updated",
+        description: `Updated ${event.title} effort to ${newEffort}`,
+      });
+    } catch (error) {
+      console.error('Failed to update event effort:', error);
+      toast({
+        title: "Update Failed",
+        description: `Failed to update ${event.title} effort`,
+        variant: "destructive",
+      });
+    }
+  };
+
 
   const navigate = (direction: 'prev' | 'next') => {
     setCurrentMonth(prev => {
@@ -679,9 +1064,30 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     setSelectedDate(new Date());
   };
 
+  // Custom collision detection for better accuracy
+  const collisionDetectionStrategy = (args: any) => {
+    // First try pointer-based detection for accuracy
+    const pointerCollisions = pointerWithin(args);
+    
+    // Fallback to rectangle intersection if no pointer collision
+    if (!pointerCollisions || pointerCollisions.length === 0) {
+      return rectIntersection(args);
+    }
+    
+    return pointerCollisions;
+  };
+
   return (
-    <div className="h-full flex flex-col bg-background">
-      {/* Calendar Header */}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={collisionDetectionStrategy}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <div className="h-full flex flex-col bg-background">
+        {/* Calendar Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b bg-card">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
@@ -802,9 +1208,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 const isSelectedDay = selectedDate && isSameDay(day, selectedDate);
                 const isTodayDate = isToday(day);
 
+                const dropId = `drop-${format(day, 'yyyy-MM-dd')}`;
+                
                 return (
-                  <div
+                  <DroppableCell
                     key={day.toISOString()}
+                    id={dropId}
                     className={cn(
                       "border-r border-b last:border-r-0 p-1 overflow-hidden",
                       "hover:bg-accent/5 transition-colors cursor-pointer",
@@ -812,53 +1221,58 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       isSelectedDay && "bg-accent/10",
                       isTodayDate && "bg-blue-50/50 dark:bg-blue-950/20"
                     )}
-                    onClick={() => setSelectedDate(day)}
                   >
-                    {/* Day Number */}
-                    <div className={cn(
-                      "text-sm font-medium mb-1 px-1",
-                      !isCurrentMonth && "text-muted-foreground",
-                      isTodayDate && "text-blue-600 dark:text-blue-400"
-                    )}>
-                      {format(day, 'd')}
-                    </div>
-
-                    {/* Events */}
-                    <ScrollArea className="h-[calc(100%-1.5rem)]">
-                      <div className="space-y-1 px-1">
-                        {dayEvents.slice(0, 4).map(event => (
-                          <div
-                            key={event.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEventClick(event);
-                            }}
-                            className={cn(
-                              "px-1.5 py-0.5 rounded text-xs truncate cursor-pointer",
-                              "border transition-all hover:shadow-sm hover:scale-105",
-                              getEventColorClass(event.type, event.eventType)
-                            )}
-                            title={`${event.time || ''} ${event.title}${event.projectName ? ` (${event.projectName})` : ''}`}
-                          >
-                            <div className="flex items-center gap-1">
-                              {event.time && (
-                                <span className="font-medium shrink-0">
-                                  {event.time}
-                                </span>
-                              )}
-                              <span className="truncate">{event.title}</span>
-                            </div>
-                          </div>
-                        ))}
-
-                        {dayEvents.length > 4 && (
-                          <div className="text-xs text-muted-foreground px-1">
-                            +{dayEvents.length - 4} more
-                          </div>
-                        )}
+                    <div onClick={() => setSelectedDate(day)}>
+                      {/* Day Number */}
+                      <div className={cn(
+                        "text-sm font-medium mb-1 px-1",
+                        !isCurrentMonth && "text-muted-foreground",
+                        isTodayDate && "text-blue-600 dark:text-blue-400"
+                      )}>
+                        {format(day, 'd')}
                       </div>
-                    </ScrollArea>
-                  </div>
+
+                      {/* Events */}
+                      <ScrollArea className="h-[calc(100%-1.5rem)]">
+                        <div className="space-y-1 px-1">
+                          {dayEvents.slice(0, 4).map(event => (
+                            <DraggableEvent key={event.id} event={event}>
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEventClick(event);
+                                }}
+                                className={cn(
+                                  "px-1.5 py-0.5 rounded text-xs truncate",
+                                  "border transition-all hover:shadow-sm hover:scale-105",
+                                  getEventColorClass(event.type, event.eventType, event.status === 'completed')
+                                )}
+                                title={`${event.time || ''} ${event.title}${event.projectName ? ` (${event.projectName})` : ''}`}
+                              >
+                                <div className="flex items-center gap-1">
+                                  {event.status === 'completed' && (
+                                    <CheckCircle2 className="h-3 w-3 shrink-0" />
+                                  )}
+                                  {event.time && (
+                                    <span className="font-medium shrink-0">
+                                      {event.time}
+                                    </span>
+                                  )}
+                                  <span className="truncate">{event.title}</span>
+                                </div>
+                              </div>
+                            </DraggableEvent>
+                          ))}
+
+                          {dayEvents.length > 4 && (
+                            <div className="text-xs text-muted-foreground px-1">
+                              +{dayEvents.length - 4} more
+                            </div>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  </DroppableCell>
                 );
               })}
             </div>
@@ -902,9 +1316,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 const dayEvents = eventsByDate.get(dateKey) || [];
                 const allDayEvents = dayEvents.filter(event => !event.time);
 
+                const allDayDropId = `drop-${format(day, 'yyyy-MM-dd')}`;
+                
                 return (
-                  <div
+                  <DroppableCell
                     key={`${day.toISOString()}-allday`}
+                    id={allDayDropId}
                     className={cn(
                       "border-r last:border-r-0 p-1",
                       isToday(day) && "bg-blue-50/30 dark:bg-blue-950/10"
@@ -912,23 +1329,27 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   >
                     <div className="space-y-1">
                       {allDayEvents.map(event => (
-                        <div
-                          key={event.id}
-                          onClick={() => handleEventClick(event)}
-                          className={cn(
-                            "px-2 py-1 rounded text-xs cursor-pointer",
-                            "border transition-all hover:shadow-md hover:scale-105",
-                            getEventColorClass(event.type, event.eventType)
-                          )}
-                          title={`${event.title}${event.projectName ? ` (${event.projectName})` : ''}`}
-                        >
-                          <div className="font-medium truncate">
-                            {event.title}
+                        <DraggableEvent key={event.id} event={event}>
+                          <div
+                            onClick={() => handleEventClick(event)}
+                            className={cn(
+                              "px-2 py-1 rounded text-xs",
+                              "border transition-all hover:shadow-md hover:scale-105",
+                              getEventColorClass(event.type, event.eventType, event.status === 'completed')
+                            )}
+                            title={`${event.title}${event.projectName ? ` (${event.projectName})` : ''}`}
+                          >
+                            <div className="font-medium truncate flex items-center gap-1">
+                              {event.status === 'completed' && (
+                                <CheckCircle2 className="h-3 w-3 shrink-0" />
+                              )}
+                              <span>{event.title}</span>
+                            </div>
                           </div>
-                        </div>
+                        </DraggableEvent>
                       ))}
                     </div>
-                  </div>
+                  </DroppableCell>
                 );
               })}
             </div>
@@ -1015,9 +1436,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                         return false;
                       });
 
+                      const hourDropId = `drop-${format(day, 'yyyy-MM-dd')}-${hour}`;
+                      
                       return (
-                        <div
+                        <DroppableCell
                           key={`${day.toISOString()}-${hour}`}
+                          id={hourDropId}
                           className={cn(
                             "relative border-r last:border-r-0 p-1",
                             "hover:bg-accent/5 transition-colors",
@@ -1057,53 +1481,70 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                     const width = group.length > 1 ? `${100 / group.length}%` : '100%';
                                     const left = group.length > 1 ? `${(100 / group.length) * index}%` : '0';
 
+                                    // Check if event is resizable (actions with effort and focus date, not completed)
+                                    const isResizable = event.type === 'action' && 
+                                                       event.eventType === 'focus' && 
+                                                       event.effort &&
+                                                       event.status !== 'completed';
+
                                     return (
-                                      <div
+                                      <ResizableEvent
                                         key={event.id}
-                                        onClick={() => handleEventClick(event)}
-                                        className={cn(
-                                          "absolute px-2 py-1 rounded text-xs cursor-pointer overflow-hidden",
-                                          "border transition-all hover:shadow-md hover:scale-105 hover:z-10",
-                                          getEventColorClass(event.type, event.eventType)
-                                        )}
-                                        style={{
-                                          top: `${minuteOffset}px`,
-                                          height: eventHeight,
-                                          minHeight: '20px',
-                                          left: left,
-                                          width: width,
-                                          right: index === group.length - 1 ? '4px' : 'auto'
-                                        }}
-                                        title={`${event.time || ''} ${event.title}${event.projectName ? ` (${event.projectName})` : ''}${event.endTime ? ` - ${event.endTime}` : ''}`}
+                                        event={event}
+                                        isResizable={isResizable}
+                                        onResize={(newEffort) => handleEffortResize(event, newEffort)}
                                       >
-                                        <div className="flex items-center gap-1 min-w-0">
-                                          {event.time && (
-                                            <span className="font-medium shrink-0 text-[10px]">
-                                              {event.time}
-                                            </span>
-                                          )}
-                                          <span className="truncate font-medium">
-                                            {event.title}
-                                          </span>
-                                        </div>
-                                        {event.endTime && event.duration && event.duration > 30 && (
-                                          <div className="text-[10px] opacity-75">
-                                            {event.endTime}
+                                        <DraggableEvent event={event}>
+                                          <div
+                                            onClick={() => handleEventClick(event)}
+                                            className={cn(
+                                              "absolute px-2 py-1 rounded text-xs overflow-hidden h-full",
+                                              "border transition-all hover:shadow-md hover:scale-105 hover:z-10",
+                                              getEventColorClass(event.type, event.eventType, event.status === 'completed')
+                                            )}
+                                            style={{
+                                              top: `${minuteOffset}px`,
+                                              height: eventHeight,
+                                              minHeight: '20px',
+                                              left: left,
+                                              width: width,
+                                              right: index === group.length - 1 ? '4px' : 'auto'
+                                            }}
+                                            title={`${event.time || ''} ${event.title}${event.projectName ? ` (${event.projectName})` : ''}${event.endTime ? ` - ${event.endTime}` : ''}`}
+                                          >
+                                            <div className="flex items-center gap-1 min-w-0">
+                                              {event.status === 'completed' && (
+                                                <CheckCircle2 className="h-3 w-3 shrink-0" />
+                                              )}
+                                              {event.time && (
+                                                <span className="font-medium shrink-0 text-[10px]">
+                                                  {event.time}
+                                                </span>
+                                              )}
+                                              <span className="truncate font-medium">
+                                                {event.title}
+                                              </span>
+                                            </div>
+                                            {event.endTime && event.duration && event.duration > 30 && (
+                                              <div className="text-[10px] opacity-75">
+                                                {event.endTime}
+                                              </div>
+                                            )}
+                                            {event.projectName && event.duration && event.duration > 45 && (
+                                              <div className="text-[10px] opacity-75 truncate">
+                                                {event.projectName}
+                                              </div>
+                                            )}
                                           </div>
-                                        )}
-                                        {event.projectName && event.duration && event.duration > 45 && (
-                                          <div className="text-[10px] opacity-75 truncate">
-                                            {event.projectName}
-                                          </div>
-                                        )}
-                                      </div>
+                                        </DraggableEvent>
+                                      </ResizableEvent>
                                     );
                                   });
                                 })}
                               </>
                             );
                           })()}
-                        </div>
+                        </DroppableCell>
                       );
                     })}
                   </div>
@@ -1266,6 +1707,27 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           onFileSelect(file);
         }}
       />
+      
+      {/* Drag Overlay for visual feedback */}
+      <DragOverlay>
+        {activeEvent ? (
+          <div
+            className={cn(
+              "px-2 py-1 rounded text-xs shadow-lg",
+              "border transition-all",
+              getEventColorClass(activeEvent.type, activeEvent.eventType, activeEvent.status === 'completed')
+            )}
+          >
+            <div className="flex items-center gap-1">
+              {activeEvent.status === 'completed' && (
+                <CheckCircle2 className="h-3 w-3 shrink-0" />
+              )}
+              <span className="font-medium truncate">{activeEvent.title}</span>
+            </div>
+          </div>
+        ) : null}
+      </DragOverlay>
     </div>
+    </DndContext>
   );
 };

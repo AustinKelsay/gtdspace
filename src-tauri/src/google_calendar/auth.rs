@@ -10,6 +10,7 @@ use hyper::client::HttpConnector;
 use log::info;
 use std::sync::Arc;
 
+use super::custom_flow_delegate::BrowserOpeningFlowDelegate;
 use super::storage::TokenStorage;
 
 pub struct GoogleAuthManager {
@@ -42,6 +43,14 @@ impl GoogleAuthManager {
 
     pub async fn authenticate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!("[GoogleAuth] Starting authentication process...");
+        
+        // Force fresh authentication by deleting existing tokens
+        // This ensures account selection prompt appears
+        if self.token_storage.has_token().await {
+            info!("[GoogleAuth] Existing tokens found, deleting to force account selection...");
+            self.token_storage.delete_token().await?;
+            self.authenticator = None;
+        }
 
         // Create OAuth2 secret with v2 endpoints
         info!("[GoogleAuth] Creating OAuth2 secret");
@@ -64,17 +73,20 @@ impl GoogleAuthManager {
             ..Default::default()
         };
 
-        // Create authenticator with installed flow
-        info!("[GoogleAuth] Building InstalledFlowAuthenticator...");
-        let auth =
-            InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect)
-                .persist_tokens_to_disk(self.token_storage.get_token_path())
-                .build()
-                .await
-                .map_err(|e| {
-                    info!("[GoogleAuth] Failed to build authenticator: {}", e);
-                    Box::new(e) as Box<dyn std::error::Error>
-                })?;
+        // Create authenticator with installed flow using dynamic port (0 = choose available port)
+        info!("[GoogleAuth] Building InstalledFlowAuthenticator with dynamic port...");
+        let auth = InstalledFlowAuthenticator::builder(
+            secret,
+            InstalledFlowReturnMethod::HTTPPortRedirect(0),
+        )
+        .persist_tokens_to_disk(self.token_storage.get_token_path())
+        .flow_delegate(Box::new(BrowserOpeningFlowDelegate))
+        .build()
+        .await
+        .map_err(|e| {
+            info!("[GoogleAuth] Failed to build authenticator: {}", e);
+            Box::new(e) as Box<dyn std::error::Error>
+        })?;
 
         // Request a token to trigger the authentication flow
         info!("[GoogleAuth] Requesting token - this should open your browser...");
@@ -125,9 +137,10 @@ impl GoogleAuthManager {
 
             let auth = InstalledFlowAuthenticator::builder(
                 secret,
-                InstalledFlowReturnMethod::HTTPRedirect,
+                InstalledFlowReturnMethod::HTTPPortRedirect(0),
             )
             .persist_tokens_to_disk(self.token_storage.get_token_path())
+            .flow_delegate(Box::new(BrowserOpeningFlowDelegate))
             .build()
             .await?;
 

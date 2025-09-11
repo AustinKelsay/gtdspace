@@ -7,6 +7,7 @@ use tokio::sync::Mutex;
 pub mod auth;
 pub mod calendar_client;
 pub mod config_manager;
+pub mod custom_flow_delegate;
 pub mod oauth_server;
 pub mod simple_auth;
 pub mod storage;

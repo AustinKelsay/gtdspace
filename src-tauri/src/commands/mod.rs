@@ -5472,40 +5472,12 @@ pub async fn google_calendar_connect(app: AppHandle) -> Result<String, String> {
     );
     println!("[GoogleCalendar] ========================================");
 
-    // First, let's check if .env file exists and try to load it
-    let project_root = std::env::current_dir()
-        .map(|mut p| {
-            if p.ends_with("src-tauri") {
-                p.pop();
-            }
-            p
-        })
-        .unwrap_or_else(|_| std::path::PathBuf::from("."));
-
-    let env_file = project_root.join(".env");
-    println!("[GoogleCalendar] Looking for .env at: {:?}", env_file);
-    println!("[GoogleCalendar] .env exists: {}", env_file.exists());
-
-    if env_file.exists() {
-        println!("[GoogleCalendar] Loading .env file...");
-        match dotenv::from_path(&env_file) {
-            Ok(_) => println!("[GoogleCalendar] .env loaded successfully"),
-            Err(e) => println!("[GoogleCalendar] Failed to load .env: {}", e),
-        }
-    }
-
-    // Check environment variables
-    println!("[GoogleCalendar] Checking environment variables...");
-    let has_client_id = std::env::var("GOOGLE_CALENDAR_CLIENT_ID").is_ok();
-    let has_client_secret = std::env::var("GOOGLE_CALENDAR_CLIENT_SECRET").is_ok();
-    println!(
-        "[GoogleCalendar] Credentials present: {}",
-        has_client_id && has_client_secret
-    );
-
-    if !has_client_id || !has_client_secret {
-        return Err("Google Calendar credentials not found. Please ensure credentials are set in your .env file".to_string());
-    }
+    // Try to load credentials from storage or environment
+    // The load_google_oauth_credentials function will:
+    // 1. First check stored credentials from Settings UI
+    // 2. Fall back to environment variables for development
+    // This ensures production builds work with stored credentials
+    println!("[GoogleCalendar] Checking for OAuth credentials...");
 
     // Initialize manager if not already done
     let needs_init = {

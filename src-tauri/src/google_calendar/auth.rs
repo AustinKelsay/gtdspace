@@ -43,7 +43,7 @@ impl GoogleAuthManager {
 
     pub async fn authenticate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!("[GoogleAuth] Starting authentication process...");
-        
+
         // Force fresh authentication by deleting existing tokens
         // This ensures account selection prompt appears
         if self.token_storage.has_token().await {

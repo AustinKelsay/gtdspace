@@ -206,12 +206,12 @@ export const GoogleCalendarSettings: React.FC = () => {
 
     setIsConnecting(true);
     try {
-      console.log('[GoogleCalendarSettings] Invoking google_calendar_start_auth command...');
-      const result = await safeInvoke<string>('google_calendar_start_auth', undefined, null);
+      console.log('[GoogleCalendarSettings] Invoking google_calendar_connect command...');
+      const result = await safeInvoke<string>('google_calendar_connect', undefined, null);
       if (!result) {
         throw new Error('Failed to start authentication');
       }
-      console.log('[GoogleCalendarSettings] Auth started:', result);
+      console.log('[GoogleCalendarSettings] Connection result:', result);
 
       // Indicate auth is in progress via sync status until verified
       setSyncStatus(prev => prev ? {
@@ -225,25 +225,19 @@ export const GoogleCalendarSettings: React.FC = () => {
         error: null
       });
 
-      // Verify authentication status before marking connected
-      const authenticated = await checkAuthStatus();
-      if (authenticated) {
-        toast({
-          title: 'Google Calendar Connected',
-          description: result,
-        });
-      } else {
-        setSyncStatus(prev => prev ? {
-          ...prev,
-          syncInProgress: false,
-          error: 'Authorization not completed. Please finish signing in via your browser.'
-        } : {
-          isConnected: false,
-          lastSync: null,
-          syncInProgress: false,
-          error: 'Authorization not completed. Please finish signing in via your browser.'
-        });
-      }
+      // Since google_calendar_connect completes the full flow, we can mark as connected
+      toast({
+        title: 'Google Calendar Connected',
+        description: result,
+      });
+      
+      // Update the sync status to show connected
+      setSyncStatus({
+        isConnected: true,
+        lastSync: null,
+        syncInProgress: false,
+        error: null
+      });
     } catch (error) {
       console.error('[GoogleCalendarSettings] Connection failed:', error);
 

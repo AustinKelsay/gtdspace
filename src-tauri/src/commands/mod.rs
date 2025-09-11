@@ -5375,17 +5375,20 @@ pub async fn google_calendar_test_async() -> Result<String, String> {
 /// - `false` if no tokens found or error occurred
 #[tauri::command]
 pub fn google_calendar_is_authenticated(app: AppHandle) -> Result<bool, String> {
-    use super::google_calendar::token_manager::TokenManager;
+    use super::google_calendar::storage::TokenStorage;
 
-    let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
-    match token_manager.load_tokens() {
-        Ok(Some(_)) => Ok(true),
-        Ok(None) => Ok(false),
-        Err(e) => {
-            println!("[GoogleCalendar] Error checking auth status: {}", e);
-            Ok(false)
-        }
-    }
+    // Create token storage instance
+    let token_storage = TokenStorage::new(app);
+
+    // Check if token file exists
+    let token_path = token_storage.get_token_path();
+    let is_authenticated = token_path.exists();
+
+    println!(
+        "[GoogleCalendar] Authentication check: token file exists = {}",
+        is_authenticated
+    );
+    Ok(is_authenticated)
 }
 
 /// Fetch Google Calendar events for the user.
@@ -5402,25 +5405,33 @@ pub fn google_calendar_is_authenticated(app: AppHandle) -> Result<bool, String> 
 #[tauri::command]
 pub async fn google_calendar_fetch_events(
     app: AppHandle,
-) -> Result<Vec<super::google_calendar::calendar_client::CalendarEvent>, String> {
-    use super::google_calendar::calendar_client::fetch_calendar_events;
-    use super::google_calendar::token_manager::TokenManager;
-
+) -> Result<Vec<GoogleCalendarEvent>, String> {
     println!("[GoogleCalendar] Fetching calendar events (async command)...");
 
-    // Load stored tokens
-    let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
-    let tokens = token_manager
-        .load_tokens()
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Not authenticated. Please connect to Google Calendar first.".to_string())?;
+    // Initialize manager if not already done
+    let needs_init = {
+        let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
+        manager_guard.is_none()
+    };
 
-    println!("[GoogleCalendar] Token loaded, fetching events...");
+    if needs_init {
+        init_google_calendar_manager(app.clone()).await?;
+    }
 
-    // Fetch events using the access token with ambient Tokio runtime
-    let events = fetch_calendar_events(&tokens.access_token)
+    // Get the manager
+    let manager = {
+        let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
+        manager_guard
+            .as_ref()
+            .ok_or_else(|| "Google Calendar manager not initialized".to_string())?
+            .clone()
+    };
+
+    // Sync events using the manager
+    let events = manager
+        .sync_events(None, None)
         .await
-        .map_err(|e| format!("Failed to fetch events: {}", e))?;
+        .map_err(|e| format!("Failed to fetch Google Calendar events: {}", e))?;
 
     println!(
         "[GoogleCalendar] Successfully fetched {} events",

@@ -11,6 +11,7 @@ pub struct StoredTokens {
 }
 
 /// Helper function to retry file reads on Windows with transient failures
+#[allow(dead_code)]
 fn read_to_string_retry(
     path: &std::path::Path,
     attempts: u32,
@@ -157,6 +158,7 @@ impl TokenManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn load_tokens(&self) -> Result<Option<StoredTokens>, Box<dyn std::error::Error>> {
         if !self.storage_path.exists() {
             return Ok(None);

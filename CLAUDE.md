@@ -47,23 +47,11 @@ npm run icons:generate # Generate app icons for all platforms (runs automaticall
 ## Before First Run
 
 1. Install dependencies: `npm install`
-2. Rust toolchain: Ensure Rust is installed via [rustup](https://rustup.rs/)
-3. For Google Calendar integration:
-   - **OAuth credentials are configured through the Settings UI** - no environment variables needed
-   - Credentials are stored using Tauri's store plugin (persisted to local JSON file)
-   - **Security Note**: tauri-plugin-store saves to a local JSON file, not the OS keychain. For enhanced security, consider implementing a system keyring/secret store plugin
-   - For development only, fallback to environment variables is supported:
-     - Create `.env` file in project root (ensure `.env*` is git-ignored)
-     - Add your Google Cloud Console OAuth credentials:
-     ```env
-     GOOGLE_CALENDAR_CLIENT_ID=your_client_id.apps.googleusercontent.com
-     GOOGLE_CALENDAR_CLIENT_SECRET=your_client_secret
-     ```
-   - OAuth App Setup (for both dev and production):
-     - Create OAuth app in Google Cloud Console
-     - Redirect URI used by the app: generic loopback (the app uses `http://localhost` / `http://127.0.0.1` and a dynamic port chosen at runtime)
-     - Use "Desktop application" type. (Note: Desktop clients typically use loopback; Google may not require pre-registering redirect URIs.)
-4. First build may take longer due to Rust compilation
+2. Rust toolchain: Install via [rustup](https://rustup.rs/)
+3. Google Calendar (optional): Configure OAuth credentials via Settings UI in-app
+   - Uses Tauri store plugin (local JSON file storage)
+   - Development fallback: `.env` file with `GOOGLE_CALENDAR_CLIENT_ID` and `GOOGLE_CALENDAR_CLIENT_SECRET`
+4. First build takes longer due to Rust compilation
 
 ## Architecture Overview
 
@@ -109,6 +97,29 @@ Auto-created at `~/GTD Space`:
 ├── Someday Maybe/
 └── Cabinet/              # Reference materials
 ```
+
+### Common Utility Functions
+
+**Date Formatting** (`src/utils/date-formatting.ts`):
+- `formatRelativeDate(dateString?: string | null)` - Returns relative dates like "Today", "Tomorrow", "In 3 days"
+- `formatCompactDate(dateString?: string | null)` - Compact date format for display
+- `formatRelativeTime(timeString?: string)` - "2 hours ago" style relative time
+- `getDateFromNow(days: number)` - Get date N days from now
+- `isDateInRange(dateString: string, startDate: Date, endDate: Date)` - Check if date is within range
+
+**Metadata Extraction** (`src/utils/metadata-extractor.ts`):
+- `extractMetadata(content: string)` - Parse all GTD fields from markdown
+- `extractHorizonReferences(content: string)` - Extract horizon-specific references
+- `extractProjectStatus(content: string)` - Get project status from README
+- `extractActionStatus(content: string)` - Get action status from markdown
+- `getMetadataChanges(old: FileMetadata, new: FileMetadata)` - Compare metadata objects
+- `addCustomExtractor(extractor: MetadataExtractor)` - Register custom metadata patterns
+
+**Toast Notifications** (`src/components/ui/use-toast.ts`):
+\`\`\`typescript
+const { toast } = useToast();
+toast({ title: "Success", description: "File saved" });
+\`\`\`
 
 ### Custom Markdown Fields
 
@@ -159,6 +170,32 @@ Auto-created at `~/GTD Space`:
 - `useKeyboardShortcuts` - Global keyboard shortcut management
 - `useActionsListInsertion` - Inserts dynamic actions list in project READMEs (Ctrl/Cmd+Alt+L)
 
+### Critical Architectural Patterns
+
+**Content Event Bus**: Window-level events for cross-component communication
+- `content-updated` - File content changed
+- `gtd-project-created` - New project added
+- `file-renamed` - File/folder name changed
+- Listen with: `window.addEventListener('content-updated', handler)`
+
+**Error Handling Pattern**: Always wrap Tauri invokes
+```typescript
+const result = await withErrorHandling(
+  async () => await invoke("command"),
+  "User-friendly error message"
+);
+```
+
+**Markdown Metadata**: Custom fields use `[!fieldtype:name:value]` syntax
+- Extraction: `metadata-extractor.ts` with regex patterns
+- Rendering: BlockNote custom components in `editor/blocks/`
+- Migration: `migrateMarkdownContent()` updates old formats in-memory
+
+**File Path Handling**: Always use absolute paths
+- Get base: `await invoke<string>("get_base_directory")`
+- Join paths: Use Tauri's path API, not string concatenation
+- Project paths: `${baseDir}/Projects/${projectName}/`
+
 ### Adding a New GTD Field
 
 1. Create BlockNote component in `src/components/editor/blocks/`
@@ -173,21 +210,15 @@ Auto-created at `~/GTD Space`:
 2. Register in `src-tauri/src/lib.rs` (not main.rs)
 3. Frontend wrapper with `withErrorHandling()`
 
-### Google Calendar OAuth Configuration
+### Google Calendar OAuth
 
-**Available Commands**:
+**Tauri Commands**:
+- `google_oauth_store_config(client_id, client_secret)` - Store credentials
+- `google_oauth_get_config()` - Retrieve configuration
+- `google_oauth_clear_config()` - Remove credentials
+- `google_oauth_has_config()` - Check if configured
 
-- `google_oauth_store_config(client_id, client_secret)` - Store OAuth credentials securely
-- `google_oauth_get_config()` - Retrieve stored OAuth configuration
-- `google_oauth_clear_config()` - Remove stored OAuth credentials
-- `google_oauth_has_config()` - Check if OAuth configuration exists
-
-**Configuration Flow**:
-
-1. User enters OAuth credentials via Settings UI
-2. Credentials stored using Tauri store plugin (local JSON file)
-3. Google Calendar commands load credentials from storage
-4. Fallback to environment variables in development mode only
+**Flow**: Settings UI → Tauri store → OAuth flow with dynamic loopback port
 
 ## Key Constraints
 
@@ -254,3 +285,56 @@ Auto-created at `~/GTD Space`:
 - Status icons: Circle (pending), CircleDot (in-progress), CheckCircle2 (completed)
 - Shows effort level and due dates for each action
 - Expandable/collapsible view with action counts
+
+### GTD Dashboard (5-tab Enhanced Layout)
+
+**Overview Tab**: System-wide statistics, trends, overdue alerts
+**Actions Tab**: All next actions with advanced filtering (status, effort, dates, contexts)
+**Projects Tab**: Portfolio view with progress bars, horizon links, action counts
+**Habits Tab**: Tracking with history, streaks, success rates, reset predictions
+**Horizons Tab**: Interactive GTD hierarchy tree with relationship mapping
+
+Dashboard data hooks:
+- `useActionsData` - All actions across projects
+- `useProjectsData` - Projects with metadata
+- `useHabitsHistory` - Habit completion analytics
+- `useHorizonsRelationships` - GTD level connections
+
+Dashboard components location: `src/components/dashboard/`
+- `DashboardOverview.tsx` - Statistics and system health
+- `DashboardActions.tsx` - Filtered action views
+- `DashboardProjects.tsx` - Project portfolio management
+- `DashboardHabits.tsx` - Habit tracking interface
+- `DashboardHorizons.tsx` - GTD hierarchy visualization
+
+## State Management Patterns
+
+**No Redux/Zustand**: Uses React hooks + context for all state
+- Tab state: `useTabManager` with `TabManagerContext`
+- File operations: `useFileManager` wraps Tauri commands
+- GTD operations: `useGTDSpace` for project/action CRUD
+- Event propagation: Window-level `CustomEvent` for cross-component updates
+
+**Data Flow**:
+1. User action → Hook function → Tauri command
+2. Tauri response → State update → Event dispatch
+3. Components listen to events → Re-fetch/re-render
+
+## Build & Platform Notes
+
+**Icon Generation**: Automatic before build via `pretauri:build` hook
+- Uses Sharp to generate all platform icons from `app-icon.png`
+- Script: `scripts/icons-generate.mjs`
+
+**Platform-Specific Builds**:
+```bash
+# macOS: Creates .dmg installer
+# Windows: Creates .msi installer
+# Linux: Creates .AppImage and .deb
+npm run tauri:build
+```
+
+**Version Synchronization**:
+- `scripts/bump-version.js` - Updates package.json, Cargo.toml, tauri.conf.json
+- `scripts/safe-release.js` - Full release with git operations
+- Version format: Semantic versioning (major.minor.patch)

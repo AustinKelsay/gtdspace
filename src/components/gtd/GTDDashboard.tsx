@@ -1,88 +1,43 @@
 /**
- * @fileoverview GTD Dashboard component showing comprehensive GTD overview
+ * @fileoverview GTD Dashboard component - Refactored with 5-tab structure and enhanced data hooks
  * @author Development Team
  * @created 2025-01-17
  */
 
 import React from 'react';
-import { readFileText } from '@/hooks/useFileManager';
-import { safeInvoke } from '@/utils/safe-invoke';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
-  CheckCircle2,
-  Circle,
-  Clock,
-  Calendar,
-  Target,
-  AlertCircle,
-  Plus,
-  FileText,
   Activity,
-  Mountain,
-  Compass,
-  Star,
-  Brain,
-  Timer,
-  TrendingUp,
-  Layers,
-  ChevronRight,
-  Sparkles,
-  Heart,
-  BarChart3,
-  ListChecks,
-  Eye,
-  MapPin,
   FolderOpen,
-  RefreshCw,
-  CheckSquare,
-  Square,
-  Coffee,
-  Zap,
-  LayoutDashboard
+  Layers,
+  LayoutDashboard,
+  ListChecks,
+  RefreshCw
 } from 'lucide-react';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
-import { useHabitTracking } from '@/hooks/useHabitTracking';
+import { useActionsData } from '@/hooks/useActionsData';
+import { useProjectsData } from '@/hooks/useProjectsData';
+import { useHabitsHistory } from '@/hooks/useHabitsHistory';
+import { useHorizonsRelationships } from '@/hooks/useHorizonsRelationships';
 import { GTDProjectDialog, GTDActionDialog } from '@/components/gtd';
-import type { GTDSpace, GTDProject, MarkdownFile, GTDHabit } from '@/types';
-import { cn } from '@/lib/utils';
+import { safeInvoke } from '@/utils/safe-invoke';
+import {
+  DashboardOverview,
+  DashboardActions,
+  DashboardProjects,
+  DashboardHabits,
+  DashboardHorizons
+} from '@/components/dashboard';
+import type { GTDSpace, GTDProject, MarkdownFile } from '@/types';
 
 interface GTDDashboardProps {
   currentFolder: string | null;
   gtdSpace?: GTDSpace | null;
-  /** Optional: use the shared loader from the parent to update the global GTD state */
   loadProjects?: (path: string) => Promise<GTDProject[]>;
-  /** Optional: loading state from the shared GTD hook */
   isLoading?: boolean;
   onSelectProject: (projectPath: string) => void;
   onSelectFile?: (file: MarkdownFile) => void;
   className?: string;
-}
-
-interface ProjectStats {
-  total: number;
-  active: number;
-  onHold: number;
-  completed: number;
-  totalActions: number;
-  completedActions: number;
-  overdueProjects: number;
-  upcomingDeadlines: GTDProject[];
-  todayFocus: GTDProject[];
-  thisWeekProjects: GTDProject[];
-}
-
-interface HabitStats {
-  total: number;
-  completedToday: number;
-  streak: number;
-  completionRate: number;
-  habits: GTDHabit[];
 }
 
 const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
@@ -94,501 +49,157 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   onSelectFile,
   className = ''
 }) => {
-  // Debug: Track renders
-  const renderCountRef = React.useRef(0);
-  renderCountRef.current++;
-  console.log(`[GTDDashboard] Render #${renderCountRef.current}`, {
-    currentFolder,
-    hasGtdSpace: !!gtdSpace,
-    projectCount: gtdSpace?.projects?.length || 0,
-    timestamp: new Date().toISOString()
-  });
-  // Fallback to local hook if parent didn't provide the shared one
+  // Use shared hooks for base functionality
   const { isLoading: hookIsLoading, loadProjects: hookLoadProjects } = useGTDSpace();
   const isLoading = isLoadingProp ?? hookIsLoading;
-  // Memoize loadProjects to prevent unnecessary re-renders
   const loadProjects = React.useMemo(
     () => loadProjectsProp ?? hookLoadProjects,
     [loadProjectsProp, hookLoadProjects]
   );
-  const { updateHabitStatus } = useHabitTracking();
+
+  // Use new data hooks for enhanced functionality
+  const {
+    actions,
+    isLoading: actionsLoading,
+    summary: actionSummary,
+    loadActions,
+    updateActionStatus
+  } = useActionsData({ includeCompleted: true, includeCancelled: true });
+
+  const {
+    projects: projectsWithMetadata,
+    isLoading: projectsLoading,
+    loadProjects: loadProjectsData,
+    updateProject
+  } = useProjectsData({ includeArchived: false, loadActionStats: true });
+
+  const {
+    habits: habitsWithHistory,
+    isLoading: habitsLoading,
+    summary: _habitsSummary,
+    analytics: _habitsAnalytics,
+    loadHabits,
+    updateHabitStatus
+  } = useHabitsHistory({ historyDays: 90, includeInactive: false });
+
+  const {
+    horizons,
+    relationships,
+    isLoading: horizonsLoading,
+    loadHorizons,
+    findRelated: _findRelated
+  } = useHorizonsRelationships({
+    includeProjects: true,
+    includeCabinet: true,
+    includeSomedayMaybe: true
+  });
+
+  // State for UI management
   const [showProjectDialog, setShowProjectDialog] = React.useState(false);
   const [showActionDialog, setShowActionDialog] = React.useState(false);
   const [selectedProject, setSelectedProject] = React.useState<GTDProject | null>(null);
   const [activeTab, setActiveTab] = React.useState('overview');
-  const [habits, setHabits] = React.useState<GTDHabit[]>([]);
-  const [horizonFileCounts, setHorizonFileCounts] = React.useState<Record<string, number>>({});
-  const [actionSummary, setActionSummary] = React.useState({
-    total: 0,
-    inProgress: 0,
-    completed: 0,
-    waiting: 0,
-    upcomingDue: 0,
-  });
-  const [expandedHorizon, setExpandedHorizon] = React.useState<Record<string, boolean>>({});
-  const [horizonFilesList, setHorizonFilesList] = React.useState<Record<string, MarkdownFile[]>>({});
 
-  const toggleHorizon = React.useCallback(async (name: string) => {
-    setExpandedHorizon(prev => ({ ...prev, [name]: !prev[name] }));
-    if (!horizonFilesList[name] && gtdSpace?.root_path) {
-      const files = await safeInvoke<MarkdownFile[]>(
-        'list_markdown_files',
-        { path: `${gtdSpace.root_path}/${name}` },
-        []
-      );
-      setHorizonFilesList(prev => ({ ...prev, [name]: files }));
-    }
-  }, [gtdSpace?.root_path, horizonFilesList]);
-
-  // Track if we've already loaded data for this path
+  // Track if we've loaded data for current space
   const loadedPathRef = React.useRef<string | null>(null);
 
-  // Batch all initial data loading into one effect to reduce re-renders
+  // Load all data when GTD space changes
   React.useEffect(() => {
-    console.log('[GTDDashboard] Main data loading effect triggered', {
-      root_path: gtdSpace?.root_path,
-      previousLoadedPath: loadedPathRef.current,
-      willLoad: gtdSpace?.root_path && loadedPathRef.current !== gtdSpace.root_path
-    });
-
     const loadAllData = async () => {
       if (!gtdSpace?.root_path) return;
 
-      // Skip if we already loaded data for this path
+      // Skip if already loaded for this path
       if (loadedPathRef.current === gtdSpace.root_path) {
-        console.log('[GTDDashboard] Skipping data load - already loaded for this path');
         return;
       }
 
-      console.log('[GTDDashboard] Loading data for path:', gtdSpace.root_path);
-
       try {
-        // Use Promise.allSettled to load all data in parallel
+        // Load data in parallel using our new hooks
         await Promise.allSettled([
-          // Load projects
-          (async () => {
-            try {
-              console.log('[GTDDashboard] Calling loadProjects');
-              await loadProjects(gtdSpace.root_path);
-              console.log('[GTDDashboard] loadProjects completed');
-            } catch (error) {
-              console.log('[GTDDashboard] loadProjects error:', error);
-              // Error already handled by loadProjects
-            }
-          })(),
-
-          // Load habits
-          (async () => {
-            try {
-              const habitsPath = `${gtdSpace.root_path}/Habits`;
-              const habitFiles = await safeInvoke<MarkdownFile[]>(
-                'list_markdown_files',
-                { path: habitsPath },
-                []
-              );
-
-              const loadedHabits: GTDHabit[] = await Promise.all(
-                habitFiles.map(async (file) => {
-                  try {
-                    const content = await readFileText(file.path);
-                    const frequencyMatch = content.match(/\[!singleselect:habit-frequency:([^\]]+)\]/);
-                    const checkboxStatus = content.match(/\[!checkbox:habit-status:(true|false)\]/);
-                    const singleselectStatus = content.match(/\[!singleselect:habit-status:([^\]]+)\]/);
-
-                    let createdDateTime: string | undefined;
-
-                    // Step 1: Try to parse from [!datetime:created_date_time:...] block
-                    const createdBlock = content.match(/\[!datetime:created_date_time:([^\]]+)\]/i);
-                    if (createdBlock && createdBlock[1]) {
-                      const raw = createdBlock[1].trim();
-                      if (raw) {
-                        const parsed = new Date(raw);
-                        if (!isNaN(parsed.getTime())) {
-                          createdDateTime = parsed.toISOString();
-                        }
-                      }
-                    }
-
-                    // Step 2: If not found, try to parse from ## Created header
-                    if (!createdDateTime) {
-                      const hdr = content.match(
-                        /##\s*Created\s*(?:\r?\n|\s+)\s*([0-9]{4})-([0-9]{2})-([0-9]{2})(?:\s+([0-9]{1,2}):([0-9]{2})(?:\s*(AM|PM))?)?/i
-                      );
-                      if (hdr) {
-                        const y = parseInt(hdr[1], 10),
-                          mo = parseInt(hdr[2], 10),
-                          d = parseInt(hdr[3], 10);
-                        let hh = hdr[4] ? parseInt(hdr[4], 10) : 0;
-                        const mm = hdr[5] ? parseInt(hdr[5], 10) : 0;
-                        const mer = (hdr[6] || '').toUpperCase();
-
-                        // Adjust hours for AM/PM
-                        if (mer === 'PM' && hh < 12) hh += 12;
-                        if (mer === 'AM' && hh === 12) hh = 0;
-
-                        // Validate and construct date
-                        if (
-                          mo >= 1 && mo <= 12 &&
-                          d >= 1 && d <= 31 &&
-                          hh >= 0 && hh <= 23 &&
-                          mm >= 0 && mm <= 59
-                        ) {
-                          createdDateTime = new Date(Date.UTC(y, mo - 1, d, hh, mm)).toISOString();
-                        }
-                      }
-                    }
-
-                    // Step 3: If still not found, try to use file.last_modified
-                    if (!createdDateTime && file.last_modified != null) {
-                      const lastModTimestamp = Number(file.last_modified);
-                      if (Number.isFinite(lastModTimestamp) && lastModTimestamp > 0) {
-                        // Convert seconds to milliseconds if needed
-                        const timestampMs = lastModTimestamp < 1e12 ? lastModTimestamp * 1000 : lastModTimestamp;
-                        const lastModDate = new Date(timestampMs);
-                        if (!isNaN(lastModDate.getTime())) {
-                          createdDateTime = lastModDate.toISOString();
-                        }
-                      }
-                    }
-
-                    // Validate and normalize last_modified for last_updated field
-                    let lastUpdatedTime: string | undefined;
-                    if (file.last_modified != null) {
-                      const lastModTimestamp = Number(file.last_modified);
-                      if (Number.isFinite(lastModTimestamp) && lastModTimestamp > 0) {
-                        // Convert seconds to milliseconds if needed
-                        const timestampMs = lastModTimestamp < 1e12 ? lastModTimestamp * 1000 : lastModTimestamp;
-                        const lastModDate = new Date(timestampMs);
-                        if (!isNaN(lastModDate.getTime())) {
-                          lastUpdatedTime = lastModDate.toISOString();
-                        }
-                      }
-                    }
-
-                    const rawStatus = checkboxStatus
-                      ? (checkboxStatus[1] === 'true' ? 'completed' : 'todo')
-                      : (singleselectStatus?.[1] || 'todo');
-
-                    return {
-                      name: file.name.replace('.md', ''),
-                      frequency: (frequencyMatch?.[1] || 'daily') as GTDHabit['frequency'],
-                      status: (rawStatus === 'completed' || rawStatus === 'todo') ? rawStatus : 'todo',
-                      path: file.path,
-                      last_updated: lastUpdatedTime || new Date().toISOString(),
-                      createdDateTime: createdDateTime || lastUpdatedTime || new Date().toISOString()
-                    };
-                  } catch (_error) {
-                    return null;
-                  }
-                })
-              );
-              setHabits(loadedHabits.filter((h): h is GTDHabit => h !== null));
-            } catch (_error) {
-              setHabits([]);
-            }
-          })(),
-
-          // Load horizon counts
-          (async () => {
-            try {
-              const horizons = [
-                'Purpose & Principles',
-                'Vision',
-                'Goals',
-                'Areas of Focus',
-                'Someday Maybe',
-                'Cabinet'
-              ];
-
-              const counts: Record<string, number> = {};
-              await Promise.all(
-                horizons.map(async (horizon) => {
-                  const horizonPath = `${gtdSpace.root_path}/${horizon}`;
-                  const files = await safeInvoke<MarkdownFile[]>(
-                    'list_markdown_files',
-                    { path: horizonPath },
-                    []
-                  );
-                  counts[horizon] = files.length;
-                })
-              );
-              setHorizonFileCounts(counts);
-            } catch (_error) {
-              // Failed to load horizon counts
-            }
-          })()
+          // Load base projects first
+          loadProjects(gtdSpace.root_path),
+          
+          // Then load enhanced data
+          loadProjectsData(gtdSpace.root_path),
+          loadHabits(gtdSpace.root_path),
         ]);
 
-        // Only mark as loaded after successful completion
+        // After projects are loaded, load actions and horizons
+        if (gtdSpace.projects && gtdSpace.projects.length > 0) {
+          await Promise.allSettled([
+            loadActions(gtdSpace.projects),
+            loadHorizons(gtdSpace.root_path, gtdSpace.projects)
+          ]);
+        }
+
         loadedPathRef.current = gtdSpace.root_path;
-        console.log('[GTDDashboard] Successfully loaded data for path:', gtdSpace.root_path);
       } catch (error) {
-        // Don't set loadedPathRef.current on failure so it can be retried
         console.error('[GTDDashboard] Failed to load data:', error);
-        // Explicitly clear to ensure retry on next attempt
         loadedPathRef.current = null;
       }
     };
 
     loadAllData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gtdSpace?.root_path]); // Only re-run when root_path changes, not when loadProjects changes
+  }, [
+    gtdSpace?.root_path,
+    gtdSpace?.projects,
+    loadProjects,
+    loadProjectsData,
+    loadActions,
+    loadHabits,
+    loadHorizons
+  ]);
 
-  // Load action summary across all projects
-  React.useEffect(() => {
-    console.log('[GTDDashboard] Action summary effect triggered', {
-      projectCount: gtdSpace?.projects?.length || 0
-    });
+  // Handle habit toggle
+  const handleHabitToggle = async (habit: typeof habitsWithHistory[0]) => {
+    const newStatus = habit.status === 'completed';
+    await updateHabitStatus(habit.path, !newStatus);
+  };
 
-    const loadActions = async () => {
-      if (!gtdSpace?.projects || gtdSpace.projects.length === 0) {
-        setActionSummary({ total: 0, inProgress: 0, completed: 0, waiting: 0, upcomingDue: 0 });
-        return;
-      }
-      try {
-        let total = 0, inProgress = 0, completed = 0, waiting = 0, upcomingDue = 0;
-        const now = new Date();
+  // Handle action status update
+  const handleActionStatusUpdate = async (actionId: string, newStatus: string) => {
+    await updateActionStatus(actionId, newStatus);
+  };
 
-        await Promise.all(gtdSpace.projects.map(async (project) => {
-          try {
-            const files = await safeInvoke<MarkdownFile[]>(
-              'list_project_actions',
-              { projectPath: project.path },
-              []
-            );
-            total += files.length;
-            await Promise.all(files.map(async (file) => {
-              try {
-                const content = await readFileText(file.path);
-                // Match any status value, including legacy ones
-                const statusMatch = content.match(/\[!singleselect:status:([^\]]+)\]/i);
-                const raw = (statusMatch?.[1] || 'in-progress').toLowerCase().trim();
-
-                // Map legacy values to canonical ones
-                if (raw === 'in-progress' || raw === 'active' || raw === 'planning' || raw === 'not-started') {
-                  inProgress++;
-                } else if (raw === 'waiting' || raw === 'on-hold' || raw === 'waiting-for') {
-                  waiting++;
-                } else if (raw === 'completed' || raw === 'done' || raw === 'complete') {
-                  completed++;
-                } else if (raw === 'cancelled' || raw === 'canceled') {
-                  // Cancelled is excluded from completed count
-                  // Not counted in any bucket - effectively ignored
-                } else {
-                  // Default unmapped values to in-progress
-                  inProgress++;
-                }
-
-
-                const dueMatch = content.match(/\[!datetime:due_date:([^\]]*)\]/i);
-                const dueStr = dueMatch?.[1]?.trim();
-                if (dueStr) {
-                  const d = new Date(dueStr);
-                  if (!isNaN(d.getTime()) && d > now) upcomingDue++;
-                }
-              } catch {
-                // Ignore parsing errors
-              }
-            }));
-          } catch {
-            // Ignore project loading errors
-          }
-        }));
-
-        setActionSummary({ total, inProgress, completed, waiting, upcomingDue });
-      } catch (_e) {
-        setActionSummary({ total: 0, inProgress: 0, completed: 0, waiting: 0, upcomingDue: 0 });
-      }
-    };
-    loadActions();
-  }, [gtdSpace?.projects]);
-
-  // Calculate project statistics
-  const stats = React.useMemo<ProjectStats>(() => {
-    if (!gtdSpace?.projects) {
-      return {
-        total: 0,
-        active: 0,
-        onHold: 0,
-        completed: 0,
-        totalActions: 0,
-        completedActions: 0,
-        overdueProjects: 0,
-        upcomingDeadlines: [],
-        todayFocus: [],
-        thisWeekProjects: []
-      };
+  // Handle bulk action updates
+  const handleBulkActionUpdate = async (actionIds: string[], updates: Partial<{ status: string }>) => {
+    if (updates.status) {
+      // Update each action's status in parallel
+      await Promise.allSettled(
+        actionIds.map(actionId => updateActionStatus(actionId, updates.status!))
+      );
     }
+  };
 
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
-    const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  // Handle project updates
+  const handleProjectUpdate = async (projectPath: string, updates: Partial<typeof projectsWithMetadata[0]>) => {
+    await updateProject(projectPath, updates);
+  };
 
-    const stats: ProjectStats = {
-      total: gtdSpace.projects.length,
-      active: 0,
-      onHold: 0,
-      completed: 0,
-      totalActions: 0,
-      completedActions: 0,
-      overdueProjects: 0,
-      upcomingDeadlines: [],
-      todayFocus: [],
-      thisWeekProjects: []
-    };
-
-    gtdSpace.projects.forEach(project => {
-      const primaryStatus = project.status || 'in-progress';
-      switch (primaryStatus) {
-        case 'in-progress':
-          stats.active++;
-          break;
-        case 'waiting':
-          stats.onHold++;
-          break;
-        case 'completed':
-          stats.completed++;
-          break;
-      }
-
-      // Count actions
-      stats.totalActions += project.action_count || 0;
-
-      // Check for overdue projects using robust parsing
-      const dueDateParsed = parseProjectDueDate((project as unknown as { dueDate?: string }).dueDate);
-      if (dueDateParsed && !primaryStatus.includes('completed')) {
-        if (dueDateParsed < now) {
-          stats.overdueProjects++;
-        } else if (dueDateParsed <= oneWeekFromNow) {
-          stats.upcomingDeadlines.push(project);
-          if (dueDateParsed >= today && dueDateParsed < tomorrow) {
-            stats.todayFocus.push(project);
-          }
-          if (dueDateParsed <= oneWeekFromNow) {
-            stats.thisWeekProjects.push(project);
-          }
-        }
-      }
+  // Convert horizons to the format expected by DashboardHorizons
+  const horizonFiles = React.useMemo(() => {
+    const files: Record<string, MarkdownFile[]> = {};
+    Object.entries(horizons).forEach(([name, level]) => {
+      files[name] = level.files;
     });
-
-    // Sort upcoming deadlines by date
-    stats.upcomingDeadlines.sort((a, b) => {
-      // Safely parse dates, handling block strings
-      const parseDateSafe = (dateStr: string): number => {
-        let str = dateStr;
-        // Check if it's a block string and extract the value
-        if (str.startsWith('[!datetime:')) {
-          const match = str.match(/\[!datetime:due_date:([^\]]*)\]/i);
-          str = match?.[1] || '';
-        }
-        const parsed = Date.parse(str);
-        // Return Infinity for invalid dates so they sort to the end
-        return isNaN(parsed) ? Infinity : parsed;
-      };
-
-      const dateA = parseDateSafe(a.dueDate!);
-      const dateB = parseDateSafe(b.dueDate!);
-      return dateA - dateB;
-    });
-
-    return stats;
-  }, [gtdSpace?.projects]);
-
-  // Calculate habit statistics
-  const habitStats = React.useMemo<HabitStats>(() => {
-    if (!habits || habits.length === 0) {
-      return {
-        total: 0,
-        completedToday: 0,
-        streak: 0,
-        completionRate: 0,
-        habits: []
-      };
-    }
-
-    const completedToday = habits.filter(h => h.status === 'completed').length;
-
-    return {
-      total: habits.length,
-      completedToday,
-      streak: 0, // Would need to calculate from history
-      completionRate: habits.length > 0 ? (completedToday / habits.length) * 100 : 0,
-      habits: habits
-    };
-  }, [habits]);
-
-  // Removed duplicate useEffect - data loading is already handled in the main effect above
-
-  const getProjectCompletion = (project: GTDProject): number => {
-    const statusStr = project.status || '';
-    if (statusStr.includes('completed')) return 100;
-    if (statusStr.includes('in-progress')) return 50;
-    if (statusStr.includes('waiting')) return 25;
-    return 0;
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffDays = Math.floor((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Tomorrow';
-    if (diffDays < 0) return `${Math.abs(diffDays)} days overdue`;
-    if (diffDays < 7) return `${diffDays} days`;
-
-    return date.toLocaleDateString();
-  };
-
-  // Parse project due_date values safely (supports raw block or ISO/RFC3339)
-  function parseProjectDueDate(value?: string | null): Date | null {
-    if (!value) return null;
-    let raw = value.trim();
-    const block = raw.match(/\[!datetime:due_date:([^\]]*)\]/i);
-    if (block) raw = block[1].trim();
-    const d = new Date(raw);
-    if (!isNaN(d.getTime())) return d;
-    const ymd = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (ymd) {
-      const dt = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
-      return isNaN(dt.getTime()) ? null : dt;
-    }
-    return null;
-  }
-
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
-
-  const handleHabitToggle = async (habit: GTDHabit) => {
-    const newStatus = habit.status === 'completed' ? 'todo' : 'completed';
-    await updateHabitStatus(
-      `${gtdSpace.root_path}/Habits/${habit.name}.md`,
-      newStatus
-    );
-  };
-
+    return files;
+  }, [horizons]);
 
   if (!currentFolder || !gtdSpace?.isGTDSpace) {
     return (
       <div className={`flex items-center justify-center h-full ${className}`}>
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle>No GTD Space Selected</CardTitle>
-            <CardDescription>
-              Select a GTD workspace from the sidebar to view your dashboard
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <div className="text-center">
+          <LayoutDashboard className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+          <h2 className="text-xl font-semibold mb-2">No GTD Space Selected</h2>
+          <p className="text-muted-foreground">
+            Select a GTD workspace from the sidebar to view your dashboard
+          </p>
+        </div>
       </div>
     );
   }
+
+  const combinedLoading = isLoading || actionsLoading || projectsLoading || habitsLoading || horizonsLoading;
 
   return (
     <div className={`h-full overflow-hidden ${className}`}>
@@ -605,15 +216,19 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
             </p>
           </div>
 
-          {/* Navigation Tabs */}
-          <TabsList className="grid grid-cols-4 w-full max-w-2xl">
+          {/* Navigation Tabs - 5 tabs */}
+          <TabsList className="grid grid-cols-5 w-full">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Activity className="h-4 w-4" />
               Overview
             </TabsTrigger>
-            <TabsTrigger value="focus" className="flex items-center gap-2">
-              <Target className="h-4 w-4" />
-              Today's Focus
+            <TabsTrigger value="actions" className="flex items-center gap-2">
+              <ListChecks className="h-4 w-4" />
+              Actions
+            </TabsTrigger>
+            <TabsTrigger value="projects" className="flex items-center gap-2">
+              <FolderOpen className="h-4 w-4" />
+              Projects
             </TabsTrigger>
             <TabsTrigger value="habits" className="flex items-center gap-2">
               <RefreshCw className="h-4 w-4" />
@@ -626,908 +241,218 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           </TabsList>
         </div>
 
-        <ScrollArea className="flex-1 min-h-0 px-6 pb-6">
-          <TabsContent value="overview" className="space-y-6 mt-6">
-            {/* Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]" onClick={() => setShowProjectDialog(true)}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10">
-                      <Plus className="h-6 w-6 text-primary" />
-                    </div>
-                    <Sparkles className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <p className="font-semibold text-lg">New Project</p>
-                  <p className="text-sm text-muted-foreground">Start something amazing</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-500/10">
-                      <Activity className="h-6 w-6 text-blue-500" />
-                    </div>
-                    <TrendingUp className="h-4 w-4 text-blue-500" />
-                  </div>
-                  {isLoading ? (
-                    <div className="space-y-2">
-                      <div className="h-8 w-12 bg-muted rounded animate-pulse" />
-                      <div className="h-3 w-20 bg-muted rounded animate-pulse" />
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-3xl font-bold">{stats.active}</p>
-                      <p className="text-sm text-muted-foreground">Active Projects</p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 rounded-lg bg-gradient-to-br from-green-500/20 to-green-500/10">
-                      <CheckCircle2 className="h-6 w-6 text-green-500" />
-                    </div>
-                    <Heart className="h-4 w-4 text-green-500" />
-                  </div>
-                  {isLoading ? (
-                    <div className="space-y-2">
-                      <div className="h-8 w-12 bg-muted rounded animate-pulse" />
-                      <div className="h-3 w-20 bg-muted rounded animate-pulse" />
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-3xl font-bold">{stats.completed}</p>
-                      <p className="text-sm text-muted-foreground">Completed</p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 rounded-lg bg-gradient-to-br from-purple-500/20 to-purple-500/10">
-                      <Zap className="h-6 w-6 text-purple-500" />
-                    </div>
-                    <BarChart3 className="h-4 w-4 text-purple-500" />
-                  </div>
-                  {isLoading ? (
-                    <div className="space-y-2">
-                      <div className="h-8 w-12 bg-muted rounded animate-pulse" />
-                      <div className="h-3 w-20 bg-muted rounded animate-pulse" />
-                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                        {[...Array(3)].map((_, i) => (
-                          <div key={i} className="space-y-1">
-                            <div className="h-4 w-6 bg-muted rounded animate-pulse" />
-                            <div className="h-3 w-12 bg-muted rounded animate-pulse" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-3xl font-bold">{actionSummary.total}</p>
-                      <p className="text-sm text-muted-foreground">Total Actions</p>
-                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-                        <div>
-                          <div className="font-semibold">{actionSummary.inProgress}</div>
-                          <div>In Progress</div>
-                        </div>
-                        <div>
-                          <div className="font-semibold">{actionSummary.waiting}</div>
-                          <div>Waiting</div>
-                        </div>
-                        <div>
-                          <div className="font-semibold">{actionSummary.completed}</div>
-                          <div>Completed</div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Quick Links: Cabinet & Someday Maybe */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="cursor-pointer hover:shadow-lg transition-all" onClick={() => onSelectProject(`${currentFolder}/Cabinet`)}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="p-3 rounded-lg bg-gradient-to-br from-slate-500/20 to-slate-500/10">
-                      <FileText className="h-6 w-6 text-slate-500" />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-lg">Cabinet</p>
-                      <p className="text-sm text-muted-foreground">Reference materials</p>
-                    </div>
-                    <Badge>{horizonFileCounts['Cabinet'] || 0}</Badge>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="cursor-pointer hover:shadow-lg transition-all" onClick={() => onSelectProject(`${currentFolder}/Someday Maybe`)}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="p-3 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-500/10">
-                      <Sparkles className="h-6 w-6 text-amber-500" />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-lg">Someday Maybe</p>
-                      <p className="text-sm text-muted-foreground">Ideas to incubate</p>
-                    </div>
-                    <Badge>{horizonFileCounts['Someday Maybe'] || 0}</Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Alerts & Today's Focus */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Today's Focus */}
-              <Card className="border-primary/20">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Target className="h-5 w-5 text-primary" />
-                    Today's Focus
-                  </CardTitle>
-                  <CardDescription>What needs your attention today</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {stats.todayFocus.length === 0 && stats.overdueProjects === 0 ? (
-                    <div className="text-center py-8">
-                      <Coffee className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-                      <p className="text-sm text-muted-foreground">
-                        No urgent items today. Focus on your priorities!
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      {stats.overdueProjects > 0 && (
-                        <div className="p-3 bg-destructive/10 rounded-lg border border-destructive/20">
-                          <div className="flex items-center gap-2 text-destructive">
-                            <AlertCircle className="h-4 w-4" />
-                            <span className="font-medium">{stats.overdueProjects} overdue project{stats.overdueProjects !== 1 ? 's' : ''}</span>
-                          </div>
-                        </div>
-                      )}
-                      {stats.todayFocus.map(project => (
-                        <div
-                          key={project.path}
-                          className="p-3 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
-                          onClick={() => {
-                            onSelectProject(project.path);
-                            if (onSelectFile) {
-                              const readmeFile: MarkdownFile = {
-                                id: `${project.path}/README.md`,
-                                name: 'README.md',
-                                path: `${project.path}/README.md`,
-                                size: 0,
-                                last_modified: Date.now(),
-                                extension: 'md'
-                              };
-                              onSelectFile(readmeFile);
-                            }
-                          }}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">{project.name}</span>
-                            <Badge variant="destructive" className="text-xs">
-                              Due Today
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
-                        </div>
-                      ))}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Quick Habits Status */}
-              <Card className="border-green-500/20">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <RefreshCw className="h-5 w-5 text-green-500" />
-                    Today's Habits
-                  </CardTitle>
-                  <CardDescription>Keep your routines on track</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {habitStats.habits.length === 0 ? (
-                    <div className="text-center py-8">
-                      <ListChecks className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-                      <p className="text-sm text-muted-foreground">
-                        No habits configured yet
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <div className="text-2xl font-bold text-green-600">
-                            {habitStats.completedToday}/{habitStats.total}
-                          </div>
-                          <span className="text-sm text-muted-foreground">completed</span>
-                        </div>
-                        <Badge variant="outline" className={cn(
-                          "text-xs",
-                          habitStats.completionRate === 100 && "bg-green-500/10 text-green-600 border-green-500/20"
-                        )}>
-                          {Math.round(habitStats.completionRate)}%
-                        </Badge>
-                      </div>
-                      <Progress value={habitStats.completionRate} className="mb-4 h-2" />
-                      <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                        {habitStats.habits.slice(0, 5).map(habit => (
-                          <div
-                            key={habit.name}
-                            className="flex items-center gap-2 p-2 rounded hover:bg-accent cursor-pointer"
-                            onClick={() => handleHabitToggle(habit)}
-                          >
-                            {habit.status === 'completed' ? (
-                              <CheckSquare className="h-4 w-4 text-green-600" />
-                            ) : (
-                              <Square className="h-4 w-4 text-muted-foreground" />
-                            )}
-                            <span className={cn(
-                              "text-sm",
-                              habit.status === 'completed' && "line-through text-muted-foreground"
-                            )}>
-                              {habit.name}
-                            </span>
-                            <Badge variant="outline" className="text-xs ml-auto">
-                              {habit.frequency}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Active Projects & Status Distribution */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Active Projects */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>Active Projects</span>
-                    <Badge>{stats.active}</Badge>
-                  </CardTitle>
-                  <CardDescription>Projects currently in progress</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[300px]">
-                    <div className="space-y-3">
-                      {isLoading && gtdSpace.projects?.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Loading projects...</p>
-                      ) : stats.active === 0 ? (
-                        <div className="text-center py-8">
-                          <FolderOpen className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-                          <p className="text-sm text-muted-foreground">No active projects</p>
-                        </div>
-                      ) : (
-                        gtdSpace.projects
-                          ?.filter(p => p.status === 'in-progress')
-                          .map(project => (
-                            <div
-                              key={project.path}
-                              className="p-3 border rounded-lg hover:bg-accent cursor-pointer transition-colors group"
-                              onClick={() => {
-                                onSelectProject(project.path);
-                                if (onSelectFile) {
-                                  const readmeFile: MarkdownFile = {
-                                    id: `${project.path}/README.md`,
-                                    name: 'README.md',
-                                    path: `${project.path}/README.md`,
-                                    size: 0,
-                                    last_modified: Date.now(),
-                                    extension: 'md'
-                                  };
-                                  onSelectFile(readmeFile);
-                                }
-                              }}
-                            >
-                              <div className="flex items-start justify-between mb-2">
-                                <h4 className="font-medium flex items-center gap-2">
-                                  {project.name}
-                                  <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </h4>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedProject(project);
-                                    setShowActionDialog(true);
-                                  }}
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </Button>
-                              </div>
-                              <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-                                {project.description}
-                              </p>
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="flex items-center gap-1">
-                                  <FileText className="h-3 w-3" />
-                                  {project.action_count || 0} actions
-                                </span>
-                                {(() => {
-                                  const d = parseProjectDueDate((project as unknown as { dueDate?: string }).dueDate); return d ? (
-                                    <span className={cn(
-                                      "flex items-center gap-1",
-                                      d < new Date() ? "text-destructive" : "text-orange-600"
-                                    )}>
-                                      <Calendar className="h-3 w-3" />
-                                      {formatDate(d.toISOString())}
-                                    </span>
-                                  ) : null
-                                })()}
-                              </div>
-                              <Progress value={getProjectCompletion(project)} className="mt-2 h-1" />
-                            </div>
-                          ))
-                      )}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-
-              {/* Project Status Distribution */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Project Pipeline</CardTitle>
-                  <CardDescription>Overview of all projects by status</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium flex items-center gap-2">
-                          <Circle className="h-4 w-4 text-blue-600 fill-blue-600" />
-                          Active
-                        </span>
-                        <span className="text-sm font-bold">{stats.active}</span>
-                      </div>
-                      <Progress value={stats.total > 0 ? (stats.active / stats.total) * 100 : 0} className="h-2" />
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-yellow-600" />
-                          Waiting
-                        </span>
-                        <span className="text-sm font-bold">{stats.onHold}</span>
-                      </div>
-                      <Progress value={stats.total > 0 ? (stats.onHold / stats.total) * 100 : 0} className="h-2" />
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-green-600" />
-                          Completed
-                        </span>
-                        <span className="text-sm font-bold">{stats.completed}</span>
-                      </div>
-                      <Progress value={stats.total > 0 ? (stats.completed / stats.total) * 100 : 0} className="h-2" />
-                    </div>
-
-                    {/* Quick Stats */}
-                    <div className="pt-6 border-t grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-2xl font-bold">{stats.totalActions}</p>
-                        <p className="text-sm text-muted-foreground">Total Actions</p>
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold">
-                          {stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}%
-                        </p>
-                        <p className="text-sm text-muted-foreground">Completion Rate</p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="h-full p-6 overflow-auto">
+            <DashboardOverview
+              gtdSpace={gtdSpace}
+              projects={projectsWithMetadata}
+              habits={habitsWithHistory}
+              actionSummary={actionSummary}
+              horizonCounts={Object.fromEntries(
+                Object.entries(horizons).map(([name, level]) => [name, level.files.length])
+              )}
+              isLoading={combinedLoading}
+              onNewProject={() => setShowProjectDialog(true)}
+              onSelectProject={onSelectProject}
+              onSelectHorizon={(name) => {
+                const level = horizons[name];
+                if (level && level.files.length > 0 && onSelectFile) {
+                  onSelectFile(level.files[0]);
+                }
+              }}
+            />
           </TabsContent>
 
-          <TabsContent value="focus" className="space-y-6 mt-6">
-            {/* Today's Schedule */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5" />
-                  Today's Focus
-                </CardTitle>
-                <CardDescription>
-                  {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {stats.todayFocus.length === 0 && stats.thisWeekProjects.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Brain className="h-16 w-16 text-muted-foreground/20 mx-auto mb-4" />
-                    <p className="text-lg font-medium mb-2">Clear Schedule Today</p>
-                    <p className="text-sm text-muted-foreground">
-                      No deadlines today. Perfect time to make progress on important projects!
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {/* Overdue Items */}
-                    {stats.overdueProjects > 0 && (
-                      <div>
-                        <h3 className="font-medium text-destructive mb-3 flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4" />
-                          Overdue Items
-                        </h3>
-                        <div className="space-y-2">
-                          {gtdSpace.projects
-                            ?.filter(p => {
-                              const due = parseProjectDueDate((p as unknown as { dueDate?: string }).dueDate);
-                              const statusStr = p.status || '';
-                              return due && due < new Date() && !statusStr.includes('completed');
-                            })
-                            .map(project => (
-                              <div
-                                key={project.path}
-                                className="p-3 bg-destructive/5 border border-destructive/20 rounded-lg cursor-pointer hover:bg-destructive/10 transition-colors"
-                                onClick={() => {
-                                  onSelectProject(project.path);
-                                  if (onSelectFile) {
-                                    const readmeFile: MarkdownFile = {
-                                      id: `${project.path}/README.md`,
-                                      name: 'README.md',
-                                      path: `${project.path}/README.md`,
-                                      size: 0,
-                                      last_modified: Date.now(),
-                                      extension: 'md'
-                                    };
-                                    onSelectFile(readmeFile);
-                                  }
-                                }}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="font-medium">{project.name}</span>
-                                  <Badge variant="destructive" className="text-xs">
-                                    {(() => { const d = parseProjectDueDate((project as unknown as { dueDate?: string }).dueDate); return d ? formatDate(d.toISOString()) : 'Due date'; })()}
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Today's Items */}
-                    {stats.todayFocus.length > 0 && (
-                      <div>
-                        <h3 className="font-medium mb-3 flex items-center gap-2">
-                          <Calendar className="h-4 w-4" />
-                          Due Today
-                        </h3>
-                        <div className="space-y-2">
-                          {stats.todayFocus.map(project => (
-                            <div
-                              key={project.path}
-                              className="p-3 bg-primary/5 border border-primary/20 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors"
-                              onClick={() => {
-                                onSelectProject(project.path);
-                                if (onSelectFile) {
-                                  const readmeFile: MarkdownFile = {
-                                    id: `${project.path}/README.md`,
-                                    name: 'README.md',
-                                    path: `${project.path}/README.md`,
-                                    size: 0,
-                                    last_modified: Date.now(),
-                                    extension: 'md'
-                                  };
-                                  onSelectFile(readmeFile);
-                                }
-                              }}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium">{project.name}</span>
-                                {project.dueDate && project.dueDate.includes('T') && (() => {
-                                  const raw = project.dueDate as string;
-                                  // Extract ISO from block syntax like "[!datetime:...ISO...]" or "[!datetime:due_date:...ISO...]"
-                                  const match = raw.match(/\[!datetime:(?:[^:\]]*:)?([^\]]+)\]/i);
-                                  const normalized = match && match[1] ? match[1].trim() : raw;
-                                  const parsed = new Date(normalized);
-                                  if (isNaN(parsed.getTime())) return null;
-                                  return (
-                                    <Badge variant="outline" className="text-xs">
-                                      {formatTime(parsed.toISOString())}
-                                    </Badge>
-                                  );
-                                })()}
-                              </div>
-                              <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
-                              <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                                <span className="flex items-center gap-1">
-                                  <FileText className="h-3 w-3" />
-                                  {project.action_count || 0} actions
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* This Week */}
-                    {stats.thisWeekProjects.filter(p => !stats.todayFocus.includes(p)).length > 0 && (
-                      <div>
-                        <h3 className="font-medium mb-3 flex items-center gap-2">
-                          <Timer className="h-4 w-4" />
-                          This Week
-                        </h3>
-                        <div className="space-y-2">
-                          {stats.thisWeekProjects
-                            .filter(p => !stats.todayFocus.includes(p))
-                            .map(project => (
-                              <div
-                                key={project.path}
-                                className="p-3 border rounded-lg cursor-pointer hover:bg-accent transition-colors"
-                                onClick={() => {
-                                  onSelectProject(project.path);
-                                  if (onSelectFile) {
-                                    const readmeFile: MarkdownFile = {
-                                      id: `${project.path}/README.md`,
-                                      name: 'README.md',
-                                      path: `${project.path}/README.md`,
-                                      size: 0,
-                                      last_modified: Date.now(),
-                                      extension: 'md'
-                                    };
-                                    onSelectFile(readmeFile);
-                                  }
-                                }}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="font-medium">{project.name}</span>
-                                  <Badge variant="outline" className="text-xs">
-                                    {(() => {
-                                      let dateStr = project.dueDate!;
-                                      // Check if it's a block string and extract the value
-                                      if (dateStr.startsWith('[!datetime:')) {
-                                        const match = dateStr.match(/\[!datetime:due_date:([^\]]*)\]/i);
-                                        dateStr = match?.[1] || '';
-                                      }
-                                      // Only format if we have a valid date string
-                                      return dateStr ? formatDate(dateStr) : 'No date';
-                                    })()}
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          {/* Actions Tab - Enhanced with new data */}
+          <TabsContent value="actions" className="h-full p-6 overflow-auto">
+            <DashboardActions
+              actions={actions}
+              projects={gtdSpace.projects?.map(p => ({ name: p.name, path: p.path })) || []}
+              isLoading={actionsLoading}
+              onSelectAction={(action) => onSelectFile?.({
+                id: action.id,
+                name: action.name,
+                path: action.path,
+                size: 0,
+                last_modified: Date.now(),
+                extension: 'md'
+              })}
+              onUpdateStatus={handleActionStatusUpdate}
+              onBulkUpdate={handleBulkActionUpdate}
+            />
           </TabsContent>
 
-          <TabsContent value="habits" className="space-y-6 mt-6">
-            {/* Habits Overview */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <RefreshCw className="h-5 w-5" />
-                    Habit Tracker
-                  </CardTitle>
-                  <CardDescription>Build consistency through daily routines</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {habitStats.habits.length === 0 ? (
-                    <div className="text-center py-12">
-                      <Star className="h-16 w-16 text-muted-foreground/20 mx-auto mb-4" />
-                      <p className="text-lg font-medium mb-2">No Habits Yet</p>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Create habits to build consistent routines
-                      </p>
-                      <Button variant="outline">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create First Habit
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {habitStats.habits.map(habit => (
-                        <div
-                          key={habit.name}
-                          className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
-                          onClick={() => handleHabitToggle(habit)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="flex-shrink-0">
-                              {habit.status === 'completed' ? (
-                                <div className="p-2 rounded-full bg-green-500/10">
-                                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                </div>
-                              ) : (
-                                <div className="p-2 rounded-full bg-muted">
-                                  <Circle className="h-5 w-5 text-muted-foreground" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex-1">
-                              <p className={cn(
-                                "font-medium",
-                                habit.status === 'completed' && "line-through text-muted-foreground"
-                              )}>
-                                {habit.name}
-                              </p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="outline" className="text-xs">
-                                  {habit.frequency}
-                                </Badge>
-                                {habit.status === 'completed' && (
-                                  <span className="text-xs text-green-600">Completed today</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Habit Stats</CardTitle>
-                  <CardDescription>Your consistency metrics</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-muted-foreground">Today's Progress</span>
-                      <span className="text-sm font-bold">{habitStats.completedToday}/{habitStats.total}</span>
-                    </div>
-                    <Progress value={habitStats.completionRate} className="h-2" />
-                  </div>
-
-                  <div className="pt-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Completion Rate</span>
-                      <span className="text-xl font-bold text-green-600">
-                        {Math.round(habitStats.completionRate)}%
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Total Habits</span>
-                      <span className="text-xl font-bold">{habitStats.total}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+          {/* Projects Tab - Enhanced with metadata */}
+          <TabsContent value="projects" className="h-full p-6 overflow-auto">
+            <DashboardProjects
+              projects={projectsWithMetadata}
+              isLoading={projectsLoading}
+              onSelectProject={(project) => {
+                onSelectProject(project.path);
+                if (onSelectFile) {
+                  const readmeFile: MarkdownFile = {
+                    id: `${project.path}/README.md`,
+                    name: 'README.md',
+                    path: `${project.path}/README.md`,
+                    size: 0,
+                    last_modified: Date.now(),
+                    extension: 'md'
+                  };
+                  onSelectFile(readmeFile);
+                }
+              }}
+              onCreateProject={() => setShowProjectDialog(true)}
+              onEditProject={(project) => {
+                // Open the project's README file in the editor
+                if (onSelectFile) {
+                  const readmeFile: MarkdownFile = {
+                    id: `${project.path}/README.md`,
+                    name: 'README.md',
+                    path: `${project.path}/README.md`,
+                    size: 0,
+                    last_modified: Date.now(),
+                    extension: 'md'
+                  };
+                  onSelectFile(readmeFile);
+                }
+              }}
+              onArchiveProject={async (project) => {
+                await handleProjectUpdate(project.path, { status: 'completed' });
+              }}
+              onAddAction={(project) => {
+                setSelectedProject(project);
+                setShowActionDialog(true);
+              }}
+            />
           </TabsContent>
 
-          <TabsContent value="horizons" className="space-y-6 mt-6">
-            {/* Horizons of Focus */}
-            <div className="space-y-4">
-              <Card className="border-purple-500/20">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Mountain className="h-5 w-5 text-purple-600" />
-                    Horizons of Focus
-                  </CardTitle>
-                  <CardDescription>Align your actions with your higher purpose</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {/* Purpose & Principles - 50,000 ft */}
-                    <Collapsible open={!!expandedHorizon['Purpose & Principles']} onOpenChange={() => toggleHorizon('Purpose & Principles')}>
-                      <div className="group flex items-center justify-between p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors">
-                        <CollapsibleTrigger className="flex-1 text-left">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h3 className="font-medium flex items-center gap-2">
-                                <Star className="h-4 w-4 text-purple-600" />
-                                Purpose & Principles
-                                <Badge variant="outline" className="text-xs">50,000 ft</Badge>
-                                {horizonFileCounts['Purpose & Principles'] > 0 && (
-                                  <Badge className="text-xs">{horizonFileCounts['Purpose & Principles']}</Badge>
-                                )}
-                              </h3>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                Your life mission and core values
-                              </p>
-                            </div>
-                            <ChevronRight className={`h-5 w-5 text-muted-foreground transition-transform ${expandedHorizon['Purpose & Principles'] ? 'rotate-90' : ''}`} />
-                          </div>
-                        </CollapsibleTrigger>
-                      </div>
-                      <CollapsibleContent>
-                        <div className="pl-6 pt-2 space-y-1">
-                          {(horizonFilesList['Purpose & Principles'] || []).map(file => (
-                            <div key={file.path} className="text-sm p-2 rounded hover:bg-accent cursor-pointer flex items-center gap-2" onClick={() => onSelectFile && onSelectFile(file)}>
-                              <FileText className="h-3.5 w-3.5" />
-                              <span>{file.name.replace('.md', '')}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
+          {/* Habits Tab - Enhanced with history and analytics */}
+          <TabsContent value="habits" className="h-full p-6 overflow-auto">
+            <DashboardHabits
+              habits={habitsWithHistory}
+              isLoading={habitsLoading}
+              onToggleHabit={handleHabitToggle}
+              onEditHabit={(habit) => {
+                if (onSelectFile) {
+                  onSelectFile({
+                    id: habit.path,
+                    name: habit.name,
+                    path: habit.path,
+                    size: 0,
+                    last_modified: Date.now(),
+                    extension: 'md'
+                  });
+                }
+              }}
+              onCreateHabit={async () => {
+                // Create a new habit file
+                if (gtdSpace?.root_path) {
+                  const habitName = prompt('Enter habit name:');
+                  if (habitName) {
+                    // Create a new habit file with default template
+                    const habitPath = `${gtdSpace.root_path}/Habits/${habitName}.md`;
+                    const defaultContent = `# ${habitName}
 
-                    {/* Vision - 40,000 ft */}
-                    <Collapsible open={!!expandedHorizon['Vision']} onOpenChange={() => toggleHorizon('Vision')}>
-                      <div className="group flex items-center justify-between p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors">
-                        <CollapsibleTrigger className="flex-1 text-left">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h3 className="font-medium flex items-center gap-2">
-                                <Eye className="h-4 w-4 text-blue-600" />
-                                Vision
-                                <Badge variant="outline" className="text-xs">40,000 ft</Badge>
-                                {horizonFileCounts['Vision'] > 0 && (
-                                  <Badge className="text-xs">{horizonFileCounts['Vision']}</Badge>
-                                )}
-                              </h3>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                Your 3-5 year aspirational picture
-                              </p>
-                            </div>
-                            <ChevronRight className={`h-5 w-5 text-muted-foreground transition-transform ${expandedHorizon['Vision'] ? 'rotate-90' : ''}`} />
-                          </div>
-                        </CollapsibleTrigger>
-                      </div>
-                      <CollapsibleContent>
-                        <div className="pl-6 pt-2 space-y-1">
-                          {(horizonFilesList['Vision'] || []).map(file => (
-                            <div key={file.path} className="text-sm p-2 rounded hover:bg-accent cursor-pointer flex items-center gap-2" onClick={() => onSelectFile && onSelectFile(file)}>
-                              <FileText className="h-3.5 w-3.5" />
-                              <span>{file.name.replace('.md', '')}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
+[!singleselect:habit-frequency:daily]
+[!checkbox:habit-status:false]
 
-                    {/* Goals - 30,000 ft */}
-                    <Collapsible open={!!expandedHorizon['Goals']} onOpenChange={() => toggleHorizon('Goals')}>
-                      <div className="group flex items-center justify-between p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors">
-                        <CollapsibleTrigger className="flex-1 text-left">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h3 className="font-medium flex items-center gap-2">
-                                <Target className="h-4 w-4 text-green-600" />
-                                Goals
-                                <Badge variant="outline" className="text-xs">30,000 ft</Badge>
-                                {horizonFileCounts['Goals'] > 0 && (
-                                  <Badge className="text-xs">{horizonFileCounts['Goals']}</Badge>
-                                )}
-                              </h3>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                Your 1-2 year objectives
-                              </p>
-                            </div>
-                            <ChevronRight className={`h-5 w-5 text-muted-foreground transition-transform ${expandedHorizon['Goals'] ? 'rotate-90' : ''}`} />
-                          </div>
-                        </CollapsibleTrigger>
-                      </div>
-                      <CollapsibleContent>
-                        <div className="pl-6 pt-2 space-y-1">
-                          {(horizonFilesList['Goals'] || []).map(file => (
-                            <div key={file.path} className="text-sm p-2 rounded hover:bg-accent cursor-pointer flex items-center gap-2" onClick={() => onSelectFile && onSelectFile(file)}>
-                              <FileText className="h-3.5 w-3.5" />
-                              <span>{file.name.replace('.md', '')}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
+## Description
+Describe your habit here.
 
-                    {/* Areas of Focus - 20,000 ft */}
-                    <Collapsible open={!!expandedHorizon['Areas of Focus']} onOpenChange={() => toggleHorizon('Areas of Focus')}>
-                      <div className="group flex items-center justify-between p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors">
-                        <CollapsibleTrigger className="flex-1 text-left">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h3 className="font-medium flex items-center gap-2">
-                                <Compass className="h-4 w-4 text-orange-600" />
-                                Areas of Focus
-                                <Badge variant="outline" className="text-xs">20,000 ft</Badge>
-                                {horizonFileCounts['Areas of Focus'] > 0 && (
-                                  <Badge className="text-xs">{horizonFileCounts['Areas of Focus']}</Badge>
-                                )}
-                              </h3>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                Your ongoing responsibilities
-                              </p>
-                            </div>
-                            <ChevronRight className={`h-5 w-5 text-muted-foreground transition-transform ${expandedHorizon['Areas of Focus'] ? 'rotate-90' : ''}`} />
-                          </div>
-                        </CollapsibleTrigger>
-                      </div>
-                      <CollapsibleContent>
-                        <div className="pl-6 pt-2 space-y-1">
-                          {(horizonFilesList['Areas of Focus'] || []).map(file => (
-                            <div key={file.path} className="text-sm p-2 rounded hover:bg-accent cursor-pointer flex items-center gap-2" onClick={() => onSelectFile && onSelectFile(file)}>
-                              <FileText className="h-3.5 w-3.5" />
-                              <span>{file.name.replace('.md', '')}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-
-                    {/* Projects - Runway */}
-                    <div
-                      className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors group"
-                      onClick={() => {
-                        const path = `${currentFolder}/Projects`;
-                        onSelectProject(path);
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-medium flex items-center gap-2">
-                            <MapPin className="h-4 w-4 text-red-600" />
-                            Projects
-                            <Badge variant="outline" className="text-xs">Runway</Badge>
-                            {stats.total > 0 && (
-                              <Badge className="text-xs">{stats.total}</Badge>
-                            )}
-                          </h3>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Your current active projects
-                          </p>
-                        </div>
-                        <ChevronRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Weekly Review */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Brain className="h-5 w-5" />
-                    Weekly Review
-                  </CardTitle>
-                  <CardDescription>Keep your system trusted and current</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center py-8">
-                    <RefreshCw className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Regular reviews keep your GTD system functioning
-                    </p>
-                    <Button variant="outline">
-                      <Calendar className="h-4 w-4 mr-2" />
-                      Start Weekly Review
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+## History
+<!-- Auto-generated history will appear below -->
+`;
+                    try {
+                      await safeInvoke('write_file', {
+                        path: habitPath,
+                        content: defaultContent
+                      });
+                      // Open the new habit file
+                      if (onSelectFile) {
+                        onSelectFile({
+                          id: habitPath,
+                          name: `${habitName}.md`,
+                          path: habitPath,
+                          size: 0,
+                          last_modified: Date.now(),
+                          extension: 'md'
+                        });
+                      }
+                      // Reload habits
+                      await loadHabits(gtdSpace.root_path);
+                    } catch (error) {
+                      console.error('Failed to create habit:', error);
+                    }
+                  }
+                }
+              }}
+            />
           </TabsContent>
-        </ScrollArea>
+
+          {/* Horizons Tab - Enhanced with relationships */}
+          <TabsContent value="horizons" className="h-full p-6 overflow-auto">
+            <DashboardHorizons
+              horizonFiles={horizonFiles}
+              projects={projectsWithMetadata}
+              relationships={relationships}
+              isLoading={horizonsLoading}
+              onSelectFile={onSelectFile}
+              onCreateFile={async (horizon) => {
+                // Create a new file in the specified horizon
+                if (gtdSpace?.root_path) {
+                  const fileName = prompt(`Create new ${horizon} file:`);
+                  if (fileName) {
+                    // Ensure the file name ends with .md
+                    const fileNameWithExt = fileName.endsWith('.md') ? fileName : `${fileName}.md`;
+                    const filePath = `${gtdSpace.root_path}/${horizon}/${fileNameWithExt}`;
+                    const title = fileName.replace('.md', '');
+
+                    // Create default content based on horizon type
+                    let defaultContent = `# ${title}\n\n`;
+
+                    // Add horizon-specific metadata fields
+                    if (horizon === 'Projects') {
+                      defaultContent += `[!singleselect:project-status:in-progress]\n[!datetime:due_date:]\n\n## Overview\n\n## Actions\n[!actions-list]\n`;
+                    } else if (horizon === 'Areas of Focus') {
+                      defaultContent += `## Description\n\n## Related Projects\n[!projects-references:]\n`;
+                    } else if (horizon === 'Goals') {
+                      defaultContent += `[!datetime:target_date:]\n\n## Objective\n\n## Related Areas\n[!areas-references:]\n`;
+                    } else if (horizon === 'Vision') {
+                      defaultContent += `## Vision Statement\n\n## Related Goals\n[!goals-references:]\n`;
+                    } else if (horizon === 'Purpose & Principles') {
+                      defaultContent += `## Core Purpose\n\n## Guiding Principles\n\n`;
+                    } else {
+                      defaultContent += `## Description\n\n`;
+                    }
+
+                    try {
+                      await safeInvoke('write_file', {
+                        path: filePath,
+                        content: defaultContent
+                      });
+                      // Open the new file
+                      if (onSelectFile) {
+                        onSelectFile({
+                          id: filePath,
+                          name: fileNameWithExt,
+                          path: filePath,
+                          size: 0,
+                          last_modified: Date.now(),
+                          extension: 'md'
+                        });
+                      }
+                      // Reload horizons
+                      await loadHorizons(gtdSpace.root_path, gtdSpace.projects || []);
+                    } catch (error) {
+                      console.error('Failed to create file:', error);
+                    }
+                  }
+                }
+              }}
+            />
+          </TabsContent>
+        </div>
       </Tabs>
 
       {/* Dialogs */}
@@ -1560,7 +485,6 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
 // Memoize the component to prevent unnecessary re-renders
 export const GTDDashboard = React.memo(GTDDashboardComponent, (prevProps, nextProps) => {
-  // Custom comparison function - only re-render if these props change
   return (
     prevProps.currentFolder === nextProps.currentFolder &&
     prevProps.gtdSpace?.root_path === nextProps.gtdSpace?.root_path &&

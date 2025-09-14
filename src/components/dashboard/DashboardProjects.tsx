@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Slider } from '@/components/ui/slider';
 import {
   Select,
   SelectContent,
@@ -56,6 +57,7 @@ import {
   MoreHorizontal,
   Plus,
   Search,
+  Star,
   Target,
   TrendingUp,
   X
@@ -69,13 +71,19 @@ interface ProjectWithMetadata extends GTDProject {
   linkedAreas?: string[];
   linkedGoals?: string[];
   linkedVision?: string[];
+  linkedPurpose?: string[];
   completionPercentage?: number;
   actionStats?: {
     total: number;
     completed: number;
     inProgress: number;
     waiting: number;
+    cancelled?: number;
   };
+  effort?: string;
+  priority?: string;
+  notes?: string;
+  outcomes?: string[];
 }
 
 interface DashboardProjectsProps {
@@ -159,7 +167,8 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
       filtered = filtered.filter(project => {
         const hasHorizons = (project.linkedAreas && project.linkedAreas.length > 0) ||
                            (project.linkedGoals && project.linkedGoals.length > 0) ||
-                           (project.linkedVision && project.linkedVision.length > 0);
+                           (project.linkedVision && project.linkedVision.length > 0) ||
+                           (project.linkedPurpose && project.linkedPurpose.length > 0);
         return hasHorizonsFilter ? hasHorizons : !hasHorizons;
       });
     }
@@ -185,10 +194,10 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
           else compareValue = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
           break;
         case 'created':
-          compareValue = 0; // Would need created date in project data
+          compareValue = new Date(a.createdDateTime).getTime() - new Date(b.createdDateTime).getTime();
           break;
         case 'actionCount':
-          compareValue = (a.action_count || 0) - (b.action_count || 0);
+          compareValue = (a.actionStats?.total || 0) - (b.actionStats?.total || 0);
           break;
         case 'completion':
           compareValue = (a.completionPercentage || 0) - (b.completionPercentage || 0);
@@ -276,10 +285,11 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
       return new Date(p.dueDate) < new Date();
     }).length;
 
-    const withHorizons = filteredProjects.filter(p => 
+    const withHorizons = filteredProjects.filter(p =>
       (p.linkedAreas && p.linkedAreas.length > 0) ||
       (p.linkedGoals && p.linkedGoals.length > 0) ||
-      (p.linkedVision && p.linkedVision.length > 0)
+      (p.linkedVision && p.linkedVision.length > 0) ||
+      (p.linkedPurpose && p.linkedPurpose.length > 0)
     ).length;
 
     const avgCompletion = filteredProjects.length > 0
@@ -335,12 +345,12 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
                   Add Action
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   onClick={() => onArchiveProject?.(project)}
-                  className="text-destructive"
+                  className="text-green-600"
                 >
-                  <Archive className="h-4 w-4 mr-2" />
-                  Archive
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Mark Complete
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -387,6 +397,12 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
               </div>
             </div>
           )}
+
+          {/* Created Date */}
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Created:</span>
+            <span>{formatDate(project.createdDateTime)}</span>
+          </div>
 
           {/* Horizons */}
           <Collapsible open={isExpanded} onOpenChange={() => toggleProjectExpansion(project.path)}>
@@ -439,7 +455,20 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
                   </div>
                 </div>
               )}
-              {!project.linkedAreas?.length && !project.linkedGoals?.length && !project.linkedVision?.length && (
+              {project.linkedPurpose && project.linkedPurpose.length > 0 && (
+                <div className="flex items-center gap-2 text-xs">
+                  <Star className="h-3 w-3 text-purple-600" />
+                  <span className="text-muted-foreground">Purpose:</span>
+                  <div className="flex gap-1 flex-wrap">
+                    {project.linkedPurpose.map(purpose => (
+                      <Badge key={purpose} variant="secondary" className="text-xs">
+                        {purpose}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {!project.linkedAreas?.length && !project.linkedGoals?.length && !project.linkedVision?.length && !project.linkedPurpose?.length && (
                 <p className="text-xs text-muted-foreground italic">No horizon links</p>
               )}
             </CollapsibleContent>
@@ -574,7 +603,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
         {showFilters && (
           <Card>
             <CardContent className="pt-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {/* Status filter */}
                 <div className="space-y-2">
                   <Label>Status</Label>
@@ -653,10 +682,29 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
                   </Select>
                 </div>
 
+                {/* Completion range filter */}
+                <div className="space-y-2">
+                  <Label>Completion %</Label>
+                  <div className="space-y-1">
+                    <Slider
+                      value={completionRangeFilter}
+                      onValueChange={(value) => setCompletionRangeFilter(value as [number, number])}
+                      min={0}
+                      max={100}
+                      step={5}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>{completionRangeFilter[0]}%</span>
+                      <span>{completionRangeFilter[1]}%</span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Clear filters */}
                 <div className="flex items-end">
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     onClick={clearFilters}
                     disabled={activeFilterCount === 0}
                   >
@@ -753,14 +801,18 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
                                 {statusDisplay.label}
                               </Badge>
                               {project.dueDate && (
-                                <Badge 
-                                  variant={isOverdue ? "destructive" : "outline"} 
+                                <Badge
+                                  variant={isOverdue ? "destructive" : "outline"}
                                   className="text-xs"
                                 >
                                   <Calendar className="h-3 w-3 mr-1" />
                                   {formatDate(project.dueDate)}
                                 </Badge>
                               )}
+                              <Badge variant="outline" className="text-xs">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {formatDate(project.createdDateTime)}
+                              </Badge>
                             </div>
                             <p className="text-sm text-muted-foreground line-clamp-1">
                               {project.description}
@@ -793,11 +845,11 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
                                   Add Action
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => onArchiveProject?.(project)}
-                                  className="text-destructive"
+                                  className="text-green-600"
                                 >
-                                  Archive
+                                  Mark Complete
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>

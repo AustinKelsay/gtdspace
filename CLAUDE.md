@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Additional Guidelines
+
+See `AGENTS.md` for comprehensive coding style guide including:
+- Module organization conventions
+- Naming patterns for components, hooks, and utilities
+- Commit message format (`feat:`, `fix:`, `docs:`, etc.)
+- PR requirements (screenshots for UI changes, testing steps)
+
 ## Essential Commands
 
 ```bash
@@ -39,7 +47,7 @@ npm run release:major  # 0.1.0 → 1.0.0 with git operations
 npm run icons:generate # Generate app icons for all platforms (runs automatically before build)
 
 # Testing
-npm test               # Run Vitest tests
+npm test               # Run Vitest tests (watch mode)
 npm run test:run       # Run tests once without watch mode
 ```
 
@@ -221,10 +229,11 @@ const result = await withErrorHandling(
 
 ## Key Constraints
 
-- **TypeScript**: Strict mode disabled
+- **TypeScript**: Strict mode disabled (`tsconfig.json` strict: false)
 - **ESLint**: v9+ with flat config (`eslint.config.js`), zero warnings allowed (CI enforced)
   - Unused vars config: `argsIgnorePattern`, `varsIgnorePattern`, `caughtErrorsIgnorePattern` all set to `'^_'`
   - Uses `--ext` flag for file extensions (legacy but still functional)
+  - Ignores: `dist`, `src-tauri`, `node_modules`, `*.config.*`
 - **Rust**: Must pass `cargo clippy -D warnings` and `cargo fmt --check`
   - Uses `notify` through `notify-debouncer-mini` (no direct dependency)
   - `rand` v0.9 with new API: `rand::rng()` and `random_range()`
@@ -233,7 +242,7 @@ const result = await withErrorHandling(
 - **Node**: v20+ required
 - **Limits**: Max 10MB files, max 10 open tabs
 - **Google OAuth**: Uses dynamic loopback port for OAuth callback (no fixed port requirement)
-- **Testing**: Vitest configured for unit testing
+- **Testing**: Vitest configured for unit testing in `tests/` directory
 
 ## CI/CD & Release
 
@@ -305,6 +314,9 @@ Dashboard components location: `src/components/dashboard/`
 - `DashboardHabits.tsx` - Habit tracking interface
 - `DashboardHorizons.tsx` - GTD hierarchy visualization
 
+**Horizons Utilities** (`src/utils/horizons.ts`):
+- `mergeProjectInfoIntoHorizonFiles()` - Enriches horizon files with project metadata
+
 ## State Management Patterns
 
 **No Redux/Zustand**: Uses React hooks + context for all state
@@ -336,3 +348,12 @@ npm run tauri:build
 - `scripts/bump-version.js` - Updates package.json, Cargo.toml, tauri.conf.json
 - `scripts/safe-release.js` - Full release with git operations
 - Version format: Semantic versioning (major.minor.patch)
+
+## TypeScript Path Aliases
+
+Configured path aliases in `tsconfig.json` and `vitest.config.ts`:
+- `@/*` → `./src/*`
+- `@/components/*` → `./src/components/*`
+- `@/hooks/*` → `./src/hooks/*`
+- `@/lib/*` → `./src/lib/*`
+- `@/types/*` → `./src/types/*`

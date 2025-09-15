@@ -74,6 +74,25 @@ const normalizeProjectStatus = (status: string): string => {
 };
 
 /**
+ * Normalize action status values (actions accept an additional "cancelled" state)
+ */
+const normalizeActionStatus = (status: string): 'in-progress' | 'waiting' | 'completed' | 'cancelled' => {
+  const normalized = status.toLowerCase().trim();
+
+  if (['cancelled', 'canceled', 'abandoned', 'dropped'].includes(normalized)) {
+    return 'cancelled';
+  }
+  if (['completed', 'done', 'finished'].includes(normalized)) {
+    return 'completed';
+  }
+  if (['waiting', 'blocked', 'on-hold', 'paused'].includes(normalized)) {
+    return 'waiting';
+  }
+  // default and common synonyms
+  return 'in-progress';
+};
+
+/**
  * Extract horizon references from content
  */
 const extractHorizonReferences = (content: string) => {
@@ -224,23 +243,12 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
                   try {
                     const actionContent = await readFileText(file.path);
                     const actionMeta = extractMetadata(actionContent);
-                    const status = normalizeProjectStatus(actionMeta.status || 'in-progress');
-                    
-                    switch (status) {
-                      case 'completed':
-                        stats.completed++;
-                        break;
-                      case 'in-progress':
-                        stats.inProgress++;
-                        break;
-                      case 'waiting':
-                        stats.waiting++;
-                        break;
-                      default:
-                        if (actionMeta.status?.toLowerCase() === 'cancelled') {
-                          stats.cancelled++;
-                        }
-                    }
+                    const status = normalizeActionStatus((actionMeta.status as string) || 'in-progress');
+
+                    if (status === 'completed') stats.completed++;
+                    else if (status === 'waiting') stats.waiting++;
+                    else if (status === 'cancelled') stats.cancelled++;
+                    else stats.inProgress++;
                   } catch {
                     // Ignore individual action errors
                   }

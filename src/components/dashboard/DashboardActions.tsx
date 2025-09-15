@@ -173,7 +173,11 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
 
     // Project filter
     if (projectFilter.length > 0) {
-      filtered = filtered.filter(action => projectFilter.includes(action.projectPath));
+      filtered = filtered.filter(action => {
+        // Prefer explicit projectPath; fall back to parent directory of action file
+        const projPath = action.projectPath ?? action.path.split('/').slice(0, -1).join('/');
+        return projectFilter.includes(projPath);
+      });
     }
 
     // Has deadline filter

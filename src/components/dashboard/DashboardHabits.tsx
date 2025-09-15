@@ -355,8 +355,14 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-7 gap-1">
-                {days.slice(0, 35).map((date, i) => {
-                  const dateStr = date.toISOString().split('T')[0];
+                {days.map((date, i) => {
+                  // Use local date formatting to match stored dates
+                  const dateStr = [
+                    date.getFullYear(),
+                    String(date.getMonth() + 1).padStart(2, '0'),
+                    String(date.getDate()).padStart(2, '0')
+                  ].join('-');
+
                   // Get ALL entries for this date
                   const entries = selectedHabit.history?.filter(h => h.date === dateStr) || [];
                   // Check if ANY entry for this date shows completed
@@ -594,7 +600,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
               <CardContent>
                 <ScrollArea className="h-[300px]">
                   <div className="space-y-2">
-                    {habits
+                    {[...habits]
                       .sort((a, b) => (b.currentStreak || 0) - (a.currentStreak || 0))
                       .slice(0, 10)
                       .map((habit, index) => {

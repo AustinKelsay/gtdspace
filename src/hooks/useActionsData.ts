@@ -189,12 +189,12 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
                           (metadata.contexts ? [metadata.contexts] : []),
                 references: Array.isArray(metadata.references) ? metadata.references :
                            (metadata.references ? [metadata.references] : []),
-                createdDate: metadata.createdDateTime as string || 
+                createdDate: metadata.createdDateTime as string ||
                            metadata.createdDate as string ||
-                           new Date(file.last_modified).toISOString(),
+                           new Date((file.last_modified || 0) * 1000).toISOString(),
                 modifiedDate: metadata.modifiedDateTime as string ||
                             metadata.modifiedDate as string ||
-                            new Date(file.last_modified).toISOString(),
+                            new Date((file.last_modified || 0) * 1000).toISOString(),
                 description: extractDescription(content),
                 notes: metadata.notes as string | undefined
               };

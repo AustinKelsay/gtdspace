@@ -107,9 +107,31 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   const loadedPathRef = React.useRef<string | null>(null);
   const { toast } = useToast();
 
-  // Load all data when GTD space changes
+  // Helper function to sanitize file names for security
+  const sanitizeFileName = (input: string): string | null => {
+    if (!input || input.trim() === '') return null;
+
+    // Remove path traversal attempts and dangerous characters
+    let sanitized = input
+      .replace(/\.\.[/\\]/g, '') // Remove ../
+      .replace(/[/\\]/g, '-')     // Replace path separators with hyphens
+      .replace(/[^a-zA-Z0-9\s\-_]/g, '') // Keep only safe characters
+      .trim();
+
+    // Reject if empty after sanitization
+    if (!sanitized) return null;
+
+    // Limit length
+    if (sanitized.length > 100) {
+      sanitized = sanitized.substring(0, 100);
+    }
+
+    return sanitized;
+  };
+
+  // Load initial data when GTD space root path changes
   React.useEffect(() => {
-    const loadAllData = async () => {
+    const loadInitialData = async () => {
       if (!gtdSpace?.root_path) return;
 
       // Skip if already loaded for this path
@@ -122,35 +144,49 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
         await Promise.allSettled([
           // Load base projects first
           loadProjects(gtdSpace.root_path),
-          
+
           // Then load enhanced data
           loadProjectsData(gtdSpace.root_path),
           loadHabits(gtdSpace.root_path),
         ]);
 
-        // After projects are loaded, load actions and horizons
-        if (gtdSpace.projects && gtdSpace.projects.length > 0) {
-          await Promise.allSettled([
-            loadActions(gtdSpace.projects),
-            loadHorizons(gtdSpace.root_path, gtdSpace.projects)
-          ]);
-        }
-
         loadedPathRef.current = gtdSpace.root_path;
       } catch (error) {
-        console.error('[GTDDashboard] Failed to load data:', error);
+        console.error('[GTDDashboard] Failed to load initial data:', error);
         loadedPathRef.current = null;
       }
     };
 
-    loadAllData();
+    loadInitialData();
+  }, [
+    gtdSpace?.root_path,
+    loadProjects,
+    loadProjectsData,
+    loadHabits
+  ]);
+
+  // Load actions and horizons when projects change
+  React.useEffect(() => {
+    const loadProjectDependentData = async () => {
+      if (!gtdSpace?.root_path || !gtdSpace?.projects || gtdSpace.projects.length === 0) {
+        return;
+      }
+
+      try {
+        await Promise.allSettled([
+          loadActions(gtdSpace.projects),
+          loadHorizons(gtdSpace.root_path, gtdSpace.projects)
+        ]);
+      } catch (error) {
+        console.error('[GTDDashboard] Failed to load project-dependent data:', error);
+      }
+    };
+
+    loadProjectDependentData();
   }, [
     gtdSpace?.root_path,
     gtdSpace?.projects,
-    loadProjects,
-    loadProjectsData,
     loadActions,
-    loadHabits,
     loadHorizons
   ]);
 
@@ -386,7 +422,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     name,
                     path: actionPath,
                     size: 0,
-                    last_modified: Date.now(),
+                    last_modified: Math.floor(Date.now() / 1000),
                     extension: 'md'
                   });
                 }
@@ -405,7 +441,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                 name: action.name,
                 path: action.path,
                 size: 0,
-                last_modified: Date.now(),
+                last_modified: Math.floor(Date.now() / 1000),
                 extension: 'md'
               })}
               onUpdateStatus={handleActionStatusUpdate}
@@ -427,7 +463,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     name: 'README.md',
                     path: `${project.path}/README.md`,
                     size: 0,
-                    last_modified: Date.now(),
+                    last_modified: Math.floor(Date.now() / 1000),
                     extension: 'md'
                   };
                   onSelectFile(readmeFile);
@@ -442,7 +478,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     name: 'README.md',
                     path: `${project.path}/README.md`,
                     size: 0,
-                    last_modified: Date.now(),
+                    last_modified: Math.floor(Date.now() / 1000),
                     extension: 'md'
                   };
                   onSelectFile(readmeFile);
@@ -471,7 +507,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     name: habit.name,
                     path: habit.path,
                     size: 0,
-                    last_modified: Date.now(),
+                    last_modified: Math.floor(Date.now() / 1000),
                     extension: 'md'
                   });
                 }
@@ -516,7 +552,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                             name: `${habitName}.md`,
                             path: habitPath,
                             size: 0,
-                            last_modified: Date.now(),
+                            last_modified: Math.floor(Date.now() / 1000),
                             extension: 'md'
                           });
                         }
@@ -545,11 +581,33 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                 // Create a new file in the specified horizon
                 if (gtdSpace?.root_path) {
                   const fileName = prompt(`Create new ${horizon} file:`);
-                  if (fileName) {
-                    // Ensure the file name ends with .md
-                    const fileNameWithExt = fileName.endsWith('.md') ? fileName : `${fileName}.md`;
-                    const filePath = `${gtdSpace.root_path}/${horizon}/${fileNameWithExt}`;
-                    const title = fileName.replace('.md', '');
+                  const sanitizedName = sanitizeFileName(fileName || '');
+
+                  if (!sanitizedName) {
+                    toast({
+                      title: 'Invalid file name',
+                      description: 'Please enter a valid file name without special characters',
+                      variant: 'destructive'
+                    });
+                    return;
+                  }
+
+                  // Ensure the file name ends with .md
+                  const fileNameWithExt = sanitizedName.endsWith('.md') ? sanitizedName : `${sanitizedName}.md`;
+                  const filePath = `${gtdSpace.root_path}/${horizon}/${fileNameWithExt}`;
+
+                  // Additional security check: ensure the resolved path is within the horizon directory
+                  const expectedPrefix = `${gtdSpace.root_path}/${horizon}/`;
+                  if (!filePath.startsWith(expectedPrefix)) {
+                    toast({
+                      title: 'Security error',
+                      description: 'Invalid file path detected',
+                      variant: 'destructive'
+                    });
+                    return;
+                  }
+
+                  const title = sanitizedName.replace('.md', '');
 
                     // Create default content based on horizon type
                     let defaultContent = `# ${title}\n\n`;
@@ -585,7 +643,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                           name: fileNameWithExt,
                           path: filePath,
                           size: 0,
-                          last_modified: Date.now(),
+                          last_modified: Math.floor(Date.now() / 1000),
                           extension: 'md'
                         });
                       }
@@ -595,7 +653,6 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                       console.error('Failed to create file:', error);
                     }
                   }
-                }
               }}
             />
           </TabsContent>

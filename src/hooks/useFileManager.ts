@@ -492,20 +492,28 @@ export const readFileText = async (path: string): Promise<string> => {
   // Check if we're in Tauri context first
   const { checkTauriContextAsync } = await import('@/utils/tauri-ready');
   const inTauriContext = await checkTauriContextAsync();
-  
+
   if (!inTauriContext) {
+    console.error('[readFileText] Not in Tauri context');
     throw new Error('readFileText is only available in the Tauri runtime');
   }
-  
+
   try {
+    console.log('[readFileText] Attempting to read file:', path);
     const content = await safeInvoke<string>('read_file', { path }, null);
-    if (!content) {
-      throw new Error('Failed to read file');
+
+    if (content === null || content === undefined) {
+      console.error('[readFileText] File read returned null/undefined for path:', path);
+      // Return empty string instead of throwing for non-existent files
+      // This allows the caller to handle missing files gracefully
+      return '';
     }
+
+    console.log('[readFileText] Successfully read file, content length:', content.length);
     return content;
   } catch (error) {
-    console.error('Failed to read file:', path, error);
-    throw new Error(`Failed to read file: ${error}`);
+    console.error('[readFileText] Failed to read file:', path, error);
+    throw new Error(`Failed to read file at ${path}: ${error instanceof Error ? error.message : String(error)}`);
   }
 };
 

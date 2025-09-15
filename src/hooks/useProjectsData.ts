@@ -125,12 +125,59 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
     setCachedSpacePath(spacePath);
     
     try {
-      // Load base projects
-      const baseProjects = await safeInvoke<GTDProject[]>(
+      // Load base projects via backend if available; otherwise fallback to scanning Projects folder
+      let baseProjects = await safeInvoke<GTDProject[]>(
         'load_projects',
         { path: spacePath },
         []
       );
+
+      if (!baseProjects || baseProjects.length === 0) {
+        // Fallback: build projects from README.md files under spacePath/Projects
+        try {
+          const projectsRoot = `${spacePath}/Projects`;
+          const files = await safeInvoke<MarkdownFile[]>(
+            'list_markdown_files',
+            { path: projectsRoot },
+            []
+          );
+          const readmes = files.filter(f => /\/Projects\/.+\/README\.(md|markdown)$/i.test(f.path));
+          baseProjects = await Promise.all(readmes.map(async (f) => {
+            const projectPath = f.path.replace(/\/README\.(md|markdown)$/i, '');
+            const name = projectPath.split('/').filter(Boolean).pop() || 'Project';
+            let description = '';
+            let status: GTDProject['status'] = 'in-progress';
+            let dueDate: string | null | undefined = undefined;
+            try {
+              const content = await readFileText(f.path);
+              const metadata = extractMetadata(content);
+              if (typeof metadata.title === 'string') {
+                // Prefer explicit title if present
+              }
+              description = '';
+              const normalized = (metadata.projectStatus || metadata.status || 'in-progress') as string;
+              status = normalizeProjectStatus(normalized) as GTDProject['status'];
+              if (typeof metadata.dueDate === 'string') dueDate = metadata.dueDate;
+            } catch {
+              // Ignore content parsing errors in fallback
+            }
+            const created = new Date((f.last_modified || 0) * 1000).toISOString();
+            const base: GTDProject = {
+              name,
+              description,
+              dueDate: dueDate || null,
+              status,
+              path: projectPath,
+              createdDateTime: created,
+              action_count: undefined
+            };
+            return base;
+          }));
+        } catch (fallbackErr) {
+          console.error('[useProjectsData] Fallback project scan failed:', fallbackErr);
+          baseProjects = [];
+        }
+      }
       
       // Filter archived if needed
       const filteredProjects = includeArchived 
@@ -274,11 +321,17 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
         }
       }
       
-      await safeInvoke('write_file', {
+      const writeResult = await safeInvoke('save_file', {
         path: readmePath,
         content
-      });
-      
+      }, null);
+
+      // Check if write succeeded
+      if (!writeResult) {
+        console.error('[updateProjectStatus] Failed to write file');
+        throw new Error('Failed to save project changes');
+      }
+
       // Update local state
       setProjects(prev => prev.map(p =>
         p.path === projectPath ? { ...p, ...updates } : p

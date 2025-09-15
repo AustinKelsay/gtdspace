@@ -6,8 +6,11 @@ type ToastProps = {
   variant?: "default" | "destructive"
 }
 
-const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_LIMIT = 3
+// How long after dismiss to fully remove from DOM
+const TOAST_REMOVE_DELAY = 1500
+// Auto-dismiss newly created toasts after this many ms
+const TOAST_AUTO_DISMISS = 4000
 
 type ToasterToast = ToastProps & {
   id: string
@@ -161,6 +164,11 @@ function toast({ ...props }: Toast) {
       },
     },
   })
+
+  // Auto-dismiss after a short delay
+  setTimeout(() => {
+    dismiss()
+  }, TOAST_AUTO_DISMISS)
 
   return {
     id: id,

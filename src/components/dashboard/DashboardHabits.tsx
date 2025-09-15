@@ -24,29 +24,13 @@ import {
   Flame,
   RefreshCw,
   Star,
-  Target
+  Target,
+  Edit
 } from 'lucide-react';
-import type { GTDHabit } from '@/types';
+import type { HabitWithHistory } from '@/hooks/useHabitsHistory';
+import { calculateNextReset } from '@/hooks/useHabitsHistory';
 import { cn } from '@/lib/utils';
-import { formatRelativeTime } from '@/utils/date-formatting';
-
-// Extended habit interface with history
-interface HabitWithHistory extends GTDHabit {
-  history?: HabitHistoryEntry[];
-  currentStreak?: number;
-  bestStreak?: number;
-  successRate?: number;
-  lastCompleted?: string;
-  nextReset?: string;
-  totalCompletions?: number;
-  totalAttempts?: number;
-}
-
-interface HabitHistoryEntry {
-  date: string;
-  completed: boolean;
-  note?: string;
-}
+import { formatCompactDate } from '@/utils/date-formatting';
 
 interface DashboardHabitsProps {
   habits: HabitWithHistory[];
@@ -57,7 +41,7 @@ interface DashboardHabitsProps {
   className?: string;
 }
 
-// Frequency display mapping
+// Frequency display mapping (must align with GTDHabitFrequency)
 const FREQUENCY_DISPLAY: Record<string, string> = {
   'daily': 'Daily',
   'every-other-day': 'Every Other Day',
@@ -68,22 +52,11 @@ const FREQUENCY_DISPLAY: Record<string, string> = {
   'monthly': 'Monthly'
 };
 
-// Frequency reset intervals (in milliseconds)
-const FREQUENCY_INTERVALS: Record<string, number> = {
-  'daily': 24 * 60 * 60 * 1000,
-  'every-other-day': 48 * 60 * 60 * 1000,
-  'twice-weekly': 3.5 * 24 * 60 * 60 * 1000,
-  'weekly': 7 * 24 * 60 * 60 * 1000,
-  'weekdays': 24 * 60 * 60 * 1000, // Daily on weekdays
-  'biweekly': 14 * 24 * 60 * 60 * 1000,
-  'monthly': 30 * 24 * 60 * 60 * 1000
-};
-
 export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
   habits,
   isLoading = false,
   onToggleHabit,
-  onEditHabit: _onEditHabit,
+  onEditHabit,
   onCreateHabit,
   className = ''
 }) => {
@@ -116,7 +89,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
         case 'name':
           return a.name.localeCompare(b.name);
         case 'frequency': {
-          const freqOrder = Object.keys(FREQUENCY_INTERVALS);
+          const freqOrder = Object.keys(FREQUENCY_DISPLAY);
           return freqOrder.indexOf(a.frequency) - freqOrder.indexOf(b.frequency);
         }
         case 'streak':
@@ -158,28 +131,25 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
 
   // Calculate next reset time for a habit
   const getNextResetTime = useCallback((habit: HabitWithHistory) => {
-    if (!habit.lastCompleted && !habit.last_updated) return 'Now';
-    
-    const lastUpdate = new Date(habit.lastCompleted || habit.last_updated || new Date());
-    const interval = FREQUENCY_INTERVALS[habit.frequency] || FREQUENCY_INTERVALS.daily;
-    const nextReset = new Date(lastUpdate.getTime() + interval);
+    // Derive next reset based on current timezone and latest history
+    const lastUpdate = habit.history && habit.history.length > 0
+      ? new Date(`${habit.history[0].date}T00:00:00`)
+      : undefined;
+    const nextReset = new Date(calculateNextReset(habit.frequency, lastUpdate));
     const now = new Date();
-    
+
     if (nextReset <= now) return 'Now';
-    
+
     const diff = nextReset.getTime() - now.getTime();
     const hours = Math.floor(diff / (60 * 60 * 1000));
     const days = Math.floor(hours / 24);
-    
+
     if (days > 0) return `${days}d ${hours % 24}h`;
     if (hours > 0) return `${hours}h`;
-    
-    const minutes = Math.floor(diff / (60 * 1000));
-    return `${minutes}m`;
-  }, []);
 
-  // Use shared date formatting utility
-  const formatTime = formatRelativeTime;
+    const minutes = Math.floor(diff / (60 * 1000));
+    return minutes > 0 ? `${minutes}m` : 'Now';
+  }, []);
 
   // Get streak display with icon
   const getStreakDisplay = (streak: number | undefined) => {
@@ -255,8 +225,22 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
                   </span>
                 </div>
               )}
-              <div className="text-xs text-muted-foreground">
-                Reset: {nextReset}
+              <div className="flex items-center gap-2 justify-end">
+                <div className="text-xs text-muted-foreground">Reset: {nextReset}</div>
+                {onEditHabit && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEditHabit?.(habit);
+                    }}
+                    title="Open Habit"
+                  >
+                    <Edit className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -290,10 +274,44 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
               <div className="text-muted-foreground">Best</div>
             </div>
             <div className="text-center p-1 bg-muted rounded">
-              <div className="font-semibold">{formatTime(habit.lastCompleted)}</div>
+              <div className="font-semibold">{habit.lastCompleted ? formatCompactDate(habit.lastCompleted) : '-'}</div>
               <div className="text-muted-foreground">Last</div>
             </div>
           </div>
+
+          {/* Horizon References */}
+          {(habit.linkedProjects?.length || habit.linkedAreas?.length || habit.linkedGoals?.length ||
+            habit.linkedVision?.length || habit.linkedPurpose?.length) ? (
+            <div className="mt-3 pt-3 border-t">
+              <div className="flex flex-wrap gap-1">
+                {habit.linkedProjects?.map((proj, i) => (
+                  <Badge key={`proj-${i}`} variant="outline" className="text-xs">
+                    📁 {proj.split('/').pop()?.replace('.md', '')}
+                  </Badge>
+                ))}
+                {habit.linkedAreas?.map((area, i) => (
+                  <Badge key={`area-${i}`} variant="outline" className="text-xs">
+                    🎯 {area.split('/').pop()?.replace('.md', '')}
+                  </Badge>
+                ))}
+                {habit.linkedGoals?.map((goal, i) => (
+                  <Badge key={`goal-${i}`} variant="outline" className="text-xs">
+                    🎖️ {goal.split('/').pop()?.replace('.md', '')}
+                  </Badge>
+                ))}
+                {habit.linkedVision?.map((vis, i) => (
+                  <Badge key={`vis-${i}`} variant="outline" className="text-xs">
+                    🔮 {vis.split('/').pop()?.replace('.md', '')}
+                  </Badge>
+                ))}
+                {habit.linkedPurpose?.map((purp, i) => (
+                  <Badge key={`purp-${i}`} variant="outline" className="text-xs">
+                    ⭐ {purp.split('/').pop()?.replace('.md', '')}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     );
@@ -339,20 +357,28 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
               <div className="grid grid-cols-7 gap-1">
                 {days.slice(0, 35).map((date, i) => {
                   const dateStr = date.toISOString().split('T')[0];
-                  const entry = selectedHabit.history?.find(h => h.date === dateStr);
-                  const isCompleted = entry?.completed || false;
-                  
+                  // Get ALL entries for this date
+                  const entries = selectedHabit.history?.filter(h => h.date === dateStr) || [];
+                  // Check if ANY entry for this date shows completed
+                  const hasCompletion = entries.some(e => e.completed);
+                  const entryCount = entries.length;
+
                   return (
                     <div
                       key={i}
                       className={cn(
-                        "aspect-square rounded-sm flex items-center justify-center text-xs",
-                        isCompleted ? "bg-green-500 text-white" : "bg-muted",
+                        "aspect-square rounded-sm flex items-center justify-center text-xs relative",
+                        hasCompletion ? "bg-green-500 text-white" : "bg-muted",
                         date.toDateString() === today.toDateString() && "ring-2 ring-primary"
                       )}
-                      title={date.toLocaleDateString()}
+                      title={`${date.toLocaleDateString()}${entryCount > 0 ? ` (${entryCount} entries)` : ''}`}
                     >
                       {date.getDate()}
+                      {entryCount > 1 && (
+                        <span className="absolute top-0 right-0 bg-blue-600 text-white text-[8px] px-1 rounded-bl">
+                          {entryCount}
+                        </span>
+                      )}
                     </div>
                   );
                 })}

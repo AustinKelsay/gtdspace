@@ -27,15 +27,18 @@ import {
   Flame
 } from 'lucide-react';
 import type { GTDSpace } from '@/types';
+import type { ActionItem } from '@/hooks/useActionsData';
 import type { ProjectWithMetadata } from '@/hooks/useProjectsData';
 import type { HabitWithHistory } from '@/hooks/useHabitsHistory';
 import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
 import { formatRelativeDate, getDateFromNow, isDateInRange } from '@/utils/date-formatting';
 
 interface DashboardOverviewProps {
   gtdSpace: GTDSpace;
   projects: ProjectWithMetadata[];
   habits: HabitWithHistory[];
+  actions?: ActionItem[];
   actionSummary: {
     total: number;
     inProgress: number;
@@ -51,6 +54,7 @@ interface DashboardOverviewProps {
   onNewProject?: () => void;
   onSelectProject?: (path: string) => void;
   onSelectHorizon?: (name: string) => void;
+  onSelectAction?: (path: string) => void;
 }
 
 interface QuickStat {
@@ -66,29 +70,36 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   gtdSpace,
   projects,
   habits,
+  actions = [],
   actionSummary,
   horizonCounts,
   isLoading = false,
   onNewProject,
   onSelectProject,
-  onSelectHorizon
+  onSelectHorizon,
+  onSelectAction
 }) => {
+  const [includeActions, setIncludeActions] = React.useState(true);
+  const [onlyOverdue, setOnlyOverdue] = React.useState(false);
   // Calculate project statistics with enhanced metadata
   const projectStats = React.useMemo(() => {
     const active = projects.filter(p => p.status === 'in-progress').length;
     const waiting = projects.filter(p => p.status === 'waiting').length;
     const completed = projects.filter(p => p.status === 'completed').length;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const overdue = projects.filter(p => {
       if (!p.dueDate || p.status === 'completed') return false;
       const due = new Date(p.dueDate);
-      return due < new Date();
+      return !isNaN(due.getTime()) && due < today;
     }).length;
 
     // Calculate projects with horizon linkages
     const withHorizons = projects.filter(p => 
       (p.linkedAreas && p.linkedAreas.length > 0) ||
       (p.linkedGoals && p.linkedGoals.length > 0) ||
-      (p.linkedVision && p.linkedVision.length > 0)
+      (p.linkedVision && p.linkedVision.length > 0) ||
+      (p.linkedPurpose && p.linkedPurpose.length > 0)
     ).length;
 
     // Calculate average completion percentage
@@ -203,7 +214,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       value: projectStats.active,
       icon: FolderOpen,
       color: 'text-blue-500',
-      trend: projectStats.total > 0 ? (projectStats.active / projectStats.total) * 100 : 0,
       description: `${projectStats.avgCompletion}% avg progress`
     },
     {
@@ -226,10 +236,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const upcomingItems = React.useMemo(() => {
     const now = new Date();
     const weekFromNow = getDateFromNow(7);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
     const upcomingProjects = projects
       .filter(p => {
         if (!p.dueDate || p.status === 'completed') return false;
+        if (onlyOverdue) {
+          const due = new Date(p.dueDate);
+          return !isNaN(due.getTime()) && due < today;
+        }
         return isDateInRange(p.dueDate, now, weekFromNow);
       })
       .map(p => ({
@@ -241,11 +256,31 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         completionPercentage: p.completionPercentage
       }));
 
-    // Sort by due date
-    return upcomingProjects
+    const upcomingActions = actions
+      .filter(a => {
+        if (!a.dueDate) return false;
+        if (a.status === 'completed' || a.status === 'cancelled') return false;
+        if (onlyOverdue) {
+          const due = new Date(a.dueDate);
+          return !isNaN(due.getTime()) && due < today;
+        }
+        return isDateInRange(a.dueDate, now, weekFromNow);
+      })
+      .map(a => ({
+        id: a.path,
+        name: a.name,
+        type: 'action' as const,
+        dueDate: a.dueDate!,
+        status: a.status,
+        completionPercentage: undefined as number | undefined
+      }));
+
+    // Sort combined by due date
+    const combined = includeActions ? [...upcomingProjects, ...upcomingActions] : upcomingProjects;
+    return combined
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-      .slice(0, 5);
-  }, [projects]);
+      .slice(0, 8);
+  }, [projects, actions, includeActions, onlyOverdue]);
 
   // Habits needing attention
   const habitsNeedingAttention = React.useMemo(() => {
@@ -503,16 +538,36 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           {/* Upcoming Deadlines */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Upcoming Deadlines
-              </CardTitle>
-              <CardDescription>Next 7 days</CardDescription>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Upcoming Deadlines
+                </CardTitle>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    className={cn(
+                      'text-xs px-2 py-1 rounded border transition-colors',
+                      onlyOverdue
+                        ? 'bg-destructive/10 border-destructive text-destructive'
+                        : 'border-muted-foreground/30 text-muted-foreground hover:bg-accent'
+                    )}
+                    onClick={() => setOnlyOverdue(v => !v)}
+                  >
+                    Only overdue
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Include actions</span>
+                    <Switch checked={includeActions} onCheckedChange={setIncludeActions} />
+                  </div>
+                </div>
+              </div>
+              <CardDescription>{onlyOverdue ? 'Overdue' : 'Next 7 days'}</CardDescription>
             </CardHeader>
             <CardContent>
               {upcomingItems.length === 0 ? (
                 <div className="text-center py-4 text-sm text-muted-foreground">
-                  No upcoming deadlines this week
+                  {onlyOverdue ? 'No overdue items' : 'No upcoming deadlines this week'}
                 </div>
               ) : (
                 <ScrollArea className="h-[200px]">
@@ -521,10 +576,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                       <div
                         key={item.id}
                         className="p-2 border rounded hover:bg-accent cursor-pointer transition-colors"
-                        onClick={() => onSelectProject?.(item.id)}
+                        onClick={() => item.type === 'action' ? onSelectAction?.(item.id) : onSelectProject?.(item.id)}
                       >
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium truncate">{item.name}</span>
+                          <span className="text-sm font-medium truncate flex items-center gap-2">
+                            {item.type === 'project' ? (
+                              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                            ) : (
+                              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                            {item.name}
+                          </span>
                           <Badge variant="outline" className="text-xs">
                             {formatRelativeDate(item.dueDate) || new Date(item.dueDate).toLocaleDateString()}
                           </Badge>
@@ -537,6 +599,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   </div>
                 </ScrollArea>
               )}
+              {/* Legend */}
+              <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <FolderOpen className="h-3.5 w-3.5" /> Project
+                </span>
+                <span className="flex items-center gap-1">
+                  <FileText className="h-3.5 w-3.5" /> Action
+                </span>
+              </div>
             </CardContent>
           </Card>
 

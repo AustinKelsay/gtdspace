@@ -311,12 +311,13 @@ const ActionsListRenderer = React.memo(function ActionsListRenderer(props: Actio
         );
       }
 
-      // Sort actions: in-progress first, then waiting, then completed
+      // Sort actions: in-progress first, then waiting, then completed, then cancelled
       filteredActions.sort((a, b) => {
         const statusOrder: Record<GTDActionStatus, number> = {
           'in-progress': 0,
           'waiting': 1,
-          'completed': 2
+          'completed': 2,
+          'cancelled': 3
         };
         
         const aStatus = normalizeStatus(a.status);
@@ -403,7 +404,8 @@ const ActionsListRenderer = React.memo(function ActionsListRenderer(props: Actio
     const groups: Record<GTDActionStatus, GTDAction[]> = {
       'in-progress': [],
       'waiting': [],
-      'completed': []
+      'completed': [],
+      'cancelled': []
     };
     
     for (const action of actions) {

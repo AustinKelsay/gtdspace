@@ -38,10 +38,9 @@ npm run release:major  # 0.1.0 → 1.0.0 with git operations
 # Utilities
 npm run icons:generate # Generate app icons for all platforms (runs automatically before build)
 
-# Testing (manual only - no framework configured)
-# 1. Test frontend changes with npm run tauri:dev
-# 2. Test production build with npm run tauri:build
-# 3. Verify GTD operations in sidebar and editor
+# Testing
+npm test               # Run Vitest tests
+npm run test:run       # Run tests once without watch mode
 ```
 
 ## Before First Run
@@ -234,7 +233,7 @@ const result = await withErrorHandling(
 - **Node**: v20+ required
 - **Limits**: Max 10MB files, max 10 open tabs
 - **Google OAuth**: Uses dynamic loopback port for OAuth callback (no fixed port requirement)
-- **Testing**: No test framework configured - manual testing required
+- **Testing**: Vitest configured for unit testing
 
 ## CI/CD & Release
 
@@ -270,7 +269,6 @@ const result = await withErrorHandling(
 
 - **Large files**: >1MB may cause editor lag
 - **BlockNote formatting**: Rich text features lost when converting to markdown
-- **No test framework**: Manual testing required
 - **macOS code signing**: Unsigned builds may require security bypass on first run
 
 ## Project-Specific Features

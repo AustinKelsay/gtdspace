@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
-import { extractMetadata } from '@/utils/metadata-extractor';
+import { extractMetadata, extractHorizonReferences } from '@/utils/metadata-extractor';
 import { readFileText } from './useFileManager';
 import type { GTDHabit, MarkdownFile } from '@/types';
 
@@ -24,12 +24,17 @@ export interface HabitWithHistory extends GTDHabit {
   averageStreak: number;
   successRate: number;
   lastCompleted?: string;
-  nextReset?: string;
   totalCompletions: number;
   totalAttempts: number;
   weeklyPattern?: number[]; // Success rate by day of week (0=Sunday)
   monthlyPattern?: number[]; // Success rate by day of month
   recentTrend: 'improving' | 'declining' | 'stable';
+  // Horizon references
+  linkedProjects?: string[];
+  linkedAreas?: string[];
+  linkedGoals?: string[];
+  linkedVision?: string[];
+  linkedPurpose?: string[];
 }
 
 interface UseHabitsHistoryOptions {
@@ -99,7 +104,7 @@ const parseHabitHistory = (content: string): HabitHistoryEntry[] => {
 /**
  * Calculate the next reset time based on frequency
  */
-const calculateNextReset = (frequency: GTDHabit['frequency'], lastUpdate?: Date): string => {
+export const calculateNextReset = (frequency: GTDHabit['frequency'], lastUpdate?: Date): string => {
   const now = new Date();
   const last = lastUpdate || now;
   
@@ -180,7 +185,7 @@ const analyzeHabitPatterns = (history: HabitHistoryEntry[], days: number = 90) =
   cutoffDate.setDate(cutoffDate.getDate() - days);
   
   const recentHistory = history.filter(entry => 
-    new Date(entry.date) >= cutoffDate
+    new Date(`${entry.date}T00:00:00`) >= cutoffDate
   );
   
   // Calculate streaks
@@ -230,7 +235,7 @@ const analyzeHabitPatterns = (history: HabitHistoryEntry[], days: number = 90) =
   const monthlyCount = new Array(31).fill(0);
   
   recentHistory.forEach(entry => {
-    const date = new Date(entry.date);
+    const date = new Date(`${entry.date}T00:00:00`);
     const dayOfWeek = date.getDay();
     const dayOfMonth = date.getDate() - 1;
     
@@ -263,10 +268,10 @@ const analyzeHabitPatterns = (history: HabitHistoryEntry[], days: number = 90) =
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
   
   const recentPeriod = recentHistory.filter(e => 
-    new Date(e.date) >= thirtyDaysAgo
+    new Date(`${e.date}T00:00:00`) >= thirtyDaysAgo
   );
   const previousPeriod = recentHistory.filter(e => {
-    const d = new Date(e.date);
+    const d = new Date(`${e.date}T00:00:00`);
     return d >= sixtyDaysAgo && d < thirtyDaysAgo;
   });
   
@@ -355,10 +360,9 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
               .filter(h => h.completed)
               .sort((a, b) => b.date.localeCompare(a.date))[0]?.date;
             
-            // Calculate next reset
-            const lastUpdate = history[0]?.date ? new Date(history[0].date) : undefined;
-            const nextReset = calculateNextReset(frequency, lastUpdate);
-            
+            // Extract horizon references
+            const horizonRefs = extractHorizonReferences(content);
+
             const habit: HabitWithHistory = {
               name: file.name.replace('.md', ''),
               frequency,
@@ -372,12 +376,17 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
               averageStreak: patterns.averageStreak,
               successRate,
               lastCompleted,
-              nextReset,
               totalCompletions,
               totalAttempts,
               weeklyPattern: patterns.weeklyPattern,
               monthlyPattern: patterns.monthlyPattern,
-              recentTrend: patterns.recentTrend
+              recentTrend: patterns.recentTrend,
+              // Add horizon references
+              linkedProjects: horizonRefs.projects,
+              linkedAreas: horizonRefs.areas,
+              linkedGoals: horizonRefs.goals,
+              linkedVision: horizonRefs.vision,
+              linkedPurpose: horizonRefs.purpose
             };
             
             return habit;
@@ -466,11 +475,17 @@ ${newRow}
         content += historyTable;
       }
       
-      await safeInvoke('write_file', {
+      const writeResult = await safeInvoke('save_file', {
         path: habitPath,
         content
-      });
-      
+      }, null);
+
+      // Check if write succeeded
+      if (!writeResult) {
+        console.error('[updateHabitStatus] Failed to write file');
+        throw new Error('Failed to save habit changes');
+      }
+
       // Reload to get updated analytics
       await refresh();
     } catch (err) {

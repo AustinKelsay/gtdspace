@@ -38,7 +38,6 @@ import {
 } from '@/components/ui/popover';
 import {
   AlertCircle,
-  Archive,
   ArrowUpDown,
   Calendar,
   CheckCircle2,
@@ -62,29 +61,11 @@ import {
   TrendingUp,
   X
 } from 'lucide-react';
-import type { GTDProject } from '@/types';
+import type { ProjectWithMetadata } from '@/hooks/useProjectsData';
 import { cn } from '@/lib/utils';
 import { formatCompactDate } from '@/utils/date-formatting';
 
-// Extended project interface with additional metadata
-interface ProjectWithMetadata extends GTDProject {
-  linkedAreas?: string[];
-  linkedGoals?: string[];
-  linkedVision?: string[];
-  linkedPurpose?: string[];
-  completionPercentage?: number;
-  actionStats?: {
-    total: number;
-    completed: number;
-    inProgress: number;
-    waiting: number;
-    cancelled?: number;
-  };
-  effort?: string;
-  priority?: string;
-  notes?: string;
-  outcomes?: string[];
-}
+// Use unified type from hook to avoid drift
 
 interface DashboardProjectsProps {
   projects: ProjectWithMetadata[];
@@ -92,6 +73,8 @@ interface DashboardProjectsProps {
   onSelectProject?: (project: ProjectWithMetadata) => void;
   onCreateProject?: () => void;
   onEditProject?: (project: ProjectWithMetadata) => void;
+  // Prefer onCompleteProject; onArchiveProject kept for backward-compat
+  onCompleteProject?: (project: ProjectWithMetadata) => void;
   onArchiveProject?: (project: ProjectWithMetadata) => void;
   onAddAction?: (project: ProjectWithMetadata) => void;
 }
@@ -122,6 +105,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
   onSelectProject,
   onCreateProject,
   onEditProject,
+  onCompleteProject,
   onArchiveProject,
   onAddAction
 }) => {
@@ -202,9 +186,13 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
         case 'completion':
           compareValue = (a.completionPercentage || 0) - (b.completionPercentage || 0);
           break;
-        case 'status':
-          compareValue = a.status.localeCompare(b.status);
+        case 'status': {
+          const order: Record<string, number> = { 'in-progress': 0, 'waiting': 1, 'completed': 2 };
+          const aOrder = order[a.status] ?? 99;
+          const bOrder = order[b.status] ?? 99;
+          compareValue = aOrder - bOrder;
           break;
+        }
       }
 
       return sortOrder === 'asc' ? compareValue : -compareValue;
@@ -346,7 +334,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => onArchiveProject?.(project)}
+                  onClick={() => (onCompleteProject || onArchiveProject)?.(project)}
                   className="text-green-600"
                 >
                   <CheckCircle2 className="h-4 w-4 mr-2" />
@@ -846,7 +834,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
-                                  onClick={() => onArchiveProject?.(project)}
+                                  onClick={() => (onCompleteProject || onArchiveProject)?.(project)}
                                   className="text-green-600"
                                 >
                                   Mark Complete
@@ -865,23 +853,38 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
 
           {/* Kanban View */}
           {viewMode === 'kanban' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[60vh]">
               {STATUS_OPTIONS.map(status => {
                 const StatusIcon = status.icon;
                 const projectsInStatus = projectsByStatus[status.value] || [];
                 
                 return (
-                  <div key={status.value} className="space-y-2">
-                    <div className="flex items-center justify-between p-2">
-                      <div className="flex items-center gap-2">
-                        <StatusIcon className={cn("h-4 w-4", status.color)} />
-                        <span className="font-medium">{status.label}</span>
-                        <Badge variant="secondary">{projectsInStatus.length}</Badge>
+                  <div
+                    key={status.value}
+                    className="flex flex-col rounded-lg border bg-background/50 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+                    aria-label={`${status.label} column`}
+                  >
+                    {/* Sticky column header */}
+                    <div className="sticky top-0 z-10 px-3 py-2 border-b bg-background/80">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <StatusIcon className={cn("h-4 w-4", status.color)} />
+                          <span className="font-medium text-sm">{status.label}</span>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">{projectsInStatus.length}</Badge>
                       </div>
                     </div>
-                    <ScrollArea className="h-[600px]">
-                      <div className="space-y-2 pr-4">
-                        {projectsInStatus.map(project => renderProjectCard(project))}
+
+                    {/* Column scroll area */}
+                    <ScrollArea className="max-h-[65vh] lg:max-h-[70vh] xl:max-h-[75vh] p-3 overscroll-contain">
+                      <div className="space-y-3 pr-2">
+                        {projectsInStatus.length === 0 ? (
+                          <div className="text-sm text-muted-foreground px-2 py-6 text-center select-none">
+                            No projects
+                          </div>
+                        ) : (
+                          projectsInStatus.map(project => renderProjectCard(project))
+                        )}
                       </div>
                     </ScrollArea>
                   </div>

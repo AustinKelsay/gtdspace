@@ -56,25 +56,21 @@ import {
   X,
   Zap
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import type { ActionItem } from '@/hooks/useActionsData';
 import { formatRelativeDate } from '@/utils/date-formatting';
 
-// Action data interface
-interface ActionItem {
-  id: string;
-  name: string;
-  path: string;
-  projectName: string;
-  projectPath: string;
-  status: string;
-  effort?: string;
-  dueDate?: string;
-  focusDate?: string;
-  contexts?: string[];
-  references?: string[];
-  createdDate?: string;
-  modifiedDate?: string;
-}
+// Use ActionItem from hook to prevent drift
 
 interface DashboardActionsProps {
   actions: ActionItem[];
@@ -82,7 +78,8 @@ interface DashboardActionsProps {
   isLoading?: boolean;
   onSelectAction?: (action: ActionItem) => void;
   onUpdateStatus?: (actionId: string, newStatus: string) => void;
-  onBulkUpdate?: (actionIds: string[], updates: Partial<ActionItem>) => void;
+  onBulkUpdate?: (actionIds: string[], updates: Partial<ActionItem>, actionPaths?: string[]) => void;
+  onDeleteAction?: (actionId: string) => void;
 }
 
 // Status options
@@ -100,6 +97,14 @@ const EFFORT_OPTIONS = [
   { value: 'large', label: 'Large (90m-3h)', icon: Timer, color: 'text-orange-500' },
   { value: 'extra-large', label: 'Extra Large (>3h)', icon: Timer, color: 'text-red-500' }
 ];
+
+// Compact effort badge style for table
+const EFFORT_SHORT: Record<string, string> = {
+  'small': 'Small',
+  'medium': 'Medium',
+  'large': 'Large',
+  'extra-large': 'XL'
+};
 
 // Sort options
 const SORT_OPTIONS = [
@@ -119,8 +124,16 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
   isLoading = false,
   onSelectAction,
   onUpdateStatus,
-  onBulkUpdate
+  onBulkUpdate,
+  onDeleteAction
 }) => {
+  // Debug: Log the actions structure on mount/update
+  React.useEffect(() => {
+    if (actions.length > 0) {
+      console.log('[DashboardActions] Received actions:', actions.length);
+      console.log('[DashboardActions] Sample action structure:', actions[0]);
+    }
+  }, [actions]);
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -132,6 +145,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [selectedActions, setSelectedActions] = useState<Set<string>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ActionItem | null>(null);
 
   // Filter actions
   const filteredActions = useMemo(() => {
@@ -187,9 +201,13 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
         case 'project':
           compareValue = a.projectName.localeCompare(b.projectName);
           break;
-        case 'status':
-          compareValue = (a.status || '').localeCompare(b.status || '');
+        case 'status': {
+          const order: Record<string, number> = { 'in-progress': 0, 'waiting': 1, 'completed': 2, 'cancelled': 3 };
+          const aOrder = order[a.status] ?? 99;
+          const bOrder = order[b.status] ?? 99;
+          compareValue = aOrder - bOrder;
           break;
+        }
         case 'effort': {
           const effortOrder = { 'small': 1, 'medium': 2, 'large': 3, 'extra-large': 4 };
           compareValue = (effortOrder[a.effort as keyof typeof effortOrder] || 0) - 
@@ -224,13 +242,17 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
 
   // Toggle action selection
   const toggleActionSelection = useCallback((actionId: string) => {
+    console.log('[DashboardActions] Toggling selection for action:', actionId);
     setSelectedActions(prev => {
       const newSet = new Set(prev);
       if (newSet.has(actionId)) {
         newSet.delete(actionId);
+        console.log('[DashboardActions] Deselected action:', actionId);
       } else {
         newSet.add(actionId);
+        console.log('[DashboardActions] Selected action:', actionId);
       }
+      console.log('[DashboardActions] Total selected:', newSet.size, Array.from(newSet));
       return newSet;
     });
   }, []);
@@ -367,13 +389,15 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
           </DropdownMenu>
 
           {selectedActions.size > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <MoreHorizontal className="h-4 w-4 mr-2" />
-                  Bulk Actions ({selectedActions.size})
-                </Button>
-              </DropdownMenuTrigger>
+            <>
+              {console.log('[DashboardActions] Rendering bulk actions button, selected count:', selectedActions.size)}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
+                    <MoreHorizontal className="h-4 w-4 mr-2" />
+                    Bulk Actions ({selectedActions.size})
+                  </Button>
+                </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuLabel>Update Status</DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -382,7 +406,24 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                     key={status.value}
                     onClick={() => {
                       if (onBulkUpdate) {
-                        onBulkUpdate(Array.from(selectedActions), { status: status.value });
+                        // Get the selected action IDs and their paths
+                        const selectedActionIds = Array.from(selectedActions);
+                        const selectedActionPaths = selectedActionIds.map(id => {
+                          const action = filteredActions.find(a => a.id === id);
+                          console.log('[DashboardActions] Bulk update - mapping action:', {
+                            id,
+                            foundAction: !!action,
+                            path: action?.path
+                          });
+                          return action?.path || id;
+                        });
+                        console.log('[DashboardActions] Initiating bulk update:', {
+                          actionCount: selectedActionIds.length,
+                          newStatus: status.value,
+                          actionIds: selectedActionIds,
+                          actionPaths: selectedActionPaths
+                        });
+                        onBulkUpdate(selectedActionIds, { status: status.value }, selectedActionPaths);
                         clearSelection();
                       }
                     }}
@@ -393,6 +434,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            </>
           )}
         </div>
 
@@ -692,8 +734,12 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                       </TableCell>
                       <TableCell>
                         {action.effort && (
-                          <Badge variant="outline" className="text-xs">
-                            {getEffortDisplay(action.effort)}
+                          <Badge
+                            variant="outline"
+                            title={getEffortDisplay(action.effort)}
+                            className="h-5 px-2 text-[11px] leading-none font-medium whitespace-nowrap rounded-full border-muted-foreground/30 text-muted-foreground"
+                          >
+                            {EFFORT_SHORT[action.effort] ?? action.effort}
                           </Badge>
                         )}
                       </TableCell>
@@ -744,9 +790,14 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                             <DropdownMenuItem onClick={() => onSelectAction?.(action)}>
                               Open
                             </DropdownMenuItem>
-                            <DropdownMenuItem>Edit</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onSelectAction?.(action)}>
+                              Edit
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive">
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={() => setDeleteTarget(action)}
+                            >
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -760,6 +811,38 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
           )}
         </CardContent>
       </Card>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => {
+        if (!open) setDeleteTarget(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Action</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget ? (
+                <>
+                  This will permanently delete "{deleteTarget.name}". You can Undo right after deletion.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTarget) {
+                  onDeleteAction?.(deleteTarget.id);
+                }
+                setDeleteTarget(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

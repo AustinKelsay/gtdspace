@@ -21,6 +21,8 @@ import { useHabitsHistory } from '@/hooks/useHabitsHistory';
 import { useHorizonsRelationships } from '@/hooks/useHorizonsRelationships';
 import { GTDProjectDialog, GTDActionDialog } from '@/components/gtd';
 import { safeInvoke } from '@/utils/safe-invoke';
+import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import {
   DashboardOverview,
   DashboardActions,
@@ -29,6 +31,7 @@ import {
   DashboardHorizons
 } from '@/components/dashboard';
 import type { GTDSpace, GTDProject, MarkdownFile } from '@/types';
+import type { HorizonFile } from '@/hooks/useHorizonsRelationships';
 
 interface GTDDashboardProps {
   currentFolder: string | null;
@@ -102,6 +105,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
   // Track if we've loaded data for current space
   const loadedPathRef = React.useRef<string | null>(null);
+  const { toast } = useToast();
 
   // Load all data when GTD space changes
   React.useEffect(() => {
@@ -161,13 +165,125 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     await updateActionStatus(actionId, newStatus);
   };
 
+  const handleDeleteAction = async (actionId: string) => {
+    try {
+      // Find the action to capture path/name
+      const action = actions.find(a => a.id === actionId);
+      const actionPath = action?.path || actionId;
+      const actionName = action?.name || 'Action';
+
+      // Read content for temp backup
+      const backupContent = await safeInvoke<string>('read_file', { path: actionPath }, '') || '';
+
+      // Delete the file
+      await safeInvoke('delete_file', { path: actionPath });
+
+      // Offer Undo via toast
+      const undoToast = toast({
+        title: 'Action deleted',
+        description: `${actionName} was deleted`,
+        action: (
+          <ToastAction
+            onClick={async () => {
+              try {
+                const writeResult = await safeInvoke('save_file', { path: actionPath, content: backupContent }, null);
+                if (!writeResult) {
+                  console.error('Failed to restore backup');
+                  toast({ title: 'Error', description: 'Failed to restore action', variant: 'destructive' });
+                  return;
+                }
+                if (gtdSpace?.projects && gtdSpace.projects.length > 0) {
+                  await loadActions(gtdSpace.projects);
+                }
+                toast({ title: 'Restored', description: `${actionName} was restored` });
+                // Close the undo toast after success
+                if (undoToast?.dismiss) undoToast.dismiss();
+              } catch (err) {
+                console.error('Failed to restore action:', err);
+                toast({ title: 'Restore failed', description: String(err), variant: 'destructive' });
+              }
+            }}
+          >
+            Undo
+          </ToastAction>
+        )
+      });
+
+      if (gtdSpace?.projects && gtdSpace.projects.length > 0) {
+        await loadActions(gtdSpace.projects);
+      }
+    } catch (err) {
+      console.error('Failed to delete action:', err);
+      toast({ title: 'Delete failed', description: String(err), variant: 'destructive' });
+    }
+  };
+
   // Handle bulk action updates
-  const handleBulkActionUpdate = async (actionIds: string[], updates: Partial<{ status: string }>) => {
+  const handleBulkActionUpdate = async (actionIds: string[], updates: Partial<{ status: string }>, actionPaths?: string[]) => {
     if (updates.status) {
-      // Update each action's status in parallel
-      await Promise.allSettled(
-        actionIds.map(actionId => updateActionStatus(actionId, updates.status!))
-      );
+      try {
+        console.log('[GTDDashboard] handleBulkActionUpdate called:', {
+          actionIds,
+          status: updates.status,
+          actionPaths
+        });
+
+        // Update each action's status in parallel
+        const results = await Promise.allSettled(
+          actionIds.map((actionId, index) => {
+            const path = actionPaths?.[index];
+            console.log(`[GTDDashboard] Updating action ${index + 1}/${actionIds.length}:`, {
+              actionId,
+              path,
+              newStatus: updates.status
+            });
+            return updateActionStatus(actionId, updates.status!, path);
+          })
+        );
+
+        // Count successes and failures
+        let successCount = 0;
+        let failureCount = 0;
+        results.forEach((result) => {
+          if (result.status === 'fulfilled' && result.value === true) {
+            successCount++;
+          } else {
+            failureCount++;
+          }
+        });
+
+        // Show feedback to user
+        if (successCount > 0 && failureCount === 0) {
+          toast({
+            title: 'Actions updated',
+            description: `Successfully updated ${successCount} action${successCount > 1 ? 's' : ''}`
+          });
+        } else if (successCount > 0 && failureCount > 0) {
+          toast({
+            title: 'Partial update',
+            description: `Updated ${successCount} action${successCount > 1 ? 's' : ''}, ${failureCount} failed`,
+            variant: 'destructive'
+          });
+        } else if (failureCount > 0) {
+          toast({
+            title: 'Update failed',
+            description: `Failed to update ${failureCount} action${failureCount > 1 ? 's' : ''}`,
+            variant: 'destructive'
+          });
+        }
+
+        // Refresh actions data to ensure UI is in sync
+        if (gtdSpace?.projects && gtdSpace.projects.length > 0) {
+          await loadActions(gtdSpace.projects);
+        }
+      } catch (err) {
+        console.error('Bulk update error:', err);
+        toast({
+          title: 'Update failed',
+          description: 'An error occurred while updating actions',
+          variant: 'destructive'
+        });
+      }
     }
   };
 
@@ -178,7 +294,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
   // Convert horizons to the format expected by DashboardHorizons
   const horizonFiles = React.useMemo(() => {
-    const files: Record<string, MarkdownFile[]> = {};
+    const files: Record<string, HorizonFile[]> = {};
     Object.entries(horizons).forEach(([name, level]) => {
       files[name] = level.files;
     });
@@ -248,6 +364,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
               gtdSpace={gtdSpace}
               projects={projectsWithMetadata}
               habits={habitsWithHistory}
+              actions={actions}
               actionSummary={actionSummary}
               horizonCounts={Object.fromEntries(
                 Object.entries(horizons).map(([name, level]) => [name, level.files.length])
@@ -259,6 +376,19 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                 const level = horizons[name];
                 if (level && level.files.length > 0 && onSelectFile) {
                   onSelectFile(level.files[0]);
+                }
+              }}
+              onSelectAction={(actionPath) => {
+                if (onSelectFile) {
+                  const name = actionPath.split('/').pop() || 'Action.md';
+                  onSelectFile({
+                    id: actionPath,
+                    name,
+                    path: actionPath,
+                    size: 0,
+                    last_modified: Date.now(),
+                    extension: 'md'
+                  });
                 }
               }}
             />
@@ -280,6 +410,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
               })}
               onUpdateStatus={handleActionStatusUpdate}
               onBulkUpdate={handleBulkActionUpdate}
+              onDeleteAction={handleDeleteAction}
             />
           </TabsContent>
 
@@ -317,7 +448,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                   onSelectFile(readmeFile);
                 }
               }}
-              onArchiveProject={async (project) => {
+              onCompleteProject={async (project) => {
                 await handleProjectUpdate(project.path, { status: 'completed' });
               }}
               onAddAction={(project) => {
@@ -346,43 +477,55 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                 }
               }}
               onCreateHabit={async () => {
-                // Create a new habit file
+                // Create a new habit file using the backend command
                 if (gtdSpace?.root_path) {
                   const habitName = prompt('Enter habit name:');
                   if (habitName) {
-                    // Create a new habit file with default template
-                    const habitPath = `${gtdSpace.root_path}/Habits/${habitName}.md`;
-                    const defaultContent = `# ${habitName}
+                    // Available frequencies: daily, weekdays, every-other-day, twice-weekly, weekly, biweekly, monthly
+                    const frequencyOptions = [
+                      { value: 'daily', label: 'Daily' },
+                      { value: 'weekdays', label: 'Weekdays (Mon-Fri)' },
+                      { value: 'every-other-day', label: 'Every Other Day' },
+                      { value: 'twice-weekly', label: 'Twice a Week' },
+                      { value: 'weekly', label: 'Weekly' },
+                      { value: 'biweekly', label: 'Biweekly' },
+                      { value: 'monthly', label: 'Monthly' }
+                    ];
 
-[!singleselect:habit-frequency:daily]
-[!checkbox:habit-status:false]
+                    const frequencyLabels = frequencyOptions.map(f => f.label).join('\n');
+                    const selectedLabel = prompt(`Select frequency:\n${frequencyLabels}`, 'Daily');
 
-## Description
-Describe your habit here.
+                    if (selectedLabel) {
+                      const frequency = frequencyOptions.find(f =>
+                        f.label.toLowerCase() === selectedLabel.toLowerCase()
+                      )?.value || 'daily';
 
-## History
-<!-- Auto-generated history will appear below -->
-`;
-                    try {
-                      await safeInvoke('write_file', {
-                        path: habitPath,
-                        content: defaultContent
-                      });
-                      // Open the new habit file
-                      if (onSelectFile) {
-                        onSelectFile({
-                          id: habitPath,
-                          name: `${habitName}.md`,
-                          path: habitPath,
-                          size: 0,
-                          last_modified: Date.now(),
-                          extension: 'md'
+                      try {
+                        const habitPath = await safeInvoke<string>('create_gtd_habit', {
+                          space_path: gtdSpace.root_path,
+                          habit_name: habitName,
+                          frequency: frequency,
+                          status: 'todo',
+                          focus_time: null
                         });
+
+                        // Open the new habit file
+                        if (habitPath && onSelectFile) {
+                          onSelectFile({
+                            id: habitPath,
+                            name: `${habitName}.md`,
+                            path: habitPath,
+                            size: 0,
+                            last_modified: Date.now(),
+                            extension: 'md'
+                          });
+                        }
+                        // Reload habits
+                        await loadHabits(gtdSpace.root_path);
+                      } catch (error) {
+                        console.error('Failed to create habit:', error);
+                        alert(`Failed to create habit: ${error}`);
                       }
-                      // Reload habits
-                      await loadHabits(gtdSpace.root_path);
-                    } catch (error) {
-                      console.error('Failed to create habit:', error);
                     }
                   }
                 }
@@ -427,10 +570,14 @@ Describe your habit here.
                     }
 
                     try {
-                      await safeInvoke('write_file', {
+                      const writeResult = await safeInvoke('save_file', {
                         path: filePath,
                         content: defaultContent
-                      });
+                      }, null);
+                      if (!writeResult) {
+                        console.error('Failed to create new file');
+                        return;
+                      }
                       // Open the new file
                       if (onSelectFile) {
                         onSelectFile({

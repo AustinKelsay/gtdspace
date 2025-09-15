@@ -222,6 +222,19 @@ Consistent animations across the app:
   animation: fadeIn 0.3s ease-in-out;
 }
 
+## Layout Notes
+
+### Kanban Columns (Projects Dashboard)
+
+The Projects Kanban view uses independent scrolling columns with a sticky header to improve readability and prevent content from being clipped:
+
+- Container: `grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[60vh]`.
+- Column: `flex flex-col rounded-lg border bg-background/50 backdrop-blur supports-[backdrop-filter]:bg-background/60`.
+- Header: `sticky top-0 z-10 px-3 py-2 border-b bg-background/80`.
+- Body: `ScrollArea` with `max-h-[65vh] lg:max-h-[70vh] xl:max-h-[75vh] p-3 overscroll-contain`.
+
+Use `max-h-*` instead of fixed `h-*` values to let the page scroll when needed. Keep icons at `h-4 w-4` and counts at `text-xs` to reduce visual noise in dark and light themes.
+
 /* Transitions */
 .transition-colors {
   transition-property: color, background-color, border-color;

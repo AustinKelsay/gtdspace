@@ -3,7 +3,7 @@
  * Provides comprehensive action data for dashboard and filtering
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { extractMetadata } from '@/utils/metadata-extractor';
 import { readFileText } from './useFileManager';
@@ -48,7 +48,7 @@ interface UseActionsDataReturn {
     dueThisWeek: number;
   };
   loadActions: (projects: GTDProject[]) => Promise<void>;
-  updateActionStatus: (actionId: string, newStatus: string) => Promise<void>;
+  updateActionStatus: (actionIdOrPath: string, newStatus: string, actionPath?: string) => Promise<boolean>;
   refresh: () => Promise<void>;
 }
 
@@ -132,11 +132,15 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
     includeCompleted = true,
     includeCancelled = false
   } = options;
-  
+
   const [actions, setActions] = useState<ActionItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cachedProjects, setCachedProjects] = useState<GTDProject[]>([]);
+
+  // Use ref to always have access to latest actions
+  const actionsRef = useRef<ActionItem[]>([]);
+  actionsRef.current = actions;
   
   const loadActions = useCallback(async (projects: GTDProject[]) => {
     setIsLoading(true);
@@ -165,6 +169,12 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
               if (!includeCompleted && status === 'completed') return;
               if (!includeCancelled && status === 'cancelled') return;
               
+              console.log('[useActionsData] Creating action item:', {
+                filePath: file.path,
+                fileName: file.name,
+                projectPath: project.path
+              });
+
               const action: ActionItem = {
                 id: file.path,
                 name: file.name.replace('.md', ''),
@@ -208,13 +218,33 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
     }
   }, [includeCompleted, includeCancelled]);
   
-  const updateActionStatus = useCallback(async (actionId: string, newStatus: string) => {
-    const action = actions.find(a => a.id === actionId);
-    if (!action) return;
-
+  const updateActionStatus = useCallback(async (actionIdOrPath: string, newStatus: string, actionPath?: string): Promise<boolean> => {
     try {
-      const content = await readFileText(action.path);
+      // Determine the actual file path
+      let filePath: string;
+
+      if (actionPath) {
+        // If path is explicitly provided, use it
+        filePath = actionPath;
+        console.log('[updateActionStatus] Using provided path:', filePath);
+      } else {
+        // Otherwise, try to find it in current actions (using ref for latest state)
+        const action = actionsRef.current.find(a => a.id === actionIdOrPath || a.path === actionIdOrPath);
+        if (!action) {
+          console.error(`[updateActionStatus] Action not found in state: ${actionIdOrPath}`);
+          console.log('[updateActionStatus] Available actions:', actionsRef.current.map(a => ({ id: a.id, path: a.path })));
+          return false;
+        }
+        filePath = action.path;
+        console.log('[updateActionStatus] Found action in state, using path:', filePath);
+      }
+
+      console.log('[updateActionStatus] Reading file:', filePath);
+      const content = await readFileText(filePath);
+      console.log('[updateActionStatus] File content length:', content?.length || 0);
+
       const canonicalStatus = normalizeActionStatus(newStatus);
+      console.log('[updateActionStatus] Updating status to:', canonicalStatus);
 
       // Replace existing status tag
       let updatedContent = content.replace(
@@ -235,20 +265,42 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       }
       const finalContent = updatedContent;
 
-      await safeInvoke('write_file', {
-        path: action.path,
+      console.log('[updateActionStatus] Writing updated content to file:', filePath);
+      const writeResult = await safeInvoke('save_file', {
+        path: filePath,
         content: finalContent
-      });
+      }, null);
+      console.log('[updateActionStatus] Write result:', writeResult);
+
+      // Check if the write actually succeeded
+      if (!writeResult) {
+        console.error('[updateActionStatus] Write failed - save_file returned null');
+        return false;
+      }
 
       // Update local state optimistically
       setActions(prev => prev.map(a =>
-        a.id === actionId ? { ...a, status: canonicalStatus } : a
+        (a.id === actionIdOrPath || a.path === filePath) ? { ...a, status: canonicalStatus } : a
       ));
+
+      // Dispatch content-updated event to notify other components
+      window.dispatchEvent(new CustomEvent('content-updated', {
+        detail: { path: filePath, content: finalContent }
+      }));
+
+      console.log('[updateActionStatus] Successfully updated action status');
+      return true;
     } catch (err) {
-      console.error('Failed to update action status:', err);
-      throw err;
+      console.error('[updateActionStatus] Failed to update action status:', err);
+      console.error('[updateActionStatus] Error details:', {
+        actionIdOrPath,
+        newStatus,
+        actionPath,
+        error: err instanceof Error ? err.message : String(err)
+      });
+      return false;
     }
-  }, [actions]);
+  }, []);
   
   const refresh = useCallback(async () => {
     if (cachedProjects.length > 0) {

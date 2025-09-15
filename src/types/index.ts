@@ -421,7 +421,7 @@ export type GTDProjectStatus = 'in-progress' | 'waiting' | 'completed';
 /**
  * GTD Action status options
  */
-export type GTDActionStatus = 'in-progress' | 'waiting' | 'completed';
+export type GTDActionStatus = 'in-progress' | 'waiting' | 'completed' | 'cancelled';
 
 /**
  * GTD Action effort estimation

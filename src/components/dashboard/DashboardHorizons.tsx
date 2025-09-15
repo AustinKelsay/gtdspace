@@ -13,6 +13,13 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   ChevronRight,
   Compass,
   Eye,
@@ -30,8 +37,13 @@ import {
   TreePine
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import type { GTDProject, MarkdownFile } from '@/types';
+import type { GTDProject } from '@/types';
+import type { HorizonFile as HookHorizonFile, HorizonRelationship as HookHorizonRelationship } from '@/hooks/useHorizonsRelationships';
+import { mergeProjectInfoIntoHorizonFiles } from '@/utils/horizons';
 import { cn } from '@/lib/utils';
+
+// Helper type for relationships with optional name properties
+type NamedRelationship = HookHorizonRelationship & { toName?: string; fromName?: string };
 
 // Horizon level definitions
 interface HorizonLevel {
@@ -87,24 +99,13 @@ const HORIZON_LEVELS: HorizonLevel[] = [
 ];
 
 // Extended file with relationships
-interface HorizonFile extends MarkdownFile {
-  linkedTo?: string[]; // Files this links to (lower levels)
-  linkedFrom?: string[]; // Files that link to this (higher levels)
-  horizonLevel?: string;
-  // Project-specific fields when file is a project
-  status?: string;
+type HorizonFile = HookHorizonFile & {
   action_count?: number;
   description?: string;
-  dueDate?: string | null;
   createdDateTime?: string;
-}
+};
 
-interface HorizonRelationship {
-  from: string;
-  to: string;
-  fromLevel: string;
-  toLevel: string;
-}
+type HorizonRelationship = HookHorizonRelationship;
 
 interface DashboardHorizonsProps {
   horizonFiles: Record<string, HorizonFile[]>;
@@ -129,6 +130,8 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showOnlyLinked, setShowOnlyLinked] = useState(false);
+  const [selectedLevel, setSelectedLevel] = useState<string>('All');
+  const [sortBy, setSortBy] = useState<'name' | 'linked'>('name');
 
   // Toggle level expansion
   const toggleLevel = useCallback((levelName: string) => {
@@ -227,21 +230,27 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
   // Render horizon level
   const renderHorizonLevel = (level: HorizonLevel) => {
     const isExpanded = expandedLevels.has(level.name);
-    const files = level.name === 'Projects' 
-      ? projects.map(p => ({ 
-          id: p.path,
-          name: p.name, 
-          path: p.path,
-          size: 0,
-          last_modified: Date.now(),
-          extension: '.md',
-          description: p.description,
-          dueDate: p.dueDate,
-          status: p.status,
-          createdDateTime: p.createdDateTime,
-          action_count: p.action_count
-        } as HorizonFile))
-      : (filteredHorizonFiles[level.name] || []);
+    // Start with files provided for this level
+    let files: HorizonFile[] = (filteredHorizonFiles[level.name] as HorizonFile[]) || [];
+
+    // For Projects, enrich from `projects` prop where available (action counts, etc.)
+    if (level.name === 'Projects' && projects.length > 0) {
+      files = mergeProjectInfoIntoHorizonFiles(files, projects as any);
+
+      // Apply search and linked-only filters to projects too (already handled above via filteredHorizonFiles)
+    }
+
+    // Apply sorting
+    files = [...files].sort((a, b) => {
+      if (sortBy === 'linked') {
+        const aRel = getFileRelationships(a.path);
+        const bRel = getFileRelationships(b.path);
+        const aCount = aRel.linkedTo.length + aRel.linkedFrom.length;
+        const bCount = bRel.linkedTo.length + bRel.linkedFrom.length;
+        if (bCount !== aCount) return bCount - aCount;
+      }
+      return a.name.localeCompare(b.name);
+    });
     const fileCount = files.length;
     const LevelIcon = level.icon;
 
@@ -295,7 +304,16 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
                       onClick={() => onCreateFile?.(level.name)}
                     >
                       <Plus className="h-3 w-3 mr-1" />
-                      Create {level.name.slice(0, -1)}
+                      {(() => {
+                        const singular: Record<string, string> = {
+                          'Purpose & Principles': 'Create Purpose document',
+                          'Vision': 'Create Vision',
+                          'Goals': 'Create Goal',
+                          'Areas of Focus': 'Create Area of Focus',
+                          'Projects': 'Create Project'
+                        };
+                        return singular[level.name] || `Create ${level.name}`;
+                      })()}
                     </Button>
                   )}
                 </div>
@@ -365,11 +383,12 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
                       {relationships.linkedTo.map((rel, idx) => {
                         const targetLevel = HORIZON_LEVELS.find(l => l.name === rel.toLevel);
                         const TargetIcon = targetLevel?.icon || FileText;
+                        const label = (rel as NamedRelationship).toName || rel.to.split('/').pop()?.replace('.md', '') || rel.to;
                         return (
                           <div key={idx} className="flex items-center gap-2 text-xs">
                             <TargetIcon className={cn("h-3 w-3", targetLevel?.color)} />
                             <span className="text-muted-foreground">{rel.toLevel}:</span>
-                            <span className="font-medium">{rel.to}</span>
+                            <span className="font-medium">{label}</span>
                           </div>
                         );
                       })}
@@ -384,11 +403,12 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
                       {relationships.linkedFrom.map((rel, idx) => {
                         const sourceLevel = HORIZON_LEVELS.find(l => l.name === rel.fromLevel);
                         const SourceIcon = sourceLevel?.icon || FileText;
+                        const label = (rel as NamedRelationship).fromName || rel.from.split('/').pop()?.replace('.md', '') || rel.from;
                         return (
                           <div key={idx} className="flex items-center gap-2 text-xs">
                             <SourceIcon className={cn("h-3 w-3", sourceLevel?.color)} />
                             <span className="text-muted-foreground">{rel.fromLevel}:</span>
-                            <span className="font-medium">{rel.from}</span>
+                            <span className="font-medium">{label}</span>
                           </div>
                         );
                       })}
@@ -405,7 +425,7 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
               <Badge variant="outline" className="text-xs">
                 {file.status}
               </Badge>
-              {file.action_count && (
+              {typeof file.action_count === 'number' && file.action_count > 0 && (
                 <Badge variant="secondary" className="text-xs">
                   {file.action_count} actions
                 </Badge>
@@ -413,6 +433,13 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
             </div>
           )}
         </div>
+
+        {/* Optional preview/description */}
+        {file.description || file.content ? (
+          <p className="mt-2 ml-6 text-xs text-muted-foreground line-clamp-2">
+            {file.description || file.content}
+          </p>
+        ) : null}
       </div>
     );
   };
@@ -425,7 +452,7 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-2">
               <Layers className="h-5 w-5 text-primary" />
-              <span className="text-2xl font-bold">{Object.keys(HORIZON_LEVELS).length}</span>
+              <span className="text-2xl font-bold">{HORIZON_LEVELS.length}</span>
             </div>
             <p className="text-sm font-medium">Horizon Levels</p>
             <p className="text-xs text-muted-foreground mt-1">From runway to 50,000 ft</p>
@@ -485,6 +512,28 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
           <Link2 className="h-4 w-4 mr-2" />
           Linked Only
         </Button>
+
+        <Select value={selectedLevel} onValueChange={setSelectedLevel}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="All levels" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="All">All levels</SelectItem>
+            {HORIZON_LEVELS.map(h => (
+              <SelectItem key={h.name} value={h.name}>{h.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v as 'name' | 'linked')}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name">Name</SelectItem>
+            <SelectItem value="linked">Linkedness</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Horizon pyramid visualization */}
@@ -556,7 +605,9 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
                 ))}
               </div>
             ) : (
-              HORIZON_LEVELS.map(level => renderHorizonLevel(level))
+              HORIZON_LEVELS
+                .filter(level => selectedLevel === 'All' || level.name === selectedLevel)
+                .map(level => renderHorizonLevel(level))
             )}
           </div>
         </CardContent>

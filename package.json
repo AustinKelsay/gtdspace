@@ -5,6 +5,8 @@
   "description": "GTD-first productivity system with integrated markdown editing",
   "type": "module",
   "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
@@ -70,6 +72,7 @@
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
+    "vitest": "^2.1.4",
     "@eslint/js": "^9.35.0",
     "@tauri-apps/cli": "2.8.4",
     "@types/lodash.debounce": "^4.0.9",

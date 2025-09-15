@@ -58,6 +58,8 @@ interface State {
 }
 
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
+// Track auto-dismiss timers per toast so we can cancel them on manual dismiss
+const autoDismissTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
 const addToRemoveQueue = (toastId: string) => {
   if (toastTimeouts.has(toastId)) {
@@ -96,6 +98,18 @@ export const reducer = (state: State, action: Action): State => {
 
       // ! Side effects ! - This could be extracted into a dismissToast() action,
       // but I'll keep it here for simplicity
+      // Clear any auto-dismiss timer for this toast
+      if (toastId) {
+        const t = autoDismissTimeouts.get(toastId)
+        if (t) {
+          clearTimeout(t)
+          autoDismissTimeouts.delete(toastId)
+        }
+      } else {
+        // Dismiss all - clear all timers
+        autoDismissTimeouts.forEach((t) => clearTimeout(t))
+        autoDismissTimeouts.clear()
+      }
       if (toastId) {
         addToRemoveQueue(toastId)
       } else {
@@ -151,7 +165,14 @@ function toast({ ...props }: Toast) {
       type: ActionType.UPDATE_TOAST,
       toast: { ...props, id },
     })
-  const dismiss = () => dispatch({ type: ActionType.DISMISS_TOAST, toastId: id })
+  const dismiss = () => {
+    const t = autoDismissTimeouts.get(id)
+    if (t) {
+      clearTimeout(t)
+      autoDismissTimeouts.delete(id)
+    }
+    dispatch({ type: ActionType.DISMISS_TOAST, toastId: id })
+  }
 
   dispatch({
     type: ActionType.ADD_TOAST,
@@ -165,10 +186,12 @@ function toast({ ...props }: Toast) {
     },
   })
 
-  // Auto-dismiss after a short delay
-  setTimeout(() => {
+  // Auto-dismiss after a short delay and track the timer for cleanup
+  const timeoutId = setTimeout(() => {
+    // When the timer fires, dispatch dismiss; reducer also clears this timer map
     dismiss()
   }, TOAST_AUTO_DISMISS)
+  autoDismissTimeouts.set(id, timeoutId)
 
   return {
     id: id,

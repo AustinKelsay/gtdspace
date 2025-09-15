@@ -120,7 +120,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
     const completedToday = habits.filter(habit => {
       // Check if habit has any history entry for today marked as completed
       if (!habit.history || habit.history.length === 0) return false;
-      return habit.history.some(entry => entry.date === todayStr && entry.completed === true);
+      return habit.history.some(entry => entry.date === todayStr && entry.completed);
     }).length;
 
     const completionRate = total > 0 ? Math.round((completedToday / total) * 100) : 0;
@@ -146,9 +146,11 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
 
   // Calculate next reset time for a habit
   const getNextResetTime = useCallback((habit: HabitWithHistory) => {
-    // Derive next reset based on current timezone and latest history
+    // Find the most recent history entry by date
     const lastUpdate = habit.history && habit.history.length > 0
-      ? new Date(`${habit.history[0].date}T00:00:00`)
+      ? new Date(`${habit.history.reduce((latest, entry) =>
+          entry.date > latest.date ? entry : latest
+        ).date}T00:00:00`)
       : undefined;
     const nextReset = new Date(calculateNextReset(habit.frequency, lastUpdate));
     const now = new Date();

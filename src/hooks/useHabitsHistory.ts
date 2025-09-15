@@ -425,11 +425,16 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
     try {
       let content = await readFileText(habitPath);
       const now = new Date();
-      const date = now.toISOString().split('T')[0];
-      const time = now.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
+      // Use local date format to match history entries
+      const date = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0')
+      ].join('-');
+      const time = now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
         minute: '2-digit',
-        hour12: true 
+        hour12: true
       });
       
       // Update status field
@@ -500,8 +505,13 @@ ${newRow}
   }, [refresh]);
   
   const summary = useMemo(() => {
-    // Get today's date in YYYY-MM-DD format (matching history entry format)
-    const today = new Date().toISOString().split('T')[0];
+    // Get today's date in YYYY-MM-DD format using local timezone
+    const now = new Date();
+    const today = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0')
+    ].join('-');
 
     // Count habits completed today based on history entries
     const completedToday = habits.filter(habit => {
@@ -558,7 +568,7 @@ ${newRow}
     if (autoLoad && cachedSpacePath) {
       loadHabits(cachedSpacePath);
     }
-  }, [autoLoad]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoLoad, cachedSpacePath, loadHabits]);
   
   return {
     habits,

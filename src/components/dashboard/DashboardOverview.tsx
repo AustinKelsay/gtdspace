@@ -32,7 +32,7 @@ import type { ProjectWithMetadata } from '@/hooks/useProjectsData';
 import type { HabitWithHistory } from '@/hooks/useHabitsHistory';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
-import { formatRelativeDate, getDateFromNow, isDateInRange } from '@/utils/date-formatting';
+import { formatRelativeDate, getDateFromNow, isDateInRange, parseLocalDate } from '@/utils/date-formatting';
 
 interface DashboardOverviewProps {
   gtdSpace: GTDSpace;
@@ -90,7 +90,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const overdue = projects.filter(p => {
       if (!p.dueDate || p.status === 'completed') return false;
-      const due = new Date(p.dueDate);
+      const due = parseLocalDate(p.dueDate);
       return !isNaN(due.getTime()) && due < today;
     }).length;
 
@@ -252,7 +252,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       .filter(p => {
         if (!p.dueDate || p.status === 'completed') return false;
         if (onlyOverdue) {
-          const due = new Date(p.dueDate);
+          const due = parseLocalDate(p.dueDate);
           return !isNaN(due.getTime()) && due < today;
         }
         return isDateInRange(p.dueDate, now, weekFromNow);
@@ -271,7 +271,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         if (!a.dueDate) return false;
         if (a.status === 'completed' || a.status === 'cancelled') return false;
         if (onlyOverdue) {
-          const due = new Date(a.dueDate);
+          const due = parseLocalDate(a.dueDate);
           return !isNaN(due.getTime()) && due < today;
         }
         return isDateInRange(a.dueDate, now, weekFromNow);
@@ -288,7 +288,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     // Sort combined by due date
     const combined = includeActions ? [...upcomingProjects, ...upcomingActions] : upcomingProjects;
     return combined
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+      .sort((a, b) => parseLocalDate(a.dueDate).getTime() - parseLocalDate(b.dueDate).getTime())
       .slice(0, 8);
   }, [projects, actions, includeActions, onlyOverdue]);
 
@@ -598,7 +598,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                             {item.name}
                           </span>
                           <Badge variant="outline" className="text-xs">
-                            {formatRelativeDate(item.dueDate) || new Date(item.dueDate).toLocaleDateString()}
+                            {formatRelativeDate(item.dueDate) || parseLocalDate(item.dueDate).toLocaleDateString()}
                           </Badge>
                         </div>
                         {item.completionPercentage !== undefined && (

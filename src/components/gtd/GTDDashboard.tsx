@@ -30,7 +30,7 @@ import {
   DashboardHabits,
   DashboardHorizons
 } from '@/components/dashboard';
-import type { GTDSpace, GTDProject, MarkdownFile } from '@/types';
+import type { GTDSpace, GTDProject, MarkdownFile, FileOperationResult } from '@/types';
 import type { HorizonFile } from '@/hooks/useHorizonsRelationships';
 
 interface GTDDashboardProps {
@@ -211,8 +211,12 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
       // Read content for temp backup
       const backupContent = await safeInvoke<string>('read_file', { path: actionPath }, '') || '';
 
-      // Delete the file
-      await safeInvoke('delete_file', { path: actionPath });
+      // Delete the file and verify result
+      const delResult = await safeInvoke<FileOperationResult>('delete_file', { path: actionPath }, { success: false, message: 'Failed to delete file' });
+      if (!delResult || delResult.success !== true) {
+        toast({ title: 'Delete failed', description: delResult?.message || 'Could not delete action', variant: 'destructive' });
+        return;
+      }
 
       // Offer Undo via toast
       const undoToast = toast({
@@ -222,12 +226,8 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           <ToastAction
             onClick={async () => {
               try {
-                const writeResult = await safeInvoke('save_file', { path: actionPath, content: backupContent }, null);
-                if (!writeResult) {
-                  console.error('Failed to restore backup');
-                  toast({ title: 'Error', description: 'Failed to restore action', variant: 'destructive' });
-                  return;
-                }
+                const writeOk = await safeInvoke('save_file', { path: actionPath, content: backupContent }, null);
+                if (writeOk === null) throw new Error('Failed to write file');
                 if (gtdSpace?.projects && gtdSpace.projects.length > 0) {
                   await loadActions(gtdSpace.projects);
                 }

@@ -1337,15 +1337,20 @@ pub fn rename_file(old_path: String, new_name: String) -> Result<FileOperationRe
 /// ```
 #[tauri::command]
 pub fn delete_file(path: String) -> Result<FileOperationResult, String> {
+    use std::io::ErrorKind;
+    use std::thread::sleep;
+    use std::time::Duration;
+
     log::info!("Deleting file: {}", path);
 
     let file_path = Path::new(&path);
 
     if !file_path.exists() {
+        // Idempotent delete: treat as success if file is already gone
         return Ok(FileOperationResult {
-            success: false,
-            path: None,
-            message: Some("File does not exist".to_string()),
+            success: true,
+            path: Some(path.clone()),
+            message: Some("File deleted successfully".to_string()),
         });
     }
 
@@ -1357,22 +1362,82 @@ pub fn delete_file(path: String) -> Result<FileOperationResult, String> {
         });
     }
 
-    match fs::remove_file(file_path) {
-        Ok(_) => {
-            log::info!("Successfully deleted file: {}", path);
-            Ok(FileOperationResult {
-                success: true,
-                path: Some(path),
-                message: Some("File deleted successfully".to_string()),
-            })
-        }
-        Err(e) => {
-            log::error!("Failed to delete file {}: {}", path, e);
-            Ok(FileOperationResult {
-                success: false,
-                path: None,
-                message: Some(format!("Failed to delete file: {}", e)),
-            })
+    let mut attempt: u32 = 0;
+    let attempts: [u64; 3] = [50, 150, 300]; // backoff in ms
+    let mut target = file_path.to_path_buf();
+
+    loop {
+        match fs::remove_file(&target) {
+            Ok(_) => {
+                log::info!("Successfully deleted file: {}", path);
+                return Ok(FileOperationResult {
+                    success: true,
+                    path: Some(path.clone()),
+                    message: Some("File deleted successfully".to_string()),
+                });
+            }
+            Err(e) => {
+                if e.kind() == ErrorKind::NotFound {
+                    log::info!("File already gone (NotFound): {}", path);
+                    return Ok(FileOperationResult {
+                        success: true,
+                        path: Some(path.clone()),
+                        message: Some("File deleted successfully".to_string()),
+                    });
+                }
+                log::warn!("Attempt {} to delete file failed: {}", attempt + 1, e);
+
+                // Windows: EPERM/locked file fallback — try rename + delete
+                #[cfg(target_os = "windows")]
+                {
+                    if e.kind() == ErrorKind::PermissionDenied {
+                        let mut tmp = target.clone();
+                        let mut suffix_counter = 0u32;
+                        // Create a unique temp name next to the file
+                        loop {
+                            let ext = format!("delete{}.tmp", if suffix_counter == 0 { String::new() } else { format!("-{}", suffix_counter) });
+                            tmp.set_extension(ext);
+                            if !tmp.exists() { break; }
+                            suffix_counter += 1;
+                        }
+                        match fs::rename(&target, &tmp) {
+                            Ok(_) => {
+                                match fs::remove_file(&tmp) {
+                                    Ok(_) => {
+                                        log::info!("Deleted file via rename workaround: {}", path);
+                                        return Ok(FileOperationResult {
+                                            success: true,
+                                            path: Some(path.clone()),
+                                            message: Some("File deleted successfully".to_string()),
+                                        });
+                                    }
+                                    Err(e2) => {
+                                        log::error!("Failed to remove renamed temp file {:?}: {}", tmp, e2);
+                                        // Keep trying to remove the renamed target in subsequent attempts
+                                        target = tmp;
+                                    }
+                                }
+                            }
+                            Err(e1) => {
+                                log::warn!("Failed to rename locked file for deletion: {}", e1);
+                            }
+                        }
+                    }
+                }
+
+                if (attempt as usize) < attempts.len() {
+                    sleep(Duration::from_millis(attempts[attempt as usize]));
+                    attempt += 1;
+                    continue;
+                }
+
+                log::error!("Failed to delete file {} after retries: {}", path, e);
+                return Ok(FileOperationResult {
+                    success: false,
+                    path: None,
+                    message: Some(format!("Failed to delete file: {}", e)),
+                });
+            }
         }
     }
 }

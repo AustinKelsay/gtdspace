@@ -1364,6 +1364,7 @@ pub fn delete_file(path: String) -> Result<FileOperationResult, String> {
 
     let mut attempt: u32 = 0;
     let attempts: [u64; 3] = [50, 150, 300]; // backoff in ms
+    #[allow(unused_mut)] // target is reassigned in the rename workaround branch
     let mut target = file_path.to_path_buf();
 
     loop {

@@ -197,20 +197,34 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
     let totalFiles = 0;
     let linkedFiles = 0;
     const levelCounts: Record<string, number> = {};
-    
-    Object.entries(horizonFiles).forEach(([level, files]) => {
+
+    const entries = Object.entries(horizonFiles);
+    const hasProjectsKey = entries.some(([level]) => level === 'Projects');
+
+    entries.forEach(([level, files]) => {
       totalFiles += files.length;
-      linkedFiles += files.filter(f => 
+      linkedFiles += files.filter(f =>
         (f.linkedTo && f.linkedTo.length > 0) ||
         (f.linkedFrom && f.linkedFrom.length > 0)
       ).length;
       levelCounts[level] = files.length;
     });
-    
-    // Add projects
-    levelCounts['Projects'] = projects.length;
-    totalFiles += projects.length;
-    
+
+    // Only add projects from the separate projects array if the horizonFiles
+    // set does not already contain the Projects bucket.
+    if (!hasProjectsKey) {
+      levelCounts['Projects'] = projects.length;
+      totalFiles += projects.length;
+
+      // Estimate linked count from project metadata when adding projects here
+      linkedFiles += projects.filter((p: any) =>
+        (Array.isArray(p.linkedAreas) && p.linkedAreas.length > 0) ||
+        (Array.isArray(p.linkedGoals) && p.linkedGoals.length > 0) ||
+        (Array.isArray(p.linkedVision) && p.linkedVision.length > 0) ||
+        (Array.isArray(p.linkedPurpose) && p.linkedPurpose.length > 0)
+      ).length;
+    }
+
     return {
       totalFiles,
       linkedFiles,

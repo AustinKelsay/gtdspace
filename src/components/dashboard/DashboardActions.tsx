@@ -127,11 +127,16 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
   onBulkUpdate,
   onDeleteAction
 }) => {
-  // Debug: Log the actions structure on mount/update
+  // Debug logger gated in non-production
+  const debug = (...args: unknown[]) => {
+    if (import.meta.env.MODE !== 'production') {
+      console.debug(...args);
+    }
+  };
   React.useEffect(() => {
     if (actions.length > 0) {
-      console.log('[DashboardActions] Received actions:', actions.length);
-      console.log('[DashboardActions] Sample action structure:', actions[0]);
+      debug('[DashboardActions] actions length:', actions.length);
+      debug('[DashboardActions] sample action:', { id: actions[0]?.id, path: actions[0]?.path });
     }
   }, [actions]);
   // Filter state
@@ -246,17 +251,17 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
 
   // Toggle action selection
   const toggleActionSelection = useCallback((actionId: string) => {
-    console.log('[DashboardActions] Toggling selection for action:', actionId);
+    debug('[DashboardActions] toggle selection:', actionId);
     setSelectedActions(prev => {
       const newSet = new Set(prev);
       if (newSet.has(actionId)) {
         newSet.delete(actionId);
-        console.log('[DashboardActions] Deselected action:', actionId);
+        debug('[DashboardActions] deselected:', actionId);
       } else {
         newSet.add(actionId);
-        console.log('[DashboardActions] Selected action:', actionId);
+        debug('[DashboardActions] selected:', actionId);
       }
-      console.log('[DashboardActions] Total selected:', newSet.size, Array.from(newSet));
+      debug('[DashboardActions] selected total:', newSet.size);
       return newSet;
     });
   }, []);
@@ -394,7 +399,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
 
           {selectedActions.size > 0 && (
             <>
-              {console.log('[DashboardActions] Rendering bulk actions button, selected count:', selectedActions.size)}
+              {import.meta.env.MODE !== 'production' ? console.debug('[DashboardActions] bulk actions visible, selected:', selectedActions.size) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline">
@@ -414,19 +419,10 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                         const selectedActionIds = Array.from(selectedActions);
                         const selectedActionPaths = selectedActionIds.map(id => {
                           const action = filteredActions.find(a => a.id === id);
-                          console.log('[DashboardActions] Bulk update - mapping action:', {
-                            id,
-                            foundAction: !!action,
-                            path: action?.path
-                          });
+                          debug('[DashboardActions] bulk map action:', { id, path: action?.path });
                           return action?.path || id;
                         });
-                        console.log('[DashboardActions] Initiating bulk update:', {
-                          actionCount: selectedActionIds.length,
-                          newStatus: status.value,
-                          actionIds: selectedActionIds,
-                          actionPaths: selectedActionPaths
-                        });
+                        debug('[DashboardActions] bulk update begin:', { count: selectedActionIds.length, status: status.value });
                         onBulkUpdate(selectedActionIds, { status: status.value }, selectedActionPaths);
                         clearSelection();
                       }

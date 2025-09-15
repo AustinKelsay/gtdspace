@@ -142,10 +142,11 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
     // Search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(project =>
-        project.name.toLowerCase().includes(query) ||
-        project.description.toLowerCase().includes(query)
-      );
+      filtered = filtered.filter(project => {
+        const name = project.name?.toLowerCase() || '';
+        const desc = (project.description || '').toLowerCase();
+        return name.includes(query) || desc.includes(query);
+      });
     }
 
     // Status filter

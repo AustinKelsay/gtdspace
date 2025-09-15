@@ -9,6 +9,7 @@ import { extractMetadata, extractHorizonReferences as extractHorizonReferencesUt
 import { readFileText } from './useFileManager';
 import type { GTDProject, MarkdownFile } from '@/types';
 import { toISOStringFromEpoch } from '@/utils/time';
+import { parseLocalDate } from '@/utils/date-formatting';
 
 export interface ProjectWithMetadata extends GTDProject {
   linkedAreas?: string[];
@@ -388,7 +389,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
       
       // Check overdue
       if (project.dueDate && project.status !== 'completed') {
-        const dueDate = new Date(project.dueDate);
+        const dueDate = parseLocalDate(project.dueDate);
         if (!isNaN(dueDate.getTime()) && dueDate < today) {
           overdue++;
         }
@@ -417,7 +418,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
     if (autoLoad && cachedSpacePath) {
       loadProjects(cachedSpacePath);
     }
-  }, [autoLoad]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoLoad, cachedSpacePath, loadProjects]);
   
   return {
     projects,

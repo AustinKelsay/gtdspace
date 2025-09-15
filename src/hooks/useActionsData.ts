@@ -8,6 +8,7 @@ import { safeInvoke } from '@/utils/safe-invoke';
 import { extractMetadata } from '@/utils/metadata-extractor';
 import { readFileText } from './useFileManager';
 import { toISOStringFromEpoch } from '@/utils/time';
+import { parseLocalDate } from '@/utils/date-formatting';
 import type { GTDProject, MarkdownFile } from '@/types';
 
 export interface ActionItem {
@@ -109,8 +110,8 @@ const extractDescription = (content: string): string => {
  */
 const analyzeDueDate = (dueDateStr: string | undefined) => {
   if (!dueDateStr) return { overdue: false, dueToday: false, dueThisWeek: false };
-  
-  const dueDate = new Date(dueDateStr);
+
+  const dueDate = parseLocalDate(dueDateStr);
   if (isNaN(dueDate.getTime())) return { overdue: false, dueToday: false, dueThisWeek: false };
   
   const now = new Date();

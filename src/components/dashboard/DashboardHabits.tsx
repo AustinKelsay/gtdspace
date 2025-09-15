@@ -107,13 +107,28 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
   // Calculate overall statistics
   const stats = useMemo(() => {
     const total = habits.length;
-    const completedToday = habits.filter(h => h.status === 'completed').length;
+
+    // Calculate today's date in YYYY-MM-DD format (local time)
+    const today = new Date();
+    const todayStr = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0')
+    ].join('-');
+
+    // Count habits that have a completed entry for today
+    const completedToday = habits.filter(habit => {
+      // Check if habit has any history entry for today marked as completed
+      if (!habit.history || habit.history.length === 0) return false;
+      return habit.history.some(entry => entry.date === todayStr && entry.completed === true);
+    }).length;
+
     const completionRate = total > 0 ? Math.round((completedToday / total) * 100) : 0;
-    
+
     const avgStreak = habits.reduce((acc, h) => acc + (h.currentStreak || 0), 0) / (total || 1);
     const avgSuccessRate = habits.reduce((acc, h) => acc + (h.successRate || 0), 0) / (total || 1);
-    const bestPerformer = habits.reduce((best, h) => 
-      (h.successRate || 0) > (best?.successRate || 0) ? h : best, 
+    const bestPerformer = habits.reduce((best, h) =>
+      (h.successRate || 0) > (best?.successRate || 0) ? h : best,
       habits[0]
     );
     const needsAttention = habits.filter(h => (h.successRate || 0) < 50 && h.totalAttempts && h.totalAttempts > 5);

@@ -1395,9 +1395,18 @@ pub fn delete_file(path: String) -> Result<FileOperationResult, String> {
                         let mut suffix_counter = 0u32;
                         // Create a unique temp name next to the file
                         loop {
-                            let ext = format!("delete{}.tmp", if suffix_counter == 0 { String::new() } else { format!("-{}", suffix_counter) });
+                            let ext = format!(
+                                "delete{}.tmp",
+                                if suffix_counter == 0 {
+                                    String::new()
+                                } else {
+                                    format!("-{}", suffix_counter)
+                                }
+                            );
                             tmp.set_extension(ext);
-                            if !tmp.exists() { break; }
+                            if !tmp.exists() {
+                                break;
+                            }
                             suffix_counter += 1;
                         }
                         match fs::rename(&target, &tmp) {
@@ -1412,7 +1421,11 @@ pub fn delete_file(path: String) -> Result<FileOperationResult, String> {
                                         });
                                     }
                                     Err(e2) => {
-                                        log::error!("Failed to remove renamed temp file {:?}: {}", tmp, e2);
+                                        log::error!(
+                                            "Failed to remove renamed temp file {:?}: {}",
+                                            tmp,
+                                            e2
+                                        );
                                         // Keep trying to remove the renamed target in subsequent attempts
                                         target = tmp;
                                     }

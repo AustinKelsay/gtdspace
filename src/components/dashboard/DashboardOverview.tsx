@@ -193,13 +193,20 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
     // Factor 4: Habit consistency and streaks (25%)
     if (habitStats.total > 0) {
-      const habitScore = (habitStats.avgSuccessRate / 100) * 0.7 + 
+      const habitScore = (habitStats.avgSuccessRate / 100) * 0.7 +
                         (habitStats.completionRate / 100) * 0.3;
       score += habitScore * 25;
       factors++;
     }
 
-    return factors > 0 ? Math.round(score) : 0;
+    // Normalize score to 0-100 based on contributing factors
+    if (factors > 0) {
+      const normalized = (score / factors) * 4; // Scale from 0-25 per factor to 0-100
+      const clamped = Math.max(0, Math.min(100, normalized));
+      return Math.round(clamped);
+    }
+
+    return 0;
   }, [projectStats, actionSummary, habitStats]);
 
   // Calculate upcoming due items (this week excluding today)

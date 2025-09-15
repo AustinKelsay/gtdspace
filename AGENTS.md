@@ -25,10 +25,11 @@
 - Linting: ESLint config in `eslint.config.js` (TypeScript + React Hooks rules). No Prettier—defer to ESLint and TS.
 
 ## Testing Guidelines
-- No automated tests are configured yet. Validate changes with:
-  - `npm run type-check` and `npm run lint`.
-  - Manual runs via `npm run tauri:dev` across platforms if possible.
-- If adding tests, prefer Vitest + React Testing Library under `src/__tests__/` with `*.test.ts(x)` naming.
+- Vitest is configured for testing.
+- Please use Vitest and React Testing Library for new tests.
+- Test files should be located in the `/tests` directory and follow the naming convention `*.test.ts(x)`.
+- To run tests, use `npm run test` or `npm run vitest`.
+- For local validation, run `npm run type-check` and `npm run lint`, and do a quick manual test with `npm run tauri dev`.
 
 ## Commit & Pull Request Guidelines
 - Commits: imperative mood, concise scope, reference issues (e.g., `feat: add GTD calendar week view (#123)`).

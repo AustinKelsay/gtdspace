@@ -128,18 +128,42 @@ const extractOutcomes = (content: string): string[] => {
   return outcomes;
 };
 
+/**
+ * Helper function to resolve project README file path
+ * Checks for both README.md and README.markdown
+ * @returns The path of the existing README file, or null if neither exists
+ */
+const resolveProjectReadme = async (projectPath: string): Promise<string | null> => {
+  const mdPath = `${projectPath}/README.md`;
+  const markdownPath = `${projectPath}/README.markdown`;
+
+  // Try README.md first
+  try {
+    await readFileText(mdPath);
+    return mdPath;
+  } catch {
+    // Try README.markdown
+    try {
+      await readFileText(markdownPath);
+      return markdownPath;
+    } catch {
+      return null;
+    }
+  }
+};
+
 export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjectsDataReturn {
   const {
     autoLoad = false,
     includeArchived = false,
     loadActionStats = true
   } = options;
-  
+
   const [projects, setProjects] = useState<ProjectWithMetadata[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cachedSpacePath, setCachedSpacePath] = useState<string>('');
-  
+
   const loadProjects = useCallback(async (spacePath: string) => {
     setIsLoading(true);
     setError(null);
@@ -209,16 +233,24 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
       const enhancedProjects = await Promise.all(
         filteredProjects.map(async (project) => {
           try {
-            // Read project README
-            const readmePath = `${project.path}/README.md`;
-            const content = await readFileText(readmePath);
-            const metadata = extractMetadata(content);
-            
-            // Extract horizon references
-            const horizonRefs = extractHorizonReferences(content);
-            
-            // Extract outcomes
-            const outcomes = extractOutcomes(content);
+            // Resolve and read project README
+            const readmePath = await resolveProjectReadme(project.path);
+
+            // Default values for when no README exists
+            let metadata: Record<string, any> = {};
+            let horizonRefs = { areas: [], goals: [], vision: [], purpose: [] };
+            let outcomes: string[] = [];
+
+            if (readmePath) {
+              const content = await readFileText(readmePath);
+              metadata = extractMetadata(content);
+
+              // Extract horizon references
+              horizonRefs = extractHorizonReferences(content);
+
+              // Extract outcomes
+              outcomes = extractOutcomes(content);
+            }
             
             // Load action stats if requested
             let actionStats = undefined;
@@ -303,8 +335,18 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
     updates: Partial<ProjectWithMetadata>
   ) => {
     try {
-      const readmePath = `${projectPath}/README.md`;
-      let content = await readFileText(readmePath);
+      // Resolve README path, or use default if none exists
+      let readmePath = await resolveProjectReadme(projectPath);
+
+      // If no README exists, create a new one with default content
+      let content: string;
+      if (!readmePath) {
+        readmePath = `${projectPath}/README.md`;
+        const projectName = projectPath.split('/').filter(Boolean).pop() || 'Project';
+        content = `# ${projectName}\n\n`;
+      } else {
+        content = await readFileText(readmePath);
+      }
 
       // Helper function to inject marker after H1 or at top
       const injectMarker = (content: string, marker: string): string => {

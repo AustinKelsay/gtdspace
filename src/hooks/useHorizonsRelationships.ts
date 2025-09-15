@@ -417,7 +417,7 @@ export function useHorizonsRelationships(
     if (autoLoad && cachedSpacePath) {
       loadHorizons(cachedSpacePath, cachedProjects);
     }
-  }, [autoLoad]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoLoad, cachedSpacePath, cachedProjects, loadHorizons]);
   
   return {
     horizons,

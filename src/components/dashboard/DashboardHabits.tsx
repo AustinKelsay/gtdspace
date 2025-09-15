@@ -31,6 +31,7 @@ import type { HabitWithHistory } from '@/hooks/useHabitsHistory';
 import { calculateNextReset } from '@/hooks/useHabitsHistory';
 import { cn } from '@/lib/utils';
 import { formatCompactDate } from '@/utils/date-formatting';
+import { localISODate } from '@/utils/time';
 
 interface DashboardHabitsProps {
   habits: HabitWithHistory[];
@@ -76,11 +77,20 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
       filtered = filtered.filter(h => h.frequency === frequencyFilter);
     }
 
-    // Status filter
-    if (statusFilter === 'completed') {
-      filtered = filtered.filter(h => h.status === 'completed');
-    } else if (statusFilter === 'pending') {
-      filtered = filtered.filter(h => h.status === 'todo');
+    // Status filter (history-based, for today's completion)
+    if (statusFilter !== 'all') {
+      const todayStr = localISODate(new Date());
+      if (statusFilter === 'completed') {
+        filtered = filtered.filter(h =>
+          Array.isArray(h.history) && h.history.some(e => e.date === todayStr && e.completed)
+        );
+      } else if (statusFilter === 'pending') {
+        filtered = filtered.filter(h => {
+          const entries = Array.isArray(h.history) ? h.history : [];
+          const todayEntry = entries.find(e => e.date === todayStr);
+          return !(todayEntry && todayEntry.completed);
+        });
+      }
     }
 
     // Sort
@@ -109,12 +119,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
     const total = habits.length;
 
     // Calculate today's date in YYYY-MM-DD format (local time)
-    const today = new Date();
-    const todayStr = [
-      today.getFullYear(),
-      String(today.getMonth() + 1).padStart(2, '0'),
-      String(today.getDate()).padStart(2, '0')
-    ].join('-');
+    const todayStr = localISODate(new Date());
 
     // Count habits that have a completed entry for today
     const completedToday = habits.filter(habit => {
@@ -179,7 +184,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
 
   // Render habit card
   const renderHabitCard = (habit: HabitWithHistory) => {
-    const isCompleted = habit.status === 'completed';
+    const isCompleted = Array.isArray(habit.history) && habit.history.some(e => e.date === localISODate(new Date()) && e.completed);
     const streakDisplay = getStreakDisplay(habit.currentStreak);
     const StreakIcon = streakDisplay.icon;
     const nextReset = getNextResetTime(habit);
@@ -200,6 +205,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
                 variant="ghost"
                 size="sm"
                 className="p-0 h-auto"
+                aria-pressed={isCompleted}
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleHabit?.(habit);
@@ -374,11 +380,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
               <div className="grid grid-cols-7 gap-1">
                 {days.map((date, i) => {
                   // Use local date formatting to match stored dates
-                  const dateStr = [
-                    date.getFullYear(),
-                    String(date.getMonth() + 1).padStart(2, '0'),
-                    String(date.getDate()).padStart(2, '0')
-                  ].join('-');
+                  const dateStr = localISODate(date);
 
                   // Get ALL entries for this date
                   const entries = selectedHabit.history?.filter(h => h.date === dateStr) || [];

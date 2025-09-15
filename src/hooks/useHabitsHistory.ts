@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { extractMetadata, extractHorizonReferences } from '@/utils/metadata-extractor';
 import { readFileText } from './useFileManager';
+import { localISODate } from '@/utils/time';
 import type { GTDHabit, MarkdownFile } from '@/types';
 
 export interface HabitHistoryEntry {
@@ -426,11 +427,7 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
       let content = await readFileText(habitPath);
       const now = new Date();
       // Use local date format to match history entries
-      const date = [
-        now.getFullYear(),
-        String(now.getMonth() + 1).padStart(2, '0'),
-        String(now.getDate()).padStart(2, '0')
-      ].join('-');
+      const date = localISODate(now);
       const time = now.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',

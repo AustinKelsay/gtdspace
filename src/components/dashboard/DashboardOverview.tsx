@@ -31,6 +31,7 @@ import type { ActionItem } from '@/hooks/useActionsData';
 import type { ProjectWithMetadata } from '@/hooks/useProjectsData';
 import type { HabitWithHistory } from '@/hooks/useHabitsHistory';
 import { cn } from '@/lib/utils';
+import { localISODate } from '@/utils/time';
 import { Switch } from '@/components/ui/switch';
 import { formatRelativeDate, getDateFromNow, isDateInRange, parseLocalDate } from '@/utils/date-formatting';
 
@@ -122,11 +123,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   // Calculate enhanced habit statistics
   const habitStats = React.useMemo(() => {
     // Count today's completions from history to avoid stale status
-    const today = new Date();
-    const y = today.getFullYear();
-    const m = String(today.getMonth() + 1).padStart(2, '0');
-    const d = String(today.getDate()).padStart(2, '0');
-    const todayStr = `${y}-${m}-${d}`;
+    const todayStr = localISODate(new Date());
     const completedToday = habits.reduce((sum, h) => {
       const entries = Array.isArray(h.history) ? h.history : [];
       const todayEntry = entries.find(e => e.date === todayStr);

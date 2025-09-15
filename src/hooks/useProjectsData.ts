@@ -305,7 +305,23 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
     try {
       const readmePath = `${projectPath}/README.md`;
       let content = await readFileText(readmePath);
-      
+
+      // Helper function to inject marker after H1 or at top
+      const injectMarker = (content: string, marker: string): string => {
+        const lines = content.split('\n');
+        const h1Index = lines.findIndex(line => line.startsWith('# '));
+
+        if (h1Index !== -1) {
+          // Insert after H1 (with blank line for readability)
+          lines.splice(h1Index + 1, 0, '', marker);
+        } else {
+          // Prepend to top (with blank line after)
+          lines.unshift(marker, '');
+        }
+
+        return lines.join('\n');
+      };
+
       // Update status if provided
       if (updates.status) {
         if (content.includes('[!singleselect:project-status:')) {
@@ -318,9 +334,12 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
             /\[!singleselect:status:[^\]]+\]/,
             `[!singleselect:status:${updates.status}]`
           );
+        } else {
+          // No existing status marker, inject new one
+          content = injectMarker(content, `[!singleselect:status:${updates.status}]`);
         }
       }
-      
+
       // Update due date if provided
       if (updates.dueDate !== undefined) {
         if (content.includes('[!datetime:due_date:')) {
@@ -328,6 +347,9 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
             /\[!datetime:due_date:[^\]]*\]/,
             `[!datetime:due_date:${updates.dueDate || ''}]`
           );
+        } else {
+          // No existing due date marker, inject new one
+          content = injectMarker(content, `[!datetime:due_date:${updates.dueDate || ''}]`);
         }
       }
       

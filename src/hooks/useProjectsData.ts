@@ -8,6 +8,7 @@ import { safeInvoke } from '@/utils/safe-invoke';
 import { extractMetadata, extractHorizonReferences as extractHorizonReferencesUtil } from '@/utils/metadata-extractor';
 import { readFileText } from './useFileManager';
 import type { GTDProject, MarkdownFile } from '@/types';
+import { toISOStringFromEpoch } from '@/utils/time';
 
 export interface ProjectWithMetadata extends GTDProject {
   linkedAreas?: string[];
@@ -180,7 +181,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
             } catch {
               // Ignore content parsing errors in fallback
             }
-            const created = new Date((f.last_modified || 0) * 1000).toISOString();
+            const created = toISOStringFromEpoch(f.last_modified);
             const base: GTDProject = {
               name,
               description,

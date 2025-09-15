@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { extractMetadata } from '@/utils/metadata-extractor';
 import { readFileText } from './useFileManager';
+import { toISOStringFromEpoch } from '@/utils/time';
 import type { GTDProject, MarkdownFile } from '@/types';
 
 export interface ActionItem {
@@ -191,10 +192,10 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
                            (metadata.references ? [metadata.references] : []),
                 createdDate: metadata.createdDateTime as string ||
                            metadata.createdDate as string ||
-                           new Date((file.last_modified || 0) * 1000).toISOString(),
+                           toISOStringFromEpoch(file.last_modified),
                 modifiedDate: metadata.modifiedDateTime as string ||
                             metadata.modifiedDate as string ||
-                            new Date((file.last_modified || 0) * 1000).toISOString(),
+                            toISOStringFromEpoch(file.last_modified),
                 description: extractDescription(content),
                 notes: metadata.notes as string | undefined
               };

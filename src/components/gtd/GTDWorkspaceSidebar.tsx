@@ -871,7 +871,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       name: 'README.md',
       path: `${project.path}/README.md`,
       size: 0, // Size will be determined when reading
-      last_modified: Date.now(),
+      last_modified: Math.floor(Date.now() / 1000),
       extension: 'md'
     };
 
@@ -1417,7 +1417,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                           name: 'Calendar',
                           path: '::calendar::',
                           size: 0,
-                          last_modified: Date.now(),
+                          last_modified: Math.floor(Date.now() / 1000),
                           extension: 'calendar'
                         };
                         onFileSelect(calendarFile);
@@ -1723,7 +1723,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                               name: 'README.md',
                               path: `${sectionPath}/README.md`,
                               size: 0,
-                              last_modified: Date.now(),
+                              last_modified: Math.floor(Date.now() / 1000),
                               extension: 'md'
                             };
                             onFileSelect(readmeFile);
@@ -1900,7 +1900,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
               name: filePath.split('/').pop() || '',
               path: filePath,
               size: 0,
-              last_modified: Date.now() / 1000, // Convert to seconds
+              last_modified: Math.floor(Date.now() / 1000), // seconds
               extension: 'md'
             };
 
@@ -1957,7 +1957,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
               name: habitPath.split('/').pop() || '',
               path: habitPath,
               size: 0,
-              last_modified: Date.now(),
+              last_modified: Math.floor(Date.now() / 1000),
               extension: 'md'
             };
 

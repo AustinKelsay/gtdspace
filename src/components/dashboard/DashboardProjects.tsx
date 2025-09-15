@@ -109,6 +109,20 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
   onArchiveProject,
   onAddAction
 }) => {
+  const parseLocal = (d: string) => {
+    const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return new Date(d);
+  };
+  const isPastDueLocal = (due?: string | null, status?: string) => {
+    if (!due || status === 'completed') return false;
+    const dt = parseLocal(due);
+    if (isNaN(dt.getTime())) return false;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dueStart = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+    return dueStart < today;
+  };
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -291,7 +305,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
   const renderProjectCard = (project: ProjectWithMetadata) => {
     const statusDisplay = getStatusDisplay(project.status);
     const StatusIcon = statusDisplay.icon;
-    const isOverdue = project.dueDate && new Date(project.dueDate) < new Date() && project.status !== 'completed';
+    const isOverdue = isPastDueLocal(project.dueDate, project.status);
     const isExpanded = expandedProjects.has(project.path);
     
     return (
@@ -771,7 +785,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
                   {filteredProjects.map(project => {
                     const statusDisplay = getStatusDisplay(project.status);
                     const StatusIcon = statusDisplay.icon;
-                    const isOverdue = project.dueDate && new Date(project.dueDate) < new Date() && project.status !== 'completed';
+                    const isOverdue = isPastDueLocal(project.dueDate, project.status);
                     
                     return (
                       <div 

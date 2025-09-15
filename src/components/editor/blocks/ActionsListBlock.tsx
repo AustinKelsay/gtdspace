@@ -93,11 +93,10 @@ const normalizeStatus = (status: string | undefined | null): GTDActionStatus => 
     case 'wait':
     case 'blocked':
       return 'waiting';
-    // Cancelled is not a valid GTDActionStatus, treat as completed
     case 'cancelled':
     case 'canceled':
     case 'cancel':
-      return 'completed';
+      return 'cancelled';
     case 'in-progress':
     case 'inprogress':
     case 'active':
@@ -113,6 +112,7 @@ const getActionStatusIcon = (status: GTDActionStatus) => {
     case 'completed': return CheckCircle2;
     case 'waiting': return CircleDot;
     case 'in-progress': return Circle;
+    case 'cancelled': return Circle;
     default: return Circle;
   }
 };
@@ -123,6 +123,7 @@ const getActionStatusColor = (status: GTDActionStatus) => {
     case 'completed': return 'text-green-600 dark:text-green-500';
     case 'waiting': return 'text-purple-600 dark:text-purple-500';
     case 'in-progress': return 'text-blue-600 dark:text-blue-500';
+    case 'cancelled': return 'text-gray-500 dark:text-gray-400';
     default: return 'text-gray-600 dark:text-gray-400';
   }
 };

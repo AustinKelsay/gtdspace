@@ -121,7 +121,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   // Calculate enhanced habit statistics
   const habitStats = React.useMemo(() => {
-    const completedToday = habits.filter(h => h.status === 'completed').length;
+    // Count today's completions from history to avoid stale status
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${y}-${m}-${d}`;
+    const completedToday = habits.reduce((sum, h) => {
+      const entries = Array.isArray(h.history) ? h.history : [];
+      const todayEntry = entries.find(e => e.date === todayStr);
+      return sum + (todayEntry && todayEntry.completed ? 1 : 0);
+    }, 0);
     const completionRate = habits.length > 0 ? Math.round((completedToday / habits.length) * 100) : 0;
     
     // Calculate aggregate statistics

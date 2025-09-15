@@ -92,7 +92,7 @@ export interface MarkdownFile {
   path: string;
   /** File size in bytes */
   size: number;
-  /** Last modification timestamp (Unix timestamp) */
+  /** Last modification timestamp (Unix timestamp, seconds) */
   last_modified: number;
   /** File extension (.md, .markdown) */
   extension: string;

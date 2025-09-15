@@ -117,7 +117,7 @@ interface MarkdownFile {
   name: string;            // filename.md
   path: string;            // /full/path/to/file.md
   size: number;            // Bytes
-  last_modified: number;   // Unix timestamp
+  last_modified: number;   // Unix timestamp (seconds)
   extension: string;       // "md" or "markdown"
 }
 ```

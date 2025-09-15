@@ -245,7 +245,7 @@ export function useHorizonsRelationships(
                       name: project.name,
                       path: readmePath,
                       size: 0,
-                      last_modified: Date.now(),
+                      last_modified: Math.floor(Date.now() / 1000),
                       extension: 'md',
                       horizonLevel: 'Projects',
                       linkedTo,

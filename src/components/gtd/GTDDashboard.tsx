@@ -167,22 +167,39 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
   // Load actions and horizons when projects change
   React.useEffect(() => {
+    let cleanupActions: (() => void) | undefined;
+    let cleanupHorizons: (() => void) | undefined;
+
     const loadProjectDependentData = async () => {
       if (!gtdSpace?.root_path || !gtdSpace?.projects || gtdSpace.projects.length === 0) {
         return;
       }
 
       try {
-        await Promise.allSettled([
+        const [actionsResult, horizonsResult] = await Promise.allSettled([
           loadActions(gtdSpace.projects),
           loadHorizons(gtdSpace.root_path, gtdSpace.projects)
         ]);
+
+        // Store cleanup functions if they were returned
+        if (actionsResult.status === 'fulfilled' && typeof actionsResult.value === 'function') {
+          cleanupActions = actionsResult.value;
+        }
+        if (horizonsResult.status === 'fulfilled' && typeof horizonsResult.value === 'function') {
+          cleanupHorizons = horizonsResult.value;
+        }
       } catch (error) {
         console.error('[GTDDashboard] Failed to load project-dependent data:', error);
       }
     };
 
     loadProjectDependentData();
+
+    // Cleanup function to cancel any ongoing operations
+    return () => {
+      cleanupActions?.();
+      cleanupHorizons?.();
+    };
   }, [
     gtdSpace?.root_path,
     gtdSpace?.projects,

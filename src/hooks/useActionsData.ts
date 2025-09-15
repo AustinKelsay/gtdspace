@@ -49,7 +49,7 @@ interface UseActionsDataReturn {
     dueToday: number;
     dueThisWeek: number;
   };
-  loadActions: (projects: GTDProject[]) => Promise<void>;
+  loadActions: (projects: GTDProject[]) => Promise<void | (() => void)>;
   updateActionStatus: (actionIdOrPath: string, newStatus: string, actionPath?: string) => Promise<boolean>;
   refresh: () => Promise<void>;
 }
@@ -143,30 +143,45 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
   // Use ref to always have access to latest actions
   const actionsRef = useRef<ActionItem[]>([]);
   actionsRef.current = actions;
-  
+
+  // Track if the hook is still mounted to prevent memory leaks
+  const isMountedRef = useRef(true);
+
   const loadActions = useCallback(async (projects: GTDProject[]) => {
-    setIsLoading(true);
-    setError(null);
-    setCachedProjects(projects);
+    // Create a cancellation flag for this specific load operation
+    let cancelled = false;
+
+    // Set initial state if still mounted
+    if (isMountedRef.current) {
+      setIsLoading(true);
+      setError(null);
+      setCachedProjects(projects);
+    }
     
     try {
       const allActions: ActionItem[] = [];
-      
+
       await Promise.all(projects.map(async (project) => {
+        // Check if cancelled before processing each project
+        if (cancelled || !isMountedRef.current) return;
+
         try {
           const files = await safeInvoke<MarkdownFile[]>(
             'list_project_actions',
             { projectPath: project.path },
             []
           );
-          
+
           await Promise.all(files.map(async (file) => {
+            // Check if cancelled before processing each file
+            if (cancelled || !isMountedRef.current) return;
+
             try {
               const content = await readFileText(file.path);
               const metadata = extractMetadata(content);
-              
+
               const status = normalizeActionStatus(metadata.status || 'in-progress');
-              
+
               // Filter based on options
               if (!includeCompleted && status === 'completed') return;
               if (!includeCancelled && status === 'cancelled') return;
@@ -187,7 +202,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
                 effort: metadata.effort as string | undefined,
                 dueDate: metadata.dueDate as string | undefined,
                 focusDate: metadata.focusDate as string | undefined,
-                contexts: Array.isArray(metadata.contexts) ? metadata.contexts : 
+                contexts: Array.isArray(metadata.contexts) ? metadata.contexts :
                           (metadata.contexts ? [metadata.contexts] : []),
                 references: Array.isArray(metadata.references) ? metadata.references :
                            (metadata.references ? [metadata.references] : []),
@@ -200,8 +215,11 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
                 description: extractDescription(content),
                 notes: metadata.notes as string | undefined
               };
-              
-              allActions.push(action);
+
+              // Only push if not cancelled
+              if (!cancelled && isMountedRef.current) {
+                allActions.push(action);
+              }
             } catch (err) {
               console.error(`Failed to load action ${file.path}:`, err);
             }
@@ -210,14 +228,28 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
           console.error(`Failed to load actions for project ${project.path}:`, err);
         }
       }));
-      
-      setActions(allActions);
+
+      // Only update state if not cancelled
+      if (!cancelled && isMountedRef.current) {
+        setActions(allActions);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load actions');
-      setActions([]);
+      // Only set error if not cancelled
+      if (!cancelled && isMountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Failed to load actions');
+        setActions([]);
+      }
     } finally {
-      setIsLoading(false);
+      // Only update loading state if not cancelled
+      if (!cancelled && isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
+
+    // Return cleanup function to cancel this operation
+    return () => {
+      cancelled = true;
+    };
   }, [includeCompleted, includeCancelled]);
   
   const updateActionStatus = useCallback(async (actionIdOrPath: string, newStatus: string, actionPath?: string): Promise<boolean> => {
@@ -364,7 +396,14 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       console.log('[useActionsData] Auto-load enabled but no projects available yet');
     }
   }, [autoLoad, cachedProjects]);
-  
+
+  // Cleanup effect to mark component as unmounted
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   return {
     actions,
     isLoading,

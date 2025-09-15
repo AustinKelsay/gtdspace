@@ -89,8 +89,36 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
   ].map(({ pattern, key }) => ({
     pattern: new RegExp(`\\[!${pattern}:([^\\]]*)\\]`, 'g'),
     extract: (match: RegExpMatchArray) => {
-      const values = match[1] ? match[1].split(',').map(v => v.trim()).filter(Boolean) : [];
-      return { key, value: values };
+      if (!match[1]) return { key, value: [] };
+
+      const rawValue = match[1].trim();
+      let values: string[] = [];
+
+      // Try JSON array format first (like backend)
+      if (rawValue.startsWith('[') && rawValue.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(rawValue);
+          if (Array.isArray(parsed)) {
+            values = parsed.map(v => String(v).replace(/\\/g, '/'));
+          } else {
+            // If not an array, fall back to CSV
+            values = rawValue.split(',').map(v => v.trim());
+          }
+        } catch {
+          // JSON parsing failed, fall back to CSV
+          // Remove the brackets and parse as CSV
+          const csvContent = rawValue.slice(1, -1);
+          values = csvContent.split(',').map(v =>
+            v.trim().replace(/^["']|["']$/g, '').replace(/\\/g, '/')
+          );
+        }
+      } else {
+        // Standard CSV format
+        values = rawValue.split(',').map(v => v.trim().replace(/\\/g, '/'));
+      }
+
+      // Filter out empty strings
+      return { key, value: values.filter(Boolean) };
     }
   })),
   

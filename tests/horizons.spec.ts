@@ -61,7 +61,7 @@ describe('mergeProjectInfoIntoHorizonFiles', () => {
     expect(alpha?.action_count).toBe(5);
 
     // Non-matching project should remain unchanged
-    expect(beta.status).toBeUndefined();
-    expect(beta.action_count).toBeUndefined();
+    expect(beta?.status).toBeUndefined();
+    expect(beta?.action_count).toBeUndefined();
   });
 });

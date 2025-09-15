@@ -86,6 +86,18 @@ const extractHorizonReferences = (content: string, _currentLevel: string) => {
 };
 
 /**
+ * Ensure a file path has a markdown extension
+ */
+const ensureMd = (filename: string): string => {
+  // If already has .md or .markdown extension, return as-is
+  if (filename.endsWith('.md') || filename.endsWith('.markdown')) {
+    return filename;
+  }
+  // Otherwise append .md
+  return `${filename}.md`;
+};
+
+/**
  * Extract content preview from markdown
  */
 const extractContentPreview = (content: string): string => {
@@ -223,7 +235,7 @@ export function useHorizonsRelationships(
                                         refLevel === 'vision' ? 'Vision' :
                                         refLevel === 'purpose' ? 'Purpose & Principles' :
                                         'Projects';
-                        const possiblePath = `${spacePath}/${levelName}/${refFile}`;
+                        const possiblePath = `${spacePath}/${levelName}/${ensureMd(refFile)}`;
                         linkedTo.push(possiblePath);
                       });
                     });
@@ -278,13 +290,13 @@ export function useHorizonsRelationships(
                                         refLevel === 'vision' ? 'Vision' :
                                         refLevel === 'purpose' ? 'Purpose & Principles' :
                                         'Projects';
-                        
+
                         if (refLevel === 'projects' && refFile.includes('/')) {
                           // Project reference includes folder name
                           linkedTo.push(`${spacePath}/Projects/${refFile}/README.md`);
                         } else {
                           // Regular file reference
-                          const possiblePath = `${spacePath}/${levelName}/${refFile}`;
+                          const possiblePath = `${spacePath}/${levelName}/${ensureMd(refFile)}`;
                           linkedTo.push(possiblePath);
                         }
                       });

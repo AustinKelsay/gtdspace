@@ -209,7 +209,12 @@ const analyzeHabitPatterns = (history: HabitHistoryEntry[], days: number = 90) =
   }
   
   // Calculate all streaks for best and average
-  for (const entry of recentHistory) {
+  // Sort history in ascending chronological order for accurate streak calculation
+  const sortedHistoryAsc = [...recentHistory].sort((a, b) =>
+    a.date.localeCompare(b.date)
+  );
+
+  for (const entry of sortedHistoryAsc) {
     if (entry.completed) {
       tempStreak++;
       bestStreak = Math.max(bestStreak, tempStreak);
@@ -495,16 +500,26 @@ ${newRow}
   }, [refresh]);
   
   const summary = useMemo(() => {
-    const completedToday = habits.filter(h => h.status === 'completed').length;
+    // Get today's date in YYYY-MM-DD format (matching history entry format)
+    const today = new Date().toISOString().split('T')[0];
+
+    // Count habits completed today based on history entries
+    const completedToday = habits.filter(habit => {
+      // Check if there's a history entry for today
+      const todayEntry = habit.history.find(entry => entry.date === today);
+      // Return true only if entry exists and is completed
+      return todayEntry?.completed === true;
+    }).length;
+
     const streaksActive = habits.filter(h => h.currentStreak > 0).length;
     const averageSuccessRate = habits.length > 0
       ? Math.round(habits.reduce((sum, h) => sum + h.successRate, 0) / habits.length)
       : 0;
-    
+
     const needingAttention = habits
       .filter(h => h.recentTrend === 'declining')
       .map(h => h.name);
-    
+
     return {
       total: habits.length,
       completedToday,

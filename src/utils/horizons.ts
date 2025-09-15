@@ -14,10 +14,10 @@ export type ProjectLike = {
  * horizon files for the Projects level. Files are matched by README path.
  */
 export function mergeProjectInfoIntoHorizonFiles(
-  files: Array<HorizonFile>,
-  projects: Array<ProjectLike>
+  files: ReadonlyArray<HorizonFile> = [],
+  projects: ReadonlyArray<ProjectLike> = []
 ): Array<HorizonFile & { action_count?: number; description?: string; status?: string; dueDate?: string }> {
-  if (!files || files.length === 0 || !projects || projects.length === 0) return files;
+  if (files.length === 0 || projects.length === 0) return [...files];
 
   const projectMap = new Map<string, ProjectLike>();
   projects.forEach((p) => {

@@ -68,7 +68,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import type { ActionItem } from '@/hooks/useActionsData';
-import { formatRelativeDate } from '@/utils/date-formatting';
+import { formatRelativeDate, parseLocalDate } from '@/utils/date-formatting';
 
 // Use ActionItem from hook to prevent drift
 
@@ -227,19 +227,19 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
           if (!a.dueDate && !b.dueDate) compareValue = 0;
           else if (!a.dueDate) compareValue = 1;
           else if (!b.dueDate) compareValue = -1;
-          else compareValue = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+          else compareValue = parseLocalDate(a.dueDate).getTime() - parseLocalDate(b.dueDate).getTime();
           break;
         case 'focusDate':
           if (!a.focusDate && !b.focusDate) compareValue = 0;
           else if (!a.focusDate) compareValue = 1;
           else if (!b.focusDate) compareValue = -1;
-          else compareValue = new Date(a.focusDate).getTime() - new Date(b.focusDate).getTime();
+          else compareValue = parseLocalDate(a.focusDate).getTime() - parseLocalDate(b.focusDate).getTime();
           break;
         case 'created':
-          compareValue = new Date(a.createdDate || 0).getTime() - new Date(b.createdDate || 0).getTime();
+          compareValue = parseLocalDate(a.createdDate || '').getTime() - parseLocalDate(b.createdDate || '').getTime();
           break;
         case 'modified':
-          compareValue = new Date(a.modifiedDate || 0).getTime() - new Date(b.modifiedDate || 0).getTime();
+          compareValue = parseLocalDate(a.modifiedDate || '').getTime() - parseLocalDate(b.modifiedDate || '').getTime();
           break;
       }
 
@@ -326,7 +326,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
     
     const overdue = filteredActions.filter(a => {
       if (!a.dueDate) return false;
-      return new Date(a.dueDate) < new Date();
+      return parseLocalDate(a.dueDate) < new Date();
     }).length;
 
     return { total, byStatus, overdue };
@@ -678,7 +678,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                 {filteredActions.map((action) => {
                   const statusDisplay = getStatusDisplay(action.status);
                   const StatusIcon = statusDisplay.icon;
-                  const isOverdue = action.dueDate && new Date(action.dueDate) < new Date();
+                  const isOverdue = action.dueDate && parseLocalDate(action.dueDate) < new Date();
                   
                   return (
                     <TableRow 

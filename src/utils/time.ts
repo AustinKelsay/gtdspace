@@ -4,12 +4,13 @@
 
 /**
  * Convert epoch (seconds or milliseconds) to ISO string safely.
- * - If value looks like milliseconds (>= 1e12), use as-is
- * - If value looks like seconds, multiply by 1000
+ * - If value is >= 1e10, it is treated as milliseconds.
+ * - Otherwise, it is treated as seconds and multiplied by 1000.
+ * - This threshold correctly handles timestamps until the year 2286.
  */
 export function toISOStringFromEpoch(epoch?: number | null): string {
   const ts = typeof epoch === 'number' && Number.isFinite(epoch) ? epoch : 0;
-  const ms = ts >= 1e12 ? ts : ts * 1000;
+  const ms = ts >= 1e10 ? ts : ts * 1000;
   return new Date(ms).toISOString();
 }
 

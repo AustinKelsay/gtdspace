@@ -287,6 +287,17 @@ Promise.all([
 - Settings migration for any stored dashboard preferences
 - Gradual rollout with feature flag if needed
 
+## Quality Assurance
+
+To maintain documentation quality and consistency, a new CI validation step will be implemented.
+
+1.  **Markdown Linting**:
+    *   A new CI job will be added to the pipeline to lint all Markdown files.
+    *   The job will execute `npx -y markdownlint-cli2 "docs/**/*.md" "AGENTS.md" "CLAUDE.md"`.
+    *   The pipeline will fail if any linting violations are found, ensuring all committed documentation adheres to the defined standards.
+    *   An optional, separate job or a manual flag (`--fix`) can be used to automatically correct linting errors and commit the fixes.
+    *   Linting rules will be configured in a new `.markdownlint.json` file at the repository root to tune settings for our specific documentation style.
+
 ## Testing Checklist
 
 - [ ] All tabs load without errors
@@ -299,6 +310,7 @@ Promise.all([
 - [ ] Export features work correctly
 - [ ] Error states handle gracefully
 - [ ] Loading states display properly
+- [ ] Table of contents updated (e.g., via `doctoc`)
 
 ## Future Enhancements
 

@@ -1700,7 +1700,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             name: selectedEvent?.title || '',
             path: path,
             size: 0,
-            last_modified: Date.now(),
+            last_modified: Math.floor(Date.now() / 1000),
             extension: 'md'
           };
           onFileSelect(file);

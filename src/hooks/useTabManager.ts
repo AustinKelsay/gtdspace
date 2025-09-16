@@ -129,7 +129,7 @@ export const useTabManager = () => {
             name: tabInfo.fileName,
             path: tabInfo.filePath,
             size: fileContent.length,
-            last_modified: Date.now(), // We don't have the real timestamp
+            last_modified: Math.floor(Date.now() / 1000), // We don't have the real timestamp
             extension: tabInfo.fileName.split('.').pop() || 'md',
           };
 
@@ -981,7 +981,7 @@ export const useTabManager = () => {
           name: fileName,
           path: path,
           size: 0, // Size doesn't matter for opening
-          last_modified: Date.now(),
+          last_modified: Math.floor(Date.now() / 1000),
           extension: 'md'
         };
         

@@ -92,7 +92,7 @@ export interface MarkdownFile {
   path: string;
   /** File size in bytes */
   size: number;
-  /** Last modification timestamp (Unix timestamp) */
+  /** Last modification timestamp (Unix timestamp, seconds) */
   last_modified: number;
   /** File extension (.md, .markdown) */
   extension: string;
@@ -421,7 +421,7 @@ export type GTDProjectStatus = 'in-progress' | 'waiting' | 'completed';
 /**
  * GTD Action status options
  */
-export type GTDActionStatus = 'in-progress' | 'waiting' | 'completed';
+export type GTDActionStatus = 'in-progress' | 'waiting' | 'completed' | 'cancelled';
 
 /**
  * GTD Action effort estimation

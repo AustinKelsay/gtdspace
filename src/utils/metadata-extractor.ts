@@ -66,11 +66,61 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
   {
     pattern: /\[!multiselect:([\w-]+):([^\]]+)\]/g,
     extract: (match) => {
-      const field = match[1] === 'tags' ? 'tags' : match[1];
+      // Map multiselect field names to their canonical metadata keys
+      const fieldMap: Record<string, string> = {
+        'tags': 'tags',
+        'contexts': 'contexts',
+        'categories': 'categories'
+      };
+      const field = fieldMap[match[1]] || match[1];
       const values = match[2].split(',').map(v => v.trim());
       return { key: field, value: values };
     }
   },
+
+  // Create horizon reference extractors dynamically
+  ...[
+    { pattern: 'areas-references', key: 'areasReferences' },
+    { pattern: 'goals-references', key: 'goalsReferences' },
+    { pattern: 'vision-references', key: 'visionReferences' },
+    { pattern: 'purpose-references', key: 'purposeReferences' },
+    { pattern: 'projects-references', key: 'projectsReferences' },
+    { pattern: 'references', key: 'references' }
+  ].map(({ pattern, key }) => ({
+    pattern: new RegExp(`\\[!${pattern}:([^\\]]*)\\]`, 'g'),
+    extract: (match: RegExpMatchArray) => {
+      if (!match[1]) return { key, value: [] };
+
+      const rawValue = match[1].trim();
+      let values: string[] = [];
+
+      // Try JSON array format first (like backend)
+      if (rawValue.startsWith('[') && rawValue.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(rawValue);
+          if (Array.isArray(parsed)) {
+            values = parsed.map(v => String(v).replace(/\\/g, '/'));
+          } else {
+            // If not an array, fall back to CSV
+            values = rawValue.split(',').map(v => v.trim());
+          }
+        } catch {
+          // JSON parsing failed, fall back to CSV
+          // Remove the brackets and parse as CSV
+          const csvContent = rawValue.slice(1, -1);
+          values = csvContent.split(',').map(v =>
+            v.trim().replace(/^["']|["']$/g, '').replace(/\\/g, '/')
+          );
+        }
+      } else {
+        // Standard CSV format
+        values = rawValue.split(',').map(v => v.trim().replace(/\\/g, '/'));
+      }
+
+      // Filter out empty strings
+      return { key, value: values.filter(Boolean) };
+    }
+  })),
   
   // H1 title extraction
   {
@@ -193,6 +243,29 @@ export function extractProjectStatus(content: string): string {
   const metadata = extractMetadata(content);
   // Handle both projectStatus and status fields
   return metadata.projectStatus || metadata.status || 'in-progress';
+}
+
+/**
+ * Extract horizon references from content
+ */
+export function extractHorizonReferences(content: string): {
+  areas: string[];
+  goals: string[];
+  vision: string[];
+  purpose: string[];
+  projects: string[];
+  references: string[];
+} {
+  const metadata = extractMetadata(content);
+  
+  return {
+    areas: Array.isArray(metadata.areasReferences) ? metadata.areasReferences : [],
+    goals: Array.isArray(metadata.goalsReferences) ? metadata.goalsReferences : [],
+    vision: Array.isArray(metadata.visionReferences) ? metadata.visionReferences : [],
+    purpose: Array.isArray(metadata.purposeReferences) ? metadata.purposeReferences : [],
+    projects: Array.isArray(metadata.projectsReferences) ? metadata.projectsReferences : [],
+    references: Array.isArray(metadata.references) ? metadata.references : []
+  };
 }
 
 /**

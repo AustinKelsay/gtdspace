@@ -499,7 +499,6 @@ export const readFileText = async (path: string): Promise<string> => {
   }
 
   try {
-    console.log('[readFileText] Attempting to read file:', path);
     const content = await safeInvoke<string>('read_file', { path }, null);
 
     if (content === null || content === undefined) {
@@ -509,7 +508,6 @@ export const readFileText = async (path: string): Promise<string> => {
       return '';
     }
 
-    console.log('[readFileText] Successfully read file, content length:', content.length);
     return content;
   } catch (error) {
     console.error('[readFileText] Failed to read file:', path, error);

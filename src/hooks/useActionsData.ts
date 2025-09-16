@@ -144,26 +144,24 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
   const actionsRef = useRef<ActionItem[]>([]);
   actionsRef.current = actions;
 
-  // Track if the hook is still mounted to prevent memory leaks
-  const isMountedRef = useRef(true);
 
   const loadActions = useCallback(async (projects: GTDProject[]) => {
+    console.log('[useActionsData] loadActions called with', projects.length, 'projects');
+
     // Create a cancellation flag for this specific load operation
     let cancelled = false;
 
-    // Set initial state if still mounted
-    if (isMountedRef.current) {
-      setIsLoading(true);
-      setError(null);
-      setCachedProjects(projects);
-    }
-    
+    // Set initial state
+    setIsLoading(true);
+    setError(null);
+    setCachedProjects(projects);
+
     try {
       const allActions: ActionItem[] = [];
 
       await Promise.all(projects.map(async (project) => {
         // Check if cancelled before processing each project
-        if (cancelled || !isMountedRef.current) return;
+        if (cancelled) return;
 
         try {
           const files = await safeInvoke<MarkdownFile[]>(
@@ -174,7 +172,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
 
           await Promise.all(files.map(async (file) => {
             // Check if cancelled before processing each file
-            if (cancelled || !isMountedRef.current) return;
+            if (cancelled) return;
 
             try {
               const content = await readFileText(file.path);
@@ -217,7 +215,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
               };
 
               // Only push if not cancelled
-              if (!cancelled && isMountedRef.current) {
+              if (!cancelled) {
                 allActions.push(action);
               }
             } catch (err) {
@@ -229,19 +227,26 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
         }
       }));
 
+      console.log(`[useActionsData] Collected ${allActions.length} actions total`);
+      console.log(`[useActionsData] cancelled=${cancelled}`);
+
       // Only update state if not cancelled
-      if (!cancelled && isMountedRef.current) {
+      if (!cancelled) {
+        console.log(`[useActionsData] About to update state with ${allActions.length} actions`);
         setActions(allActions);
+        console.log(`[useActionsData] State updated successfully`);
       }
     } catch (err) {
+      console.error('[useActionsData] Error in loadActions:', err);
       // Only set error if not cancelled
-      if (!cancelled && isMountedRef.current) {
+      if (!cancelled) {
         setError(err instanceof Error ? err.message : 'Failed to load actions');
         setActions([]);
       }
     } finally {
+      console.log(`[useActionsData] loadActions completed. Loading: ${!cancelled ? 'false' : 'skipped'}`);
       // Only update loading state if not cancelled
-      if (!cancelled && isMountedRef.current) {
+      if (!cancelled) {
         setIsLoading(false);
       }
     }
@@ -396,13 +401,6 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       console.log('[useActionsData] Auto-load enabled but no projects available yet');
     }
   }, [autoLoad, cachedProjects]);
-
-  // Cleanup effect to mark component as unmounted
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
 
   return {
     actions,

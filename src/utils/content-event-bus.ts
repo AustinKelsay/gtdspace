@@ -179,20 +179,20 @@ export const onContentSaved = (callback: EventCallback) =>
 export const onMetadataChange = (callback: EventCallback) => 
   contentEventBus.on('content:metadata-changed', callback);
 
-export const emitContentChange = (event: Omit<ContentChangeEvent, 'timestamp'>) => 
+export const emitContentChange = (event: Omit<ContentChangeEvent, 'timestamp'>) =>
   contentEventBus.emit('content:changed', {
     ...event,
-    timestamp: Date.now()
+    timestamp: Math.floor(Date.now() / 1000)
   });
 
-export const emitContentSaved = (event: Omit<ContentChangeEvent, 'timestamp'>) => 
+export const emitContentSaved = (event: Omit<ContentChangeEvent, 'timestamp'>) =>
   contentEventBus.emit('content:saved', {
     ...event,
-    timestamp: Date.now()
+    timestamp: Math.floor(Date.now() / 1000)
   });
 
-export const emitMetadataChange = (event: Omit<ContentChangeEvent, 'timestamp'>) => 
+export const emitMetadataChange = (event: Omit<ContentChangeEvent, 'timestamp'>) =>
   contentEventBus.emit('content:metadata-changed', {
     ...event,
-    timestamp: Date.now()
+    timestamp: Math.floor(Date.now() / 1000)
   });

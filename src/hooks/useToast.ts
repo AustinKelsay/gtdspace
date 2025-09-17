@@ -14,7 +14,7 @@ const DEDUP_WINDOW_MS = 100; // 100ms window to catch React StrictMode duplicate
  * Includes deduplication to prevent duplicate toasts in React StrictMode
  */
 export function useToast() {
-  const { toast, dismiss: dismissFromHook } = useShadcnToast();
+  const { toast, dismiss: dismissFromHook, toasts } = useShadcnToast();
   const toastTimerRef = useRef<NodeJS.Timeout>();
 
   // Clean up old entries periodically
@@ -140,6 +140,7 @@ export function useToast() {
   }, [dismissFromHook]);
 
   return {
+    toasts,
     showSuccess,
     showError,
     showInfo,
@@ -148,3 +149,6 @@ export function useToast() {
     dismiss,
   };
 }
+
+// Re-export for convenience
+export { useToast as useShadcnToast };

@@ -8,10 +8,10 @@ import {
   ToastTitle,
   ToastViewport,
 } from "@/components/ui/toast"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/hooks/useToast"
 
 export function Toaster() {
-  const { toasts } = useToast()
+  const { toasts, dismiss } = useToast()
 
   return (
     <ToastProvider>
@@ -25,7 +25,7 @@ export function Toaster() {
               )}
             </div>
             {action}
-            <ToastClose />
+            <ToastClose onClick={() => dismiss(id)} />
           </Toast>
         )
       })}

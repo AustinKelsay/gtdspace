@@ -90,7 +90,8 @@ pub fn run() {
             commands::google_oauth_store_config,
             commands::google_oauth_get_config,
             commands::google_oauth_clear_config,
-            commands::google_oauth_has_config
+            commands::google_oauth_has_config,
+            commands::check_file_exists
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -720,7 +720,7 @@ export const App: React.FC = () => {
               name: 'Calendar',
               path: '::calendar::',
               size: 0,
-              last_modified: Date.now(),
+                    last_modified: Math.floor(Date.now() / 1000),
               extension: '',
             });
           } : undefined}

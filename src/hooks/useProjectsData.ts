@@ -129,27 +129,37 @@ const extractOutcomes = (content: string): string[] => {
 };
 
 /**
+ * Helper function to check if a file exists using Tauri command
+ */
+const checkFileExists = async (filePath: string): Promise<boolean> => {
+  try {
+    return await safeInvoke<boolean>('check_file_exists', { filePath }, false);
+  } catch (error) {
+    console.error('[checkFileExists] Failed to check file existence:', error);
+    return false;
+  }
+};
+
+/**
  * Helper function to resolve project README file path
- * Checks for both README.md and README.markdown
+ * Checks for both README.md and README.markdown using proper file existence check
  * @returns The path of the existing README file, or null if neither exists
  */
 const resolveProjectReadme = async (projectPath: string): Promise<string | null> => {
   const mdPath = `${projectPath}/README.md`;
   const markdownPath = `${projectPath}/README.markdown`;
 
-  // Try README.md first
-  try {
-    await readFileText(mdPath);
+  // Check README.md first
+  if (await checkFileExists(mdPath)) {
     return mdPath;
-  } catch {
-    // Try README.markdown
-    try {
-      await readFileText(markdownPath);
-      return markdownPath;
-    } catch {
-      return null;
-    }
   }
+
+  // Check README.markdown
+  if (await checkFileExists(markdownPath)) {
+    return markdownPath;
+  }
+
+  return null;
 };
 
 export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjectsDataReturn {

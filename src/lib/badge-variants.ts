@@ -39,12 +39,12 @@ export const badgeVariants = cva(
     },
     // Apply classes for the soft + intent combinations
     compoundVariants: [
-      { variant: "soft", intent: "neutral", className: "bg-foreground/5 text-foreground/70 border-border" },
-      { variant: "soft", intent: "success", className: "bg-green-500/10 text-green-600 border-green-500/20" },
-      { variant: "soft", intent: "warning", className: "bg-yellow-500/10 text-yellow-700 border-yellow-500/20" },
-      { variant: "soft", intent: "danger", className: "bg-red-500/10 text-red-600 border-red-500/20" },
-      { variant: "soft", intent: "info", className: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
-      { variant: "soft", intent: "brand", className: "bg-violet-500/10 text-violet-600 border-violet-500/20" },
+      { variant: "soft", intent: "neutral", class: "bg-foreground/5 text-foreground/70 border-border" },
+      { variant: "soft", intent: "success", class: "bg-green-500/10 text-green-600 border-green-500/20" },
+      { variant: "soft", intent: "warning", class: "bg-yellow-500/10 text-yellow-700 border-yellow-500/20" },
+      { variant: "soft", intent: "danger", class: "bg-red-500/10 text-red-600 border-red-500/20" },
+      { variant: "soft", intent: "info", class: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+      { variant: "soft", intent: "brand", class: "bg-violet-500/10 text-violet-600 border-violet-500/20" },
     ],
     defaultVariants: {
       variant: "default",

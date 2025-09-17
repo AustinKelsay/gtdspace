@@ -70,35 +70,45 @@ interface UseHabitsHistoryReturn {
  */
 const parseHabitHistory = (content: string): HabitHistoryEntry[] => {
   const history: HabitHistoryEntry[] = [];
-  
-  // Find the history table
-  const tableRegex = /\| Date \| Time \| Status \| Action \| Details \|[\s\S]*?\n(?:\|[^|\n]+\|[^|\n]+\|[^|\n]+\|[^|\n]+\|[^|\n]+\|\n?)+/g;
+
+  // Find the history table - flexible regex to handle varying whitespace
+  const tableRegex = /\|\s*Date\s*\|\s*Time\s*\|\s*Status\s*\|\s*Action\s*\|\s*Details\s*\|[\s\S]*?\n(?:\|[^|\n]+\|[^|\n]+\|[^|\n]+\|[^|\n]+\|[^|\n]+\|\n?)+/gi;
   const tableMatch = content.match(tableRegex);
-  
+
+  console.log('[parseHabitHistory] Looking for history table...');
+
   if (tableMatch && tableMatch[0]) {
+    console.log('[parseHabitHistory] Found history table!');
     const lines = tableMatch[0].split('\n');
-    
+    console.log('[parseHabitHistory] Processing', lines.length, 'lines');
+
     for (const line of lines) {
+      // Skip header and separator lines
       if (line.includes('Date') || line.includes('---') || !line.trim()) continue;
-      
+
       const cells = line.split('|').map(cell => cell.trim()).filter(cell => cell);
-      
+
       if (cells.length >= 3) {
         const [date, time, status, action = '', details = ''] = cells;
-        
+
         if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-          history.push({
+          const entry = {
             date,
             time,
             completed: status.toLowerCase().includes('complete'),
             action,
             note: details || action || undefined
-          });
+          };
+          history.push(entry);
+          console.log('[parseHabitHistory] Added entry:', entry);
         }
       }
     }
+  } else {
+    console.log('[parseHabitHistory] No history table found in content');
   }
-  
+
+  console.log('[parseHabitHistory] Parsed', history.length, 'history entries');
   return history;
 };
 
@@ -315,17 +325,38 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
   const [cachedSpacePath, setCachedSpacePath] = useState<string>('');
   
   const loadHabits = useCallback(async (spacePath: string) => {
+    console.log('[useHabitsHistory] Loading habits from path:', spacePath);
+
+    if (!spacePath || spacePath.trim() === '') {
+      console.error('[useHabitsHistory] Invalid spacePath provided:', spacePath);
+      setError('Invalid workspace path');
+      setHabits([]);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     setCachedSpacePath(spacePath);
-    
+
     try {
       const habitsPath = `${spacePath}/Habits`;
-      const habitFiles = await safeInvoke<MarkdownFile[]>(
-        'list_markdown_files',
-        { path: habitsPath },
-        []
-      );
+      console.log('[useHabitsHistory] Attempting to list files from:', habitsPath);
+
+      // Try to list files with better error handling
+      let habitFiles: MarkdownFile[] = [];
+      try {
+        habitFiles = await safeInvoke<MarkdownFile[]>(
+          'list_markdown_files',
+          { path: habitsPath },
+          []
+        );
+      } catch (invokeError) {
+        console.error('[useHabitsHistory] Error invoking list_markdown_files:', invokeError);
+        // Return empty array but continue - the directory might just not exist yet
+        habitFiles = [];
+      }
+
+      console.log('[useHabitsHistory] Found habit files:', habitFiles.length, habitFiles.map(f => f.name));
       
       const loadedHabits = await Promise.all(
         habitFiles.map(async (file) => {
@@ -345,9 +376,11 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
             
             // Parse history
             const history = parseHabitHistory(content);
-            
+            console.log(`[useHabitsHistory] Habit "${file.name}" has ${history.length} history entries`);
+
             // Filter inactive if needed
             if (!includeInactive && history.length === 0) {
+              console.log(`[useHabitsHistory] Filtering out inactive habit: ${file.name}`);
               return null;
             }
             
@@ -403,8 +436,11 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
         })
       );
       
-      setHabits(loadedHabits.filter((h): h is HabitWithHistory => h !== null));
+      const validHabits = loadedHabits.filter((h): h is HabitWithHistory => h !== null);
+      console.log('[useHabitsHistory] Successfully loaded habits:', validHabits.length, validHabits.map(h => h.name));
+      setHabits(validHabits);
     } catch (err) {
+      console.error('[useHabitsHistory] Failed to load habits:', err);
       setError(err instanceof Error ? err.message : 'Failed to load habits');
       setHabits([]);
     } finally {

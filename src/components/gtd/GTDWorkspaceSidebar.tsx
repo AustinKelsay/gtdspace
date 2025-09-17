@@ -1567,7 +1567,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                             onClick={async (e) => {
                                               e.stopPropagation();
                                               try {
-                                                await safeInvoke('open_file_location', { file_path: project.path }, null);
+                                                await safeInvoke('open_file_location', { filePath: project.path }, null);
                                               } catch (_error) {
                                                 // Silently handle file location open errors
                                               }
@@ -1657,7 +1657,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                       onClick={async (e) => {
                                                         e.stopPropagation();
                                                         try {
-                                                          await safeInvoke('open_file_location', { file_path: currentPath }, null);
+                                                          await safeInvoke('open_file_location', { filePath: currentPath }, null);
                                                         } catch (_error) {
                                                           // Silently handle file location open errors
                                                         }
@@ -1815,7 +1815,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                       onClick={async (e) => {
                                         e.stopPropagation();
                                         try {
-                                          await safeInvoke('open_file_location', { file_path: currentPath }, null);
+                                          await safeInvoke('open_file_location', { filePath: currentPath }, null);
                                         } catch (_error) {
                                           // Silently handle file location open errors
                                         }

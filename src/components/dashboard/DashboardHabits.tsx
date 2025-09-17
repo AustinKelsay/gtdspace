@@ -68,6 +68,13 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
   const [selectedHabit, setSelectedHabit] = useState<HabitWithHistory | null>(null);
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('month');
 
+  // Auto-select first habit when viewing history if none selected
+  React.useEffect(() => {
+    if (activeView === 'history' && !selectedHabit && habits.length > 0) {
+      setSelectedHabit(habits[0]);
+    }
+  }, [activeView, selectedHabit, habits]);
+
   // Filter and sort habits
   const filteredHabits = useMemo(() => {
     let filtered = [...habits];
@@ -154,8 +161,8 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
     // Find the most recent history entry by date
     const lastUpdate = habit.history && habit.history.length > 0
       ? new Date(`${habit.history.reduce((latest, entry) =>
-          entry.date > latest.date ? entry : latest
-        ).date}T00:00:00`)
+        entry.date > latest.date ? entry : latest
+      ).date}T00:00:00`)
       : undefined;
     const nextReset = new Date(calculateNextReset(habit.frequency, lastUpdate));
     const now = new Date();
@@ -188,9 +195,9 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
     const streakDisplay = getStreakDisplay(habit.currentStreak);
     const StreakIcon = streakDisplay.icon;
     const nextReset = getNextResetTime(habit);
-    
+
     return (
-      <Card 
+      <Card
         key={habit.path}
         className={cn(
           "transition-all hover:shadow-lg cursor-pointer",
@@ -225,13 +232,14 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
                   {habit.name}
                 </h4>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="soft" intent="neutral" size="xs">
                     {FREQUENCY_DISPLAY[habit.frequency]}
                   </Badge>
                   {habit.successRate !== undefined && (
-                    <Badge 
-                      variant={habit.successRate >= 80 ? "default" : habit.successRate >= 50 ? "secondary" : "destructive"}
-                      className="text-xs"
+                    <Badge
+                      variant="soft"
+                      intent={habit.successRate >= 80 ? "success" : habit.successRate >= 50 ? "brand" : "danger"}
+                      size="xs"
                     >
                       {habit.successRate}% success
                     </Badge>
@@ -275,8 +283,8 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
                 <span>Success Rate</span>
                 <span>{habit.totalCompletions || 0}/{habit.totalAttempts || 0}</span>
               </div>
-              <Progress 
-                value={habit.successRate} 
+              <Progress
+                value={habit.successRate}
                 className={cn(
                   "h-2",
                   habit.successRate >= 80 && "[&>div]:bg-green-500",
@@ -308,28 +316,28 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
             <div className="mt-3 pt-3 border-t">
               <div className="flex flex-wrap gap-1">
                 {habit.linkedProjects?.map((proj, i) => (
-                  <Badge key={`proj-${i}`} variant="outline" className="text-xs">
-                    📁 {proj.split('/').pop()?.replace('.md', '')}
+                  <Badge key={`proj-${i}`} variant="soft" intent="info" size="xs">
+                    {proj.split('/').pop()?.replace('.md', '')}
                   </Badge>
                 ))}
                 {habit.linkedAreas?.map((area, i) => (
-                  <Badge key={`area-${i}`} variant="outline" className="text-xs">
-                    🎯 {area.split('/').pop()?.replace('.md', '')}
+                  <Badge key={`area-${i}`} variant="soft" intent="brand" size="xs">
+                    {area.split('/').pop()?.replace('.md', '')}
                   </Badge>
                 ))}
                 {habit.linkedGoals?.map((goal, i) => (
-                  <Badge key={`goal-${i}`} variant="outline" className="text-xs">
-                    🎖️ {goal.split('/').pop()?.replace('.md', '')}
+                  <Badge key={`goal-${i}`} variant="soft" intent="success" size="xs">
+                    {goal.split('/').pop()?.replace('.md', '')}
                   </Badge>
                 ))}
                 {habit.linkedVision?.map((vis, i) => (
-                  <Badge key={`vis-${i}`} variant="outline" className="text-xs">
-                    🔮 {vis.split('/').pop()?.replace('.md', '')}
+                  <Badge key={`vis-${i}`} variant="soft" intent="neutral" size="xs">
+                    {vis.split('/').pop()?.replace('.md', '')}
                   </Badge>
                 ))}
                 {habit.linkedPurpose?.map((purp, i) => (
-                  <Badge key={`purp-${i}`} variant="outline" className="text-xs">
-                    ⭐ {purp.split('/').pop()?.replace('.md', '')}
+                  <Badge key={`purp-${i}`} variant="soft" intent="warning" size="xs">
+                    {purp.split('/').pop()?.replace('.md', '')}
                   </Badge>
                 ))}
               </div>
@@ -345,7 +353,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
     const today = new Date();
     const daysToShow = timeRange === 'week' ? 7 : timeRange === 'month' ? 30 : 365;
     const days = [];
-    
+
     for (let i = daysToShow - 1; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
@@ -356,16 +364,39 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-medium">Completion History</h3>
-          <Select value={timeRange} onValueChange={(v) => setTimeRange(v as 'week' | 'month' | 'year')}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="week">Week</SelectItem>
-              <SelectItem value="month">Month</SelectItem>
-              <SelectItem value="year">Year</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            {/* Habit selector */}
+            <Select
+              value={selectedHabit?.path || ''}
+              onValueChange={(path) => {
+                const habit = habits.find(h => h.path === path);
+                if (habit) setSelectedHabit(habit);
+              }}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select a habit" />
+              </SelectTrigger>
+              <SelectContent>
+                {habits.map(habit => (
+                  <SelectItem key={habit.path} value={habit.path}>
+                    {habit.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Time range selector */}
+            <Select value={timeRange} onValueChange={(v) => setTimeRange(v as 'week' | 'month' | 'year')}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="week">Week</SelectItem>
+                <SelectItem value="month">Month</SelectItem>
+                <SelectItem value="year">Year</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {selectedHabit ? (
@@ -625,7 +656,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
                       .map((habit, index) => {
                         const streakDisplay = getStreakDisplay(habit.currentStreak);
                         const StreakIcon = streakDisplay.icon;
-                        
+
                         return (
                           <div key={habit.path} className="flex items-center justify-between p-2">
                             <div className="flex items-center gap-2">

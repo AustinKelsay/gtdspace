@@ -83,7 +83,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     analytics: _habitsAnalytics,
     loadHabits,
     updateHabitStatus
-  } = useHabitsHistory({ historyDays: 90, includeInactive: false });
+  } = useHabitsHistory({ historyDays: 90, includeInactive: true });
 
   const {
     horizons,
@@ -132,25 +132,52 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   // Load initial data when GTD space root path changes
   React.useEffect(() => {
     const loadInitialData = async () => {
-      if (!gtdSpace?.root_path) return;
+      console.log('[GTDDashboard] Checking GTD space:', gtdSpace, 'currentFolder:', currentFolder);
 
-      // Skip if already loaded for this path
-      if (loadedPathRef.current === gtdSpace.root_path) {
+      // Use gtdSpace.root_path if available, otherwise fall back to currentFolder
+      const pathToLoad = gtdSpace?.root_path || currentFolder;
+
+      if (!pathToLoad) {
+        console.log('[GTDDashboard] No path available (neither gtdSpace.root_path nor currentFolder), skipping load');
         return;
       }
 
+      // Skip if already loaded for this path
+      if (loadedPathRef.current === pathToLoad) {
+        console.log('[GTDDashboard] Already loaded for path:', pathToLoad);
+        return;
+      }
+
+      console.log('[GTDDashboard] Loading initial data for path:', pathToLoad);
+
       try {
         // Load data in parallel using our new hooks
-        await Promise.allSettled([
+        const results = await Promise.allSettled([
           // Load base projects first
-          loadProjects(gtdSpace.root_path),
+          loadProjects(pathToLoad),
 
           // Then load enhanced data
-          loadProjectsData(gtdSpace.root_path),
-          loadHabits(gtdSpace.root_path),
+          loadProjectsData(pathToLoad),
+          loadHabits(pathToLoad),
         ]);
 
-        loadedPathRef.current = gtdSpace.root_path;
+        console.log('[GTDDashboard] Load results:', results.map((r, i) => ({
+          index: i,
+          status: r.status,
+          reason: r.status === 'rejected' ? r.reason : 'success'
+        })));
+
+        // Check if habits loading failed specifically
+        if (results[2].status === 'rejected') {
+          console.error('[GTDDashboard] Habits loading failed:', results[2].reason);
+          toast({
+            title: 'Failed to Load Habits',
+            description: 'Unable to load habits from the workspace. Please check the console for details.',
+            variant: 'destructive',
+          });
+        }
+
+        loadedPathRef.current = pathToLoad;
       } catch (error) {
         console.error('[GTDDashboard] Failed to load initial data:', error);
         loadedPathRef.current = null;
@@ -159,10 +186,12 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
     loadInitialData();
   }, [
-    gtdSpace?.root_path,
+    gtdSpace,
+    currentFolder,
     loadProjects,
     loadProjectsData,
-    loadHabits
+    loadHabits,
+    toast
   ]);
 
   // Load actions and horizons when projects change

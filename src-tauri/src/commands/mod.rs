@@ -5820,6 +5820,36 @@ pub fn google_oauth_clear_config(app: AppHandle) -> Result<String, String> {
     Ok("Google OAuth configuration cleared".to_string())
 }
 
+/// Check if a file exists at the specified path
+///
+/// Checks for file existence without reading the file content.
+/// This is more efficient than reading the file and safer than
+/// catching read errors to determine existence.
+///
+/// # Arguments
+///
+/// * `file_path` - The path to the file to check
+///
+/// # Returns
+///
+/// True if the file exists and is a file (not a directory), false otherwise
+///
+/// # Example
+///
+/// ```javascript
+/// import { invoke } from '@tauri-apps/api/core';
+///
+/// const exists = await invoke('check_file_exists', { filePath: '/path/to/file.md' });
+/// ```
+#[tauri::command]
+pub fn check_file_exists(file_path: String) -> Result<bool, String> {
+    log::info!("Checking if file exists: {}", file_path);
+    let path = Path::new(&file_path);
+    let exists = path.exists() && path.is_file();
+    log::info!("File exists: {} -> {}", file_path, exists);
+    Ok(exists)
+}
+
 /// Check if Google OAuth configuration exists in storage
 ///
 /// Quick check to determine if the user has configured OAuth credentials

@@ -198,6 +198,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const [selectedProject, setSelectedProject] = React.useState<GTDProject | null>(null);
   const [expandedSections, setExpandedSections] = React.useState<string[]>(['areas', 'projects', 'habits']);
   const [expandedProjects, setExpandedProjects] = React.useState<string[]>([]);
+  // Completed group states (default collapsed)
+  const [completedProjectsExpanded, setCompletedProjectsExpanded] = React.useState<boolean>(false);
+  const [expandedCompletedActions, setExpandedCompletedActions] = React.useState<Set<string>>(new Set());
   const [projectActions, setProjectActions] = React.useState<{ [projectPath: string]: MarkdownFile[] }>({});
   const [actionStatuses, setActionStatuses] = React.useState<{ [actionPath: string]: string }>({});
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -942,6 +945,16 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     }
   };
 
+  // Toggle per-project completed actions group
+  const toggleCompletedActions = (projectPath: string) => {
+    setExpandedCompletedActions(prev => {
+      const next = new Set(prev);
+      if (next.has(projectPath)) next.delete(projectPath); else next.add(projectPath);
+      return next;
+    });
+  };
+
+
   // Generic search results across all sections
   const searchResults = React.useMemo(() => {
     if (!searchQuery) {
@@ -1011,6 +1024,17 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
     return merged;
   }, [gtdSpace?.projects, pendingProjects, searchQuery]);
+
+  // Partition into active vs completed to keep finished work tucked away
+  const [activeProjects, completedProjects] = React.useMemo(() => {
+    const active: GTDProject[] = [];
+    const completed: GTDProject[] = [];
+    (filteredProjects || []).forEach(project => {
+      const st = normalizeStatus(projectMetadata[project.path]?.status || project.status || 'in-progress');
+      (st === 'completed' ? completed : active).push(project);
+    });
+    return [active, completed];
+  }, [filteredProjects, projectMetadata]);
 
   const handleSelectFolder = async () => {
     try {
@@ -1482,7 +1506,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                               {searchQuery ? 'No projects match your search' : 'No projects yet'}
                             </div>
                           ) : (
-                            filteredProjects.map((project) => {
+                            <>
+                            {activeProjects.map((project) => {
                               const isProjectExpanded = expandedProjects.includes(project.path);
                               const actions = projectActions[project.path] || [];
                               const currentStatus = projectMetadata[project.path]?.status || project.status || 'in-progress';
@@ -1599,99 +1624,369 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                   {/* Actions */}
                                   {isProjectExpanded && (
                                     <div className="pl-8 py-0.5">
-                                      {actions.length === 0 ? (
-                                        <div className="text-xs text-muted-foreground py-1 px-1">No actions yet</div>
-                                      ) : (
-                                        actions
-                                          .filter(action => !action.name.toLowerCase().includes('readme'))
-                                          .map((action) => {
-                                            const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress';
-                                            const normalizedStatus = normalizeStatus(currentStatus);
-                                            const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
-                                            const currentPath = actionMetadata[action.path]?.currentPath || action.path;
+                                      {(() => {
+                                        const list = actions.filter(action => !action.name.toLowerCase().includes('readme'));
+                                        const incompleteActions = list.filter((action) => {
+                                          const st = normalizeStatus(actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress');
+                                          return st !== 'completed';
+                                        });
+                                        const completedActions = list.filter((action) => {
+                                          const st = normalizeStatus(actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress');
+                                          return st === 'completed';
+                                        });
 
-                                            return (
+                                        if (incompleteActions.length === 0 && completedActions.length === 0) {
+                                          return <div className="text-xs text-muted-foreground py-1 px-1">No actions yet</div>;
+                                        }
+
+                                        const renderActionRow = (action: MarkdownFile, faded = false) => {
+                                          const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress';
+                                          const normalizedStatus = normalizeStatus(currentStatus);
+                                          const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
+                                          const currentPath = actionMetadata[action.path]?.currentPath || action.path;
+                                          return (
+                                            <div
+                                              key={`${faded ? 'completed-' : ''}${action.path}`}
+                                              className={`group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs ${faded ? 'opacity-80' : ''}`}
+                                            >
                                               <div
-                                                key={action.path}
-                                                className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs"
-                                              >
-                                                <div
-                                                  className="flex items-center gap-1 flex-1 cursor-pointer"
-                                                  role="button"
-                                                  tabIndex={0}
-                                                  onClick={() => {
+                                                className="flex items-center gap-1 flex-1 cursor-pointer"
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={() => {
+                                                  onFileSelect({ ...action, path: currentPath });
+                                                }}
+                                                onKeyDown={(e) => {
+                                                  if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
                                                     onFileSelect({ ...action, path: currentPath });
-                                                  }}
-                                                  onKeyDown={(e) => {
-                                                    if (e.key === 'Enter' || e.key === ' ') {
-                                                      e.preventDefault();
-                                                      onFileSelect({ ...action, path: currentPath });
-                                                    }
-                                                  }}
-                                                >
-                                                  <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
-                                                  <span className="truncate flex-1">{currentTitle}</span>
-                                                  {actionMetadata[action.path]?.due_date && actionMetadata[action.path].due_date.trim() !== '' && (() => {
-                                                    const date = new Date(actionMetadata[action.path].due_date);
-                                                    return !isNaN(date.getTime()) ? (
-                                                      <span className="flex items-center flex-shrink-0 ml-1 text-muted-foreground">
-                                                        <Calendar className="h-2 w-2 mr-0.5" />
-                                                        <span className="text-[10px]">{date.toLocaleDateString()}</span>
-                                                      </span>
-                                                    ) : null;
-                                                  })()}
-                                                </div>
-                                                <DropdownMenu>
-                                                  <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                      variant="ghost"
-                                                      size="icon"
-                                                      className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                      onClick={(e) => e.stopPropagation()}
-                                                    >
-                                                      <MoreHorizontal className="h-2.5 w-2.5" />
-                                                    </Button>
-                                                  </DropdownMenuTrigger>
-                                                  <DropdownMenuContent align="end" className="w-40">
-                                                    <DropdownMenuItem
-                                                      onClick={async (e) => {
-                                                        e.stopPropagation();
-                                                        try {
-                                                          await safeInvoke('open_file_location', { filePath: currentPath }, null);
-                                                        } catch (_error) {
-                                                          // Silently handle file location open errors
-                                                        }
-                                                      }}
-                                                    >
-                                                      <Folder className="h-3 w-3 mr-2" />
-                                                      Open File Location
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuSeparator />
-                                                    <DropdownMenuItem
-                                                      onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setDeleteItem({
-                                                          type: 'action',
-                                                          path: currentPath,
-                                                          name: currentTitle
-                                                        });
-                                                      }}
-                                                      className="text-destructive focus:text-destructive"
-                                                    >
-                                                      <Trash2 className="h-3 w-3 mr-2" />
-                                                      Delete
-                                                    </DropdownMenuItem>
-                                                  </DropdownMenuContent>
-                                                </DropdownMenu>
+                                                  }
+                                                }}
+                                              >
+                                                <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
+                                                <span className="truncate flex-1">{currentTitle}</span>
+                                                {actionMetadata[action.path]?.due_date && actionMetadata[action.path].due_date.trim() !== '' && (() => {
+                                                  const date = new Date(actionMetadata[action.path].due_date);
+                                                  return !isNaN(date.getTime()) ? (
+                                                    <span className="flex items-center flex-shrink-0 ml-1 text-muted-foreground">
+                                                      <Calendar className="h-2 w-2 mr-0.5" />
+                                                      <span className="text-[10px]">{date.toLocaleDateString()}</span>
+                                                    </span>
+                                                  ) : null;
+                                                })()}
                                               </div>
-                                            );
-                                          })
-                                      )}
+                                              <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                  >
+                                                    <MoreHorizontal className="h-2.5 w-2.5" />
+                                                  </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-40">
+                                                  <DropdownMenuItem
+                                                    onClick={async (e) => {
+                                                      e.stopPropagation();
+                                                      try {
+                                                        await safeInvoke('open_file_location', { filePath: currentPath }, null);
+                                                      } catch (_error) {
+                                                        // Silently handle file location open errors
+                                                      }
+                                                    }}
+                                                  >
+                                                    <Folder className="h-3 w-3 mr-2" />
+                                                    Open File Location
+                                                  </DropdownMenuItem>
+                                                  <DropdownMenuSeparator />
+                                                  <DropdownMenuItem
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setDeleteItem({
+                                                        type: 'action',
+                                                        path: currentPath,
+                                                        name: currentTitle
+                                                      });
+                                                    }}
+                                                    className="text-destructive focus:text-destructive"
+                                                  >
+                                                    <Trash2 className="h-3 w-3 mr-2" />
+                                                    Delete
+                                                  </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                              </DropdownMenu>
+                                            </div>
+                                          );
+                                        };
+
+                                        return (
+                                          <>
+                                            {incompleteActions.map((a) => renderActionRow(a))}
+                                            {completedActions.length > 0 && (
+                                              <Collapsible
+                                                open={expandedCompletedActions.has(project.path)}
+                                                onOpenChange={() => toggleCompletedActions(project.path)}
+                                                data-sidebar-group="completed-actions"
+                                              >
+                                                <div className="group flex items-center justify-between px-1 py-0.5 hover:bg-accent/50 rounded">
+                                                  <CollapsibleTrigger className="flex-1 min-w-0 text-[11px] text-muted-foreground">
+                                                    <div className="flex items-center gap-1">
+                                                      <ChevronRight className={`h-2.5 w-2.5 transition-transform ${expandedCompletedActions.has(project.path) ? 'rotate-90' : ''}`} />
+                                                      <span>Completed Actions</span>
+                                                      <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0 h-4">{completedActions.length}</Badge>
+                                                    </div>
+                                                  </CollapsibleTrigger>
+                                                </div>
+                                                <CollapsibleContent>
+                                                  <div className="mt-0.5 space-y-0.5">
+                                                    {completedActions.map((a) => renderActionRow(a, true))}
+                                                  </div>
+                                                </CollapsibleContent>
+                                              </Collapsible>
+                                            )}
+                                          </>
+                                        );
+                                      })()}
                                     </div>
                                   )}
                                 </div>
                               );
-                            })
+                            })}
+
+                            {completedProjects.length > 0 && (
+                              <Collapsible
+                                open={completedProjectsExpanded}
+                                onOpenChange={setCompletedProjectsExpanded}
+                                data-sidebar-group="completed-projects"
+                              >
+                                <div className="group flex items-center justify-between px-1 py-0.5 mt-1 hover:bg-accent rounded-lg">
+                                  <CollapsibleTrigger className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                      <ChevronRight className={`h-3 w-3 transition-transform ${completedProjectsExpanded ? 'rotate-90' : ''}`} />
+                                      <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                                      <span className="truncate">Completed Projects</span>
+                                      <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
+                                        {completedProjects.length}
+                                      </Badge>
+                                    </div>
+                                  </CollapsibleTrigger>
+                                </div>
+                                <CollapsibleContent>
+                                  <div className="mt-1 space-y-1">
+                                    {completedProjects.map((project) => {
+                                      const isProjectExpanded = expandedProjects.includes(project.path);
+                                      const actions = projectActions[project.path] || [];
+                                      const currentStatus = projectMetadata[project.path]?.status || project.status || 'completed';
+                                      const normalizedStatus = normalizeStatus(currentStatus);
+                                      const currentTitle = projectMetadata[project.path]?.title || project.name;
+                                      const StatusIcon = getProjectStatusIcon(normalizedStatus);
+
+                                      return (
+                                        <div key={`completed-${project.path}`}>
+                                          <div className="group flex items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors">
+                                            <div
+                                              className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer"
+                                              role="button"
+                                              tabIndex={0}
+                                              onClick={() => {
+                                                handleProjectClick(project)
+                                              }}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                  e.preventDefault();
+                                                  handleProjectClick(project);
+                                                }
+                                              }}
+                                            >
+                                              <Button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  toggleProjectExpand(project);
+                                                }}
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-5 w-5 p-0 flex-shrink-0"
+                                              >
+                                                <ChevronRight className={`h-3 w-3 transition-transform ${isProjectExpanded ? 'rotate-90' : ''}`} />
+                                              </Button>
+                                              <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(normalizedStatus)}`} />
+                                              <div className="flex-1 min-w-0 ml-1">
+                                                <div className="font-medium text-sm truncate">{currentTitle}</div>
+                                                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                                  <span className="truncate">{project.action_count || 0} actions</span>
+                                                  {(() => {
+                                                    const dueStr = projectMetadata[project.path]?.due_date ?? project.dueDate ?? '';
+                                                    if (!dueStr || dueStr.trim() === '') return null;
+                                                    const date = parseLocalDateString(dueStr);
+                                                    return date ? (
+                                                      <span className="flex items-center flex-shrink-0">
+                                                        <Calendar className="h-2.5 w-2.5 mr-0.5" />
+                                                        <span className="truncate">{date.toLocaleDateString()}</span>
+                                                      </span>
+                                                    ) : null;
+                                                  })()}
+                                                </div>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                                              <Button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedProject(project);
+                                                  setShowActionDialog(true);
+                                                }}
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                title="Add Action"
+                                              >
+                                                <Plus className="h-3 w-3" />
+                                              </Button>
+                                              <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                  >
+                                                    <MoreHorizontal className="h-3 w-3" />
+                                                  </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-40">
+                                                  <DropdownMenuItem
+                                                    onClick={async (e) => {
+                                                      e.stopPropagation();
+                                                      try {
+                                                        await safeInvoke('open_file_location', { filePath: project.path }, null);
+                                                      } catch (_error) {
+                                                        // Silently handle file location open errors
+                                                      }
+                                                    }}
+                                                  >
+                                                    <Folder className="h-3 w-3 mr-2" />
+                                                    Open Project Folder
+                                                  </DropdownMenuItem>
+                                                  <DropdownMenuSeparator />
+                                                  <DropdownMenuItem
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setDeleteItem({
+                                                        type: 'project',
+                                                        path: project.path,
+                                                        name: currentTitle
+                                                      });
+                                                    }}
+                                                    className="text-destructive focus:text-destructive"
+                                                  >
+                                                    <Trash2 className="h-3 w-3 mr-2" />
+                                                    Delete Project
+                                                  </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                              </DropdownMenu>
+                                            </div>
+                                          </div>
+                                          {isProjectExpanded && (
+                                            <div className="pl-6 pr-2 py-1 space-y-0.5">
+                                              {(() => {
+                                                const incompleteActions = actions.filter((action) => {
+                                                  const st = normalizeStatus(actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress');
+                                                  return st !== 'completed';
+                                                });
+                                                const completedActions = actions.filter((action) => {
+                                                  const st = normalizeStatus(actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress');
+                                                  return st === 'completed';
+                                                });
+
+                                                return (
+                                                  <>
+                                                    {incompleteActions.length === 0 && completedActions.length === 0 ? (
+                                                      <div className="text-xs text-muted-foreground py-0.5">No actions</div>
+                                                    ) : (
+                                                      <>
+                                                        {incompleteActions.map((action) => {
+                                                          const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress';
+                                                          const normalizedStatus = normalizeStatus(currentStatus);
+                                                          const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
+                                                          const currentPath = actionMetadata[action.path]?.currentPath || action.path;
+                                                          return (
+                                                            <div
+                                                              key={`completed-group-active-${action.path}`}
+                                                              className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs"
+                                                            >
+                                                              <div
+                                                                className="flex items-center gap-1 flex-1 cursor-pointer"
+                                                                role="button"
+                                                                tabIndex={0}
+                                                                onClick={() => onFileSelect({ ...action, path: currentPath })}
+                                                              >
+                                                                <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
+                                                                <span className="truncate flex-1">{currentTitle}</span>
+                                                              </div>
+                                                            </div>
+                                                          );
+                                                        })}
+
+                                                        {completedActions.length > 0 && (
+                                                          <Collapsible
+                                                            open={expandedCompletedActions.has(project.path)}
+                                                            onOpenChange={() => toggleCompletedActions(project.path)}
+                                                            data-sidebar-group="completed-actions"
+                                                          >
+                                                            <div className="group flex items-center justify-between px-1 py-0.5 hover:bg-accent/50 rounded">
+                                                              <CollapsibleTrigger className="flex-1 min-w-0 text-[11px] text-muted-foreground">
+                                                                <div className="flex items-center gap-1">
+                                                                  <ChevronRight className={`h-2.5 w-2.5 transition-transform ${expandedCompletedActions.has(project.path) ? 'rotate-90' : ''}`} />
+                                                                  <span>Completed Actions</span>
+                                                                  <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0 h-4">{completedActions.length}</Badge>
+                                                                </div>
+                                                              </CollapsibleTrigger>
+                                                            </div>
+                                                            <CollapsibleContent>
+                                                              <div className="mt-0.5 space-y-0.5">
+                                                                {completedActions.map((action) => {
+                                                                  const currentStatus = actionMetadata[action.path]?.status || actionStatuses[action.path] || 'completed';
+                                                                  const normalizedStatus = normalizeStatus(currentStatus);
+                                                                  const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
+                                                                  const currentPath = actionMetadata[action.path]?.currentPath || action.path;
+                                                                  return (
+                                                                    <div
+                                                                      key={`completed-${action.path}`}
+                                                                      className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs opacity-80"
+                                                                    >
+                                                                      <div
+                                                                        className="flex items-center gap-1 flex-1 cursor-pointer"
+                                                                        role="button"
+                                                                        tabIndex={0}
+                                                                        onClick={() => onFileSelect({ ...action, path: currentPath })}
+                                                                      >
+                                                                        <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
+                                                                        <span className="truncate flex-1">{currentTitle}</span>
+                                                                      </div>
+                                                                    </div>
+                                                                  );
+                                                                })}
+                                                              </div>
+                                                            </CollapsibleContent>
+                                                          </Collapsible>
+                                                        )}
+                                                      </>
+                                                    )}
+                                                  </>
+                                                );
+                                              })()}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            )}
+                            </>
                           )}
                         </div>
                       </CollapsibleContent>

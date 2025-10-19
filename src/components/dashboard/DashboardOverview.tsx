@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { localISODate } from '@/utils/time';
 import { Switch } from '@/components/ui/switch';
 import { formatRelativeDate, getDateFromNow, isDateInRange, parseLocalDate } from '@/utils/date-formatting';
+import { QuestionMarkTooltip } from '@/components/ui/QuestionMarkTooltip';
 
 interface DashboardOverviewProps {
   gtdSpace: GTDSpace;
@@ -65,6 +66,8 @@ interface QuickStat {
   color: string;
   trend?: number;
   description?: string;
+  tooltip?: React.ReactNode;
+  tooltipLabel?: string;
 }
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
@@ -221,21 +224,51 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       value: `${systemHealth}%`,
       icon: Activity,
       color: systemHealth >= 80 ? 'text-green-500' : systemHealth >= 60 ? 'text-yellow-500' : 'text-red-500',
-      description: systemHealth >= 80 ? 'Excellent' : systemHealth >= 60 ? 'Good' : 'Needs Attention'
+      description: systemHealth >= 80 ? 'Excellent' : systemHealth >= 60 ? 'Good' : 'Needs Attention',
+      tooltipLabel: 'About System Health',
+      tooltip: (
+        <div className="space-y-1">
+          <p>Composite readiness score (0–100) made up of four weighted inputs.</p>
+          <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+            <li>Project completion momentum</li>
+            <li>Share of projects and actions without overdue dates</li>
+            <li>Action completion and in-progress traction</li>
+            <li>Habit success rate plus today’s completions</li>
+          </ul>
+        </div>
+      )
     },
     {
       label: 'Active Projects',
       value: projectStats.active,
       icon: FolderOpen,
       color: 'text-blue-500',
-      description: `${projectStats.avgCompletion}% avg progress`
+      description: `${projectStats.avgCompletion}% avg progress`,
+      tooltipLabel: 'About Active Projects',
+      tooltip: (
+        <div className="space-y-1">
+          <p>Number of projects marked in progress right now.</p>
+          <p className="text-xs text-muted-foreground">
+            Includes all projects with status set to in-progress; average progress reflects completion percentages across every project.
+          </p>
+        </div>
+      )
     },
     {
       label: 'Actions Progress',
       value: `${actionSummary.completed}/${actionSummary.total}`,
       icon: ListChecks,
       color: 'text-purple-500',
-      description: `${actionSummary.inProgress} in progress`
+      description: `${actionSummary.inProgress} in progress`,
+      tooltipLabel: 'About Actions Progress',
+      tooltip: (
+        <div className="space-y-1">
+          <p>Shows completed actions out of the total tracked actions.</p>
+          <p className="text-xs text-muted-foreground">
+            In-progress items earn half credit in the overall system health score; waiting and cancelled actions are excluded from the numerator.
+          </p>
+        </div>
+      )
     },
     {
       label: "Today's Habits",
@@ -343,22 +376,35 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         {quickStats.slice(0, 3).map((stat) => (
           <Card key={stat.label}>
             <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className={cn("p-3 rounded-lg bg-gradient-to-br", 
-                  stat.color === 'text-blue-500' && "from-blue-500/20 to-blue-500/10",
-                  stat.color === 'text-green-500' && "from-green-500/20 to-green-500/10",
-                  stat.color === 'text-purple-500' && "from-purple-500/20 to-purple-500/10",
-                  stat.color === 'text-yellow-500' && "from-yellow-500/20 to-yellow-500/10",
-                  stat.color === 'text-red-500' && "from-red-500/20 to-red-500/10"
-                )}>
-                  <stat.icon className={cn("h-6 w-6", stat.color)} />
+              <div className="flex items-start justify-between mb-4">
+                <div
+                  className={cn(
+                    'p-3 rounded-lg bg-gradient-to-br',
+                    stat.color === 'text-blue-500' && 'from-blue-500/20 to-blue-500/10',
+                    stat.color === 'text-green-500' && 'from-green-500/20 to-green-500/10',
+                    stat.color === 'text-purple-500' && 'from-purple-500/20 to-purple-500/10',
+                    stat.color === 'text-yellow-500' && 'from-yellow-500/20 to-yellow-500/10',
+                    stat.color === 'text-red-500' && 'from-red-500/20 to-red-500/10'
+                  )}
+                >
+                  <stat.icon className={cn('h-6 w-6', stat.color)} />
                 </div>
-                {stat.trend !== undefined && stat.trend > 0 && (
-                  <TrendingUp className={cn("h-4 w-4", stat.color)} />
-                )}
-                {stat.trend !== undefined && stat.trend < 0 && (
-                  <TrendingDown className={cn("h-4 w-4", stat.color)} />
-                )}
+                <div className="flex items-center gap-2">
+                  {stat.trend !== undefined && stat.trend > 0 && (
+                    <TrendingUp className={cn('h-4 w-4', stat.color)} />
+                  )}
+                  {stat.trend !== undefined && stat.trend < 0 && (
+                    <TrendingDown className={cn('h-4 w-4', stat.color)} />
+                  )}
+                  {stat.tooltip && (
+                    <QuestionMarkTooltip
+                      content={stat.tooltip}
+                      label={stat.tooltipLabel ?? `More information about ${stat.label}`}
+                      className="h-6 w-6 border-border/70"
+                      iconClassName="h-4 w-4"
+                    />
+                  )}
+                </div>
               </div>
               {isLoading ? (
                 <div className="space-y-2">

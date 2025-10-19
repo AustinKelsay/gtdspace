@@ -1,44 +1,19 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- App code in `src/` (React + TypeScript): `components/`, `hooks/`, `utils/`, `lib/`, `types/`, `styles/`.
-- Desktop backend in `src-tauri/` (Tauri + Rust): `Cargo.toml`, `src/`, `tauri.conf.json`.
-- Static assets in `public/`; built output in `dist/`.
-- Developer docs in `docs/`; scripts in `scripts/` (e.g., `icons-generate.mjs`).
+GTD Space is split between a React frontend in `src/` and a Tauri desktop backend in `src-tauri/`. The frontend organizes UI code into `components/`, stateful hooks in `hooks/`, shared logic in `utils/`, data contracts in `types/`, and Tailwind helpers in `styles/`. Desktop-specific Rust code, commands, and capability configs live under `src-tauri/src/` with project metadata in `Cargo.toml` and runtime settings in `tauri.conf.json`. Shared assets sit in `public/`, while production builds land in `dist/`. End-to-end and exploratory docs belong in `docs/`, and automation scripts (e.g., `icons-generate.mjs`) stay inside `scripts/`.
 
 ## Build, Test, and Development Commands
-- `npm run tauri:dev` — Run the full desktop app with hot reload.
-- `npm run dev` — Start Vite dev server for the frontend only.
-- `npm run build` — Type-check then build frontend to `dist/`.
-- `npm run preview` — Serve production build locally.
-- `npm run tauri:build` — Build installers/bundles for desktop targets.
-- `npm run type-check` — TypeScript type checking.
-- `npm run lint` / `npm run lint:fix` — ESLint check/auto-fix.
-- Release helpers: `npm run release[:major|:minor|:patch]`.
+Use `npm run dev` for the Vite frontend and `npm run tauri:dev` when you need the full desktop shell. Run `npm run build` to type-check and emit optimized assets to `dist/`, and `npm run preview` to inspect that output. Desktop installers ship via `npm run tauri:build`. Lint with `npm run lint` or auto-fix via `npm run lint:fix`; `npm run type-check` validates pure TypeScript without bundling.
 
 ## Coding Style & Naming Conventions
-- Language: TypeScript, React 18, Vite. Indentation: 2 spaces; use semicolons.
-- Components: `PascalCase` in `src/components` (e.g., `GTDProjectList.tsx`).
-- Hooks: `useCamelCase` in `src/hooks` (e.g., `useGTDSpace.ts`).
-- Utilities: kebab-case filenames in `src/utils` (e.g., `date-formatting.ts`).
-- Styling: Tailwind CSS; shared CSS in `src/styles/`.
-- Linting: ESLint config in `eslint.config.js` (TypeScript + React Hooks rules). No Prettier—defer to ESLint and TS.
+Author React 18 components with TypeScript, two-space indentation, and semicolons. Component files in `src/components` use PascalCase, hooks in `src/hooks` use the `useThing` pattern, and utilities in `src/utils` adopt kebab-case filenames. Tailwind is the default styling approach; global overrides live in `src/styles`. ESLint (configured in `eslint.config.js`) governs formatting and React Hooks rules—there is no Prettier step.
 
 ## Testing Guidelines
-- Vitest is configured for testing.
-- Please use Vitest and React Testing Library for new tests.
-- Test files should be located in the `/tests` directory and follow the naming convention `*.test.ts(x)`.
-- To run tests, use `npm run test` or `npm run vitest`.
-- For local validation, run `npm run type-check` and `npm run lint`, and do a quick manual test with `npm run tauri dev`.
+Vitest with React Testing Library underpins unit and component coverage. Place specs in `/tests` with the `*.test.ts` or `*.test.tsx` suffix. Run suites through `npm run vitest` (watch) or `npm run test` (CI modes). Before opening a PR, pair automated tests with `npm run lint` and `npm run type-check`, and spot-check new UI through `npm run tauri:dev`.
 
 ## Commit & Pull Request Guidelines
-- Commits: imperative mood, concise scope, reference issues (e.g., `feat: add GTD calendar week view (#123)`).
-- PRs: include purpose, screenshots for UI changes, steps to reproduce/test, and linked issues.
-- Ensure `type-check` and `lint` pass; update docs in `docs/` when behavior changes.
-- Releases: follow `RELEASING.md` and use `npm run release` to tag and trigger CI.
+Write imperative, scope-focused commit messages referencing issues when applicable, e.g., `feat: add GTD calendar week view (#123)`. Pull requests should outline motivation, include screenshots for UI-facing updates, note test coverage, and link issues. Confirm linting, type-checks, and relevant Vitest suites pass, and update `docs/` when behavior or workflows change.
 
 ## Security & Configuration Tips
-- Do not commit secrets. Use `.env` for `GOOGLE_CALENDAR_*` and related keys.
-- Tauri CSP is strict by default; avoid introducing remote script/style origins without review.
-- Sensitive platform code lives in `src-tauri/`; review capability changes in `src-tauri/capabilities/`.
-
+Guard credentials: store API keys in `.env` and exclude from Git. Review any changes to `src-tauri/capabilities/` carefully, and avoid relaxing the default Tauri CSP without consultation. When integrating remote content, prefer local bundling to preserve offline operation and security posture.

@@ -559,7 +559,9 @@ pub fn generate_action_template(
     );
 
     // Notes section - use provided notes or a helpful placeholder
-    let notes_content = notes.unwrap_or_else(|| "<!-- Add any additional notes or details about this action here -->".to_string());
+    let notes_content = notes.unwrap_or_else(|| {
+        "<!-- Add any additional notes or details about this action here -->".to_string()
+    });
     template.push_str(&format!(
         r#"
 ## Notes

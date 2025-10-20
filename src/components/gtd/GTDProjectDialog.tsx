@@ -19,6 +19,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Calendar } from 'lucide-react';
+import { MultiSelect, type Option } from '@/components/ui/multi-select';
+import type { MarkdownFile } from '@/types';
+import { safeInvoke } from '@/utils/safe-invoke';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { GTDProjectCreate, GTDProjectStatus } from '@/types';
 
@@ -42,6 +45,64 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
   const [status, setStatus] = React.useState<GTDProjectStatus>('in-progress');
   const [isCreating, setIsCreating] = React.useState(false);
   const { createProject } = useGTDSpace();
+
+  // Horizon linking (optional)
+  const [areaOptions, setAreaOptions] = React.useState<Option[]>([]);
+  const [goalOptions, setGoalOptions] = React.useState<Option[]>([]);
+  const [visionOptions, setVisionOptions] = React.useState<Option[]>([]);
+  const [purposeOptions, setPurposeOptions] = React.useState<Option[]>([]);
+
+  const [areas, setAreas] = React.useState<string[]>([]);
+  const [goals, setGoals] = React.useState<string[]>([]);
+  const [visions, setVisions] = React.useState<string[]>([]);
+  const [purposes, setPurposes] = React.useState<string[]>([]);
+
+  const [isLoadingHorizons, setIsLoadingHorizons] = React.useState(false);
+
+  const loadHorizonOptions = React.useCallback(async () => {
+    if (!spacePath) return;
+    setIsLoadingHorizons(true);
+    try {
+      const mapFilesToOptions = (files: MarkdownFile[] | null | undefined): Option[] => {
+        if (!files) return [];
+        return files
+          .filter(f => !f.name.toLowerCase().includes('readme'))
+          .map((f) => ({ value: f.path.replace(/\\/g, '/'), label: f.name.replace(/\.md$/i, '') }));
+      };
+
+      const areasPath = `${spacePath}/Areas of Focus`;
+      const goalsPath = `${spacePath}/Goals`;
+      const visionPath = `${spacePath}/Vision`;
+      const purposePath = `${spacePath}/Purpose & Principles`;
+
+      const [areasFiles, goalsFiles, visionFiles, purposeFiles] = await Promise.all([
+        safeInvoke<MarkdownFile[]>('list_markdown_files', { path: areasPath }, []),
+        safeInvoke<MarkdownFile[]>('list_markdown_files', { path: goalsPath }, []),
+        safeInvoke<MarkdownFile[]>('list_markdown_files', { path: visionPath }, []),
+        safeInvoke<MarkdownFile[]>('list_markdown_files', { path: purposePath }, []),
+      ]);
+
+      setAreaOptions(mapFilesToOptions(areasFiles));
+      setGoalOptions(mapFilesToOptions(goalsFiles));
+      setVisionOptions(mapFilesToOptions(visionFiles));
+      setPurposeOptions(mapFilesToOptions(purposeFiles));
+    } finally {
+      setIsLoadingHorizons(false);
+    }
+  }, [spacePath]);
+
+  // Load horizon options whenever dialog opens
+  React.useEffect(() => {
+    if (isOpen) {
+      loadHorizonOptions();
+    } else {
+      // Reset selections when closing
+      setAreas([]);
+      setGoals([]);
+      setVisions([]);
+      setPurposes([]);
+    }
+  }, [isOpen, loadHorizonOptions]);
 
   const handleCreate = async () => {
     console.log('[GTDProjectDialog] handleCreate called with:', {
@@ -77,12 +138,53 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       console.log('[GTDProjectDialog] createProject result:', result);
 
       if (result) {
+        // If horizon links were selected, write them to the new README
+        const hasAnyHorizon = areas.length || goals.length || visions.length || purposes.length;
+        if (hasAnyHorizon) {
+          try {
+            const readmePath = `${result}/README.md`;
+            const current = await safeInvoke<string>('read_file', { path: readmePath }, '');
+            if (current != null) {
+              const toJson = (arr: string[]) => JSON.stringify(arr.map(p => p.replace(/\\/g, '/')));
+              const replaceMarker = (content: string, marker: string, payload: string) => {
+                const re = new RegExp(`\\[!${marker}:([^\\]]*)\\]`);
+                if (re.test(content)) return content.replace(re, `[!${marker}:${payload}]`);
+                // Fallback: append under Horizon References if available
+                if (/## Horizon References/.test(content)) {
+                  return content.replace(
+                    /## Horizon References\n/,
+                    `## Horizon References\n\n[!${marker}:${payload}]\n\n`
+                  );
+                }
+                // Last resort: append at end
+                return `${content.trim()}\n\n[!${marker}:${payload}]\n`;
+              };
+
+              let updated = current;
+              if (areas.length) updated = replaceMarker(updated, 'areas-references', toJson(areas));
+              if (goals.length) updated = replaceMarker(updated, 'goals-references', toJson(goals));
+              if (visions.length) updated = replaceMarker(updated, 'vision-references', toJson(visions));
+              if (purposes.length) updated = replaceMarker(updated, 'purpose-references', toJson(purposes));
+
+              if (updated !== current) {
+                await safeInvoke('save_file', { path: readmePath, content: updated }, null);
+              }
+            }
+          } catch (e) {
+            console.warn('[GTDProjectDialog] Failed to write horizon references to README', e);
+          }
+        }
+
         // Reset form
         setProjectName('');
         setDescription('');
         setDueDate('');
         setDueTime('');
         setStatus('in-progress');
+        setAreas([]);
+        setGoals([]);
+        setVisions([]);
+        setPurposes([]);
 
         // Call success callback if provided
         if (onSuccess) {
@@ -107,6 +209,10 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       setDueDate('');
       setDueTime('');
       setStatus('in-progress');
+      setAreas([]);
+      setGoals([]);
+      setVisions([]);
+      setPurposes([]);
       onClose();
     }
   };
@@ -159,11 +265,11 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="due-date">Due Date (Optional)</Label>
-            <p className="text-xs text-muted-foreground mb-2">
-              When does this project need to be completed?
-            </p>
+        <div className="space-y-2">
+          <Label htmlFor="due-date">Due Date (Optional)</Label>
+          <p className="text-xs text-muted-foreground mb-2">
+            When does this project need to be completed?
+          </p>
             <div className="grid grid-cols-2 gap-2">
               <div className="relative">
                 <Input
@@ -184,10 +290,61 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
                 disabled={isCreating}
                 placeholder="Time"
               />
-            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <Label>Horizon Links (Optional)</Label>
+          <p className="text-xs text-muted-foreground">
+            Link this project to higher horizons. These references will be written to the project README.
+          </p>
+
+          <div className="space-y-2">
+            <Label>Areas of Focus</Label>
+            <MultiSelect
+              options={areaOptions}
+              value={areas}
+              onValueChange={setAreas}
+              placeholder={isLoadingHorizons ? 'Loading areas...' : 'Select related areas'}
+              disabled={isCreating || isLoadingHorizons}
+            />
           </div>
 
+          <div className="space-y-2">
+            <Label>Goals</Label>
+            <MultiSelect
+              options={goalOptions}
+              value={goals}
+              onValueChange={setGoals}
+              placeholder={isLoadingHorizons ? 'Loading goals...' : 'Select related goals'}
+              disabled={isCreating || isLoadingHorizons}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Vision</Label>
+            <MultiSelect
+              options={visionOptions}
+              value={visions}
+              onValueChange={setVisions}
+              placeholder={isLoadingHorizons ? 'Loading vision docs...' : 'Select related vision docs'}
+              disabled={isCreating || isLoadingHorizons}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Purpose & Principles</Label>
+            <MultiSelect
+              options={purposeOptions}
+              value={purposes}
+              onValueChange={setPurposes}
+              placeholder={isLoadingHorizons ? 'Loading purpose docs...' : 'Select related purpose docs'}
+              disabled={isCreating || isLoadingHorizons}
+            />
+          </div>
         </div>
+
+      </div>
 
         <DialogFooter className="flex-shrink-0">
           <Button variant="outline" onClick={handleClose} disabled={isCreating}>

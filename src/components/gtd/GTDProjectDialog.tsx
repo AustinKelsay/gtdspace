@@ -22,8 +22,17 @@ import { Calendar } from 'lucide-react';
 import { MultiSelect, type Option } from '@/components/ui/multi-select';
 import type { MarkdownFile } from '@/types';
 import { safeInvoke } from '@/utils/safe-invoke';
+import { useToast } from '@/hooks/useToast';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { GTDProjectCreate, GTDProjectStatus } from '@/types';
+
+// Horizon marker constants used in README
+const HORIZON_MARKERS = {
+  areas: 'areas-references',
+  goals: 'goals-references',
+  vision: 'vision-references',
+  purpose: 'purpose-references',
+} as const;
 
 interface GTDProjectDialogProps {
   isOpen: boolean;
@@ -45,6 +54,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
   const [status, setStatus] = React.useState<GTDProjectStatus>('in-progress');
   const [isCreating, setIsCreating] = React.useState(false);
   const { createProject } = useGTDSpace();
+  const { showError } = useToast();
 
   // Horizon linking (optional)
   const [areaOptions, setAreaOptions] = React.useState<Option[]>([]);
@@ -161,10 +171,10 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
               };
 
               let updated = current;
-              if (areas.length) updated = replaceMarker(updated, 'areas-references', toJson(areas));
-              if (goals.length) updated = replaceMarker(updated, 'goals-references', toJson(goals));
-              if (visions.length) updated = replaceMarker(updated, 'vision-references', toJson(visions));
-              if (purposes.length) updated = replaceMarker(updated, 'purpose-references', toJson(purposes));
+              if (areas.length)   updated = replaceMarker(updated, HORIZON_MARKERS.areas, toJson(areas));
+              if (goals.length)   updated = replaceMarker(updated, HORIZON_MARKERS.goals, toJson(goals));
+              if (visions.length) updated = replaceMarker(updated, HORIZON_MARKERS.vision, toJson(visions));
+              if (purposes.length)updated = replaceMarker(updated, HORIZON_MARKERS.purpose, toJson(purposes));
 
               if (updated !== current) {
                 await safeInvoke('save_file', { path: readmePath, content: updated }, null);
@@ -172,6 +182,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
             }
           } catch (e) {
             console.warn('[GTDProjectDialog] Failed to write horizon references to README', e);
+            showError('Failed to link selected horizons to the project README. You can try again after opening the project.');
           }
         }
 
@@ -299,49 +310,23 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
             Link this project to higher horizons. These references will be written to the project README.
           </p>
 
-          <div className="space-y-2">
-            <Label>Areas of Focus</Label>
-            <MultiSelect
-              options={areaOptions}
-              value={areas}
-              onValueChange={setAreas}
-              placeholder={isLoadingHorizons ? 'Loading areas...' : 'Select related areas'}
-              disabled={isCreating || isLoadingHorizons}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Goals</Label>
-            <MultiSelect
-              options={goalOptions}
-              value={goals}
-              onValueChange={setGoals}
-              placeholder={isLoadingHorizons ? 'Loading goals...' : 'Select related goals'}
-              disabled={isCreating || isLoadingHorizons}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Vision</Label>
-            <MultiSelect
-              options={visionOptions}
-              value={visions}
-              onValueChange={setVisions}
-              placeholder={isLoadingHorizons ? 'Loading vision docs...' : 'Select related vision docs'}
-              disabled={isCreating || isLoadingHorizons}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Purpose & Principles</Label>
-            <MultiSelect
-              options={purposeOptions}
-              value={purposes}
-              onValueChange={setPurposes}
-              placeholder={isLoadingHorizons ? 'Loading purpose docs...' : 'Select related purpose docs'}
-              disabled={isCreating || isLoadingHorizons}
-            />
-          </div>
+          {([
+            { key: 'areas' as const,   label: 'Areas of Focus',       options: areaOptions,   value: areas,    onChange: setAreas,    placeholderNoun: 'areas' },
+            { key: 'goals' as const,   label: 'Goals',                 options: goalOptions,   value: goals,    onChange: setGoals,    placeholderNoun: 'goals' },
+            { key: 'vision' as const,  label: 'Vision',                options: visionOptions, value: visions,  onChange: setVisions,  placeholderNoun: 'vision docs' },
+            { key: 'purpose' as const, label: 'Purpose & Principles',  options: purposeOptions,value: purposes, onChange: setPurposes, placeholderNoun: 'purpose docs' },
+          ]).map(cfg => (
+            <div key={cfg.key} className="space-y-2">
+              <Label>{cfg.label}</Label>
+              <MultiSelect
+                options={cfg.options}
+                value={cfg.value}
+                onValueChange={cfg.onChange}
+                placeholder={isLoadingHorizons ? `Loading ${cfg.placeholderNoun}...` : `Select related ${cfg.placeholderNoun}`}
+                disabled={isCreating || isLoadingHorizons}
+              />
+            </div>
+          ))}
         </div>
 
       </div>

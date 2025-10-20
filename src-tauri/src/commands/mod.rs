@@ -3647,6 +3647,7 @@ pub fn create_gtd_project(
 /// });
 /// ```
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn create_gtd_action(
     project_path: String,
     action_name: String,

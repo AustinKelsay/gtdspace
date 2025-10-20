@@ -78,8 +78,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
         dueDate: dueDateOnly,
         effort,
         contexts: contexts.length > 0 ? contexts : undefined,
-        // TODO: Add notes field when backend supports it
-        // notes: notes.trim() ? notes : undefined,
+        notes: notes.trim() ? notes : undefined,
       };
 
       console.log('[GTDActionDialog] Calling createAction with:', actionData);

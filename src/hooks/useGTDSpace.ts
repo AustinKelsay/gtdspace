@@ -224,6 +224,7 @@ export function useGTDSpace() {
               focusDate: params.focusDate || undefined,
               effort: params.effort,
               contexts: contextsArray,
+              notes: params.notes && params.notes.trim() ? params.notes : undefined,
             }, null);
             if (!actionPath) {
               throw new Error('Failed to create action');

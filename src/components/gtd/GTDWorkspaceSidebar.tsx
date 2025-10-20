@@ -7,6 +7,7 @@
 import React from 'react';
 import { flushSync } from 'react-dom';
 import { safeInvoke } from '@/utils/safe-invoke';
+import { partitionActions as partitionActionsUtil } from '@/utils/partition-actions';
 import { readFileText } from '@/hooks/useFileManager';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,6 +56,7 @@ import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { GTDProjectDialog, GTDActionDialog, CreatePageDialog, CreateHabitDialog } from '@/components/gtd';
 import { FileSearch } from '@/components/file-browser/FileSearch';
 import type { GTDProject, MarkdownFile, GTDSpace } from '@/types';
+import { normalizeStatus } from '@/utils/gtd-status';
 
 interface GTDWorkspaceSidebarProps {
   currentFolder: string | null;
@@ -151,25 +153,7 @@ const GTD_SECTIONS: GTDSection[] = [
   }
 ];
 
-// Helper function to normalize status values to canonical tokens
-const normalizeStatus = (status: string | undefined): string => {
-  if (!status) return 'in-progress';
-
-  const statusMappings: Record<string, string> = {
-    'not-started': 'in-progress',
-    'active': 'in-progress',
-    'planning': 'in-progress',
-    'on-hold': 'waiting',
-    'waiting-for': 'waiting',
-    'cancelled': 'cancelled',
-    'done': 'completed',
-    'complete': 'completed',
-    'canceled': 'cancelled', // Map US spelling to canonical UK spelling
-  };
-
-  const normalized = status.trim().toLowerCase().replace(/\s+/g, '-');
-  return statusMappings[normalized] || normalized;
-};
+// normalizeStatus is imported from utils/gtd-status
 
 export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   currentFolder,
@@ -945,6 +929,18 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     }
   };
 
+  // Wrapper that passes component state into the shared util
+  const partitionActions = React.useCallback(
+    (items: MarkdownFile[]) =>
+      partitionActionsUtil(items, {
+        metadata: actionMetadata,
+        statuses: actionStatuses,
+        normalize: normalizeStatus,
+        excludeReadme: true,
+      }),
+    [actionMetadata, actionStatuses]
+  );
+
   // Toggle per-project completed actions group
   const toggleCompletedActions = (projectPath: string) => {
     setExpandedCompletedActions(prev => {
@@ -1625,15 +1621,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                   {isProjectExpanded && (
                                     <div className="pl-8 py-0.5">
                                       {(() => {
-                                        const list = actions.filter(action => !action.name.toLowerCase().includes('readme'));
-                                        const incompleteActions = list.filter((action) => {
-                                          const st = normalizeStatus(actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress');
-                                          return st !== 'completed';
-                                        });
-                                        const completedActions = list.filter((action) => {
-                                          const st = normalizeStatus(actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress');
-                                          return st === 'completed';
-                                        });
+                                        const { active: incompleteActions, completed: completedActions } = partitionActions(actions);
 
                                         if (incompleteActions.length === 0 && completedActions.length === 0) {
                                           return <div className="text-xs text-muted-foreground py-1 px-1">No actions yet</div>;
@@ -1666,8 +1654,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                 <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
                                                 <span className="truncate flex-1">{currentTitle}</span>
                                                 {actionMetadata[action.path]?.due_date && actionMetadata[action.path].due_date.trim() !== '' && (() => {
-                                                  const date = new Date(actionMetadata[action.path].due_date);
-                                                  return !isNaN(date.getTime()) ? (
+                                                  const date = parseLocalDateString(actionMetadata[action.path].due_date);
+                                                  return date ? (
                                                     <span className="flex items-center flex-shrink-0 ml-1 text-muted-foreground">
                                                       <Calendar className="h-2 w-2 mr-0.5" />
                                                       <span className="text-[10px]">{date.toLocaleDateString()}</span>
@@ -1891,14 +1879,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                           {isProjectExpanded && (
                                             <div className="pl-6 pr-2 py-1 space-y-0.5">
                                               {(() => {
-                                                const incompleteActions = actions.filter((action) => {
-                                                  const st = normalizeStatus(actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress');
-                                                  return st !== 'completed';
-                                                });
-                                                const completedActions = actions.filter((action) => {
-                                                  const st = normalizeStatus(actionMetadata[action.path]?.status || actionStatuses[action.path] || 'in-progress');
-                                                  return st === 'completed';
-                                                });
+                                                const { active: incompleteActions, completed: completedActions } = partitionActions(actions);
 
                                                 return (
                                                   <>

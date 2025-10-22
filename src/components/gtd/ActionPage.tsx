@@ -19,6 +19,7 @@ import { Archive, Lightbulb, Search } from 'lucide-react';
 import { GTDTagSelector } from '@/components/gtd/GTDTagSelector';
 import { GTDActionEffort, GTDActionStatus } from '@/types';
 import { extractMetadata } from '@/utils/metadata-extractor';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
 
 /**
  * Standardized Action page layout with compact metadata header
@@ -294,6 +295,7 @@ function buildActionMarkdown(
 export const ActionPage: React.FC<ActionPageProps> = ({ content, onChange, filePath, className }) => {
   // Parse current metadata
   const meta = React.useMemo(() => extractMetadata(content || ''), [content]);
+  const { withErrorHandling } = useErrorHandler();
 
   // Local state reflecting header fields
   const [title, setTitle] = React.useState<string>(
@@ -458,10 +460,21 @@ export const ActionPage: React.FC<ActionPageProps> = ({ content, onChange, fileP
       const somedayPath = `${spacePath}/Someday Maybe`;
 
       type MarkdownFile = { path: string; name: string };
-      const [cabinet, someday] = await Promise.all([
-        invoke<MarkdownFile[]>('list_markdown_files', { path: cabinetPath }).catch(() => []),
-        invoke<MarkdownFile[]>('list_markdown_files', { path: somedayPath }).catch(() => []),
+      const [cabinetResult, somedayResult] = await Promise.all([
+        withErrorHandling(
+          () => invoke<MarkdownFile[]>('list_markdown_files', { path: cabinetPath }),
+          'Failed to load Cabinet references',
+          'references'
+        ),
+        withErrorHandling(
+          () => invoke<MarkdownFile[]>('list_markdown_files', { path: somedayPath }),
+          'Failed to load Someday Maybe references',
+          'references'
+        ),
       ]);
+
+      const cabinet = cabinetResult ?? [];
+      const someday = somedayResult ?? [];
 
       const toRef = (f: MarkdownFile, type: 'cabinet' | 'someday') => ({
         path: f.path,
@@ -476,7 +489,7 @@ export const ActionPage: React.FC<ActionPageProps> = ({ content, onChange, fileP
     } finally {
       setRefsLoading(false);
     }
-  }, []);
+  }, [withErrorHandling]);
 
   // Handlers that update state then rebuild
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -19,7 +19,7 @@ Scope notes:
 
 When initializing a GTD space, Tauri creates these top-level folders:
 
-```
+```text
 <GTD Root>/
 ├── Projects/              # Each project is a folder, actions are files inside
 ├── Habits/                # Each habit is a single markdown file

@@ -10,8 +10,7 @@ use hyper::client::HttpConnector;
 use log::info;
 use std::sync::Arc;
 
-use super::storage::TokenStorage;
-use super::custom_flow_delegate::BrowserOpeningFlowDelegate;
+use super::{custom_flow_delegate::BrowserOpeningFlowDelegate, storage::TokenStorage};
 
 pub struct GoogleAuthManager {
     client_id: String,

@@ -5121,7 +5121,7 @@ fn parse_project_readme(content: &str) -> (String, Option<String>, String, Strin
         let trimmed = line.trim();
 
         // Detect section headers
-        if trimmed.starts_with("## Description") {
+        if trimmed.starts_with("## Desired Outcome") || trimmed.starts_with("## Description") {
             current_section = "description";
         } else if trimmed.starts_with("## Due Date") {
             current_section = "due_date";

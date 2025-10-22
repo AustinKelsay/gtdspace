@@ -10,7 +10,9 @@ use hyper::client::HttpConnector;
 use log::info;
 use std::sync::Arc;
 
-use super::{storage::TokenStorage, GoogleCalendarConfig};
+use super::{
+    custom_flow_delegate::BrowserOpeningFlowDelegate, storage::TokenStorage, GoogleCalendarConfig,
+};
 
 pub struct GoogleAuthManager {
     client_id: String,

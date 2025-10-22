@@ -340,12 +340,10 @@ export const ActionPage: React.FC<ActionPageProps> = ({ content, onChange, fileP
 
   // Body-only markdown for the WYSIWYG
   const bodyOnly = React.useMemo(() => stripActionHeader(content || ''), [content]);
-  const [bodyLive, setBodyLive] = React.useState<string>(bodyOnly);
   const bodyRef = React.useRef<string>(bodyOnly);
   const horizonRawRef = React.useRef<HorizonRaw>({});
   React.useEffect(() => {
     // Sync local body cache when external content changes
-    setBodyLive(bodyOnly);
     bodyRef.current = bodyOnly;
   }, [bodyOnly]);
 
@@ -442,7 +440,7 @@ export const ActionPage: React.FC<ActionPageProps> = ({ content, onChange, fileP
         onChange(built);
       }
     },
-    [title, status, effort, focusDate, focusTime, dueDate, contexts, references, horizonRefs, content, onChange, meta, focusEdited]
+    [title, status, effort, focusDate, focusTime, dueDate, contexts, references, horizonRefs, content, onChange, focusEdited]
   );
 
   // Load Cabinet and Someday files for the references picker
@@ -759,7 +757,7 @@ export const ActionPage: React.FC<ActionPageProps> = ({ content, onChange, fileP
       <div className="px-12 pt-6 align-with-header">
         <EnhancedTextEditor
           content={bodyOnly}
-          onChange={(nextBody) => { setBodyLive(nextBody); bodyRef.current = nextBody; emitRebuild({ body: nextBody }); }}
+          onChange={(nextBody) => { bodyRef.current = nextBody; emitRebuild({ body: nextBody }); }}
           readOnly={false}
           autoFocus={true}
           className="flex-1"

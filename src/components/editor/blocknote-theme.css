@@ -513,6 +513,21 @@ no longer clipped. Additionally, ensure node wrappers don't hide child effects.
   padding-left: 0.25rem;
 }
 
+/* Align editor text with left page gutter when requested by parent */
+.align-with-header .bn-editor,
+.align-with-header .bn-container,
+.align-with-header .bn-editor-wrapper,
+.align-with-header .bn-editor .ProseMirror,
+.align-with-header .bn-block-outer,
+.align-with-header .bn-block,
+.align-with-header .bn-block-content {
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+}
+
+/* Disable BlockNote's left gutter reserved for the side menu in this layout */
+.align-with-header .bn-side-menu { left: 0 !important; }
+
 /* Remove any default shadows */
 .bn-container * {
   box-shadow: none !important;

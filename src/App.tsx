@@ -10,6 +10,7 @@ import { AppHeader, AppLoadingScreen } from '@/components/app';
 import { GTDWorkspaceSidebar, GTDDashboard, GTDQuickActions, GTDInitDialog } from '@/components/gtd';
 import { FileChangeManager } from '@/components/file-browser/FileChangeManager';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
+import { ActionPage } from '@/components/gtd/ActionPage';
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { TabManager } from '@/components/tabs';
 import {
@@ -861,18 +862,50 @@ export const App: React.FC = () => {
                         files={fileState.files}
                       />
                     ) : (
-                      <EnhancedTextEditor
-                        key={displayedTab.id}
-                        content={displayedTab.content}
-                        onChange={(content) => updateTabContent(displayedTab.id, content)}
-                        mode={settings.editor_mode as EditorMode}
-                        showLineNumbers={true}
-                        readOnly={false}
-                        autoFocus={true}
-                        className="flex-1"
-                        data-editor-root
-                        filePath={displayedTab.filePath}
-                      />
+                      (() => {
+                        // Detect Action files: under Projects/ and not README.md
+                        const projectsDir = gtdSpace?.root_path ? `${gtdSpace.root_path}/Projects/` : undefined;
+                        const underProjects = projectsDir ? isUnder(displayedTab.file.path, projectsDir) : false;
+                        const isReadme = /(^|\/)README\.md$/i.test(displayedTab.file.path);
+                        // Narrow routing: only render ActionPage when the file is clearly an action
+                        // 1) Path heuristic: in an "Actions/" subfolder under a project, or
+                        // 2) Content heuristic: has action markers
+                        const pathLooksLikeAction = /(^|\/)Actions\//i.test(displayedTab.file.path);
+                        const contentHasActionMarkers = /\[!singleselect:status:/i.test(displayedTab.content)
+                          || /\[!singleselect:effort:/i.test(displayedTab.content)
+                          || /\[!multiselect:contexts:/i.test(displayedTab.content)
+                          || /\[!datetime:focus_date:/i.test(displayedTab.content)
+                          || /\[!datetime:due_date:/i.test(displayedTab.content);
+                        const isActionFile = underProjects && !isReadme && (pathLooksLikeAction || contentHasActionMarkers);
+
+                        if (isActionFile) {
+                          return (
+                            <ActionPage
+                              key={displayedTab.id}
+                              content={displayedTab.content}
+                              onChange={(content) => updateTabContent(displayedTab.id, content)}
+                              filePath={displayedTab.filePath}
+                              className="flex-1"
+                            />
+                          );
+                        }
+
+                        // Default editor for non-action files
+                        return (
+                          <EnhancedTextEditor
+                            key={displayedTab.id}
+                            content={displayedTab.content}
+                            onChange={(content) => updateTabContent(displayedTab.id, content)}
+                            mode={settings.editor_mode as EditorMode}
+                            showLineNumbers={true}
+                            readOnly={false}
+                            autoFocus={true}
+                            className="flex-1"
+                            data-editor-root
+                            filePath={displayedTab.filePath}
+                          />
+                        );
+                      })()
                     )
                   ) : tabState.openTabs.length > 0 ? (
                     <div className="h-full flex items-center justify-center text-muted-foreground">

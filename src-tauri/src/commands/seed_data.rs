@@ -488,6 +488,7 @@ pub fn generate_action_template(
     due_date: Option<String>,
     effort: &str,
     contexts: Option<Vec<String>>,
+    notes: Option<String>,
 ) -> String {
     let mut template = format!(
         r#"# {}
@@ -549,18 +550,28 @@ pub fn generate_action_template(
         contexts_value
     ));
 
-    template.push_str(&format!(
+    // References section
+    template.push_str(
         r#"
 ## References
 [!references:]
+"#,
+    );
 
+    // Notes section - use provided notes or a helpful placeholder
+    let notes_content = notes.unwrap_or_else(|| {
+        "<!-- Add any additional notes or details about this action here -->".to_string()
+    });
+    template.push_str(&format!(
+        r#"
 ## Notes
-<!-- Add any additional notes or details about this action here -->
+{}
 
 ---
 ## Created
 [!datetime:created_date_time:{}]
 "#,
+        notes_content,
         Local::now().to_rfc3339()
     ));
 

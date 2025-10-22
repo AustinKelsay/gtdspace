@@ -3372,6 +3372,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         Some(chrono::Local::now().to_rfc3339()),
         "medium".to_string(),
         None, // No contexts specified
+        None, // No notes for seed action
     );
 
     let _ = create_gtd_action(
@@ -3382,6 +3383,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         None,
         "large".to_string(),
         None, // No contexts specified
+        None, // No notes for seed action
     );
 
     // That's it - just ONE project with maximum connections!
@@ -3645,6 +3647,7 @@ pub fn create_gtd_project(
 /// });
 /// ```
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn create_gtd_action(
     project_path: String,
     action_name: String,
@@ -3653,6 +3656,7 @@ pub fn create_gtd_action(
     focus_date: Option<String>,
     effort: String,
     contexts: Option<Vec<String>>,
+    notes: Option<String>,
 ) -> Result<String, String> {
     log::info!(
         "Creating GTD action: {} in project: {}",
@@ -3724,6 +3728,7 @@ pub fn create_gtd_action(
         due_date,
         effort_value,
         contexts_value,
+        notes,
     );
 
     match fs::write(&action_path, action_content) {

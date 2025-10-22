@@ -10,14 +10,14 @@ use hyper::client::HttpConnector;
 use log::info;
 use std::sync::Arc;
 
-use super::custom_flow_delegate::BrowserOpeningFlowDelegate;
-use super::storage::TokenStorage;
+use super::{storage::TokenStorage, GoogleCalendarConfig};
 
 pub struct GoogleAuthManager {
     client_id: String,
     client_secret: String,
     token_storage: Arc<TokenStorage>,
     authenticator: Option<Authenticator<hyper_rustls::HttpsConnector<HttpConnector>>>,
+    pub config: GoogleCalendarConfig,
 }
 
 impl GoogleAuthManager {
@@ -26,11 +26,17 @@ impl GoogleAuthManager {
         client_secret: String,
         token_storage: Arc<TokenStorage>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        let config = GoogleCalendarConfig {
+            client_id: client_id.clone(),
+            client_secret: client_secret.clone(),
+        };
+
         let mut manager = Self {
             client_id,
             client_secret,
             token_storage,
             authenticator: None,
+            config,
         };
 
         // Try to load existing authenticator if token exists

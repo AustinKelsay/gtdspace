@@ -534,8 +534,8 @@ export interface GTDActionCreate {
   effort: GTDActionEffort;
   /** GTD contexts where this action can be performed */
   contexts?: string[];
-  // TODO: Add notes field when backend supports it
-  // notes?: string;
+  /** Optional freeform notes to seed the Notes section */
+  notes?: string;
 }
 
 /**

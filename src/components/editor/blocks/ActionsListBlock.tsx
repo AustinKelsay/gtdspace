@@ -25,6 +25,7 @@ import {
   Clock
 } from 'lucide-react';
 import type { GTDAction, GTDActionStatus, GTDActionEffort, MarkdownFile } from '@/types';
+import { normalizeStatus } from '@/utils/gtd-status';
 
 /**
  * Base props provided to BlockNote React block renderers
@@ -76,35 +77,7 @@ function toActionsListBlockRenderProps(
   };
 }
 
-// Status normalization helper
-const normalizeStatus = (status: string | undefined | null): GTDActionStatus => {
-  // Handle undefined/null status - default to 'in-progress'
-  if (!status) {
-    return 'in-progress';
-  }
-  
-  const normalized = status.toLowerCase().trim().replace(/[\s-_]+/g, '-');
-  switch (normalized) {
-    case 'completed':
-    case 'complete':
-    case 'done':
-      return 'completed';
-    case 'waiting':
-    case 'wait':
-    case 'blocked':
-      return 'waiting';
-    case 'cancelled':
-    case 'canceled':
-    case 'cancel':
-      return 'cancelled';
-    case 'in-progress':
-    case 'inprogress':
-    case 'active':
-    case 'doing':
-    default:
-      return 'in-progress';
-  }
-};
+// normalizeStatus imported from utils/gtd-status
 
 // Get status icon
 const getActionStatusIcon = (status: GTDActionStatus) => {

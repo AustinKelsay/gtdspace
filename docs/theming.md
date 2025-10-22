@@ -242,6 +242,88 @@ Use `max-h-*` instead of fixed `h-*` values to let the page scroll when needed. 
 }
 ```
 
+### Sidebar Completed Groups
+
+Keep the sidebar focused by tucking finished work into nested collapsibles. First partition the datasets inside `src/components/gtd/GTDWorkspaceSidebar.tsx` so that completed projects and actions are easy to render separately:
+
+```typescript
+const [activeProjects, completedProjects] = React.useMemo(() => {
+  const buckets = { active: [] as GTDProject[], completed: [] as GTDProject[] };
+  filteredProjects.forEach(project => {
+    const status = normalizeStatus(projectMetadata[project.path]?.status || project.status || 'in-progress');
+    (status === 'completed' ? buckets.completed : buckets.active).push(project);
+  });
+  return [buckets.active, buckets.completed];
+}, [filteredProjects, projectMetadata]);
+```
+
+Render the active list as usual, then mount a secondary `Collapsible` that defaults to `open={false}` so completed projects stay hidden until requested. Reuse the same project row renderer to keep styling consistent:
+
+```tsx
+{completedProjects.length > 0 && (
+  <Collapsible open={false} className="mt-1" data-sidebar-group="completed-projects">
+    <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+      <ChevronRight className="h-3 w-3 transition-transform data-[state=open]:rotate-90" />
+      <span>Completed Projects ({completedProjects.length})</span>
+    </CollapsibleTrigger>
+    <CollapsibleContent className="pl-5 space-y-1">
+      {completedProjects.map(renderProjectRow)}
+    </CollapsibleContent>
+  </Collapsible>
+)}
+```
+
+Inside each expanded project, apply the same pattern to the actions array so finished tasks are tucked under a labelled sub-dropdown:
+
+```tsx
+const partitionActions = React.useCallback(
+  (
+    items: MarkdownFile[],
+    metadata: Record<string, { status?: string; currentPath?: string }>,
+    statuses: Record<string, string>
+  ) =>
+    items.reduce(
+      (acc, item) => {
+        const status = normalizeStatus(metadata[item.path]?.status || statuses[item.path] || 'in-progress');
+        (status === 'completed' ? acc.completed : acc.active).push(item);
+        return acc;
+      },
+      { active: [] as MarkdownFile[], completed: [] as MarkdownFile[] }
+    ),
+  [metadata, statuses]
+);
+
+const { active, completed } = partitionActions(actions, actionMetadata, actionStatuses);
+
+{active.map(renderActionRow)}
+{completed.length > 0 && (
+  <Collapsible open={false} className="mt-0.5" data-sidebar-group="completed-actions">
+    <CollapsibleTrigger className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
+      <ChevronRight className="h-2.5 w-2.5 transition-transform data-[state=open]:rotate-90" />
+      <span>Completed Actions ({completed.length})</span>
+    </CollapsibleTrigger>
+    <CollapsibleContent className="pl-4 space-y-0.5">
+      {completed.map(renderActionRow)}
+    </CollapsibleContent>
+  </Collapsible>
+)}
+```
+
+Style these buckets through the `data-sidebar-group` selector so collapsed rows blend with the rest of the theme:
+
+```css
+[data-sidebar-group="completed-projects"],
+[data-sidebar-group="completed-actions"] {
+  @apply rounded-md bg-muted/30 dark:bg-muted/10 text-muted-foreground;
+}
+
+[data-sidebar-group] [data-state="open"] {
+  @apply text-foreground;
+}
+```
+
+This approach keeps the default view uncluttered while allowing contributors to drill into archived work with a single click.
+
 ## Theme Best Practices
 
 ### 1. Always Use Theme Variables

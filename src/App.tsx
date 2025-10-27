@@ -11,6 +11,7 @@ import { GTDWorkspaceSidebar, GTDDashboard, GTDQuickActions, GTDInitDialog } fro
 import { FileChangeManager } from '@/components/file-browser/FileChangeManager';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
 import { ActionPage } from '@/components/gtd/ActionPage';
+import { HabitPage } from '@/components/gtd/HabitPage';
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { TabManager } from '@/components/tabs';
 import {
@@ -863,6 +864,28 @@ export const App: React.FC = () => {
                       />
                     ) : (
                       (() => {
+                        // Detect Habit files first to render HabitPage
+                        const habitsDir = gtdSpace?.root_path ? `${gtdSpace.root_path}/Habits/` : undefined;
+                        const pathLooksLikeHabit = habitsDir ? isUnder(displayedTab.file.path, habitsDir) : isHabitPath(displayedTab.file.path);
+                        const contentHasHabitMarkers =
+                          /\[!checkbox:habit-status:/i.test(displayedTab.content) ||
+                          /\[!singleselect:habit-frequency:/i.test(displayedTab.content);
+                        const isHabitFile =
+                          (pathLooksLikeHabit || contentHasHabitMarkers) &&
+                          !/(^|\/)README\.md$/i.test(displayedTab.file.path);
+
+                        if (isHabitFile) {
+                          return (
+                            <HabitPage
+                              key={displayedTab.id}
+                              content={displayedTab.content}
+                              onChange={(value) => updateTabContent(displayedTab.id, value)}
+                              filePath={displayedTab.filePath}
+                              className="flex-1"
+                            />
+                          );
+                        }
+
                         // Detect Action files: under Projects/ and not README.md
                         const projectsDir = gtdSpace?.root_path ? `${gtdSpace.root_path}/Projects/` : undefined;
                         const underProjects = projectsDir ? isUnder(displayedTab.file.path, projectsDir) : false;

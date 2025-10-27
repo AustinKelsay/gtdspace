@@ -3750,6 +3750,7 @@ pub fn create_gtd_action(
 /// * `habit_name` - Name of the habit
 /// * `frequency` - Habit frequency (daily, every-other-day, twice-weekly, weekly, biweekly, monthly)
 /// * `status` - Habit status (active, paused, completed, archived)
+/// * `references` - Optional horizon references to seed (projects, areas, goals, vision, purpose)
 ///
 /// # Returns
 ///
@@ -3767,6 +3768,21 @@ pub fn create_gtd_action(
 ///   status: 'active'
 /// });
 /// ```
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct HabitReferenceInput {
+    #[serde(default)]
+    projects: Vec<String>,
+    #[serde(default)]
+    areas: Vec<String>,
+    #[serde(default)]
+    goals: Vec<String>,
+    #[serde(default)]
+    vision: Vec<String>,
+    #[serde(default)]
+    purpose: Vec<String>,
+}
+
 #[tauri::command]
 pub fn create_gtd_habit(
     space_path: String,
@@ -3774,6 +3790,7 @@ pub fn create_gtd_habit(
     frequency: String,
     _status: String,            // Always 'todo', kept for API compatibility
     focus_time: Option<String>, // Optional focus time (HH:MM format)
+    references: Option<HabitReferenceInput>,
 ) -> Result<String, String> {
     log::info!("Creating GTD habit: {}", habit_name);
 
@@ -3794,6 +3811,7 @@ pub fn create_gtd_habit(
 
     // Map frequency and status to single select values
     let frequency_value = match frequency.as_str() {
+        "Every 5 Minutes (Testing)" | "5-minute" => "5-minute",
         "Every Day" | "daily" => "daily",
         "Weekdays (Mon-Fri)" | "weekdays" => "weekdays",
         "Every Other Day" | "every-other-day" => "every-other-day",
@@ -3810,22 +3828,55 @@ pub fn create_gtd_habit(
     // Create habit file with template using checkbox for status
     let now = chrono::Local::now();
 
+    let reference_values = references.unwrap_or_default();
+    log::debug!(
+        "create_gtd_habit references -> projects: {:?}, areas: {:?}, goals: {:?}, vision: {:?}, purpose: {:?}",
+        reference_values.projects,
+        reference_values.areas,
+        reference_values.goals,
+        reference_values.vision,
+        reference_values.purpose
+    );
+    let render_reference_token = |items: &[String]| -> String {
+        let normalized: Vec<String> = items
+            .iter()
+            .map(|value| value.trim().replace('\\', "/"))
+            .filter(|value| !value.is_empty())
+            .collect();
+        if normalized.is_empty() {
+            String::new()
+        } else {
+            match serde_json::to_string(&normalized) {
+                Ok(json) => urlencoding::encode(&json).into_owned(),
+                Err(_) => urlencoding::encode(&normalized.join(",")).into_owned(),
+            }
+        }
+    };
+
+    let projects_token = render_reference_token(&reference_values.projects);
+    let areas_token = render_reference_token(&reference_values.areas);
+    let goals_token = render_reference_token(&reference_values.goals);
+    let vision_token = render_reference_token(&reference_values.vision);
+    let purpose_token = render_reference_token(&reference_values.purpose);
+
     // Format focus time if provided
     let focus_time_section = if let Some(time) = focus_time {
         // Validate time format (HH:MM)
         if time.len() == 5 && time.chars().nth(2) == Some(':') {
             // Create a datetime with today's date and the specified time
             format!(
-                "\n## Focus Date\n[!datetime:focus_date:{}T{}:00]\n",
+                "\n## Focus Date\n[!datetime:focus_date:{}T{}:00]\n\n",
                 now.format("%Y-%m-%d"),
                 time
             )
         } else {
-            String::new()
+            "\n".to_string()
         }
     } else {
-        String::new()
+        "\n".to_string()
     };
+
+    let history_template = "*Track your habit completions below:*\n\n| Date | Time | Status | Action | Details |\n|------|------|--------|--------|---------|";
 
     let habit_content = format!(
         r#"# {}
@@ -3835,32 +3886,38 @@ pub fn create_gtd_habit(
 
 ## Frequency
 [!singleselect:habit-frequency:{}]
-{}
-## Horizon References
+{}## Projects References
+[!projects-references:{}]
 
-[!projects-references:]
+## Areas References
+[!areas-references:{}]
 
-[!areas-references:]
+## Goals References
+[!goals-references:{}]
 
-[!goals-references:]
+## Vision References
+[!vision-references:{}]
 
-[!vision-references:]
-
-[!purpose-references:]
+## Purpose & Principles References
+[!purpose-references:{}]
 
 ## Created
 [!datetime:created_date_time:{}]
 
 ## History
-
-*Track your habit completions below:*
-
+{}
 "#,
         habit_name,
         checkbox_value,
         frequency_value,
         focus_time_section,
-        now.to_rfc3339()
+        projects_token,
+        areas_token,
+        goals_token,
+        vision_token,
+        purpose_token,
+        now.to_rfc3339(),
+        history_template
     );
 
     match fs::write(&habit_path, habit_content) {
@@ -3882,16 +3939,26 @@ pub fn create_gtd_habit(
 /// * `new_status` - New status value ("todo" or "completed")
 ///
 /// # Returns
-/// * `Ok(())` if successful
+/// * `Ok(true)` if status changed and history entry added
+/// * `Ok(false)` if status was already the desired value
 /// * `Err(String)` with error message if operation fails
 #[tauri::command]
-pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(), String> {
+pub fn update_habit_status(habit_path: String, new_status: String) -> Result<bool, String> {
     use chrono::Local;
+
+    let normalized_status = match new_status.as_str() {
+        "completed" | "complete" | "done" => "completed".to_string(),
+        "todo" | "to-do" | "pending" => "todo".to_string(),
+        other => {
+            log::error!("Invalid habit status received: {}", other);
+            return Err(format!("Invalid habit status: {}", other));
+        }
+    };
 
     log::info!(
         "Updating habit status: path={}, new_status={}",
         habit_path,
-        new_status
+        normalized_status
     );
 
     // Read and validate habit file
@@ -3932,25 +3999,25 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
         .ok_or("Could not find frequency in habit file")?;
 
     // Skip if status isn't changing
-    if current_status == new_status {
+    if current_status == normalized_status {
         log::info!(
             "Habit status unchanged (current='{}', new='{}'), skipping history update",
             current_status,
-            new_status
+            normalized_status
         );
-        return Ok(());
+        return Ok(false);
     }
 
     log::info!(
         "Habit status changing from '{}' to '{}' (checkbox format: {})",
         current_status,
-        new_status,
+        normalized_status,
         is_checkbox_format
     );
 
     // Create history entry for the manual status change
     let now = Local::now();
-    let status_display = if new_status == "todo" {
+    let status_display = if normalized_status == "todo" {
         "To Do"
     } else {
         "Complete"
@@ -3983,7 +4050,7 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
 
     // Keep the actual status that was set - don't auto-reset
     // The habit should remain checked until the next frequency window
-    let final_status = new_status.as_str();
+    let final_status = normalized_status.as_str();
 
     // Update the status field in the content based on format
     let updated_content = if is_checkbox_format {
@@ -4051,7 +4118,7 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
             return Err(format!("Failed to write habit file: {}", e));
         }
     }
-    Ok(())
+    Ok(true)
 }
 
 /// Checks all habits and resets their status based on frequency
@@ -4292,6 +4359,7 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
     let mut in_history_section = false;
     let mut history_section_idx = None;
     let mut has_table_header = false;
+    let mut table_separator_idx = None;
     let mut has_old_list_format = false;
     let mut old_list_entries: Vec<(usize, &str)> = Vec::new();
 
@@ -4317,6 +4385,7 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
             }
             // Skip table separator line
             else if line.contains("|---") || line.contains("| ---") {
+                table_separator_idx = Some(i);
                 continue;
             }
             // Look for table rows (new format)
@@ -4421,6 +4490,19 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
         let mut new_lines = lines[..=idx].to_vec();
         new_lines.push(entry);
         new_lines.extend_from_slice(&lines[idx + 1..]);
+        new_lines.join("\n")
+    } else if let Some(sep_idx) = table_separator_idx {
+        // Header and separator exist but no data rows yet; insert right after separator
+        log::debug!(
+            "[INSERT-HISTORY] Inserting first row after separator at line {}",
+            sep_idx
+        );
+        let mut new_lines = Vec::new();
+        new_lines.extend_from_slice(&lines[..=sep_idx]);
+        new_lines.push(entry);
+        if sep_idx + 1 < lines.len() {
+            new_lines.extend_from_slice(&lines[sep_idx + 1..]);
+        }
         new_lines.join("\n")
     } else if let Some(idx) = history_section_idx {
         // History section exists but no entries yet

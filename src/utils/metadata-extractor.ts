@@ -87,11 +87,37 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
     { pattern: 'projects-references', key: 'projectsReferences' },
     { pattern: 'references', key: 'references' }
   ].map(({ pattern, key }) => ({
-    pattern: new RegExp(`\\[!${pattern}:([^\\]]*)\\]`, 'g'),
+    pattern: new RegExp(`\\[!${pattern}:(.*?)\\]`, 'gs'),
     extract: (match: RegExpMatchArray) => {
       if (!match[1]) return { key, value: [] };
 
-      const rawValue = match[1].trim();
+      const decodeLoose = (input: string): string => {
+        let result = input;
+        let attempts = 0;
+        while (attempts < 3 && /%[0-9A-Fa-f]{2}/.test(result)) {
+          try {
+            const decoded = decodeURIComponent(result);
+            if (decoded === result) break;
+            result = decoded;
+            attempts += 1;
+          } catch {
+            break;
+          }
+        }
+        return result;
+      };
+
+      const normalizeEntry = (input: string): string => {
+        const trimmed = decodeLoose(input.trim());
+        if (!trimmed) return '';
+        const withoutQuotes = trimmed.replace(/^['"]|['"]$/g, '');
+        return withoutQuotes.replace(/\\/g, '/').trim();
+      };
+
+      let rawValue = decodeLoose(match[1].trim());
+      if (rawValue.startsWith('[') && !rawValue.endsWith(']')) {
+        rawValue = `${rawValue}]`;
+      }
       let values: string[] = [];
 
       // Try JSON array format first (like backend)
@@ -99,26 +125,27 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
         try {
           const parsed = JSON.parse(rawValue);
           if (Array.isArray(parsed)) {
-            values = parsed.map(v => String(v).replace(/\\/g, '/'));
+            values = parsed.map((v) => String(v));
           } else {
             // If not an array, fall back to CSV
-            values = rawValue.split(',').map(v => v.trim());
+            values = rawValue.split(',');
           }
         } catch {
           // JSON parsing failed, fall back to CSV
           // Remove the brackets and parse as CSV
           const csvContent = rawValue.slice(1, -1);
-          values = csvContent.split(',').map(v =>
-            v.trim().replace(/^["']|["']$/g, '').replace(/\\/g, '/')
-          );
+          values = csvContent.split(',');
         }
       } else {
         // Standard CSV format
-        values = rawValue.split(',').map(v => v.trim().replace(/\\/g, '/'));
+        values = rawValue.split(',');
       }
 
-      // Filter out empty strings
-      return { key, value: values.filter(Boolean) };
+      const decodedValues = values
+        .map((value) => normalizeEntry(value))
+        .filter(Boolean);
+
+      return { key, value: decodedValues };
     }
   })),
   

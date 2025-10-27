@@ -20,14 +20,15 @@ export function useHabitTracking() {
     async (habitPath: string, newStatus: 'todo' | 'completed') => {
       const result = await withErrorHandling(
         async () => {
-          const result = await safeInvoke('update_habit_status', {
-            habitPath,
-            newStatus,
-          }, null);
-          if (result === null) {
+          const updated = await safeInvoke<boolean>(
+            'update_habit_status',
+            { habitPath, newStatus },
+            null
+          );
+          if (updated === null) {
             throw new Error('Failed to update habit status');
           }
-          return true;
+          return updated;
         },
         'Failed to update habit status',
         'habit'

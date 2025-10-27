@@ -542,6 +542,7 @@ export interface GTDActionCreate {
  * GTD Habit frequency options
  */
 export type GTDHabitFrequency = 
+  | '5-minute'
   | 'daily' 
   | 'every-other-day' 
   | 'twice-weekly' 

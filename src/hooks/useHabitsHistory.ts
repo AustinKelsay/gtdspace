@@ -178,6 +178,13 @@ export const calculateNextReset = (frequency: GTDHabit['frequency'], lastUpdate?
       nextMonth.setHours(0, 0, 0, 0);
       return nextMonth.toISOString();
     }
+
+    case '5-minute': {
+      const nextFive = new Date(last);
+      nextFive.setMinutes(nextFive.getMinutes() + 5);
+      nextFive.setSeconds(0, 0);
+      return nextFive.toISOString();
+    }
       
     default: {
       const defaultTomorrow = new Date(now);

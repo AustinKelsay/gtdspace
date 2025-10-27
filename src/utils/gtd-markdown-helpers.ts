@@ -1,3 +1,5 @@
+import type { GTDHabitFrequency, GTDHabitStatus } from '@/types';
+
 /**
  * @fileoverview Helper functions for generating GTD-specific markdown with select fields
  * @author Development Team
@@ -7,6 +9,27 @@
 // Canonical token sets for validation
 const STATUS_TOKENS = ['in-progress', 'waiting', 'completed'] as const;
 const EFFORT_TOKENS = ['small', 'medium', 'large', 'extra-large'] as const;
+const HABIT_FREQUENCY_TOKENS: ReadonlyArray<GTDHabitFrequency> = [
+  '5-minute',
+  'daily',
+  'every-other-day',
+  'twice-weekly',
+  'weekly',
+  'weekdays',
+  'biweekly',
+  'monthly',
+] as const;
+
+export interface HabitReferenceGroups {
+  projects: string[];
+  areas: string[];
+  goals: string[];
+  vision: string[];
+  purpose: string[];
+}
+
+export const DEFAULT_HABIT_HISTORY_BODY =
+  '*Track your habit completions below:*\n\n| Date | Time | Status | Action | Details |\n|------|------|--------|--------|---------|';
 
 /**
  * Escapes special characters for safe inclusion in HTML attributes
@@ -296,4 +319,90 @@ export function mapLegacyEffort(effort: string): string {
   };
   
   return effortMap[effort] || effort.toLowerCase();
+}
+
+/**
+ * Builds canonical markdown for a habit file with standardized ordering.
+ */
+export function buildHabitMarkdown({
+  title,
+  status,
+  frequency,
+  focusDateTime,
+  references,
+  createdDateTime,
+  notes,
+  history,
+}: {
+  title: string;
+  status: GTDHabitStatus;
+  frequency: GTDHabitFrequency;
+  focusDateTime?: string | null;
+  references: HabitReferenceGroups;
+  createdDateTime: string;
+  notes?: string;
+  history: string;
+}): string {
+  const parts: string[] = [];
+
+  const safeTitle = title?.trim() || 'Untitled';
+  const normalizedStatus = status === 'completed' ? 'true' : 'false';
+  const normalizedFrequency = HABIT_FREQUENCY_TOKENS.includes(frequency) ? frequency : 'daily';
+  const normalizeRefs = (arr?: string[]) => {
+    const normalized = (arr ?? [])
+      .map((ref) => ref.trim())
+      .filter(Boolean)
+      .map((ref) => ref.replace(/\\/g, '/'));
+    if (normalized.length === 0) return '';
+    try {
+      return encodeURIComponent(JSON.stringify(normalized));
+    } catch {
+      // Fallback to comma-separated encoding if JSON serialization fails
+      return encodeURIComponent(normalized.join(','));
+    }
+  };
+
+  parts.push(`# ${safeTitle}`);
+
+  parts.push('\n\n## Status\n');
+  parts.push(`[!checkbox:habit-status:${normalizedStatus}]\n`);
+
+  parts.push('\n\n## Frequency\n');
+  parts.push(`[!singleselect:habit-frequency:${normalizedFrequency}]\n`);
+
+  const focusValue = focusDateTime?.trim() ?? '';
+  if (focusValue.length > 0) {
+    parts.push('\n\n## Focus Date\n');
+    parts.push(`[!datetime:focus_date:${focusValue}]\n`);
+  }
+
+  parts.push('\n\n## Projects References\n');
+  parts.push(`[!projects-references:${normalizeRefs(references.projects)}]\n`);
+
+  parts.push('\n\n## Areas References\n');
+  parts.push(`[!areas-references:${normalizeRefs(references.areas)}]\n`);
+
+  parts.push('\n\n## Goals References\n');
+  parts.push(`[!goals-references:${normalizeRefs(references.goals)}]\n`);
+
+  parts.push('\n\n## Vision References\n');
+  parts.push(`[!vision-references:${normalizeRefs(references.vision)}]\n`);
+
+  parts.push('\n\n## Purpose & Principles References\n');
+  parts.push(`[!purpose-references:${normalizeRefs(references.purpose)}]\n`);
+
+  parts.push('\n\n## Created\n');
+  parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
+
+  const cleanNotes = notes?.trim() ?? '';
+  if (cleanNotes.length > 0) {
+    parts.push('\n\n## Notes\n');
+    parts.push(`${cleanNotes.replace(/\s+$/g, '')}\n`);
+  }
+
+  const historyBody = history?.trim().length ? history.trim() : DEFAULT_HABIT_HISTORY_BODY;
+  parts.push('\n\n## History\n');
+  parts.push(`${historyBody.replace(/\s+$/g, '')}\n`);
+
+  return `${parts.join('').trimEnd()}\n`;
 }

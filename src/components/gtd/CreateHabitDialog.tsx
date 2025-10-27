@@ -150,12 +150,15 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
 
   const loadReferenceOptions = React.useCallback(
     async (key: ReferenceKey) => {
+      const requestKey = key;
       if (!spacePath) {
         setReferenceOptions([]);
         return;
       }
 
-      setReferencesLoading(true);
+      if (activeReferenceKey === requestKey) {
+        setReferencesLoading(true);
+      }
       try {
         let options: HabitReferenceOption[] = [];
         if (key === 'projects') {
@@ -193,23 +196,29 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
           (option, index, arr) => arr.findIndex((candidate) => candidate.path === option.path) === index
         );
 
-        setReferenceOptionCache((prev) => ({
-          ...prev,
-          [key]: unique,
-        }));
-        setReferenceOptions(unique);
+        if (activeReferenceKey === requestKey) {
+          setReferenceOptionCache((prev) => ({
+            ...prev,
+            [key]: unique,
+          }));
+          setReferenceOptions(unique);
+        }
       } catch (error) {
         console.error('[CreateHabitDialog] Failed to load references', error);
-        setReferenceOptionCache((prev) => ({
-          ...prev,
-          [key]: [],
-        }));
-        setReferenceOptions([]);
+        if (activeReferenceKey === requestKey) {
+          setReferenceOptionCache((prev) => ({
+            ...prev,
+            [key]: [],
+          }));
+          setReferenceOptions([]);
+        }
       } finally {
-        setReferencesLoading(false);
+        if (activeReferenceKey === requestKey) {
+          setReferencesLoading(false);
+        }
       }
     },
-    [spacePath]
+    [spacePath, activeReferenceKey]
   );
 
   React.useEffect(() => {
@@ -222,6 +231,7 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
     const cached = referenceOptionCache[activeReferenceKey];
     if (cached && cached.length > 0) {
       setReferenceOptions(cached);
+      setReferencesLoading(false);
       return;
     }
 
@@ -309,7 +319,9 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
       references: referencesPayload,
     };
 
-    console.debug('[CreateHabitDialog] create_gtd_habit payload', payload);
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[CreateHabitDialog] create_gtd_habit payload', payload);
+    }
 
     const result = await withErrorHandling(
       async () => {
@@ -467,9 +479,8 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
                                     type="button"
                                     key={option.path}
                                     onClick={() => handleReferenceToggle(key, option.path)}
-                                    className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                                      selected ? 'bg-muted text-muted-foreground' : 'hover:bg-accent'
-                                    }`}
+                                    className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${selected ? 'bg-muted text-muted-foreground' : 'hover:bg-accent'
+                                      }`}
                                   >
                                     <div className="flex flex-col">
                                       <span className="font-medium">{option.name}</span>

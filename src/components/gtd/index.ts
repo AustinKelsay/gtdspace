@@ -9,4 +9,4 @@ export { GTDDashboard } from './GTDDashboard';
 export { GTDQuickActions } from './GTDQuickActions';
 export { GTDTagSelector, GTDTagExample } from './GTDTagSelector';
 export { ActionPage } from './ActionPage';
-export { HabitPage } from './HabitPage';
+export { default as HabitPage } from './HabitPage';

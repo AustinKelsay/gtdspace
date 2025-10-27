@@ -114,31 +114,46 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
         return withoutQuotes.replace(/\\/g, '/').trim();
       };
 
-      let rawValue = decodeLoose(match[1].trim());
+      let rawValue = match[1].trim();
       if (rawValue.startsWith('[') && !rawValue.endsWith(']')) {
         rawValue = `${rawValue}]`;
       }
-      let values: string[] = [];
-
-      // Try JSON array format first (like backend)
-      if (rawValue.startsWith('[') && rawValue.endsWith(']')) {
+      const parseJsonArray = (input: string): string[] | null => {
         try {
-          const parsed = JSON.parse(rawValue);
-          if (Array.isArray(parsed)) {
-            values = parsed.map((v) => String(v));
-          } else {
-            // If not an array, fall back to CSV
-            values = rawValue.split(',');
-          }
+          const parsed = JSON.parse(input);
+          if (!Array.isArray(parsed)) return null;
+          return parsed.map((value) => String(value));
         } catch {
-          // JSON parsing failed, fall back to CSV
-          // Remove the brackets and parse as CSV
-          const csvContent = rawValue.slice(1, -1);
-          values = csvContent.split(',');
+          return null;
         }
+      };
+
+      let parsedValues = parseJsonArray(rawValue);
+      let decodedRawValue: string | null = null;
+
+      if (!parsedValues) {
+        decodedRawValue = decodeLoose(rawValue);
+        if (decodedRawValue !== rawValue) {
+          parsedValues = parseJsonArray(decodedRawValue);
+        }
+      }
+
+      let values: string[];
+
+      if (parsedValues) {
+        values = parsedValues;
       } else {
-        // Standard CSV format
-        values = rawValue.split(',');
+        let csvSource = rawValue;
+        if (rawValue.startsWith('[') && rawValue.endsWith(']')) {
+          csvSource = rawValue.slice(1, -1);
+        } else if (
+          decodedRawValue &&
+          decodedRawValue.startsWith('[') &&
+          decodedRawValue.endsWith(']')
+        ) {
+          csvSource = decodedRawValue.slice(1, -1);
+        }
+        values = csvSource.split(',');
       }
 
       const decodedValues = values

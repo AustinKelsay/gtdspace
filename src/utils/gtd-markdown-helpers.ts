@@ -29,7 +29,7 @@ export interface HabitReferenceGroups {
 }
 
 export const DEFAULT_HABIT_HISTORY_BODY =
-  '*Track your habit completions below:*\n\n| Date | Time | Status | Action | Details |\n|------|------|--------|--------|---------|';
+  '*Track your habit completions below:*\n\n| Date | Time | Status | Action | Details |\n| --- | --- | --- | --- | --- |';
 
 /**
  * Escapes special characters for safe inclusion in HTML attributes

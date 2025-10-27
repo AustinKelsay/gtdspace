@@ -181,8 +181,8 @@ export const calculateNextReset = (frequency: GTDHabit['frequency'], lastUpdate?
 
     case '5-minute': {
       const nextFive = new Date(last);
+      nextFive.setSeconds(0, 0); // Round down to start of minute
       nextFive.setMinutes(nextFive.getMinutes() + 5);
-      nextFive.setSeconds(0, 0);
       return nextFive.toISOString();
     }
       
@@ -500,7 +500,7 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
         let inserted = false;
         
         for (let i = 0; i < lines.length; i++) {
-          if (lines[i].includes('| --- | --- | --- |')) {
+          if (/^\|\s*-+\s*\|\s*-+\s*\|\s*-+\s*\|\s*-+\s*\|\s*-+\s*\|$/.test(lines[i].trim())) {
             lines.splice(i + 1, 0, newRow);
             inserted = true;
             break;

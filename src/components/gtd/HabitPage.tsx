@@ -775,7 +775,8 @@ export const HabitPage: React.FC<HabitPageProps> = ({
         setStatus(previous);
         return;
       } else {
-        setStatus(previous);
+        // No change on backend - keep optimistic UI state
+        // (status already set to next)
       }
     } else {
       emitRebuild({ status: next });
@@ -1007,9 +1008,8 @@ export const HabitPage: React.FC<HabitPageProps> = ({
                           key={option.path}
                           type="button"
                           onClick={() => handleReferenceToggle(activePicker, option.path)}
-                          className={`w-full text-left px-4 py-3 rounded-md transition-colors ${
-                            isSelected ? 'bg-muted text-muted-foreground' : 'hover:bg-accent'
-                          }`}
+                          className={`w-full text-left px-4 py-3 rounded-md transition-colors ${isSelected ? 'bg-muted text-muted-foreground' : 'hover:bg-accent'
+                            }`}
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium">{option.name}</span>

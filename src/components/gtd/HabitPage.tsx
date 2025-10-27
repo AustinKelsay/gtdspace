@@ -669,7 +669,11 @@ export const HabitPage: React.FC<HabitPageProps> = ({
   const filteredPickerOptions = React.useMemo(() => {
     if (!pickerSearch) return pickerOptions;
     const query = pickerSearch.toLowerCase();
-    return pickerOptions.filter((option) => option.name.toLowerCase().includes(query));
+    return pickerOptions.filter((option) => {
+      const nameMatch = option.name.toLowerCase().includes(query);
+      const pathMatch = option.path?.toLowerCase()?.includes(query) ?? false;
+      return nameMatch || pathMatch;
+    });
   }, [pickerOptions, pickerSearch]);
 
   const emitRebuild = React.useCallback(

@@ -732,11 +732,11 @@ export const HabitPage: React.FC<HabitPageProps> = ({
     } catch {
       return null;
     }
-  }, [frequency, lastResetMoment, nowTick]);
+  }, [frequency, lastResetMoment]);
 
   const nextResetDisplay = React.useMemo(() => {
     if (!nextResetDate) return '—';
-    if (nextResetDate.getTime() <= Date.now()) return 'Now';
+    if (nextResetDate.getTime() <= nowTick) return 'Now';
     return formatDisplayDate(nextResetDate);
   }, [nextResetDate, nowTick]);
 

@@ -11,6 +11,7 @@ import { GTDWorkspaceSidebar, GTDDashboard, GTDQuickActions, GTDInitDialog } fro
 import { FileChangeManager } from '@/components/file-browser/FileChangeManager';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
 import { ActionPage } from '@/components/gtd/ActionPage';
+import AreaPage from '@/components/gtd/AreaPage';
 import { HabitPage } from '@/components/gtd/HabitPage';
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { TabManager } from '@/components/tabs';
@@ -877,6 +878,30 @@ export const App: React.FC = () => {
                         if (isHabitFile) {
                           return (
                             <HabitPage
+                              key={displayedTab.id}
+                              content={displayedTab.content}
+                              onChange={(value) => updateTabContent(displayedTab.id, value)}
+                              filePath={displayedTab.filePath}
+                              className="flex-1"
+                            />
+                          );
+                        }
+
+                        // Detect Area of Focus files
+                        const areasDir = gtdSpace?.root_path
+                          ? `${gtdSpace.root_path}/Areas of Focus/`
+                          : undefined;
+                        const pathLooksLikeArea = areasDir
+                          ? isUnder(displayedTab.file.path, areasDir)
+                          : /\/Areas of Focus\//i.test(displayedTab.file.path.replace(/\\/g, '/'));
+                        const contentHasAreaMarkers =
+                          /\[!singleselect:area-status:/i.test(displayedTab.content) ||
+                          /\[!singleselect:area-review-cadence:/i.test(displayedTab.content);
+                        const isAreaFile = (pathLooksLikeArea || contentHasAreaMarkers) && displayedTab.file.path !== '::calendar::';
+
+                        if (isAreaFile) {
+                          return (
+                            <AreaPage
                               key={displayedTab.id}
                               content={displayedTab.content}
                               onChange={(value) => updateTabContent(displayedTab.id, value)}

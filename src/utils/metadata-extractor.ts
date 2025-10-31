@@ -32,7 +32,9 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
       const fieldMap: Record<string, string> = {
         'status': 'status',
         'effort': 'effort',
-        'project-status': 'projectStatus'
+        'project-status': 'projectStatus',
+        'area-status': 'areaStatus',
+        'area-review-cadence': 'areaReviewCadence',
       };
       const field = fieldMap[match[1]] || match[1];
       return { key: field, value: match[2] };
@@ -70,7 +72,8 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
       const fieldMap: Record<string, string> = {
         'tags': 'tags',
         'contexts': 'contexts',
-        'categories': 'categories'
+        'categories': 'categories',
+        'area-stewards': 'areaStewards',
       };
       const field = fieldMap[match[1]] || match[1];
       const values = match[2].split(',').map(v => v.trim());

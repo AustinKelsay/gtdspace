@@ -1,4 +1,9 @@
-import type { GTDHabitFrequency, GTDHabitStatus } from '@/types';
+import type {
+  GTDAreaReviewCadence,
+  GTDAreaStatus,
+  GTDHabitFrequency,
+  GTDHabitStatus,
+} from '@/types';
 
 /**
  * @fileoverview Helper functions for generating GTD-specific markdown with select fields
@@ -19,6 +24,18 @@ const HABIT_FREQUENCY_TOKENS: ReadonlyArray<GTDHabitFrequency> = [
   'biweekly',
   'monthly',
 ] as const;
+const AREA_STATUS_TOKENS: ReadonlyArray<GTDAreaStatus> = [
+  'steady',
+  'watch',
+  'incubating',
+  'delegated',
+] as const;
+const AREA_REVIEW_CADENCE_TOKENS: ReadonlyArray<GTDAreaReviewCadence> = [
+  'weekly',
+  'monthly',
+  'quarterly',
+  'annually',
+] as const;
 
 export interface HabitReferenceGroups {
   projects: string[];
@@ -28,8 +45,13 @@ export interface HabitReferenceGroups {
   purpose: string[];
 }
 
+export type AreaReferenceGroups = HabitReferenceGroups;
+
 export const DEFAULT_HABIT_HISTORY_BODY =
   '*Track your habit completions below:*\n\n| Date | Time | Status | Action | Details |\n| --- | --- | --- | --- | --- |';
+
+export const DEFAULT_AREA_NARRATIVE =
+  '*Summarize the scope, responsibilities, and commitments for this area.*';
 
 /**
  * Escapes special characters for safe inclusion in HTML attributes
@@ -95,6 +117,23 @@ function escapeMarkdownInline(str: string): string {
     .replace(/\)/g, '\\)')
     .replace(/\|/g, '\\|')
     .replace(/#/g, '\\#');
+}
+
+function encodeReferenceArray(values?: string[]): string {
+  const normalized = (values ?? [])
+    .map((ref) => ref.trim())
+    .filter(Boolean)
+    .map((ref) => ref.replace(/\\/g, '/'));
+
+  if (normalized.length === 0) {
+    return '';
+  }
+
+  try {
+    return encodeURIComponent(JSON.stringify(normalized));
+  } catch {
+    return encodeURIComponent(normalized.join(','));
+  }
 }
 
 /**
@@ -348,19 +387,6 @@ export function buildHabitMarkdown({
   const safeTitle = title?.trim() || 'Untitled';
   const normalizedStatus = status === 'completed' ? 'true' : 'false';
   const normalizedFrequency = HABIT_FREQUENCY_TOKENS.includes(frequency) ? frequency : 'daily';
-  const normalizeRefs = (arr?: string[]) => {
-    const normalized = (arr ?? [])
-      .map((ref) => ref.trim())
-      .filter(Boolean)
-      .map((ref) => ref.replace(/\\/g, '/'));
-    if (normalized.length === 0) return '';
-    try {
-      return encodeURIComponent(JSON.stringify(normalized));
-    } catch {
-      // Fallback to comma-separated encoding if JSON serialization fails
-      return encodeURIComponent(normalized.join(','));
-    }
-  };
 
   parts.push(`# ${safeTitle}`);
 
@@ -377,19 +403,19 @@ export function buildHabitMarkdown({
   }
 
   parts.push('\n\n## Projects References\n');
-  parts.push(`[!projects-references:${normalizeRefs(references.projects)}]\n`);
+  parts.push(`[!projects-references:${encodeReferenceArray(references.projects)}]\n`);
 
   parts.push('\n\n## Areas References\n');
-  parts.push(`[!areas-references:${normalizeRefs(references.areas)}]\n`);
+  parts.push(`[!areas-references:${encodeReferenceArray(references.areas)}]\n`);
 
   parts.push('\n\n## Goals References\n');
-  parts.push(`[!goals-references:${normalizeRefs(references.goals)}]\n`);
+  parts.push(`[!goals-references:${encodeReferenceArray(references.goals)}]\n`);
 
   parts.push('\n\n## Vision References\n');
-  parts.push(`[!vision-references:${normalizeRefs(references.vision)}]\n`);
+  parts.push(`[!vision-references:${encodeReferenceArray(references.vision)}]\n`);
 
   parts.push('\n\n## Purpose & Principles References\n');
-  parts.push(`[!purpose-references:${normalizeRefs(references.purpose)}]\n`);
+  parts.push(`[!purpose-references:${encodeReferenceArray(references.purpose)}]\n`);
 
   parts.push('\n\n## Created\n');
   parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
@@ -403,6 +429,146 @@ export function buildHabitMarkdown({
   const historyBody = history?.trim().length ? history.trim() : DEFAULT_HABIT_HISTORY_BODY;
   parts.push('\n\n## History\n');
   parts.push(`${historyBody.replace(/\s+$/g, '')}\n`);
+
+  return `${parts.join('').trimEnd()}\n`;
+}
+
+/**
+ * Builds canonical markdown for an Area of Focus file with standardized ordering.
+ */
+export function buildAreaMarkdown({
+  title,
+  status,
+  reviewCadence,
+  stewards,
+  references,
+  createdDateTime,
+  narrative,
+  successCriteria,
+  focusMetrics,
+  supportingNotes,
+  includeProjectsSnapshot,
+  includeGoalsSnapshot,
+  snapshotsAdditional,
+  projectsSnapshotBlock,
+  goalsSnapshotBlock,
+}: {
+  title: string;
+  status: GTDAreaStatus;
+  reviewCadence: GTDAreaReviewCadence;
+  stewards: string[];
+  references: AreaReferenceGroups;
+  createdDateTime: string;
+  narrative?: string;
+  successCriteria?: string;
+  focusMetrics?: string;
+  supportingNotes?: string;
+  includeProjectsSnapshot?: boolean;
+  includeGoalsSnapshot?: boolean;
+  snapshotsAdditional?: string;
+  projectsSnapshotBlock?: string;
+  goalsSnapshotBlock?: string;
+}): string {
+  const safeTitle = title?.trim() || 'Untitled Area';
+  const normalizedStatus = AREA_STATUS_TOKENS.includes(status) ? status : 'steady';
+  const normalizedCadence = AREA_REVIEW_CADENCE_TOKENS.includes(reviewCadence)
+    ? reviewCadence
+    : 'monthly';
+  const stewardTokens = Array.from(
+    new Set(
+      (stewards ?? [])
+        .map((steward) => steward.trim())
+        .filter(Boolean)
+        .map((steward) => steward.replace(/\s+/g, '-').toLowerCase())
+    )
+  );
+
+  const parts: string[] = [];
+  parts.push(`# ${safeTitle}`);
+
+  parts.push('\n\n## Status\n');
+  parts.push(`[!singleselect:area-status:${normalizedStatus}]\n`);
+
+  parts.push('\n\n## Review Cadence\n');
+  parts.push(`[!singleselect:area-review-cadence:${normalizedCadence}]\n`);
+
+  if (stewardTokens.length > 0) {
+    parts.push('\n\n## Stewards (optional)\n');
+    parts.push(`[!multiselect:area-stewards:${stewardTokens.join(',')}]\n`);
+  }
+
+  parts.push('\n\n## Projects References\n');
+  parts.push(`[!projects-references:${encodeReferenceArray(references.projects)}]\n`);
+
+  const encodedAreas = encodeReferenceArray(references.areas);
+  if (encodedAreas) {
+    parts.push('\n\n## Areas References (optional)\n');
+    parts.push(`[!areas-references:${encodedAreas}]\n`);
+  }
+
+  parts.push('\n\n## Goals References\n');
+  parts.push(`[!goals-references:${encodeReferenceArray(references.goals)}]\n`);
+
+  const encodedVision = encodeReferenceArray(references.vision);
+  if (encodedVision) {
+    parts.push('\n\n## Vision References (optional)\n');
+    parts.push(`[!vision-references:${encodedVision}]\n`);
+  }
+
+  const encodedPurpose = encodeReferenceArray(references.purpose);
+  if (encodedPurpose) {
+    parts.push('\n\n## Purpose & Principles References (optional)\n');
+    parts.push(`[!purpose-references:${encodedPurpose}]\n`);
+  }
+
+  parts.push('\n\n## Created\n');
+  parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
+
+  const cleanNarrative = (narrative ?? '').trim();
+  parts.push('\n\n## Area Narrative\n');
+  parts.push(`${(cleanNarrative.length > 0 ? cleanNarrative : DEFAULT_AREA_NARRATIVE).replace(/\s+$/g, '')}\n`);
+
+  const cleanSuccess = (successCriteria ?? '').trim();
+  if (cleanSuccess.length > 0) {
+    parts.push('\n\n## Success Criteria (optional)\n');
+    parts.push(`${cleanSuccess.replace(/\s+$/g, '')}\n`);
+  }
+
+  const cleanMetrics = (focusMetrics ?? '').trim();
+  if (cleanMetrics.length > 0) {
+    parts.push('\n\n## Focus Metrics (optional)\n');
+    parts.push(`${cleanMetrics.replace(/\s+$/g, '')}\n`);
+  }
+
+  const cleanNotes = (supportingNotes ?? '').trim();
+  if (cleanNotes.length > 0) {
+    parts.push('\n\n## Supporting Notes (optional)\n');
+    parts.push(`${cleanNotes.replace(/\s+$/g, '')}\n`);
+  }
+
+  const additionalSnapshots = (snapshotsAdditional ?? '').trim();
+  const hasSnapshotsContent =
+    includeProjectsSnapshot || includeGoalsSnapshot || additionalSnapshots.length > 0;
+
+  if (hasSnapshotsContent) {
+    parts.push('\n\n## Snapshots (optional)\n');
+    if (includeProjectsSnapshot) {
+      const normalizedProjectsSnapshot =
+        (projectsSnapshotBlock?.trim() ?? '') || '[!projects-list]';
+      parts.push(`${normalizedProjectsSnapshot}\n`);
+    }
+    if (includeGoalsSnapshot) {
+      const normalizedGoalsSnapshot =
+        (goalsSnapshotBlock?.trim() ?? '') || '[!goals-list]';
+      parts.push(`${normalizedGoalsSnapshot}\n`);
+    }
+    if (additionalSnapshots.length > 0) {
+      if (includeProjectsSnapshot || includeGoalsSnapshot) {
+        parts.push('\n');
+      }
+      parts.push(`${additionalSnapshots.replace(/\s+$/g, '')}\n`);
+    }
+  }
 
   return `${parts.join('').trimEnd()}\n`;
 }

@@ -573,3 +573,39 @@ export interface GTDHabit {
   /** Date habit was created */
   createdDateTime: string;
 }
+
+/**
+ * GTD Area of Focus status options
+ */
+export type GTDAreaStatus = 'steady' | 'watch' | 'incubating' | 'delegated';
+
+/**
+ * GTD Area of Focus review cadence options
+ */
+export type GTDAreaReviewCadence = 'weekly' | 'monthly' | 'quarterly' | 'annually';
+
+/**
+ * GTD Area of Focus structure
+ */
+export interface GTDArea {
+  /** Area display name (H1 title) */
+  name: string;
+  /** Full file path to the area markdown file */
+  path: string;
+  /** Canonical status token controlling attention level */
+  status: GTDAreaStatus;
+  /** Preferred review cadence token */
+  reviewCadence: GTDAreaReviewCadence;
+  /** Owners or accountable stewards for the area */
+  stewards?: string[];
+  /** ISO timestamp representing creation date */
+  createdDateTime?: string;
+  /** Linked projects (file paths) */
+  projects?: string[];
+  /** Linked goals (file paths) */
+  goals?: string[];
+  /** Linked vision documents (file paths) */
+  vision?: string[];
+  /** Linked purpose & principles documents (file paths) */
+  purpose?: string[];
+}

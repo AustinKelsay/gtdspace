@@ -50,7 +50,7 @@ export type AreaReferenceGroups = HabitReferenceGroups;
 export const DEFAULT_HABIT_HISTORY_BODY =
   '*Track your habit completions below:*\n\n| Date | Time | Status | Action | Details |\n| --- | --- | --- | --- | --- |';
 
-export const DEFAULT_AREA_NARRATIVE =
+export const DEFAULT_AREA_DESCRIPTION =
   '*Summarize the scope, responsibilities, and commitments for this area.*';
 
 /**
@@ -440,48 +440,22 @@ export function buildAreaMarkdown({
   title,
   status,
   reviewCadence,
-  stewards,
   references,
   createdDateTime,
-  narrative,
-  successCriteria,
-  focusMetrics,
-  supportingNotes,
-  includeProjectsSnapshot,
-  includeGoalsSnapshot,
-  snapshotsAdditional,
-  projectsSnapshotBlock,
-  goalsSnapshotBlock,
+  description,
 }: {
   title: string;
   status: GTDAreaStatus;
   reviewCadence: GTDAreaReviewCadence;
-  stewards: string[];
   references: AreaReferenceGroups;
   createdDateTime: string;
-  narrative?: string;
-  successCriteria?: string;
-  focusMetrics?: string;
-  supportingNotes?: string;
-  includeProjectsSnapshot?: boolean;
-  includeGoalsSnapshot?: boolean;
-  snapshotsAdditional?: string;
-  projectsSnapshotBlock?: string;
-  goalsSnapshotBlock?: string;
+  description?: string;
 }): string {
   const safeTitle = title?.trim() || 'Untitled Area';
   const normalizedStatus = AREA_STATUS_TOKENS.includes(status) ? status : 'steady';
   const normalizedCadence = AREA_REVIEW_CADENCE_TOKENS.includes(reviewCadence)
     ? reviewCadence
     : 'monthly';
-  const stewardTokens = Array.from(
-    new Set(
-      (stewards ?? [])
-        .map((steward) => steward.trim())
-        .filter(Boolean)
-        .map((steward) => steward.replace(/\s+/g, '-').toLowerCase())
-    )
-  );
 
   const parts: string[] = [];
   parts.push(`# ${safeTitle}`);
@@ -491,11 +465,6 @@ export function buildAreaMarkdown({
 
   parts.push('\n\n## Review Cadence\n');
   parts.push(`[!singleselect:area-review-cadence:${normalizedCadence}]\n`);
-
-  if (stewardTokens.length > 0) {
-    parts.push('\n\n## Stewards (optional)\n');
-    parts.push(`[!multiselect:area-stewards:${stewardTokens.join(',')}]\n`);
-  }
 
   parts.push('\n\n## Projects References\n');
   parts.push(`[!projects-references:${encodeReferenceArray(references.projects)}]\n`);
@@ -524,51 +493,11 @@ export function buildAreaMarkdown({
   parts.push('\n\n## Created\n');
   parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
 
-  const cleanNarrative = (narrative ?? '').trim();
-  parts.push('\n\n## Area Narrative\n');
-  parts.push(`${(cleanNarrative.length > 0 ? cleanNarrative : DEFAULT_AREA_NARRATIVE).replace(/\s+$/g, '')}\n`);
-
-  const cleanSuccess = (successCriteria ?? '').trim();
-  if (cleanSuccess.length > 0) {
-    parts.push('\n\n## Success Criteria (optional)\n');
-    parts.push(`${cleanSuccess.replace(/\s+$/g, '')}\n`);
-  }
-
-  const cleanMetrics = (focusMetrics ?? '').trim();
-  if (cleanMetrics.length > 0) {
-    parts.push('\n\n## Focus Metrics (optional)\n');
-    parts.push(`${cleanMetrics.replace(/\s+$/g, '')}\n`);
-  }
-
-  const cleanNotes = (supportingNotes ?? '').trim();
-  if (cleanNotes.length > 0) {
-    parts.push('\n\n## Supporting Notes (optional)\n');
-    parts.push(`${cleanNotes.replace(/\s+$/g, '')}\n`);
-  }
-
-  const additionalSnapshots = (snapshotsAdditional ?? '').trim();
-  const hasSnapshotsContent =
-    includeProjectsSnapshot || includeGoalsSnapshot || additionalSnapshots.length > 0;
-
-  if (hasSnapshotsContent) {
-    parts.push('\n\n## Snapshots (optional)\n');
-    if (includeProjectsSnapshot) {
-      const normalizedProjectsSnapshot =
-        (projectsSnapshotBlock?.trim() ?? '') || '[!projects-list]';
-      parts.push(`${normalizedProjectsSnapshot}\n`);
-    }
-    if (includeGoalsSnapshot) {
-      const normalizedGoalsSnapshot =
-        (goalsSnapshotBlock?.trim() ?? '') || '[!goals-list]';
-      parts.push(`${normalizedGoalsSnapshot}\n`);
-    }
-    if (additionalSnapshots.length > 0) {
-      if (includeProjectsSnapshot || includeGoalsSnapshot) {
-        parts.push('\n');
-      }
-      parts.push(`${additionalSnapshots.replace(/\s+$/g, '')}\n`);
-    }
-  }
+  const cleanDescription = (description ?? '').trim();
+  parts.push('\n\n## Description\n');
+  parts.push(
+    `${(cleanDescription.length > 0 ? cleanDescription : DEFAULT_AREA_DESCRIPTION).replace(/\s+$/g, '')}\n`
+  );
 
   return `${parts.join('').trimEnd()}\n`;
 }

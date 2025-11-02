@@ -13,6 +13,7 @@ import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
 import { ActionPage } from '@/components/gtd/ActionPage';
 import AreaPage from '@/components/gtd/AreaPage';
 import GoalPage from '@/components/gtd/GoalPage';
+import VisionPage from '@/components/gtd/VisionPage';
 import { HabitPage } from '@/components/gtd/HabitPage';
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { TabManager } from '@/components/tabs';
@@ -927,6 +928,29 @@ export const App: React.FC = () => {
                         if (isGoalFile) {
                           return (
                             <GoalPage
+                              key={displayedTab.id}
+                              content={displayedTab.content}
+                              onChange={(value) => updateTabContent(displayedTab.id, value)}
+                              filePath={displayedTab.filePath}
+                              className="flex-1"
+                            />
+                          );
+                        }
+
+                        // Detect Vision files
+                        const visionDir = gtdSpace?.root_path
+                          ? `${gtdSpace.root_path}/Vision/`
+                          : undefined;
+                        const pathLooksLikeVision = visionDir
+                          ? isUnder(displayedTab.file.path, visionDir)
+                          : /\/Vision\//i.test(displayedTab.file.path.replace(/\\/g, '/'));
+                        const contentHasVisionMarkers =
+                          /\[!singleselect:vision-horizon:/i.test(displayedTab.content);
+                        const isVisionFile = (pathLooksLikeVision || contentHasVisionMarkers) && displayedTab.file.path !== '::calendar::';
+
+                        if (isVisionFile) {
+                          return (
+                            <VisionPage
                               key={displayedTab.id}
                               content={displayedTab.content}
                               onChange={(value) => updateTabContent(displayedTab.id, value)}

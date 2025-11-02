@@ -638,3 +638,32 @@ export interface GTDGoal {
   /** Linked purpose & principles documents (file paths) */
   purpose?: string[];
 }
+
+/**
+ * GTD Vision horizon options
+ */
+export type GTDVisionHorizon = '3-years' | '5-years' | '10-years' | 'custom';
+
+/**
+ * GTD Vision document structure
+ */
+export interface GTDVisionDoc {
+  /** Vision display name (H1 title) */
+  name: string;
+  /** Full file path to the vision markdown file */
+  path: string;
+  /** Horizon token representing time span */
+  horizon: GTDVisionHorizon;
+  /** ISO timestamp representing creation date */
+  createdDateTime?: string;
+  /** Linked projects (file paths) */
+  projects?: string[];
+  /** Linked goals (file paths) */
+  goals?: string[];
+  /** Linked areas (file paths) */
+  areas?: string[];
+  /** Linked purpose & principles documents (file paths) */
+  purpose?: string[];
+  /** Vision narrative content */
+  narrative?: string;
+}

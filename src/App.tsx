@@ -12,6 +12,7 @@ import { FileChangeManager } from '@/components/file-browser/FileChangeManager';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
 import { ActionPage } from '@/components/gtd/ActionPage';
 import AreaPage from '@/components/gtd/AreaPage';
+import GoalPage from '@/components/gtd/GoalPage';
 import { HabitPage } from '@/components/gtd/HabitPage';
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { TabManager } from '@/components/tabs';
@@ -902,6 +903,30 @@ export const App: React.FC = () => {
                         if (isAreaFile) {
                           return (
                             <AreaPage
+                              key={displayedTab.id}
+                              content={displayedTab.content}
+                              onChange={(value) => updateTabContent(displayedTab.id, value)}
+                              filePath={displayedTab.filePath}
+                              className="flex-1"
+                            />
+                          );
+                        }
+
+                        // Detect Goal files
+                        const goalsDir = gtdSpace?.root_path
+                          ? `${gtdSpace.root_path}/Goals/`
+                          : undefined;
+                        const pathLooksLikeGoal = goalsDir
+                          ? isUnder(displayedTab.file.path, goalsDir)
+                          : /\/Goals\//i.test(displayedTab.file.path.replace(/\\/g, '/'));
+                        const contentHasGoalMarkers =
+                          /\[!singleselect:goal-status:/i.test(displayedTab.content) ||
+                          /\[!datetime:goal-target-date:/i.test(displayedTab.content);
+                        const isGoalFile = (pathLooksLikeGoal || contentHasGoalMarkers) && displayedTab.file.path !== '::calendar::';
+
+                        if (isGoalFile) {
+                          return (
+                            <GoalPage
                               key={displayedTab.id}
                               content={displayedTab.content}
                               onChange={(value) => updateTabContent(displayedTab.id, value)}

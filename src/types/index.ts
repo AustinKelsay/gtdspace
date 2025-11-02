@@ -609,3 +609,32 @@ export interface GTDArea {
   /** Linked purpose & principles documents (file paths) */
   purpose?: string[];
 }
+
+/**
+ * GTD Goal status options
+ */
+export type GTDGoalStatus = 'in-progress' | 'waiting' | 'completed';
+
+/**
+ * GTD Goal structure
+ */
+export interface GTDGoal {
+  /** Goal display name (H1 title) */
+  name: string;
+  /** Full file path to the goal markdown file */
+  path: string;
+  /** Canonical progress status */
+  status: GTDGoalStatus;
+  /** Optional target date ISO string (YYYY-MM-DD) */
+  targetDate?: string | null;
+  /** ISO timestamp representing creation date */
+  createdDateTime?: string;
+  /** Linked areas (file paths) */
+  areas?: string[];
+  /** Linked projects (file paths) */
+  projects?: string[];
+  /** Linked vision documents (file paths) */
+  vision?: string[];
+  /** Linked purpose & principles documents (file paths) */
+  purpose?: string[];
+}

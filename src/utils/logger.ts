@@ -24,7 +24,7 @@ const onceCache = new Set<string>();
 const isBrowser = () => typeof window !== 'undefined';
 
 const isValidLevel = (level: string): level is LogLevel =>
-  level in LOG_LEVEL_ORDER;
+  Object.prototype.hasOwnProperty.call(LOG_LEVEL_ORDER, level);
 
 const resolveInitialLevel = (): LogLevel => {
   const envLevel =

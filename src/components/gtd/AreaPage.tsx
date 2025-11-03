@@ -181,18 +181,23 @@ function displayNameForReference(ref: string): string {
   return leaf.replace(/\.(md|markdown)$/i, "");
 }
 
+const normalizeReferencePath = (raw: string): string =>
+  raw.replace(/\\/g, "/").trim();
+
 function toStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value
-      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .map((item) =>
+        typeof item === "string" ? normalizeReferencePath(item) : ""
+      )
       .filter(Boolean);
   }
   if (typeof value === "string") {
-    const trimmed = value.trim();
+    const trimmed = value.replace(/\\/g, "/").trim();
     if (!trimmed) return [];
     return trimmed
       .split(",")
-      .map((entry) => entry.trim())
+      .map((entry) => normalizeReferencePath(entry))
       .filter(Boolean);
   }
   return [];
@@ -437,13 +442,15 @@ const AreaPage: React.FC<AreaPageProps> = ({
 
   const handleReferenceToggle = React.useCallback(
     (key: AreaReferenceKey, value: string) => {
-      const normalizedTarget = value.replace(/\\/g, "/");
+      const normalizedTarget = normalizeReferencePath(value);
+      if (!normalizedTarget) return;
       setReferences((current) => {
-        const group = current[key] ?? [];
-        const isPresent = group.includes(value);
+        const existingGroup = current[key] ?? [];
+        const normalizedGroup = existingGroup.map(normalizeReferencePath);
+        const isPresent = normalizedGroup.includes(normalizedTarget);
         const nextGroup = isPresent
-          ? group.filter((ref) => ref !== value)
-          : [...group, value];
+          ? normalizedGroup.filter((ref) => ref !== normalizedTarget)
+          : [...normalizedGroup, normalizedTarget];
         const next = { ...current, [key]: nextGroup };
         emitRebuild({ references: next });
         if (normalizedFilePath && normalizedTarget) {
@@ -462,9 +469,14 @@ const AreaPage: React.FC<AreaPageProps> = ({
 
   const handleReferenceRemove = React.useCallback(
     (key: AreaReferenceKey, value: string) => {
-      const normalizedTarget = value.replace(/\\/g, "/");
+      const normalizedTarget = normalizeReferencePath(value);
+      if (!normalizedTarget) return;
       setReferences((current) => {
-        const nextGroup = (current[key] ?? []).filter((item) => item !== value);
+        const existingGroup = current[key] ?? [];
+        const normalizedGroup = existingGroup.map(normalizeReferencePath);
+        const nextGroup = normalizedGroup.filter(
+          (item) => item !== normalizedTarget
+        );
         const next = { ...current, [key]: nextGroup };
         emitRebuild({ references: next });
         if (normalizedFilePath && normalizedTarget) {

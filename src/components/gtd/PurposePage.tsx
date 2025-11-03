@@ -265,7 +265,7 @@ const PurposePage: React.FC<PurposePageProps> = ({ content, onChange, filePath, 
           
           // Process projects with path validation
           const validatedProjects = await Promise.all(
-            projects.map(async (project) => {
+            projects.map(async (project): Promise<PurposeReferenceOption | null> => {
               const normalizedName = project.name.trim();
               let resolvedPath: string | null = null;
               

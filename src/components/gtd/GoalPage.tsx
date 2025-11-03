@@ -141,22 +141,49 @@ function normalizeGoalStatus(raw: unknown): GTDGoalStatus {
 }
 
 function displayNameForReference(ref: string): string {
-  const normalized = ref.replace(/\\/g, '/');
+  const normalized = normalizeReference(ref);
   const leaf = normalized.split('/').pop();
   if (!leaf) return normalized;
   return leaf.replace(/\.(md|markdown)$/i, '');
 }
 
+function normalizeReference(value: string): string {
+  return value.replace(/\\/g, '/').trim();
+}
+
+function normalizeReferenceGroup(values?: ReadonlyArray<string>): string[] {
+  if (!values || values.length === 0) return [];
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const candidate = normalizeReference(value);
+    if (!candidate || seen.has(candidate)) continue;
+    seen.add(candidate);
+    normalized.push(candidate);
+  }
+  return normalized;
+}
+
+function normalizeReferenceGroups(groups: GoalReferenceGroups): GoalReferenceGroups {
+  return {
+    areas: normalizeReferenceGroup(groups.areas),
+    projects: normalizeReferenceGroup(groups.projects),
+    vision: normalizeReferenceGroup(groups.vision),
+    purpose: normalizeReferenceGroup(groups.purpose),
+  };
+}
+
 function toStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value
-      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .map((item) => (typeof item === 'string' ? normalizeReference(item) : ''))
       .filter(Boolean);
   }
   if (typeof value === 'string') {
     const trimmed = value.trim();
     if (!trimmed) return [];
-    return trimmed.split(',').map((entry) => entry.trim()).filter(Boolean);
+    return trimmed.split(',').map((entry) => normalizeReference(entry)).filter(Boolean);
   }
   return [];
 }
@@ -183,15 +210,15 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
   const initialTitle =
     typeof meta.title === 'string' && meta.title.trim().length > 0 ? meta.title.trim() : 'Untitled Goal';
 
-  const initialReferences = React.useMemo<GoalReferenceGroups>(
-    () => ({
+  const initialReferences = React.useMemo<GoalReferenceGroups>(() => {
+    const parsed: GoalReferenceGroups = {
       areas: toStringArray((meta as any).areasReferences),
       projects: toStringArray((meta as any).projectsReferences),
       vision: toStringArray((meta as any).visionReferences),
       purpose: toStringArray((meta as any).purposeReferences),
-    }),
-    [meta]
-  );
+    };
+    return normalizeReferenceGroups(parsed);
+  }, [meta]);
 
   const [title, setTitle] = React.useState<string>(initialTitle);
   const [status, setStatus] = React.useState<GTDGoalStatus>(normalizeGoalStatus((meta as any).goalStatus ?? (meta as any).status));
@@ -244,12 +271,14 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
           ? (meta as any).targetDate.trim()
           : '';
     setTargetDate(metaTarget);
-    setReferences({
-      areas: toStringArray((meta as any).areasReferences),
-      projects: toStringArray((meta as any).projectsReferences),
-      vision: toStringArray((meta as any).visionReferences),
-      purpose: toStringArray((meta as any).purposeReferences),
-    });
+    setReferences(
+      normalizeReferenceGroups({
+        areas: toStringArray((meta as any).areasReferences),
+        projects: toStringArray((meta as any).projectsReferences),
+        vision: toStringArray((meta as any).visionReferences),
+        purpose: toStringArray((meta as any).purposeReferences),
+      })
+    );
 
     const updatedSections = parseGoalSections(content || '');
     setDescription(
@@ -378,21 +407,34 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
 
   const handleReferenceToggle = React.useCallback(
     (key: GoalReferenceKey, value: string) => {
-      const normalizedTarget = value.replace(/\\/g, '/');
+      const normalizedTarget = normalizeReference(value);
+      if (!normalizedTarget) {
+        return;
+      }
+
       setReferences((current) => {
-        const group = current[key] ?? [];
-        const isPresent = group.includes(value);
-        const nextGroup = isPresent ? group.filter((ref) => ref !== value) : [...group, value];
-        const next = { ...current, [key]: nextGroup };
+        const normalizedCurrent = normalizeReferenceGroups(current);
+        const group = normalizedCurrent[key] ?? [];
+        const isPresent = group.includes(normalizedTarget);
+        const action: 'add' | 'remove' = isPresent ? 'remove' : 'add';
+        const nextGroup = isPresent
+          ? group.filter((ref) => ref !== normalizedTarget)
+          : [...group, normalizedTarget];
+        const next = {
+          ...normalizedCurrent,
+          [key]: nextGroup,
+        };
+
         emitRebuild({ references: next });
-        if (normalizedFilePath && normalizedTarget) {
+        if (normalizedFilePath) {
           void syncHorizonBacklink({
             sourcePath: normalizedFilePath,
             sourceKind: 'goals',
             targetPath: normalizedTarget,
-            action: isPresent ? 'remove' : 'add',
+            action,
           });
         }
+
         return next;
       });
     },
@@ -401,12 +443,26 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
 
   const handleReferenceRemove = React.useCallback(
     (key: GoalReferenceKey, value: string) => {
-      const normalizedTarget = value.replace(/\\/g, '/');
+      const normalizedTarget = normalizeReference(value);
+      if (!normalizedTarget) {
+        return;
+      }
+
       setReferences((current) => {
-        const nextGroup = (current[key] ?? []).filter((item) => item !== value);
-        const next = { ...current, [key]: nextGroup };
+        const normalizedCurrent = normalizeReferenceGroups(current);
+        const group = normalizedCurrent[key] ?? [];
+        if (!group.includes(normalizedTarget)) {
+          return normalizedCurrent;
+        }
+
+        const nextGroup = group.filter((item) => item !== normalizedTarget);
+        const next = {
+          ...normalizedCurrent,
+          [key]: nextGroup,
+        };
+
         emitRebuild({ references: next });
-        if (normalizedFilePath && normalizedTarget) {
+        if (normalizedFilePath) {
           void syncHorizonBacklink({
             sourcePath: normalizedFilePath,
             sourceKind: 'goals',
@@ -414,6 +470,7 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
             action: 'remove',
           });
         }
+
         return next;
       });
     },

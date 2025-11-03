@@ -1017,6 +1017,9 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
         format!(
             r#"# {}
 
+## Horizon
+[!singleselect:vision-horizon:3-years]
+
 ## Projects References
 [!projects-references:]
 

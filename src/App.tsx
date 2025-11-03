@@ -494,7 +494,14 @@ export const App: React.FC = () => {
     }
     return DEFAULT_SIDEBAR_WIDTH;
   });
+  // Ref to track live width during resize to avoid stale closure in handleMouseUp
+  const sidebarWidthRef = React.useRef(sidebarWidth);
   const [isResizing, setIsResizing] = React.useState(false);
+
+  // Keep ref in sync with state
+  React.useEffect(() => {
+    sidebarWidthRef.current = sidebarWidth;
+  }, [sidebarWidth]);
 
   // === GTD SPACE CHECK ===
 
@@ -929,16 +936,18 @@ export const App: React.FC = () => {
                       Math.max(MIN_SIDEBAR_WIDTH, startWidth + delta)
                     );
                     setSidebarWidth(newWidth);
+                    // Update ref with live width to avoid stale closure in handleMouseUp
+                    sidebarWidthRef.current = newWidth;
                   };
 
                   const handleMouseUp = () => {
                     setIsResizing(false);
                     document.removeEventListener("mousemove", handleMouseMove);
                     document.removeEventListener("mouseup", handleMouseUp);
-                    // Save the width preference
+                    // Save the width preference using the ref to get the final width
                     localStorage.setItem(
                       "gtdspace-sidebar-width",
-                      String(sidebarWidth)
+                      String(sidebarWidthRef.current)
                     );
                   };
 

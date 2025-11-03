@@ -175,6 +175,16 @@ const PurposePage: React.FC<PurposePageProps> = ({ content, onChange, filePath, 
   const parsedDescription = React.useMemo(() => parsePurposeDescription(content || ''), [content]);
   const { withErrorHandling } = useErrorHandler();
 
+  const syncBacklinkSafely = React.useCallback(
+    (options: Parameters<typeof syncHorizonBacklink>[0]) =>
+      withErrorHandling(
+        () => syncHorizonBacklink(options),
+        'Failed to update purpose backlinks. Please try again.',
+        'sync-horizon-backlink'
+      ),
+    [withErrorHandling]
+  );
+
   const initialTitle =
     typeof meta.title === 'string' && meta.title.trim().length > 0 ? meta.title.trim() : 'Purpose & Principles';
 
@@ -252,12 +262,106 @@ const PurposePage: React.FC<PurposePageProps> = ({ content, onChange, filePath, 
             []
           );
           if (!projects) return [];
-          return projects
-            .map((project) => ({
-              path: (project.path || `${spacePath}/Projects/${project.name}`).replace(/\\/g, '/'),
-              name: project.name,
-              horizon: key,
-            }))
+          
+          // Process projects with path validation
+          const validatedProjects = await Promise.all(
+            projects.map(async (project) => {
+              const normalizedName = project.name.trim();
+              let resolvedPath: string | null = null;
+              
+              // Check if project.path is falsy
+              if (!project.path || project.path.trim() === '') {
+                // Construct fallback path - try the project directory first, then README files
+                const projectDirPath = `${spacePath}/Projects/${normalizedName}`.replace(/\\/g, '/');
+                const readmeMdPath = `${projectDirPath}/README.md`;
+                const readmeMarkdownPath = `${projectDirPath}/README.markdown`;
+                
+                // Check fallback paths in order: directory, README.md, README.markdown
+                const dirExists = await safeInvoke<boolean>(
+                  'check_directory_exists',
+                  { path: projectDirPath },
+                  false
+                );
+                
+                if (dirExists) {
+                  resolvedPath = projectDirPath;
+                } else {
+                  const readmeMdExists = await safeInvoke<boolean>(
+                    'check_file_exists',
+                    { filePath: readmeMdPath },
+                    false
+                  );
+                  
+                  if (readmeMdExists) {
+                    resolvedPath = readmeMdPath;
+                  } else {
+                    const readmeMarkdownExists = await safeInvoke<boolean>(
+                      'check_file_exists',
+                      { filePath: readmeMarkdownPath },
+                      false
+                    );
+                    
+                    if (readmeMarkdownExists) {
+                      resolvedPath = readmeMarkdownPath;
+                    }
+                  }
+                }
+                
+                if (!resolvedPath) {
+                  // No valid fallback path found
+                  console.warn(
+                    `[PurposePage] Project "${normalizedName}" has no valid path. ` +
+                    `Original path was missing/empty, and none of the fallback paths exist: ` +
+                    `"${projectDirPath}", "${readmeMdPath}", "${readmeMarkdownPath}"`
+                  );
+                  return null;
+                }
+                
+                // Log warning when fallback is used
+                console.warn(
+                  `[PurposePage] Project "${normalizedName}" had missing/empty path. ` +
+                  `Using fallback path: "${resolvedPath}"`
+                );
+              } else {
+                // Use provided path and normalize it
+                resolvedPath = project.path.replace(/\\/g, '/');
+                
+                // Verify the provided path exists (file or directory)
+                let pathExists = await safeInvoke<boolean>(
+                  'check_file_exists',
+                  { filePath: resolvedPath },
+                  false
+                );
+                
+                if (!pathExists) {
+                  pathExists = await safeInvoke<boolean>(
+                    'check_directory_exists',
+                    { path: resolvedPath },
+                    false
+                  );
+                }
+                
+                if (!pathExists) {
+                  // Log warning for missing file or directory
+                  console.warn(
+                    `[PurposePage] Project "${normalizedName}" has invalid path: "${resolvedPath}" does not exist. ` +
+                    `Skipping this project.`
+                  );
+                  return null;
+                }
+              }
+              
+              return {
+                path: resolvedPath,
+                name: normalizedName,
+                horizon: key,
+              };
+            })
+          );
+          
+          // Filter out null entries (invalid projects) and sort
+          return validatedProjects
+            .filter((project): project is PurposeReferenceOption => project !== null)
             .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
         }
 
@@ -343,45 +447,88 @@ const PurposePage: React.FC<PurposePageProps> = ({ content, onChange, filePath, 
   const handleReferenceToggle = React.useCallback(
     (key: PurposeReferenceKey, value: string) => {
       const normalizedTarget = value.replace(/\\/g, '/');
+      let action: 'add' | 'remove' = 'add';
+
       setReferences((current) => {
         const group = current[key] ?? [];
         const isPresent = group.includes(value);
+        action = isPresent ? 'remove' : 'add';
         const nextGroup = isPresent ? group.filter((ref) => ref !== value) : [...group, value];
         const next = { ...current, [key]: nextGroup };
         emitRebuild({ references: next });
+        const attemptedAction = action;
+
         if (normalizedFilePath && normalizedTarget) {
-          void syncHorizonBacklink({
+          void syncBacklinkSafely({
             sourcePath: normalizedFilePath,
             sourceKind: 'purpose',
             targetPath: normalizedTarget,
-            action: isPresent ? 'remove' : 'add',
+            action: attemptedAction,
+          }).then((result) => {
+            if (result === null) {
+              const originalHadValue = attemptedAction === 'remove';
+              setReferences((latest) => {
+                const latestGroup = latest[key] ?? [];
+                const currentlyHas = latestGroup.includes(value);
+                if (currentlyHas === originalHadValue) {
+                  return latest;
+                }
+                const revertedGroup = originalHadValue
+                  ? [...latestGroup, value]
+                  : latestGroup.filter((ref) => ref !== value);
+                const reverted = { ...latest, [key]: revertedGroup };
+                emitRebuild({ references: reverted });
+                return reverted;
+              });
+            }
           });
         }
+
         return next;
       });
     },
-    [emitRebuild, normalizedFilePath]
+    [emitRebuild, normalizedFilePath, syncBacklinkSafely]
   );
 
   const handleReferenceRemove = React.useCallback(
     (key: PurposeReferenceKey, value: string) => {
       const normalizedTarget = value.replace(/\\/g, '/');
       setReferences((current) => {
-        const nextGroup = (current[key] ?? []).filter((item) => item !== value);
+        const group = current[key] ?? [];
+        if (!group.includes(value)) {
+          return current;
+        }
+
+        const nextGroup = group.filter((item) => item !== value);
         const next = { ...current, [key]: nextGroup };
         emitRebuild({ references: next });
+
         if (normalizedFilePath && normalizedTarget) {
-          void syncHorizonBacklink({
+          void syncBacklinkSafely({
             sourcePath: normalizedFilePath,
             sourceKind: 'purpose',
             targetPath: normalizedTarget,
             action: 'remove',
+          }).then((result) => {
+            if (result === null) {
+              setReferences((latest) => {
+                const latestGroup = latest[key] ?? [];
+                if (latestGroup.includes(value)) {
+                  return latest;
+                }
+                const revertedGroup = [...latestGroup, value];
+                const reverted = { ...latest, [key]: revertedGroup };
+                emitRebuild({ references: reverted });
+                return reverted;
+              });
+            }
           });
         }
+
         return next;
       });
     },
-    [emitRebuild, normalizedFilePath]
+    [emitRebuild, normalizedFilePath, syncBacklinkSafely]
   );
 
   const onDescriptionChange = React.useCallback(

@@ -150,15 +150,16 @@ function normalizeVisionHorizon(raw: unknown): GTDVisionHorizon {
 }
 
 function toStringArray(value: unknown): string[] {
+  const normalize = (input: string) => input.replace(/\\/g, '/').trim();
   if (Array.isArray(value)) {
     return value
-      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .map((item) => (typeof item === 'string' ? normalize(item) : ''))
       .filter(Boolean);
   }
   if (typeof value === 'string') {
     const trimmed = value.trim();
     if (!trimmed) return [];
-    return trimmed.split(',').map((entry) => entry.trim()).filter(Boolean);
+    return trimmed.split(',').map((entry) => normalize(entry)).filter(Boolean);
   }
   return [];
 }

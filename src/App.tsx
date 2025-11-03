@@ -1165,21 +1165,12 @@ export const App: React.FC = () => {
                           : /\/Purpose\s*&\s*Principles\//i.test(
                               displayedTab.file.path.replace(/\\/g, "/")
                             );
-                        const contentLooksLikePurpose =
-                          /\[!vision-references:/i.test(displayedTab.content) ||
-                          /\[!areas-references:/i.test(displayedTab.content) ||
-                          /\[!projects-references:/i.test(
-                            displayedTab.content
-                          ) ||
-                          /\[!goals-references:/i.test(displayedTab.content);
                         const likelyPurposeHeadings =
                           /##\s+Purpose\s+Statement/i.test(
                             displayedTab.content
                           );
                         const isPurposeFile =
-                          (pathLooksLikePurpose ||
-                            likelyPurposeHeadings ||
-                            contentLooksLikePurpose) &&
+                          (pathLooksLikePurpose || likelyPurposeHeadings) &&
                           displayedTab.file.path !== "::calendar::";
 
                         if (isPurposeFile) {

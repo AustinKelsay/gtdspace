@@ -48,11 +48,11 @@ use tokio::sync::Mutex as TokioMutex;
 // Import seed data module
 mod seed_data;
 use seed_data::{
-    generate_action_template, generate_area_of_focus_template_with_refs,
+    core_values_template, generate_action_template, generate_area_of_focus_template_with_refs,
     generate_goal_template_with_refs, generate_project_readme, generate_project_readme_with_refs,
-    generate_vision_document_template_with_refs, generate_weekly_review_habit, ProjectReadmeParams,
-    AREAS_OF_FOCUS_OVERVIEW_TEMPLATE, CABINET_GTD_PRINCIPLES_TEMPLATE, CORE_VALUES_TEMPLATE,
-    GOALS_OVERVIEW_TEMPLATE, LIFE_MISSION_TEMPLATE, PURPOSE_PRINCIPLES_OVERVIEW_TEMPLATE,
+    generate_vision_document_template_with_refs, generate_weekly_review_habit,
+    life_mission_template, ProjectReadmeParams, AREAS_OF_FOCUS_OVERVIEW_TEMPLATE,
+    CABINET_GTD_PRINCIPLES_TEMPLATE, GOALS_OVERVIEW_TEMPLATE, PURPOSE_PRINCIPLES_OVERVIEW_TEMPLATE,
     SOMEDAY_LEARN_LANGUAGE_TEMPLATE, VISION_OVERVIEW_TEMPLATE, WELCOME_TEMPLATE,
 };
 
@@ -3118,7 +3118,7 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                 // Create Life Mission document
                 let mission_file = dir_path.join("Life Mission.md");
                 if !mission_file.exists() {
-                    if let Err(e) = fs::write(&mission_file, LIFE_MISSION_TEMPLATE) {
+                    if let Err(e) = fs::write(&mission_file, life_mission_template()) {
                         log::warn!("Failed to create life mission document: {}", e);
                     } else {
                         log::info!("Created life mission document");
@@ -3128,7 +3128,7 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                 // Create Core Values document
                 let values_file = dir_path.join("Core Values.md");
                 if !values_file.exists() {
-                    if let Err(e) = fs::write(&values_file, CORE_VALUES_TEMPLATE) {
+                    if let Err(e) = fs::write(&values_file, core_values_template()) {
                         log::warn!("Failed to create core values document: {}", e);
                     } else {
                         log::info!("Created core values document");

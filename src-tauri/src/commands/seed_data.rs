@@ -225,7 +225,9 @@ Your ultimate intention and core standards. These drive everything else.
 "#;
 
 /// Template for Life Mission document
-pub const LIFE_MISSION_TEMPLATE: &str = r#"# Life Mission
+pub fn life_mission_template() -> String {
+    format!(
+        r#"# Life Mission
 
 ## Projects References
 [!projects-references:]
@@ -240,7 +242,7 @@ pub const LIFE_MISSION_TEMPLATE: &str = r#"# Life Mission
 [!areas-references:]
 
 ## Created
-[!datetime:created_date_time:2025-01-01T09:00:00Z]
+[!datetime:created_date_time:{}]
 
 ## Description
 
@@ -257,10 +259,15 @@ pub const LIFE_MISSION_TEMPLATE: &str = r#"# Life Mission
 - I stay true to my commitments.
 - I invest my energy in what matters most.
 - I grow through reflective learning.
-"#;
+"#,
+        chrono::Local::now().to_rfc3339()
+    )
+}
 
 /// Template for Core Values document
-pub const CORE_VALUES_TEMPLATE: &str = r#"# Core Values & Principles
+pub fn core_values_template() -> String {
+    format!(
+        r#"# Core Values & Principles
 
 ## Projects References
 [!projects-references:]
@@ -275,7 +282,7 @@ pub const CORE_VALUES_TEMPLATE: &str = r#"# Core Values & Principles
 [!areas-references:]
 
 ## Created
-[!datetime:created_date_time:2025-01-01T09:05:00Z]
+[!datetime:created_date_time:{}]
 
 ## Description
 
@@ -284,8 +291,10 @@ pub const CORE_VALUES_TEMPLATE: &str = r#"# Core Values & Principles
 - **Connection** — Building meaningful relationships
 - **Excellence** — Doing my best work
 - **[Your Value]** — [What it means]
-
-"#;
+"#,
+        chrono::Local::now().to_rfc3339()
+    )
+}
 
 /// Template content for the Welcome to GTD Space file
 pub const WELCOME_TEMPLATE: &str = r#"# Welcome to Your GTD Space

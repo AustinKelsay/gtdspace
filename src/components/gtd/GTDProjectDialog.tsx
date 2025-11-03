@@ -173,7 +173,7 @@ const linkProjectToHorizons = async (
   });
 
   if (operations.length > 0) {
-    await Promise.allSettled(operations);
+    await Promise.all(operations);
   }
 };
 
@@ -336,11 +336,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
         }
 
         if (areas.length || goals.length || visions.length || purposes.length) {
-          try {
-            await linkProjectToHorizons(result, horizonSelections);
-          } catch (e) {
-            console.warn('[GTDProjectDialog] Failed to sync project references with horizons', e);
-          }
+          await linkProjectToHorizons(result, horizonSelections);
         }
 
         // Reset form
@@ -364,6 +360,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       }
     } catch (error) {
       console.error('[GTDProjectDialog] Error creating project:', error);
+      showError('Failed to create project. Please check horizon links and try again.');
     } finally {
       console.log('[GTDProjectDialog] Setting isCreating to false');
       setIsCreating(false);

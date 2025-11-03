@@ -972,11 +972,15 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
 
     // Normalize horizon detection
     let is_in_projects = dir_path.components().any(|c| c.as_os_str() == "Projects");
-   let is_in_habits = dir_path.components().any(|c| c.as_os_str() == "Habits");
+    let is_in_habits = dir_path.components().any(|c| c.as_os_str() == "Habits");
     let is_in_vision = dir_path.components().any(|c| c.as_os_str() == "Vision");
     let is_in_goals = dir_path.components().any(|c| c.as_os_str() == "Goals");
-    let is_in_areas = dir_path.components().any(|c| c.as_os_str() == "Areas of Focus");
-    let is_in_purpose = dir_path.components().any(|c| c.as_os_str() == "Purpose & Principles");
+    let is_in_areas = dir_path
+        .components()
+        .any(|c| c.as_os_str() == "Areas of Focus");
+    let is_in_purpose = dir_path
+        .components()
+        .any(|c| c.as_os_str() == "Purpose & Principles");
 
     // For project actions, require README.md to distinguish from project root creation
     let is_project_dir = dir_path.join("README.md").exists();

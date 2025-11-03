@@ -107,7 +107,10 @@ pub fn generate_goal_template_with_refs(
     purpose_refs: &str,
 ) -> String {
     let target_section = if let Some(date) = target_date {
-        format!("\n## Target Date (optional)\n[!datetime:goal-target-date:{}]\n", date)
+        format!(
+            "\n## Target Date (optional)\n[!datetime:goal-target-date:{}]\n",
+            date
+        )
     } else {
         "\n## Target Date (optional)\n[!datetime:goal-target-date:]\n".to_string()
     };
@@ -115,7 +118,10 @@ pub fn generate_goal_template_with_refs(
     let vision_section = if vision_refs.trim().is_empty() {
         String::new()
     } else {
-        format!("\n## Vision References (optional)\n[!vision-references:{}]\n", vision_refs)
+        format!(
+            "\n## Vision References (optional)\n[!vision-references:{}]\n",
+            vision_refs
+        )
     };
 
     let purpose_section = if purpose_refs.trim().is_empty() {

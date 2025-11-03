@@ -25,6 +25,7 @@ import {
   DEFAULT_GOAL_DESCRIPTION,
   type GoalReferenceGroups,
 } from '@/utils/gtd-markdown-helpers';
+import { syncHorizonBacklink } from '@/utils/horizon-backlinks';
 import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
@@ -340,6 +341,8 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
     });
   }, [pickerOptions, pickerSearch]);
 
+  const normalizedFilePath = React.useMemo(() => (filePath ? filePath.replace(/\\/g, '/') : ''), [filePath]);
+
   const emitRebuild = React.useCallback(
     (overrides?: EmitOverrides) => {
       const nextTitle = overrides?.title ?? title;
@@ -375,29 +378,46 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
 
   const handleReferenceToggle = React.useCallback(
     (key: GoalReferenceKey, value: string) => {
+      const normalizedTarget = value.replace(/\\/g, '/');
       setReferences((current) => {
         const group = current[key] ?? [];
-        const nextGroup = group.includes(value)
-          ? group.filter((ref) => ref !== value)
-          : [...group, value];
+        const isPresent = group.includes(value);
+        const nextGroup = isPresent ? group.filter((ref) => ref !== value) : [...group, value];
         const next = { ...current, [key]: nextGroup };
         emitRebuild({ references: next });
+        if (normalizedFilePath && normalizedTarget) {
+          void syncHorizonBacklink({
+            sourcePath: normalizedFilePath,
+            sourceKind: 'goals',
+            targetPath: normalizedTarget,
+            action: isPresent ? 'remove' : 'add',
+          });
+        }
         return next;
       });
     },
-    [emitRebuild]
+    [emitRebuild, normalizedFilePath]
   );
 
   const handleReferenceRemove = React.useCallback(
     (key: GoalReferenceKey, value: string) => {
+      const normalizedTarget = value.replace(/\\/g, '/');
       setReferences((current) => {
         const nextGroup = (current[key] ?? []).filter((item) => item !== value);
         const next = { ...current, [key]: nextGroup };
         emitRebuild({ references: next });
+        if (normalizedFilePath && normalizedTarget) {
+          void syncHorizonBacklink({
+            sourcePath: normalizedFilePath,
+            sourceKind: 'goals',
+            targetPath: normalizedTarget,
+            action: 'remove',
+          });
+        }
         return next;
       });
     },
-    [emitRebuild]
+    [emitRebuild, normalizedFilePath]
   );
 
   const onDescriptionChange = React.useCallback(

@@ -29,27 +29,57 @@ pub fn generate_area_of_focus_template_with_refs(
     vision_refs: &str,
     purpose_refs: &str,
 ) -> String {
+    let vision_section = if vision_refs.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n\n## Vision References (optional)\n[!vision-references:{}]\n",
+            vision_refs
+        )
+    };
+    let purpose_section = if purpose_refs.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n\n## Purpose & Principles References (optional)\n[!purpose-references:{}]\n",
+            purpose_refs
+        )
+    };
+    let standards_section = if standards.trim().is_empty() {
+        String::new()
+    } else {
+        format!("\n\n### Standards\n{}\n", standards.trim())
+    };
+
     format!(
         r#"# {}
 
-{}
+## Status
+[!singleselect:area-status:steady]
 
-{}
+## Review Cadence
+[!singleselect:area-review-cadence:monthly]
 
-## Horizon Alignment
+## Projects References
+[!projects-references:]
+
+## Goals References
 [!goals-references:{}]
+{}{}
 
-[!vision-references:{}]
+## Created
+[!datetime:created_date_time:{}]
 
-[!purpose-references:{}]
-
-## Active Projects
-[!projects-list]
-
-## References
-[!references:]
-"#,
-        name, description, standards, goals_refs, vision_refs, purpose_refs
+## Description
+{}
+{}"#,
+        name,
+        goals_refs,
+        vision_section,
+        purpose_section,
+        chrono::Local::now().to_rfc3339(),
+        description.trim(),
+        standards_section
     )
 }
 
@@ -72,34 +102,53 @@ These accomplishments will require multiple projects to complete. They provide f
 pub fn generate_goal_template_with_refs(
     name: &str,
     target_date: Option<&str>,
-    outcome: &str,
+    description: &str,
     vision_refs: &str,
     purpose_refs: &str,
 ) -> String {
     let target_section = if let Some(date) = target_date {
-        format!("**Target:** [!datetime:due_date:{}]\n\n", date)
+        format!("\n## Target Date (optional)\n[!datetime:goal-target-date:{}]\n", date)
     } else {
+        "\n## Target Date (optional)\n[!datetime:goal-target-date:]\n".to_string()
+    };
+
+    let vision_section = if vision_refs.trim().is_empty() {
         String::new()
+    } else {
+        format!("\n## Vision References (optional)\n[!vision-references:{}]\n", vision_refs)
+    };
+
+    let purpose_section = if purpose_refs.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n## Purpose & Principles References (optional)\n[!purpose-references:{}]\n",
+            purpose_refs
+        )
     };
 
     format!(
         r#"# {}
 
-{}## Successful Outcome
+## Status
+[!singleselect:goal-status:in-progress]
+{}## Projects References
+[!projects-references:]
+
+## Areas References
+[!areas-references:]
+{}{}## Created
+[!datetime:created_date_time:{}]
+
+## Description
 {}
-
-## Aligned With
-[!vision-references:{}]
-
-[!purpose-references:{}]
-
-## Related Items
-[!projects-areas-list]
-
-## References
-[!references:]
 "#,
-        name, target_section, outcome, vision_refs, purpose_refs
+        name,
+        target_section,
+        vision_section,
+        purpose_section,
+        chrono::Local::now().to_rfc3339(),
+        description.trim()
     )
 }
 
@@ -119,12 +168,22 @@ pub fn generate_vision_document_template_with_refs(purpose_refs: &str) -> String
     format!(
         r#"# 3-5 Year Vision
 
-**Living My Purpose**
+## Projects References
+[!projects-references:]
+
+## Goals References
+[!goals-references:]
+
+## Areas References
+[!areas-references:]
+
+## Purpose & Principles References (optional)
 [!purpose-references:{}]
 
-## The Picture of Success
+## Created
+[!datetime:created_date_time:{}]
 
-*It's 3-5 years from now. I wake up and...*
+## Narrative
 
 ### Professional Life
 I'm [role/position] making impact by [key contribution]. My work involves [core activities] and I'm recognized for [unique value].
@@ -140,17 +199,9 @@ I have [financial state] allowing me to [possibilities]. My income comes from [s
 
 ### Growth & Learning
 I've mastered [skills/knowledge]. I'm exploring [new areas]. I contribute by [teaching/sharing].
-
-## Supporting Elements
-[!goals-areas-list]
-
-## Active Projects
-[!projects-list]
-
-## References
-[!references:]
 "#,
-        purpose_refs
+        purpose_refs,
+        chrono::Local::now().to_rfc3339()
     )
 }
 
@@ -170,66 +221,64 @@ Your ultimate intention and core standards. These drive everything else.
 /// Template for Life Mission document
 pub const LIFE_MISSION_TEMPLATE: &str = r#"# Life Mission
 
-## My Purpose Statement
+## Projects References
+[!projects-references:]
 
+## Goals References
+[!goals-references:]
+
+## Vision References
+[!vision-references:]
+
+## Areas References (optional)
+[!areas-references:]
+
+## Created
+[!datetime:created_date_time:2025-01-01T09:00:00Z]
+
+## Description
+
+### Purpose Statement
 *I exist to [core purpose] by [primary means] so that [ultimate impact].*
 
-## This Means I:
+### This Means I:
+- **Create**: [What I bring into existence]
+- **Serve**: [Who I help and how]
+- **Learn**: [What I explore and master]
+- **Share**: [What I teach and give]
 
-**Create**: [What I bring into existence]
-
-**Serve**: [Who I help and how]
-
-**Learn**: [What I explore and master]
-
-**Share**: [What I teach and give]
-
-## Living This Purpose
-- In my work, I...
-- In relationships, I...
-- In community, I...
-- For myself, I...
-
-## Supported By
-[!visions-goals-list]
-
-## References
-[!references:]
+### Principles
+- I stay true to my commitments.
+- I invest my energy in what matters most.
+- I grow through reflective learning.
 "#;
 
 /// Template for Core Values document
 pub const CORE_VALUES_TEMPLATE: &str = r#"# Core Values & Principles
 
-## My Top 5 Values
+## Projects References
+[!projects-references:]
 
-1. **Integrity** - Being true to my word and values
-2. **Growth** - Continuously learning and improving
-3. **Connection** - Building meaningful relationships
-4. **Excellence** - Doing my best work
-5. **[Your Value]** - [What it means]
+## Goals References
+[!goals-references:]
 
-## Operating Principles
+## Vision References
+[!vision-references:]
 
-✓ **I always**: Take responsibility for my commitments
+## Areas References (optional)
+[!areas-references:]
 
-✓ **I never**: Compromise my integrity for short-term gain
+## Created
+[!datetime:created_date_time:2025-01-01T09:05:00Z]
 
-✓ **I believe**: Everyone has something valuable to teach
+## Description
 
-✓ **I stand for**: Making a positive difference
+- **Integrity** — Being true to my word and values
+- **Growth** — Continuously learning and improving
+- **Connection** — Building meaningful relationships
+- **Excellence** — Doing my best work
+- **[Your Value]** — [What it means]
 
-## Expressed Through
-[!visions-goals-list]
-
-## Decision Filter
-
-Before major decisions, I ask:
-1. Does this align with my values?
-2. Will I be proud of this choice?  
-3. Does this move me toward my vision?
-
-## References
-[!references:]
 "#;
 
 /// Template content for the Welcome to GTD Space file

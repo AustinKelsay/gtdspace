@@ -14,6 +14,7 @@ import { ActionPage } from '@/components/gtd/ActionPage';
 import AreaPage from '@/components/gtd/AreaPage';
 import GoalPage from '@/components/gtd/GoalPage';
 import VisionPage from '@/components/gtd/VisionPage';
+import PurposePage from '@/components/gtd/PurposePage';
 import { HabitPage } from '@/components/gtd/HabitPage';
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { TabManager } from '@/components/tabs';
@@ -368,6 +369,36 @@ export const App: React.FC = () => {
       delete window.onTabFileSaved;
     };
   }, [gtdSpace?.root_path, loadProjects]);
+
+  const applyBacklinkChange = React.useCallback(
+    (
+      targetPath: string,
+      mutator: (content: string | null | undefined) => string
+    ): { handled: boolean; wasDirty: boolean } => {
+      const normalizedTarget = targetPath.replace(/\\/g, '/');
+      const tab = tabState.openTabs.find((t) => (t.file.path || t.filePath || '').replace(/\\/g, '/') === normalizedTarget);
+      if (!tab) {
+        return { handled: false, wasDirty: false };
+      }
+
+      const nextContent = mutator(tab.content ?? '');
+      if (nextContent !== tab.content) {
+        updateTabContent(tab.id, nextContent);
+      }
+
+      return { handled: true, wasDirty: tab.hasUnsavedChanges };
+    },
+    [tabState.openTabs, updateTabContent]
+  );
+
+  React.useEffect(() => {
+    window.applyBacklinkChange = applyBacklinkChange;
+    return () => {
+      if (window.applyBacklinkChange === applyBacklinkChange) {
+        delete window.applyBacklinkChange;
+      }
+    };
+  }, [applyBacklinkChange]);
 
   // Create a workspace switching function that can be passed to settings
   const switchWorkspace = React.useCallback(async (path: string) => {
@@ -951,6 +982,36 @@ export const App: React.FC = () => {
                         if (isVisionFile) {
                           return (
                             <VisionPage
+                              key={displayedTab.id}
+                              content={displayedTab.content}
+                              onChange={(value) => updateTabContent(displayedTab.id, value)}
+                              filePath={displayedTab.filePath}
+                              className="flex-1"
+                            />
+                          );
+                        }
+
+                        // Detect Purpose & Principles files
+                        const purposeDir = gtdSpace?.root_path
+                          ? `${gtdSpace.root_path}/Purpose & Principles/`
+                          : undefined;
+                        const pathLooksLikePurpose = purposeDir
+                          ? isUnder(displayedTab.file.path, purposeDir)
+                          : /\/Purpose\s*&\s*Principles\//i.test(displayedTab.file.path.replace(/\\/g, '/'));
+                        const contentLooksLikePurpose =
+                          /\[!vision-references:/i.test(displayedTab.content) ||
+                          /\[!areas-references:/i.test(displayedTab.content) ||
+                          /\[!projects-references:/i.test(displayedTab.content) ||
+                          /\[!goals-references:/i.test(displayedTab.content);
+                        const likelyPurposeHeadings = /##\s+Purpose\s+Statement/i.test(displayedTab.content);
+                        const isPurposeFile =
+                          (pathLooksLikePurpose || likelyPurposeHeadings) &&
+                          displayedTab.file.path !== '::calendar::' &&
+                          contentLooksLikePurpose;
+
+                        if (isPurposeFile) {
+                          return (
+                            <PurposePage
                               key={displayedTab.id}
                               content={displayedTab.content}
                               onChange={(value) => updateTabContent(displayedTab.id, value)}

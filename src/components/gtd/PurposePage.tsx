@@ -1,12 +1,5 @@
 import React from 'react';
 import { Search, X } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,151 +14,66 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
 import { extractMetadata } from '@/utils/metadata-extractor';
 import {
-  buildAreaMarkdown,
-  DEFAULT_AREA_DESCRIPTION,
-  type AreaReferenceGroups,
+  buildPurposeMarkdown,
+  DEFAULT_PURPOSE_DESCRIPTION,
+  type PurposeReferenceGroups,
 } from '@/utils/gtd-markdown-helpers';
 import { syncHorizonBacklink } from '@/utils/horizon-backlinks';
 import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
-import type { GTDAreaReviewCadence, GTDAreaStatus, MarkdownFile } from '@/types';
+import type { MarkdownFile } from '@/types';
 
-export interface AreaPageProps {
+export interface PurposePageProps {
   content: string;
   onChange: (nextContent: string) => void;
   filePath?: string;
   className?: string;
 }
 
-type AreaReferenceKey = 'projects' | 'goals' | 'vision' | 'purpose';
+type PurposeReferenceKey = 'projects' | 'goals' | 'vision' | 'areas';
 
-const HORIZON_DIRS: Record<AreaReferenceKey, string> = {
-  projects: 'Projects',
+const HORIZON_DIRS: Record<Exclude<PurposeReferenceKey, 'projects'>, string> = {
   goals: 'Goals',
   vision: 'Vision',
-  purpose: 'Purpose & Principles',
+  areas: 'Areas of Focus',
 };
 
-type AreaReferenceOption = {
+type PurposeReferenceOption = {
   path: string;
   name: string;
-  horizon: AreaReferenceKey;
+  horizon: PurposeReferenceKey;
 };
 
 const README_REGEX = /(?:^|\/)README(?:\.(md|markdown))?$/i;
 
 type EmitOverrides = Partial<{
   title: string;
-  status: GTDAreaStatus;
-  reviewCadence: GTDAreaReviewCadence;
-  references: AreaReferenceGroups;
+  references: PurposeReferenceGroups;
   description: string;
 }>;
 
-interface AreaSections {
-  description: string;
-}
-
-const AREA_STATUS_OPTIONS: Array<{ value: GTDAreaStatus; label: string }> = [
-  { value: 'steady', label: 'Steady' },
-  { value: 'watch', label: 'Watch' },
-  { value: 'incubating', label: 'Incubating' },
-  { value: 'delegated', label: 'Delegated' },
-];
-
-const AREA_REVIEW_CADENCE_OPTIONS: Array<{ value: GTDAreaReviewCadence; label: string }> = [
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'quarterly', label: 'Quarterly' },
-  { value: 'annually', label: 'Annually' },
-];
-
-const REFERENCE_LABELS: Record<AreaReferenceKey, string> = {
+const PURPOSE_REFERENCE_LABELS: Record<PurposeReferenceKey, string> = {
   projects: 'Projects References',
   goals: 'Goals References',
   vision: 'Vision References',
-  purpose: 'Purpose & Principles References',
+  areas: 'Areas References',
 };
 
+const PURPOSE_REFERENCE_ORDER: PurposeReferenceKey[] = ['projects', 'goals', 'vision', 'areas'];
+
 const CANONICAL_METADATA_HEADINGS: RegExp[] = [
-  /^##\s+Status\b/i,
-  /^##\s+Review\s+Cadence\b/i,
   /^##\s+Projects\s+References\b/i,
   /^##\s+Goals\s+References\b/i,
   /^##\s+Vision\s+References\b/i,
-  /^##\s+Purpose\s*&\s*Principles\s+References\b/i,
   /^##\s+Areas\s+References\b/i,
   /^##\s+Created\b/i,
   /^##\s+Description\b/i,
-  /^##\s+Success\s+Criteria\b/i,
-  /^##\s+Focus\s+Metrics\b/i,
-  /^##\s+Supporting\s+Notes\b/i,
-  /^##\s+Snapshots\b/i,
 ];
 
-function parseAreaSections(content: string): AreaSections {
-  const lines = content.split(/\r?\n/);
-  let collecting = false;
-  const buffer: string[] = [];
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (/^##\s+(Description|Area\s+Narrative)\b.*$/i.test(line)) {
-      collecting = true;
-      buffer.length = 0;
-      continue;
-    }
-
-    if (
-      collecting &&
-      CANONICAL_METADATA_HEADINGS.some((regex) => regex.test(line))
-    ) {
-      break;
-    }
-
-    if (collecting) {
-      buffer.push(rawLine);
-    }
-  }
-
-  const description = buffer.length
-    ? buffer.join('\n').replace(/^\s*\n+/, '').trimEnd()
-    : '';
-
-  return { description };
-}
-
-function normalizeAreaStatus(raw: unknown): GTDAreaStatus {
-  switch (typeof raw === 'string' ? raw.trim().toLowerCase() : '') {
-    case 'steady':
-    case 'watch':
-    case 'incubating':
-    case 'delegated':
-      return raw as GTDAreaStatus;
-    default:
-      return 'steady';
-  }
-}
-
-function normalizeReviewCadence(raw: unknown): GTDAreaReviewCadence {
-  switch (typeof raw === 'string' ? raw.trim().toLowerCase() : '') {
-    case 'weekly':
-    case 'monthly':
-    case 'quarterly':
-    case 'annually':
-      return raw as GTDAreaReviewCadence;
-    default:
-      return 'monthly';
-  }
-}
-
-function displayNameForReference(ref: string): string {
-  const normalized = ref.replace(/\\/g, '/');
-  const leaf = normalized.split('/').pop();
-  if (!leaf) return normalized;
-  return leaf.replace(/\.(md|markdown)$/i, '');
-}
+const DESCRIPTION_HEADING = /^##\s+Description\b/i;
+const LEGACY_PURPOSE_HEADING = /^##\s+Purpose\s+Statement\b/i;
+const LEGACY_PRINCIPLES_HEADING = /^##\s+Principles\b/i;
 
 function toStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -179,6 +87,13 @@ function toStringArray(value: unknown): string[] {
     return trimmed.split(',').map((entry) => entry.trim()).filter(Boolean);
   }
   return [];
+}
+
+function displayNameForReference(ref: string): string {
+  const normalized = ref.replace(/\\/g, '/');
+  const leaf = normalized.split('/').pop();
+  if (!leaf) return normalized;
+  return leaf.replace(/\.(md|markdown)$/i, '');
 }
 
 function formatDisplayDate(iso?: string | null): string {
@@ -195,50 +110,90 @@ function formatDisplayDate(iso?: string | null): string {
   }
 }
 
-const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, className }) => {
+function collectSection(content: string, heading: RegExp): string {
+  const lines = content.split(/\r?\n/);
+  const buffer: string[] = [];
+  let collecting = false;
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (heading.test(trimmed)) {
+      collecting = true;
+      buffer.length = 0;
+      continue;
+    }
+
+    if (!collecting) {
+      continue;
+    }
+
+    if (CANONICAL_METADATA_HEADINGS.some((regex) => regex.test(trimmed))) {
+      break;
+    }
+
+    if (/^##(?!#)/.test(trimmed)) {
+      break;
+    }
+
+    buffer.push(rawLine);
+  }
+
+  return buffer.length ? buffer.join('\n').replace(/^\s*\n+/, '').trimEnd() : '';
+}
+
+function parsePurposeDescription(content: string): string {
+  const canonicalDescription = collectSection(content, DESCRIPTION_HEADING);
+  if (canonicalDescription) {
+    return canonicalDescription;
+  }
+
+  const legacyStatement = collectSection(content, LEGACY_PURPOSE_HEADING);
+  const legacyPrinciples = collectSection(content, LEGACY_PRINCIPLES_HEADING);
+
+  let combined = '';
+  if (legacyStatement) {
+    combined += legacyStatement;
+  }
+
+  if (legacyPrinciples) {
+    if (combined.length > 0) {
+      combined += '\n\n### Principles\n';
+    } else {
+      combined += '### Principles\n';
+    }
+    combined += legacyPrinciples;
+  }
+
+  return combined.trim();
+}
+
+const PurposePage: React.FC<PurposePageProps> = ({ content, onChange, filePath, className }) => {
   const meta = React.useMemo(() => extractMetadata(content || ''), [content]);
-  const parsedSections = React.useMemo(() => parseAreaSections(content || ''), [content]);
+  const parsedDescription = React.useMemo(() => parsePurposeDescription(content || ''), [content]);
+  const { withErrorHandling } = useErrorHandler();
 
   const initialTitle =
-    typeof meta.title === 'string' && meta.title.trim().length > 0 ? meta.title.trim() : 'Untitled Area';
+    typeof meta.title === 'string' && meta.title.trim().length > 0 ? meta.title.trim() : 'Purpose & Principles';
 
-  const initialReferences = React.useMemo<AreaReferenceGroups>(
+  const initialReferences = React.useMemo<PurposeReferenceGroups>(
     () => ({
       projects: toStringArray((meta as any).projectsReferences),
-      areas: toStringArray((meta as any).areasReferences),
       goals: toStringArray((meta as any).goalsReferences),
       vision: toStringArray((meta as any).visionReferences),
-      purpose: toStringArray((meta as any).purposeReferences),
+      areas: toStringArray((meta as any).areasReferences),
     }),
     [meta]
   );
 
   const [title, setTitle] = React.useState<string>(initialTitle);
-  const [status, setStatus] = React.useState<GTDAreaStatus>(normalizeAreaStatus((meta as any).areaStatus));
-  const [reviewCadence, setReviewCadence] = React.useState<GTDAreaReviewCadence>(
-    normalizeReviewCadence((meta as any).areaReviewCadence)
+  const [references, setReferences] = React.useState<PurposeReferenceGroups>(initialReferences);
+  const [description, setDescription] = React.useState<string>(
+    parsedDescription.trim() === DEFAULT_PURPOSE_DESCRIPTION.trim() ? '' : parsedDescription
   );
-  const [references, setReferences] = React.useState<AreaReferenceGroups>(initialReferences);
-  const [activePicker, setActivePicker] = React.useState<AreaReferenceKey | null>(null);
-  const [pickerOptions, setPickerOptions] = React.useState<AreaReferenceOption[]>([]);
+  const [activePicker, setActivePicker] = React.useState<PurposeReferenceKey | null>(null);
+  const [pickerOptions, setPickerOptions] = React.useState<PurposeReferenceOption[]>([]);
   const [pickerLoading, setPickerLoading] = React.useState(false);
   const [pickerSearch, setPickerSearch] = React.useState('');
-  const { withErrorHandling } = useErrorHandler();
-
-  const normalizeSection = React.useCallback(
-    (value: string) => {
-      const trimmed = value?.trim() ?? '';
-      if (trimmed === DEFAULT_AREA_DESCRIPTION.trim()) {
-        return '';
-      }
-      return trimmed;
-    },
-    []
-  );
-
-  const [description, setDescription] = React.useState<string>(
-    normalizeSection(parsedSections.description)
-  );
 
   const createdRef = React.useRef<string>(new Date().toISOString());
   const [createdDisplayValue, setCreatedDisplayValue] = React.useState<string>(
@@ -263,23 +218,23 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
 
   React.useEffect(() => {
     const nextTitle =
-      typeof meta.title === 'string' && meta.title.trim().length > 0 ? meta.title.trim() : 'Untitled Area';
+      typeof meta.title === 'string' && meta.title.trim().length > 0 ? meta.title.trim() : 'Purpose & Principles';
     setTitle(nextTitle);
-    setStatus(normalizeAreaStatus((meta as any).areaStatus));
-    setReviewCadence(normalizeReviewCadence((meta as any).areaReviewCadence));
     setReferences({
       projects: toStringArray((meta as any).projectsReferences),
-      areas: toStringArray((meta as any).areasReferences),
       goals: toStringArray((meta as any).goalsReferences),
       vision: toStringArray((meta as any).visionReferences),
-      purpose: toStringArray((meta as any).purposeReferences),
+      areas: toStringArray((meta as any).areasReferences),
     });
-    const updatedSections = parseAreaSections(content || '');
-    setDescription(normalizeSection(updatedSections.description));
-  }, [meta, content, normalizeSection]);
+
+    const updatedDescription = parsePurposeDescription(content || '');
+    setDescription(
+      updatedDescription.trim() === DEFAULT_PURPOSE_DESCRIPTION.trim() ? '' : updatedDescription
+    );
+  }, [meta, content]);
 
   const loadReferenceOptions = React.useCallback(
-    async (key: AreaReferenceKey): Promise<AreaReferenceOption[]> => {
+    async (key: PurposeReferenceKey): Promise<PurposeReferenceOption[]> => {
       const spacePath = window.localStorage.getItem('gtdspace-current-path') || '';
       if (!spacePath) return [];
 
@@ -296,7 +251,7 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
           if (!projects) return [];
           return projects
             .map((project) => ({
-              path: (project.path || `${spacePath}/${HORIZON_DIRS.projects}/${project.name}`).replace(/\\/g, '/'),
+              path: (project.path || `${spacePath}/Projects/${project.name}`).replace(/\\/g, '/'),
               name: project.name,
               horizon: key,
             }))
@@ -319,7 +274,7 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
             horizon: key,
           }))
           .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-      }, 'Failed to load references', `area-${key}-references`);
+      }, 'Failed to load references', `purpose-${key}-references`);
 
       return result ?? [];
     },
@@ -365,15 +320,11 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
   const emitRebuild = React.useCallback(
     (overrides?: EmitOverrides) => {
       const nextTitle = overrides?.title ?? title;
-      const nextStatus = overrides?.status ?? status;
-      const nextCadence = overrides?.reviewCadence ?? reviewCadence;
       const nextReferences = overrides?.references ?? references;
       const nextDescription = overrides?.description ?? description;
 
-      const built = buildAreaMarkdown({
+      const built = buildPurposeMarkdown({
         title: nextTitle,
-        status: nextStatus,
-        reviewCadence: nextCadence,
         references: nextReferences,
         createdDateTime: createdRef.current,
         description: nextDescription,
@@ -383,11 +334,11 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
         onChange(built);
       }
     },
-    [title, status, reviewCadence, references, description, content, onChange]
+    [title, references, description, content, onChange]
   );
 
   const handleReferenceToggle = React.useCallback(
-    (key: AreaReferenceKey, value: string) => {
+    (key: PurposeReferenceKey, value: string) => {
       const normalizedTarget = value.replace(/\\/g, '/');
       setReferences((current) => {
         const group = current[key] ?? [];
@@ -398,7 +349,7 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
         if (normalizedFilePath && normalizedTarget) {
           void syncHorizonBacklink({
             sourcePath: normalizedFilePath,
-            sourceKind: 'areas',
+            sourceKind: 'purpose',
             targetPath: normalizedTarget,
             action: isPresent ? 'remove' : 'add',
           });
@@ -410,7 +361,7 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
   );
 
   const handleReferenceRemove = React.useCallback(
-    (key: AreaReferenceKey, value: string) => {
+    (key: PurposeReferenceKey, value: string) => {
       const normalizedTarget = value.replace(/\\/g, '/');
       setReferences((current) => {
         const nextGroup = (current[key] ?? []).filter((item) => item !== value);
@@ -419,7 +370,7 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
         if (normalizedFilePath && normalizedTarget) {
           void syncHorizonBacklink({
             sourcePath: normalizedFilePath,
-            sourceKind: 'areas',
+            sourceKind: 'purpose',
             targetPath: normalizedTarget,
             action: 'remove',
           });
@@ -428,6 +379,16 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
       });
     },
     [emitRebuild, normalizedFilePath]
+  );
+
+  const onDescriptionChange = React.useCallback(
+    (nextValue: string) => {
+      const trimmed = nextValue.trim();
+      const clean = trimmed === DEFAULT_PURPOSE_DESCRIPTION.trim() ? '' : nextValue;
+      setDescription(clean);
+      emitRebuild({ description: clean });
+    },
+    [emitRebuild]
   );
 
   return (
@@ -442,74 +403,31 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
             emitRebuild({ title: next });
           }}
           className="w-full bg-background text-foreground text-5xl font-bold leading-tight tracking-[-0.01em] border-0 outline-none placeholder:text-muted-foreground"
-          placeholder="Untitled Area"
+          placeholder="Purpose & Principles"
         />
 
-        <div className="grid lg:grid-cols-3 gap-x-6 gap-y-4">
-          <div className="grid grid-cols-[140px_1fr] gap-x-4 items-center">
-            <span className="text-sm text-muted-foreground">Status</span>
-            <Select
-              value={status}
-              onValueChange={(value) => {
-                const next = value as GTDAreaStatus;
-                setStatus(next);
-                emitRebuild({ status: next });
-              }}
-            >
-              <SelectTrigger className="h-9 text-sm" aria-label="Area status">
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                {AREA_STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-[140px_1fr] gap-x-4 items-center">
-            <span className="text-sm text-muted-foreground">Review Cadence</span>
-            <Select
-              value={reviewCadence}
-              onValueChange={(value) => {
-                const next = value as GTDAreaReviewCadence;
-                setReviewCadence(next);
-                emitRebuild({ reviewCadence: next });
-              }}
-            >
-              <SelectTrigger className="h-9 text-sm" aria-label="Area review cadence">
-                <SelectValue placeholder="Select cadence" />
-              </SelectTrigger>
-              <SelectContent>
-                {AREA_REVIEW_CADENCE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-[140px_1fr] gap-x-4 items-center">
-            <span className="text-sm text-muted-foreground">Created</span>
+        <div className="grid md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground">Created</span>
+            </div>
             <div className="text-sm text-muted-foreground">{createdDisplayValue}</div>
           </div>
-        </div>
-        <div className="grid md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
-          {(Object.keys(REFERENCE_LABELS) as AreaReferenceKey[]).map((key) => {
+
+          {PURPOSE_REFERENCE_ORDER.map((key) => {
             const currentRefs = references[key] ?? [];
+            const label = PURPOSE_REFERENCE_LABELS[key];
+            const isOptional = key === 'areas';
+
             return (
               <div key={key} className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm text-muted-foreground">
-                    {REFERENCE_LABELS[key]}
+                    {label}
+                    {isOptional ? ' (optional)' : ''}
                   </span>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground">
-                      {currentRefs.length} linked
-                    </span>
+                    <span className="text-xs text-muted-foreground">{currentRefs.length} linked</span>
                     <Button
                       type="button"
                       variant="outline"
@@ -566,9 +484,9 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
               return (
                 <>
                   <DialogHeader>
-                    <DialogTitle>Manage {REFERENCE_LABELS[activePicker]}</DialogTitle>
+                    <DialogTitle>Manage {PURPOSE_REFERENCE_LABELS[activePicker]}</DialogTitle>
                     <DialogDescription>
-                      Select items to link with this area. Existing selections stay highlighted.
+                      Select items to link with this purpose document. Existing selections stay highlighted.
                     </DialogDescription>
                   </DialogHeader>
 
@@ -587,7 +505,8 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
                       <div className="py-12 text-center text-muted-foreground">Loading references...</div>
                     ) : filteredPickerOptions.length === 0 ? (
                       <div className="py-12 text-center text-muted-foreground">
-                        No items found. Add files to the {HORIZON_DIRS[activePicker]} folder to link them here.
+                        No items found. Add files to the{' '}
+                        {activePicker === 'projects' ? 'Projects' : HORIZON_DIRS[activePicker]} folder to link them here.
                       </div>
                     ) : (
                       <div className="p-4 space-y-2">
@@ -610,9 +529,7 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
                                   </Badge>
                                 )}
                               </div>
-                              <div className="text-xs text-muted-foreground mt-1 truncate">
-                                {option.path}
-                              </div>
+                              <div className="text-xs text-muted-foreground mt-1 truncate">{option.path}</div>
                             </button>
                           );
                         })}
@@ -627,18 +544,14 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
 
       <div className="border-t border-border mt-8" />
 
-      <div className="px-12 pb-16 pt-10 space-y-8 flex-1 overflow-y-auto">
+      <div className="px-12 pb-16 pt-10 space-y-10 flex-1 overflow-y-auto">
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Description</h2>
           </div>
           <EnhancedTextEditor
-            content={description || DEFAULT_AREA_DESCRIPTION}
-            onChange={(next) => {
-              const clean = next.trim() === DEFAULT_AREA_DESCRIPTION.trim() ? '' : next;
-              setDescription(clean);
-              emitRebuild({ description: clean });
-            }}
+            content={description || DEFAULT_PURPOSE_DESCRIPTION}
+            onChange={onDescriptionChange}
             readOnly={false}
             autoFocus={false}
             className="flex-1"
@@ -652,4 +565,4 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
   );
 };
 
-export default AreaPage;
+export default PurposePage;

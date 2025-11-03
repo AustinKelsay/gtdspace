@@ -667,3 +667,27 @@ export interface GTDVisionDoc {
   /** Vision narrative content */
   narrative?: string;
 }
+
+/**
+ * GTD Purpose & Principles document structure
+ */
+export interface GTDPurposePrinciplesDoc {
+  /** Purpose document display name (H1 title) */
+  name: string;
+  /** Full file path to the purpose markdown file */
+  path: string;
+  /** ISO timestamp representing creation date */
+  createdDateTime?: string;
+  /** Linked projects (file paths) */
+  projects?: string[];
+  /** Linked goals (file paths) */
+  goals?: string[];
+  /** Linked vision documents (file paths) */
+  vision?: string[];
+  /** Linked areas of focus (file paths) */
+  areas?: string[];
+  /** Core purpose statement */
+  purposeStatement?: string;
+  /** Guiding principles (rich text or markdown list) */
+  principles?: string;
+}

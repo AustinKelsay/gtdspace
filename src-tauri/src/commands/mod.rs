@@ -970,19 +970,15 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
         });
     }
 
-    // Check which GTD horizon we're in
+    // Normalize horizon detection
     let is_in_projects = dir_path.components().any(|c| c.as_os_str() == "Projects");
+   let is_in_habits = dir_path.components().any(|c| c.as_os_str() == "Habits");
     let is_in_vision = dir_path.components().any(|c| c.as_os_str() == "Vision");
     let is_in_goals = dir_path.components().any(|c| c.as_os_str() == "Goals");
-    let is_in_areas = dir_path
-        .components()
-        .any(|c| c.as_os_str() == "Areas of Focus");
-    let is_in_purpose = dir_path
-        .components()
-        .any(|c| c.as_os_str() == "Purpose & Principles");
-    let is_in_habits = dir_path.components().any(|c| c.as_os_str() == "Habits");
+    let is_in_areas = dir_path.components().any(|c| c.as_os_str() == "Areas of Focus");
+    let is_in_purpose = dir_path.components().any(|c| c.as_os_str() == "Purpose & Principles");
 
-    // Check if this is a project directory (has README.md)
+    // For project actions, require README.md to distinguish from project root creation
     let is_project_dir = dir_path.join("README.md").exists();
 
     // Create appropriate template content based on GTD horizon
@@ -1014,148 +1010,113 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
             chrono::Local::now().to_rfc3339()
         )
     } else if is_in_vision {
-        // Vision template with purpose references
         format!(
             r#"# {}
 
-## Living My Purpose
+## Projects References
+[!projects-references:]
 
+## Goals References
+[!goals-references:]
+
+## Areas References
+[!areas-references:]
+
+## Purpose & Principles References (optional)
 [!purpose-references:]
 
-## The Picture of Success
-*Describe what success looks like in 3-5 years...*
-
-## Supporting Goals
-
-[!goals-list]
-
-## Supporting Areas
-
-[!areas-list]
-
-## Supporting Projects
-
-[!projects-list]
-
-## Related Habits
-
-[!habits-list]
-
----
+## Created
 [!datetime:created_date_time:{}]
+
+## Narrative
+*Describe the vivid picture of your desired future state and the key themes you want to realize.*
 "#,
             clean_name,
             chrono::Local::now().to_rfc3339()
         )
     } else if is_in_goals {
-        // Goals template with vision and purpose references
         format!(
             r#"# {}
 
-## Target Date
+## Status
+[!singleselect:goal-status:in-progress]
 
-[!datetime:target_date:]
+## Target Date (optional)
+[!datetime:goal-target-date:]
 
-## Outcome
-*What specific outcome will be achieved?*
+## Projects References
+[!projects-references:]
 
-## Aligned With
+## Areas References
+[!areas-references:]
 
+## Vision References (optional)
 [!vision-references:]
 
+## Purpose & Principles References (optional)
 [!purpose-references:]
 
-## Supporting Areas
-
-[!areas-list]
-
-## Projects
-
-[!projects-list]
-
-## Related Habits
-
-[!habits-list]
-
----
+## Created
 [!datetime:created_date_time:{}]
+
+## Description
+*Describe the desired outcome, success criteria, and why this goal matters.*
 "#,
             clean_name,
             chrono::Local::now().to_rfc3339()
         )
     } else if is_in_areas {
-        // Areas of Focus template with all horizon references
         format!(
             r#"# {}
 
-## Purpose
-*Why is this area important?*
+## Status
+[!singleselect:area-status:steady]
 
-## Standards
-*What does excellence look like in this area?*
+## Review Cadence
+[!singleselect:area-review-cadence:monthly]
 
-## Aligned With
+## Projects References
+[!projects-references:]
 
+## Goals References
 [!goals-references:]
 
+## Vision References (optional)
 [!vision-references:]
 
+## Purpose & Principles References (optional)
 [!purpose-references:]
 
-## Supporting Projects
-
-[!projects-list]
-
-## Related Habits
-
-[!habits-list]
-
-## References
-
-[!references:]
-
----
+## Created
 [!datetime:created_date_time:{}]
+
+## Description
+*Summarize the scope, responsibilities, and commitments for this area.*
 "#,
             clean_name,
             chrono::Local::now().to_rfc3339()
         )
     } else if is_in_purpose {
-        // Purpose & Principles template
         format!(
             r#"# {}
 
-## Core Principle
-*What fundamental truth or value does this represent?*
+## Projects References
+[!projects-references:]
 
-## Why It Matters
-*How does this guide your decisions and actions?*
+## Goals References
+[!goals-references:]
 
-## Living This Principle
-*What does it look like when you embody this?*
+## Vision References
+[!vision-references:]
 
-## Supporting Visions
+## Areas References (optional)
+[!areas-references:]
 
-[!visions-list]
-
-## Supporting Goals
-
-[!goals-list]
-
-## Supporting Areas
-
-[!areas-list]
-
-## Supporting Projects
-
-[!projects-list]
-
-## Related Habits
-
-[!habits-list]
-
----
+## Created
 [!datetime:created_date_time:{}]
+
+## Description
+*Capture the purpose and guiding principles that anchor your commitments.*
 "#,
             clean_name,
             chrono::Local::now().to_rfc3339()

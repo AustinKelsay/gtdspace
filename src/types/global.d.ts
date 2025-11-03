@@ -19,6 +19,13 @@ declare global {
   // Window extensions for GTD Space
   interface Window {
     onTabFileSaved?: (filePath: string) => Promise<void>;
+    applyBacklinkChange?: (
+      filePath: string,
+      mutator: (content: string | null | undefined) => string
+    ) => {
+      handled: boolean;
+      wasDirty: boolean;
+    };
   }
 }
 

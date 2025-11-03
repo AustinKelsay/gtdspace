@@ -74,6 +74,13 @@ export interface VisionReferenceGroups {
   purpose: string[];
 }
 
+export interface PurposeReferenceGroups {
+  projects: string[];
+  goals: string[];
+  vision: string[];
+  areas: string[];
+}
+
 export const DEFAULT_HABIT_HISTORY_BODY =
   '*Track your habit completions below:*\n\n| Date | Time | Status | Action | Details |\n| --- | --- | --- | --- | --- |';
 
@@ -85,6 +92,9 @@ export const DEFAULT_GOAL_DESCRIPTION =
 
 export const DEFAULT_VISION_NARRATIVE =
   '*Describe the vivid picture of your desired future state and the key themes you want to realize.*';
+
+export const DEFAULT_PURPOSE_DESCRIPTION =
+  '*Capture the purpose and guiding principles that anchor your commitments.*';
 
 /**
  * Escapes special characters for safe inclusion in HTML attributes
@@ -152,7 +162,7 @@ function escapeMarkdownInline(str: string): string {
     .replace(/#/g, '\\#');
 }
 
-function encodeReferenceArray(values?: string[]): string {
+export function encodeReferenceArray(values?: string[]): string {
   const normalized = (values ?? [])
     .map((ref) => ref.trim())
     .filter(Boolean)
@@ -646,6 +656,52 @@ export function buildVisionMarkdown({
   parts.push('\n\n## Narrative\n');
   parts.push(
     `${(cleanNarrative.length > 0 ? cleanNarrative : DEFAULT_VISION_NARRATIVE).replace(/\s+$/g, '')}\n`
+  );
+
+  return `${parts.join('').trimEnd()}\n`;
+}
+
+/**
+ * Builds canonical markdown for a Purpose & Principles file with standardized ordering.
+ */
+export function buildPurposeMarkdown({
+  title,
+  references,
+  createdDateTime,
+  description,
+}: {
+  title: string;
+  references: PurposeReferenceGroups;
+  createdDateTime: string;
+  description?: string;
+}): string {
+  const safeTitle = title?.trim() || 'Purpose & Principles';
+
+  const parts: string[] = [];
+  parts.push(`# ${safeTitle}`);
+
+  parts.push('\n\n## Projects References\n');
+  parts.push(`[!projects-references:${encodeReferenceArray(references.projects ?? [])}]\n`);
+
+  parts.push('\n\n## Goals References\n');
+  parts.push(`[!goals-references:${encodeReferenceArray(references.goals ?? [])}]\n`);
+
+  parts.push('\n\n## Vision References\n');
+  parts.push(`[!vision-references:${encodeReferenceArray(references.vision ?? [])}]\n`);
+
+  const encodedAreas = encodeReferenceArray(references.areas ?? []);
+  if (encodedAreas) {
+    parts.push('\n\n## Areas References (optional)\n');
+    parts.push(`[!areas-references:${encodedAreas}]\n`);
+  }
+
+  parts.push('\n\n## Created\n');
+  parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
+
+  const cleanDescription = (description ?? '').trim();
+  parts.push('\n\n## Description\n');
+  parts.push(
+    `${(cleanDescription.length > 0 ? cleanDescription : DEFAULT_PURPOSE_DESCRIPTION).replace(/\s+$/g, '')}\n`
   );
 
   return `${parts.join('').trimEnd()}\n`;

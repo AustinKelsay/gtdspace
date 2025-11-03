@@ -573,3 +573,121 @@ export interface GTDHabit {
   /** Date habit was created */
   createdDateTime: string;
 }
+
+/**
+ * GTD Area of Focus status options
+ */
+export type GTDAreaStatus = 'steady' | 'watch' | 'incubating' | 'delegated';
+
+/**
+ * GTD Area of Focus review cadence options
+ */
+export type GTDAreaReviewCadence = 'weekly' | 'monthly' | 'quarterly' | 'annually';
+
+/**
+ * GTD Area of Focus structure
+ */
+export interface GTDArea {
+  /** Area display name (H1 title) */
+  name: string;
+  /** Full file path to the area markdown file */
+  path: string;
+  /** Canonical status token controlling attention level */
+  status: GTDAreaStatus;
+  /** Preferred review cadence token */
+  reviewCadence: GTDAreaReviewCadence;
+  /** Owners or accountable stewards for the area */
+  stewards?: string[];
+  /** ISO timestamp representing creation date */
+  createdDateTime?: string;
+  /** Linked projects (file paths) */
+  projects?: string[];
+  /** Linked goals (file paths) */
+  goals?: string[];
+  /** Linked vision documents (file paths) */
+  vision?: string[];
+  /** Linked purpose & principles documents (file paths) */
+  purpose?: string[];
+}
+
+/**
+ * GTD Goal status options
+ */
+export type GTDGoalStatus = 'in-progress' | 'waiting' | 'completed';
+
+/**
+ * GTD Goal structure
+ */
+export interface GTDGoal {
+  /** Goal display name (H1 title) */
+  name: string;
+  /** Full file path to the goal markdown file */
+  path: string;
+  /** Canonical progress status */
+  status: GTDGoalStatus;
+  /** Optional target date ISO string (YYYY-MM-DD) */
+  targetDate?: string | null;
+  /** ISO timestamp representing creation date */
+  createdDateTime?: string;
+  /** Linked areas (file paths) */
+  areas?: string[];
+  /** Linked projects (file paths) */
+  projects?: string[];
+  /** Linked vision documents (file paths) */
+  vision?: string[];
+  /** Linked purpose & principles documents (file paths) */
+  purpose?: string[];
+}
+
+/**
+ * GTD Vision horizon options
+ */
+export type GTDVisionHorizon = '3-years' | '5-years' | '10-years' | 'custom';
+
+/**
+ * GTD Vision document structure
+ */
+export interface GTDVisionDoc {
+  /** Vision display name (H1 title) */
+  name: string;
+  /** Full file path to the vision markdown file */
+  path: string;
+  /** Horizon token representing time span */
+  horizon: GTDVisionHorizon;
+  /** ISO timestamp representing creation date */
+  createdDateTime?: string;
+  /** Linked projects (file paths) */
+  projects?: string[];
+  /** Linked goals (file paths) */
+  goals?: string[];
+  /** Linked areas (file paths) */
+  areas?: string[];
+  /** Linked purpose & principles documents (file paths) */
+  purpose?: string[];
+  /** Vision narrative content */
+  narrative?: string;
+}
+
+/**
+ * GTD Purpose & Principles document structure
+ */
+export interface GTDPurposePrinciplesDoc {
+  /** Purpose document display name (H1 title) */
+  name: string;
+  /** Full file path to the purpose markdown file */
+  path: string;
+  /** ISO timestamp representing creation date */
+  createdDateTime?: string;
+  /** Linked projects (file paths) */
+  projects?: string[];
+  /** Linked goals (file paths) */
+  goals?: string[];
+  /** Linked vision documents (file paths) */
+  vision?: string[];
+  /** Linked areas of focus (file paths) */
+  areas?: string[];
+  /** Core purpose statement */
+  purposeStatement?: string;
+  /** Guiding principles (rich text or markdown list) */
+  principles?: string;
+}

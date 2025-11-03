@@ -10,6 +10,7 @@ import { readFileText } from './useFileManager';
 import type { GTDProject, MarkdownFile } from '@/types';
 import { toISOStringFromEpoch } from '@/utils/time';
 import { parseLocalDate } from '@/utils/date-formatting';
+import { migrateGTDObjects } from '@/utils/data-migration';
 
 export interface ProjectWithMetadata extends GTDProject {
   linkedAreas?: string[];
@@ -177,20 +178,52 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
   const loadProjects = useCallback(async (spacePath: string) => {
     setIsLoading(true);
     setError(null);
-    setCachedSpacePath(spacePath);
+    const normalizedSpacePath = spacePath.trim();
+    setCachedSpacePath(normalizedSpacePath);
     
     try {
+      let workspaceExists = await safeInvoke<boolean>('check_directory_exists', { path: normalizedSpacePath }, null);
+      if (workspaceExists === false) {
+        await safeInvoke<string>('initialize_gtd_space', { spacePath: normalizedSpacePath }, null);
+        workspaceExists = await safeInvoke<boolean>('check_directory_exists', { path: normalizedSpacePath }, null);
+      }
+
+      if (workspaceExists === false) {
+        throw new Error(`Workspace path does not exist: ${normalizedSpacePath}`);
+      }
+
+      let projectsDirExists = await safeInvoke<boolean>(
+        'check_directory_exists',
+        { path: `${normalizedSpacePath}/Projects` },
+        null
+      );
+
+      if (projectsDirExists === false) {
+        await safeInvoke<string>('initialize_gtd_space', { spacePath: normalizedSpacePath }, null);
+        projectsDirExists = await safeInvoke<boolean>(
+          'check_directory_exists',
+          { path: `${normalizedSpacePath}/Projects` },
+          null
+        );
+      }
+
+      if (projectsDirExists === false) {
+        throw new Error(`Projects directory is missing under ${normalizedSpacePath}`);
+      }
+
       // Load base projects via backend if available; otherwise fallback to scanning Projects folder
-      let baseProjects = await safeInvoke<GTDProject[]>(
-        'load_projects',
-        { path: spacePath },
+      const invokedProjects = await safeInvoke<GTDProject[]>(
+        'list_gtd_projects',
+        { spacePath: normalizedSpacePath },
         []
       );
 
-      if (!baseProjects || baseProjects.length === 0) {
+      let baseProjects = migrateGTDObjects(invokedProjects ?? []);
+
+      if (baseProjects.length === 0) {
         // Fallback: build projects from README.md files under spacePath/Projects
         try {
-          const projectsRoot = `${spacePath}/Projects`;
+          const projectsRoot = `${normalizedSpacePath}/Projects`;
           const files = await safeInvoke<MarkdownFile[]>(
             'list_markdown_files',
             { path: projectsRoot },

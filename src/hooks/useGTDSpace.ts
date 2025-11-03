@@ -10,6 +10,7 @@ import {
   GTDActionCreate,
 } from '@/types';
 import { migrateGTDObjects } from '@/utils/data-migration';
+import { createScopedLogger } from '@/utils/logger';
 
 /**
  * Hook for managing GTD space operations
@@ -20,6 +21,7 @@ import { migrateGTDObjects } from '@/utils/data-migration';
  * - Managing GTD-specific operations
  */
 export function useGTDSpace() {
+  const log = useMemo(() => createScopedLogger('useGTDSpace'), []);
   const [gtdSpace, setGTDSpace] = useState<GTDSpace | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -319,7 +321,7 @@ export function useGTDSpace() {
    */
   const loadProjectsInternal = useCallback(
     async (spacePath: string) => {
-      console.log('[useGTDSpace] loadProjectsInternal called for path:', spacePath);
+      log.debug('loadProjectsInternal called for path', spacePath);
       setIsLoading(true);
       let result: GTDProject[] | undefined;
       try {
@@ -336,11 +338,11 @@ export function useGTDSpace() {
             const totalActions = projects.reduce((sum, project) => sum + (project.action_count || 0), 0);
             
             // Update space state with loaded projects - use functional update to preserve other state
-            console.log('[useGTDSpace] Updating GTDSpace state with', projects.length, 'projects');
+            log.debug('Updating GTDSpace state', { projectCount: projects.length });
             setGTDSpace(prev => {
               // If no previous state, we need to initialize it
               if (!prev) {
-                console.log('[useGTDSpace] No previous state - initializing with projects');
+                log.debug('No previous state - initializing with projects');
                 return {
                   root_path: spacePath,
                   is_initialized: true,
@@ -352,7 +354,7 @@ export function useGTDSpace() {
               
               // If the path doesn't match, skip update (wrong space)
               if (prev.root_path !== spacePath) {
-                console.log('[useGTDSpace] Skipping state update - path mismatch');
+                log.debug('Skipping state update - path mismatch');
                 return prev;
               }
               
@@ -363,11 +365,11 @@ export function useGTDSpace() {
                 JSON.stringify(prev.projects) !== JSON.stringify(projects);
               
               if (!projectsChanged) {
-                console.log('[useGTDSpace] Skipping state update - data unchanged');
+                log.debug('Skipping state update - data unchanged');
                 return prev;
               }
               
-              console.log('[useGTDSpace] Previous state:', prev);
+              log.debug('Previous state snapshot', prev);
               const newState = {
                 ...prev,
                 // Don't update root_path - it's already set and updating it causes re-renders
@@ -376,7 +378,7 @@ export function useGTDSpace() {
                 projects,
                 total_actions: totalActions,
               };
-              console.log('[useGTDSpace] New state:', newState);
+              log.debug('New state snapshot', newState);
               return newState;
             });
             
@@ -389,10 +391,10 @@ export function useGTDSpace() {
         setIsLoading(false);
       }
       
-      console.log('[useGTDSpace] loadProjectsInternal completed, returning', result?.length || 0, 'projects');
+      log.debug('loadProjectsInternal completed', { projectCount: result?.length ?? 0 });
       return result || [];
     },
-    [withErrorHandling]
+    [withErrorHandling, log]
   );
 
   // Track the last spacePath to avoid redundant calls
@@ -407,7 +409,7 @@ export function useGTDSpace() {
       async (spacePath: string) => {
         // Skip if we're already loading the same path
         if (lastLoadedPath.current === spacePath && loadPromise.current) {
-          console.log('[useGTDSpace] Skipping loadProjects - already loading path:', spacePath);
+          log.debug('Skipping loadProjects - already loading path', spacePath);
           return loadPromise.current;
         }
 
@@ -424,7 +426,7 @@ export function useGTDSpace() {
       500, // 500ms debounce to batch rapid calls
       { leading: true, trailing: true, maxWait: 1000 } // Run immediately and flush the last call within the window
     ),
-    [loadProjectsInternal]
+    [loadProjectsInternal, log]
   );
 
   /**
@@ -432,10 +434,10 @@ export function useGTDSpace() {
    */
   const loadProjects = useCallback(
     async (spacePath: string) => {
-      console.log('[useGTDSpace] loadProjects called for path:', spacePath);
+      log.debug('loadProjects called for path', spacePath);
       return debouncedLoadProjects(spacePath);
     },
-    [debouncedLoadProjects]
+    [debouncedLoadProjects, log]
   );
 
   /**

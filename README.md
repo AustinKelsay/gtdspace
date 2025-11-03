@@ -1,6 +1,6 @@
 # GTD Space
 
-A GTD-first productivity system with integrated markdown editing, built with Tauri, React, and TypeScript.
+A GTD-first productivity system with integrated WYSIWYG markdown editing, built with Tauri, React, and TypeScript.
 
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
 ![Tech Stack](https://img.shields.io/badge/Stack-Tauri%202.x%20%7C%20React%2018%20%7C%20Rust-orange)

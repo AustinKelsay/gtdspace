@@ -32,6 +32,9 @@ import {
 } from '@/components/dashboard';
 import type { GTDSpace, GTDProject, MarkdownFile, FileOperationResult } from '@/types';
 import type { HorizonFile } from '@/hooks/useHorizonsRelationships';
+import { createScopedLogger } from '@/utils/logger';
+
+const log = createScopedLogger('GTDDashboard');
 
 interface GTDDashboardProps {
   currentFolder: string | null;
@@ -132,23 +135,23 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   // Load initial data when GTD space root path changes
   React.useEffect(() => {
     const loadInitialData = async () => {
-      console.log('[GTDDashboard] Checking GTD space:', gtdSpace, 'currentFolder:', currentFolder);
+      log.debug('Checking GTD space', { gtdSpace, currentFolder });
 
       // Use gtdSpace.root_path if available, otherwise fall back to currentFolder
       const pathToLoad = gtdSpace?.root_path || currentFolder;
 
       if (!pathToLoad) {
-        console.log('[GTDDashboard] No path available (neither gtdSpace.root_path nor currentFolder), skipping load');
+        log.debug('No path available (neither root_path nor currentFolder); skipping load');
         return;
       }
 
       // Skip if already loaded for this path
       if (loadedPathRef.current === pathToLoad) {
-        console.log('[GTDDashboard] Already loaded for path:', pathToLoad);
+        log.debug('Already loaded for path', pathToLoad);
         return;
       }
 
-      console.log('[GTDDashboard] Loading initial data for path:', pathToLoad);
+      log.info('Loading initial GTD data for path', pathToLoad);
 
       try {
         // Load data in parallel using our new hooks
@@ -161,7 +164,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           loadHabits(pathToLoad),
         ]);
 
-        console.log('[GTDDashboard] Load results:', results.map((r, i) => ({
+        log.debug('Load results', results.map((r, i) => ({
           index: i,
           status: r.status,
           reason: r.status === 'rejected' ? r.reason : 'success'
@@ -169,7 +172,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
         // Check if habits loading failed specifically
         if (results[2].status === 'rejected') {
-          console.error('[GTDDashboard] Habits loading failed:', results[2].reason);
+          log.error('Habits loading failed', results[2].reason);
           toast({
             title: 'Failed to Load Habits',
             description: 'Unable to load habits from the workspace. Please check the console for details.',
@@ -179,7 +182,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
         loadedPathRef.current = pathToLoad;
       } catch (error) {
-        console.error('[GTDDashboard] Failed to load initial data:', error);
+        log.error('Failed to load initial data', error);
         loadedPathRef.current = null;
       }
     };
@@ -218,7 +221,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           cleanupHorizons = horizonsResult.value;
         }
       } catch (error) {
-        console.error('[GTDDashboard] Failed to load project-dependent data:', error);
+        log.error('Failed to load project-dependent data', error);
       }
     };
 
@@ -281,7 +284,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                 // Close the undo toast after success
                 if (undoToast?.dismiss) undoToast.dismiss();
               } catch (err) {
-                console.error('Failed to restore action:', err);
+                log.error('Failed to restore action', err);
                 toast({ title: 'Restore failed', description: String(err), variant: 'destructive' });
               }
             }}
@@ -295,7 +298,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
         await loadActions(gtdSpace.projects);
       }
     } catch (err) {
-      console.error('Failed to delete action:', err);
+      log.error('Failed to delete action', err);
       toast({ title: 'Delete failed', description: String(err), variant: 'destructive' });
     }
   };
@@ -304,7 +307,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   const handleBulkActionUpdate = async (actionIds: string[], updates: Partial<{ status: string }>, actionPaths?: string[]) => {
     if (updates.status) {
       try {
-        console.log('[GTDDashboard] handleBulkActionUpdate called:', {
+        log.debug('handleBulkActionUpdate called', {
           actionIds,
           status: updates.status,
           actionPaths
@@ -314,7 +317,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
         const results = await Promise.allSettled(
           actionIds.map((actionId, index) => {
             const path = actionPaths?.[index];
-            console.log(`[GTDDashboard] Updating action ${index + 1}/${actionIds.length}:`, {
+            log.debug(`Updating action ${index + 1}/${actionIds.length}`, {
               actionId,
               path,
               newStatus: updates.status
@@ -359,7 +362,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           await loadActions(gtdSpace.projects);
         }
       } catch (err) {
-        console.error('Bulk update error:', err);
+        log.error('Bulk update error', err);
         toast({
           title: 'Update failed',
           description: 'An error occurred while updating actions',
@@ -605,7 +608,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                         // Reload habits
                         await loadHabits(gtdSpace.root_path);
                       } catch (error) {
-                        console.error('Failed to create habit:', error);
+                        log.error('Failed to create habit', error);
                         alert(`Failed to create habit: ${error}`);
                       }
                     }
@@ -679,7 +682,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                         content: defaultContent
                       }, null);
                       if (!writeResult) {
-                        console.error('Failed to create new file');
+                        log.error('Failed to create new file');
                         return;
                       }
                       // Open the new file
@@ -696,7 +699,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                       // Reload horizons
                       await loadHorizons(gtdSpace.root_path, gtdSpace.projects || []);
                     } catch (error) {
-                      console.error('Failed to create file:', error);
+                      log.error('Failed to create file', error);
                     }
                   }
               }}

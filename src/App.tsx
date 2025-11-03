@@ -1,36 +1,56 @@
-import React from 'react';
-import '@/utils/resize-observer-fix';
+import React from "react";
+import "@/utils/resize-observer-fix";
 // Use guarded Tauri detection and dynamic invoke to avoid web/runtime crashes
-import { waitForTauriReady } from '@/utils/tauri-ready';
-import { safeInvoke } from '@/utils/safe-invoke';
-import { PanelLeftClose, PanelLeft, FolderOpen, Folder, Target } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { AppHeader, AppLoadingScreen } from '@/components/app';
-import { GTDWorkspaceSidebar, GTDDashboard, GTDQuickActions, GTDInitDialog } from '@/components/gtd';
-import { FileChangeManager } from '@/components/file-browser/FileChangeManager';
-import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
-import { ActionPage } from '@/components/gtd/ActionPage';
-import { HabitPage } from '@/components/gtd/HabitPage';
-import { CalendarView } from '@/components/calendar/CalendarView';
-import { TabManager } from '@/components/tabs';
+import { waitForTauriReady } from "@/utils/tauri-ready";
+import { safeInvoke } from "@/utils/safe-invoke";
+import {
+  PanelLeftClose,
+  PanelLeft,
+  FolderOpen,
+  Folder,
+  Target,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { AppHeader, AppLoadingScreen } from "@/components/app";
+import {
+  GTDWorkspaceSidebar,
+  GTDDashboard,
+  GTDQuickActions,
+  GTDInitDialog,
+} from "@/components/gtd";
+import { FileChangeManager } from "@/components/file-browser/FileChangeManager";
+import { EnhancedTextEditor } from "@/components/editor/EnhancedTextEditor";
+import { ActionPage } from "@/components/gtd/ActionPage";
+import AreaPage from "@/components/gtd/AreaPage";
+import GoalPage from "@/components/gtd/GoalPage";
+import VisionPage from "@/components/gtd/VisionPage";
+import PurposePage from "@/components/gtd/PurposePage";
+import { HabitPage } from "@/components/gtd/HabitPage";
+import { CalendarView } from "@/components/calendar/CalendarView";
+import { TabManager } from "@/components/tabs";
 import {
   SettingsManagerLazy,
   GlobalSearchLazy,
-  KeyboardShortcutsReferenceLazy
-} from '@/components/lazy';
-import { useFileManager } from '@/hooks/useFileManager';
-import { useTabManager } from '@/hooks/useTabManager';
-import { useFileWatcher } from '@/hooks/useFileWatcher';
-import { useSettings } from '@/hooks/useSettings';
-import { useModalManager } from '@/hooks/useModalManager';
-import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
-import { useErrorHandler } from '@/hooks/useErrorHandler';
-import { useGTDSpace } from '@/hooks/useGTDSpace';
-import { ErrorBoundary } from '@/components/error-handling';
-import { Toaster } from '@/components/ui/toaster';
-import type { Theme, MarkdownFile, EditorMode, GTDProject } from '@/types';
-import './styles/globals.css';
+  KeyboardShortcutsReferenceLazy,
+} from "@/components/lazy";
+import { useFileManager } from "@/hooks/useFileManager";
+import { useTabManager } from "@/hooks/useTabManager";
+import { useFileWatcher } from "@/hooks/useFileWatcher";
+import { useSettings } from "@/hooks/useSettings";
+import { useModalManager } from "@/hooks/useModalManager";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useErrorHandler } from "@/hooks/useErrorHandler";
+import { useGTDSpace } from "@/hooks/useGTDSpace";
+import { ErrorBoundary } from "@/components/error-handling";
+import { Toaster } from "@/components/ui/toaster";
+import type { Theme, MarkdownFile, EditorMode, GTDProject } from "@/types";
+import "./styles/globals.css";
 
 /**
  * Normalizes a file path by converting it to lowercase and replacing
@@ -40,7 +60,7 @@ import './styles/globals.css';
  * @returns The normalized path, or null/undefined if the input is null/undefined.
  */
 function norm(p?: string | null): string | null | undefined {
-  return p?.toLowerCase().replace(/\\/g, '/');
+  return p?.toLowerCase().replace(/\\/g, "/");
 }
 
 /**
@@ -59,19 +79,21 @@ function isUnder(p?: string | null, dir?: string | null): boolean {
   }
 
   // Ensure the directory path ends with a slash for accurate "under" comparison
-  const dirWithTrailingSlash = normalizedDir.endsWith('/') ? normalizedDir : `${normalizedDir}/`;
+  const dirWithTrailingSlash = normalizedDir.endsWith("/")
+    ? normalizedDir
+    : `${normalizedDir}/`;
 
   return normalizedP.startsWith(dirWithTrailingSlash);
 }
 
 function isHabitPath(p?: string | null): boolean {
-  const normalized = p?.replace(/\\/g, '/');
-  return !!normalized && normalized.toLowerCase().includes('/habits/');
+  const normalized = p?.replace(/\\/g, "/");
+  return !!normalized && normalized.toLowerCase().includes("/habits/");
 }
 
 /**
  * Main application component - Simplified version
- * 
+ *
  * Core Features:
  * - File browser and management
  * - Markdown editor with syntax highlighting
@@ -81,17 +103,13 @@ function isHabitPath(p?: string | null): boolean {
  * - Basic search
  * - Theme switching
  * - File watcher
- * 
+ *
  * @returns Simplified GTD Space application
  */
 export const App: React.FC = () => {
   // === FILE MANAGEMENT ===
 
-  const {
-    state: fileState,
-    selectFolder,
-    loadFolder,
-  } = useFileManager();
+  const { state: fileState, selectFolder, loadFolder } = useFileManager();
 
   // === TAB MANAGEMENT ===
 
@@ -109,10 +127,14 @@ export const App: React.FC = () => {
     reorderTabs,
   } = useTabManager();
 
-
   // Fallback to last tab if activeTab is not set for any reason
   const displayedTab = React.useMemo(() => {
-    return activeTab || (tabState.openTabs.length > 0 ? tabState.openTabs[tabState.openTabs.length - 1] : null);
+    return (
+      activeTab ||
+      (tabState.openTabs.length > 0
+        ? tabState.openTabs[tabState.openTabs.length - 1]
+        : null)
+    );
   }, [activeTab, tabState.openTabs]);
 
   // Handle auto-activation of last tab when no active tab exists
@@ -125,29 +147,25 @@ export const App: React.FC = () => {
 
   // === FILE WATCHER ===
 
-  const {
-    state: watcherState,
-    startWatching,
-  } = useFileWatcher();
+  const { state: watcherState, startWatching } = useFileWatcher();
 
   // === SETTINGS MANAGEMENT ===
 
-  const { settings, setTheme, setLastFolder, isLoading: isLoadingSettings } = useSettings();
+  const {
+    settings,
+    setTheme,
+    setLastFolder,
+    isLoading: isLoadingSettings,
+  } = useSettings();
   const [themeKey, setThemeKey] = React.useState(0); // Force re-render on theme change
 
   // === MODAL MANAGEMENT ===
 
-  const {
-    isModalOpen,
-    openModal,
-    closeModal,
-  } = useModalManager();
+  const { isModalOpen, openModal, closeModal } = useModalManager();
 
   // === ERROR HANDLING ===
 
-  const {
-    withErrorHandling,
-  } = useErrorHandler();
+  const { withErrorHandling } = useErrorHandler();
 
   // Refresh file list handler
   const refreshFileList = async () => {
@@ -162,33 +180,35 @@ export const App: React.FC = () => {
     const root = document.documentElement;
 
     // Remove any existing theme classes first
-    root.classList.remove('dark', 'light');
+    root.classList.remove("dark", "light");
 
-    if (theme === 'dark') {
-      root.classList.add('dark');
-      root.style.colorScheme = 'dark';
-    } else if (theme === 'light') {
-      root.classList.add('light');
-      root.style.colorScheme = 'light';
+    if (theme === "dark") {
+      root.classList.add("dark");
+      root.style.colorScheme = "dark";
+    } else if (theme === "light") {
+      root.classList.add("light");
+      root.style.colorScheme = "light";
     } else {
       // Auto theme - detect system preference
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const prefersDark = window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      ).matches;
       if (prefersDark) {
-        root.classList.add('dark');
-        root.style.colorScheme = 'dark';
+        root.classList.add("dark");
+        root.style.colorScheme = "dark";
       } else {
-        root.classList.add('light');
-        root.style.colorScheme = 'light';
+        root.classList.add("light");
+        root.style.colorScheme = "light";
       }
     }
 
     // Force a re-render of affected components
-    window.dispatchEvent(new Event('theme-changed'));
-    setThemeKey(prev => prev + 1); // Force React re-render
+    window.dispatchEvent(new Event("theme-changed"));
+    setThemeKey((prev) => prev + 1); // Force React re-render
   }, []);
 
   const toggleTheme = async () => {
-    const newTheme: Theme = settings.theme === 'dark' ? 'light' : 'dark';
+    const newTheme: Theme = settings.theme === "dark" ? "light" : "dark";
     await setTheme(newTheme);
     // Theme will be applied automatically by the useEffect watching settings.theme
   };
@@ -201,7 +221,7 @@ export const App: React.FC = () => {
   const handleFileSelect = async (file: MarkdownFile) => {
     // Check if file path exists and is valid
     if (!file.path) {
-      console.error('File path is undefined or empty');
+      console.error("File path is undefined or empty");
       return;
     }
 
@@ -211,15 +231,16 @@ export const App: React.FC = () => {
         activateTab(tabId);
         // Focus the editor region shortly after activation
         setTimeout(() => {
-          const editorRoot = document.querySelector('[data-editor-root]') as HTMLElement | null;
+          const editorRoot = document.querySelector(
+            "[data-editor-root]"
+          ) as HTMLElement | null;
           editorRoot?.focus();
         }, 0);
       }
     } catch (error) {
-      console.error('Failed to open file in tab:', error);
+      console.error("Failed to open file in tab:", error);
     }
   };
-
 
   /**
    * Handle folder loading - start file watcher
@@ -230,7 +251,7 @@ export const App: React.FC = () => {
         await loadFolder(folderPath);
         await startWatching(folderPath);
       } catch (error) {
-        console.error('Failed to load folder or start watcher:', error);
+        console.error("Failed to load folder or start watcher:", error);
       }
     },
     [loadFolder, startWatching]
@@ -242,20 +263,23 @@ export const App: React.FC = () => {
   React.useEffect(() => {
     if (watcherState.recentEvents.length === 0) return;
 
-    const latestEvent = watcherState.recentEvents[watcherState.recentEvents.length - 1];
+    const latestEvent =
+      watcherState.recentEvents[watcherState.recentEvents.length - 1];
 
     // Handle different types of file changes
     switch (latestEvent.event_type) {
-      case 'created':
+      case "created":
         // New file created - refresh file list
         if (fileState.currentFolder) {
           loadFolder(fileState.currentFolder);
         }
         break;
 
-      case 'deleted': {
+      case "deleted": {
         // File deleted - close tab if open and refresh file list
-        const deletedTab = tabState.openTabs.find(tab => norm(tab.file.path) === norm(latestEvent.file_path));
+        const deletedTab = tabState.openTabs.find(
+          (tab) => norm(tab.file.path) === norm(latestEvent.file_path)
+        );
         if (deletedTab) {
           closeTab(deletedTab.id);
         }
@@ -265,16 +289,24 @@ export const App: React.FC = () => {
         break;
       }
 
-      case 'modified': {
+      case "modified": {
         // File modified externally - show notification if tab is open
-        const modifiedTab = tabState.openTabs.find(tab => norm(tab.file.path) === norm(latestEvent.file_path));
+        const modifiedTab = tabState.openTabs.find(
+          (tab) => norm(tab.file.path) === norm(latestEvent.file_path)
+        );
         if (modifiedTab && !modifiedTab.hasUnsavedChanges) {
           // File was modified externally
         }
         break;
       }
     }
-  }, [watcherState.recentEvents, fileState.currentFolder, tabState.openTabs, loadFolder, closeTab]);
+  }, [
+    watcherState.recentEvents,
+    fileState.currentFolder,
+    tabState.openTabs,
+    loadFolder,
+    closeTab,
+  ]);
 
   // === KEYBOARD SHORTCUTS ===
 
@@ -282,20 +314,22 @@ export const App: React.FC = () => {
   const shouldReloadProjects = (filePath: string): boolean => {
     if (!gtdSpace?.root_path) return false;
     const projectsPath = `${gtdSpace.root_path}/Projects/`;
-    return isUnder(filePath, projectsPath) && norm(filePath)?.endsWith('.md');
+    return isUnder(filePath, projectsPath) && norm(filePath)?.endsWith(".md");
   };
 
   const keyboardHandlers = {
-    onSaveActive: activeTab ? async () => {
-      const saved = await saveTab(activeTab.id);
-      // Reload projects if we saved a file in the Projects folder
-      if (saved && shouldReloadProjects(activeTab.file.path)) {
-        await loadProjects(gtdSpace.root_path!);
-      }
-    } : undefined,
+    onSaveActive: activeTab
+      ? async () => {
+          const saved = await saveTab(activeTab.id);
+          // Reload projects if we saved a file in the Projects folder
+          if (saved && shouldReloadProjects(activeTab.file.path)) {
+            await loadProjects(gtdSpace.root_path!);
+          }
+        }
+      : undefined,
     onSaveAll: async () => {
-      const hadProjectFiles = tabState.openTabs.some(tab =>
-        tab.hasUnsavedChanges && shouldReloadProjects(tab.file.path)
+      const hadProjectFiles = tabState.openTabs.some(
+        (tab) => tab.hasUnsavedChanges && shouldReloadProjects(tab.file.path)
       );
 
       await saveAllTabs();
@@ -306,11 +340,11 @@ export const App: React.FC = () => {
       }
     },
     onOpenFolder: selectFolder,
-    onOpenGlobalSearch: () => openModal('globalSearch'),
-    onOpenKeyboardShortcuts: () => openModal('keyboardShortcuts'),
+    onOpenGlobalSearch: () => openModal("globalSearch"),
+    onOpenKeyboardShortcuts: () => openModal("keyboardShortcuts"),
     onInsertActionsList: () => {
       // Dispatch custom event that the editor hook will listen for
-      window.dispatchEvent(new CustomEvent('insert-actions-list'));
+      window.dispatchEvent(new CustomEvent("insert-actions-list"));
     },
   };
 
@@ -332,15 +366,25 @@ export const App: React.FC = () => {
           // TODO: Future enhancement to scroll to specific line
         }
       },
-      'Failed to open search result',
-      'file_operation'
+      "Failed to open search result",
+      "file_operation"
     );
   };
 
   // === GTD STATE ===
 
-  const { gtdSpace, isLoading, checkGTDSpace, loadProjects, initializeGTDSpace, initializeDefaultSpaceIfNeeded, refreshSpace: refreshGTDSpace } = useGTDSpace();
-  const [currentProject, setCurrentProject] = React.useState<GTDProject | null>(null);
+  const {
+    gtdSpace,
+    isLoading,
+    checkGTDSpace,
+    loadProjects,
+    initializeGTDSpace,
+    initializeDefaultSpaceIfNeeded,
+    refreshSpace: refreshGTDSpace,
+  } = useGTDSpace();
+  const [currentProject, setCurrentProject] = React.useState<GTDProject | null>(
+    null
+  );
   const [showGTDInit, setShowGTDInit] = React.useState(false);
   const [isAppInitializing, setIsAppInitializing] = React.useState(true); // App-level loading state
 
@@ -356,7 +400,7 @@ export const App: React.FC = () => {
 
     window.onTabFileSaved = async (filePath: string) => {
       // Only reload if the file is in the Projects directory
-      if (isUnder(filePath, projectsPath) && norm(filePath)?.endsWith('.md')) {
+      if (isUnder(filePath, projectsPath) && norm(filePath)?.endsWith(".md")) {
         await loadProjects(gtdSpace.root_path);
       }
     };
@@ -366,25 +410,62 @@ export const App: React.FC = () => {
     };
   }, [gtdSpace?.root_path, loadProjects]);
 
+  const applyBacklinkChange = React.useCallback(
+    (
+      targetPath: string,
+      mutator: (content: string | null | undefined) => string
+    ): { handled: boolean; wasDirty: boolean } => {
+      const normalizedTarget = targetPath.replace(/\\/g, "/");
+      const tab = tabState.openTabs.find(
+        (t) =>
+          (t.file.path || t.filePath || "").replace(/\\/g, "/") ===
+          normalizedTarget
+      );
+      if (!tab) {
+        return { handled: false, wasDirty: false };
+      }
+
+      const nextContent = mutator(tab.content ?? "");
+      if (nextContent !== tab.content) {
+        updateTabContent(tab.id, nextContent);
+      }
+
+      return { handled: true, wasDirty: tab.hasUnsavedChanges };
+    },
+    [tabState.openTabs, updateTabContent]
+  );
+
+  React.useEffect(() => {
+    window.applyBacklinkChange = applyBacklinkChange;
+    return () => {
+      if (window.applyBacklinkChange === applyBacklinkChange) {
+        delete window.applyBacklinkChange;
+      }
+    };
+  }, [applyBacklinkChange]);
+
   // Create a workspace switching function that can be passed to settings
-  const switchWorkspace = React.useCallback(async (path: string) => {
-    // Close all tabs when switching workspaces
-    tabState.openTabs.forEach(tab => {
-      closeTab(tab.id);
-    });
+  const switchWorkspace = React.useCallback(
+    async (path: string) => {
+      // Close all tabs when switching workspaces
+      tabState.openTabs.forEach((tab) => {
+        closeTab(tab.id);
+      });
 
-    // Mark that we're handling a workspace change to prevent loops
-    hasInitializedWorkspace.current = true;
+      // Mark that we're handling a workspace change to prevent loops
+      hasInitializedWorkspace.current = true;
 
-    // Initialize the new GTD space
-    await initializeGTDSpace(path);
+      // Initialize the new GTD space
+      await initializeGTDSpace(path);
 
-    // Load the folder without saving to settings to avoid triggering side effects
-    await loadFolder(path, { saveToSettings: false });
+      // Load the folder without saving to settings to avoid triggering side effects
+      await loadFolder(path, { saveToSettings: false });
 
-    // Save the workspace path to settings after everything is loaded
-    await setLastFolder(path);
-  }, [tabState.openTabs, closeTab, initializeGTDSpace, loadFolder, setLastFolder]);
+      // Save the workspace path to settings after everything is loaded
+      await setLastFolder(path);
+    },
+    [tabState.openTabs, closeTab, initializeGTDSpace, loadFolder, setLastFolder]
+  );
 
   // === VIEW STATE ===
 
@@ -399,29 +480,46 @@ export const App: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
   const [sidebarWidth, setSidebarWidth] = React.useState(() => {
     // Restore saved width from localStorage with validation
-    const saved = localStorage.getItem('gtdspace-sidebar-width');
+    const saved = localStorage.getItem("gtdspace-sidebar-width");
     if (saved) {
       const parsedWidth = parseInt(saved, 10);
       // Validate the parsed value
-      if (!isNaN(parsedWidth) &&
+      if (
+        !isNaN(parsedWidth) &&
         parsedWidth >= MIN_SIDEBAR_WIDTH &&
-        parsedWidth <= MAX_SIDEBAR_WIDTH) {
+        parsedWidth <= MAX_SIDEBAR_WIDTH
+      ) {
         return parsedWidth;
       }
     }
     return DEFAULT_SIDEBAR_WIDTH;
   });
+  // Ref to track live width during resize to avoid stale closure in handleMouseUp
+  const sidebarWidthRef = React.useRef(sidebarWidth);
   const [isResizing, setIsResizing] = React.useState(false);
+
+  // Keep ref in sync with state
+  React.useEffect(() => {
+    sidebarWidthRef.current = sidebarWidth;
+  }, [sidebarWidth]);
 
   // === GTD SPACE CHECK ===
 
   React.useEffect(() => {
     // Only update current project when in a GTD space
-    if (gtdSpace?.root_path && isUnder(fileState.currentFolder, gtdSpace.root_path)) {
+    if (
+      gtdSpace?.root_path &&
+      isUnder(fileState.currentFolder, gtdSpace.root_path)
+    ) {
       // Check if we're in a specific project
-      if (isUnder(fileState.currentFolder, `${gtdSpace.root_path}/Projects/`) && gtdSpace?.projects) {
+      if (
+        isUnder(fileState.currentFolder, `${gtdSpace.root_path}/Projects/`) &&
+        gtdSpace?.projects
+      ) {
         const projectPath = fileState.currentFolder;
-        const project = gtdSpace.projects.find(p => norm(p.path) === norm(projectPath));
+        const project = gtdSpace.projects.find(
+          (p) => norm(p.path) === norm(projectPath)
+        );
         setCurrentProject(project || null);
       } else {
         setCurrentProject(null);
@@ -452,16 +550,21 @@ export const App: React.FC = () => {
 
         // Check permissions on app start (guarded)
         await withErrorHandling<{ status: string } | null>(
-          async () => await safeInvoke<{ status: string }>('check_permissions', undefined, null),
-          'Failed to check permissions'
+          async () =>
+            await safeInvoke<{ status: string }>(
+              "check_permissions",
+              undefined,
+              null
+            ),
+          "Failed to check permissions"
         );
 
         // Clear tab state if no folder is selected (fresh start)
         if (!fileState.currentFolder) {
-          localStorage.removeItem('gtdspace-tabs');
+          localStorage.removeItem("gtdspace-tabs");
         }
       } catch (error) {
-        console.error('Failed to initialize app:', error);
+        console.error("Failed to initialize app:", error);
       }
     };
 
@@ -488,7 +591,7 @@ export const App: React.FC = () => {
 
       try {
         // Check if settings has a last_folder saved
-        if (settings.last_folder && settings.last_folder !== '') {
+        if (settings.last_folder && settings.last_folder !== "") {
           // Use the saved workspace
           await handleFolderLoad(settings.last_folder);
           const isGTDNow = await checkGTDSpace(settings.last_folder);
@@ -505,16 +608,24 @@ export const App: React.FC = () => {
           }
         }
       } catch (e) {
-        console.warn('Workspace initialization failed:', e);
+        console.warn("Workspace initialization failed:", e);
       } finally {
         setIsAppInitializing(false); // Always stop showing loading state
       }
     };
 
     initWorkspace();
-  }, [isLoadingSettings, settings.last_folder, gtdSpace?.root_path, handleFolderLoad, checkGTDSpace, loadProjects, initializeDefaultSpaceIfNeeded]);
+  }, [
+    isLoadingSettings,
+    settings.last_folder,
+    gtdSpace?.root_path,
+    handleFolderLoad,
+    checkGTDSpace,
+    loadProjects,
+    initializeDefaultSpaceIfNeeded,
+  ]);
 
-  // Apply theme when it changes  
+  // Apply theme when it changes
   React.useEffect(() => {
     applyTheme(settings.theme);
   }, [settings.theme, applyTheme]);
@@ -528,7 +639,7 @@ export const App: React.FC = () => {
     const checkTauri = async () => {
       // In Tauri 2.x, check if we can invoke commands
       // Use safeInvoke which gracefully handles non-Tauri environments
-      const result = await safeInvoke<string>('ping', undefined, null);
+      const result = await safeInvoke<string>("ping", undefined, null);
       setIsTauriEnvironment(result !== null);
     };
 
@@ -537,18 +648,23 @@ export const App: React.FC = () => {
 
   // Listen for habit status updates to refresh the editor
   React.useEffect(() => {
-    const handleHabitStatusUpdate = (event: CustomEvent<{ habitPath: string }>) => {
+    const handleHabitStatusUpdate = (
+      event: CustomEvent<{ habitPath: string }>
+    ) => {
       // Check if the updated habit is currently open in the editor
       if (norm(activeTab?.filePath) === norm(event.detail.habitPath)) {
         // Reload the file content from disk
-        safeInvoke<string>('read_file', { path: event.detail.habitPath }, null)
-          .then(freshContent => {
+        safeInvoke<string>("read_file", { path: event.detail.habitPath }, null)
+          .then((freshContent) => {
             if (freshContent !== null && freshContent !== undefined) {
               updateTabContent(activeTab.id, freshContent);
             }
           })
-          .catch(error => {
-            console.error('Failed to refresh habit after status update:', error);
+          .catch((error) => {
+            console.error(
+              "Failed to refresh habit after status update:",
+              error
+            );
           });
       }
 
@@ -559,29 +675,43 @@ export const App: React.FC = () => {
     };
 
     // Handle real-time content changes for habits
-    const handleHabitContentChanged = (event: CustomEvent<{ filePath: string }>) => {
+    const handleHabitContentChanged = (
+      event: CustomEvent<{ filePath: string }>
+    ) => {
       const { filePath } = event.detail;
 
       // If the changed file is the currently active tab, reload its content
       if (norm(activeTab?.filePath) === norm(filePath)) {
-        safeInvoke<string>('read_file', { path: filePath }, null)
-          .then(freshContent => {
+        safeInvoke<string>("read_file", { path: filePath }, null)
+          .then((freshContent) => {
             if (freshContent !== null && freshContent !== undefined) {
               updateTabContent(activeTab.id, freshContent);
             }
           })
-          .catch(error => {
-            console.error('Failed to reload habit content:', error);
+          .catch((error) => {
+            console.error("Failed to reload habit content:", error);
           });
       }
     };
 
-    window.addEventListener('habit-status-updated', handleHabitStatusUpdate as EventListener);
-    window.addEventListener('habit-content-changed', handleHabitContentChanged as EventListener);
+    window.addEventListener(
+      "habit-status-updated",
+      handleHabitStatusUpdate as EventListener
+    );
+    window.addEventListener(
+      "habit-content-changed",
+      handleHabitContentChanged as EventListener
+    );
 
     return () => {
-      window.removeEventListener('habit-status-updated', handleHabitStatusUpdate as EventListener);
-      window.removeEventListener('habit-content-changed', handleHabitContentChanged as EventListener);
+      window.removeEventListener(
+        "habit-status-updated",
+        handleHabitStatusUpdate as EventListener
+      );
+      window.removeEventListener(
+        "habit-content-changed",
+        handleHabitContentChanged as EventListener
+      );
     };
   }, [activeTab?.filePath, activeTab?.id, updateTabContent, refreshGTDSpace]);
 
@@ -609,15 +739,20 @@ export const App: React.FC = () => {
     const checkHabits = async () => {
       try {
         // Guard against missing required state
-        if (!currentSpacePath || currentSpacePath.trim() === '') {
+        if (!currentSpacePath || currentSpacePath.trim() === "") {
           return; // Skip invocation if no valid space path
         }
 
         // Always run the check - the backend will determine if any habits need resetting
         // This ensures we catch all frequency intervals properly
-        const resetHabits = (await safeInvoke<string[]>('check_and_reset_habits', {
-          spacePath: currentSpacePath,
-        }, [])) ?? [];
+        const resetHabits =
+          (await safeInvoke<string[]>(
+            "check_and_reset_habits",
+            {
+              spacePath: currentSpacePath,
+            },
+            []
+          )) ?? [];
 
         if (resetHabits && resetHabits.length > 0) {
           // Refresh the workspace to show updated statuses
@@ -630,17 +765,21 @@ export const App: React.FC = () => {
           if (isHabitPath(currentTab?.filePath)) {
             // Reload the file content from disk
             try {
-              const freshContent = await safeInvoke<string>('read_file', { path: currentTab.filePath }, null);
+              const freshContent = await safeInvoke<string>(
+                "read_file",
+                { path: currentTab.filePath },
+                null
+              );
               if (freshContent !== null && freshContent !== undefined) {
                 updateTabContentRef.current(currentTab.id, freshContent);
               }
             } catch (error) {
-              console.error('Failed to refresh habit tab:', error);
+              console.error("Failed to refresh habit tab:", error);
             }
           }
         }
       } catch (error) {
-        console.error('[App] Failed to check and reset habits:', error);
+        console.error("[App] Failed to check and reset habits:", error);
       }
     };
 
@@ -648,13 +787,18 @@ export const App: React.FC = () => {
     const checkMissedResets = async () => {
       try {
         // Guard against missing required state
-        if (!currentSpacePath || currentSpacePath.trim() === '') {
+        if (!currentSpacePath || currentSpacePath.trim() === "") {
           return; // Skip invocation if no valid space path
         }
 
-        const resetHabits = (await safeInvoke<string[]>('check_and_reset_habits', {
-          spacePath: currentSpacePath,
-        }, [])) ?? [];
+        const resetHabits =
+          (await safeInvoke<string[]>(
+            "check_and_reset_habits",
+            {
+              spacePath: currentSpacePath,
+            },
+            []
+          )) ?? [];
 
         if (resetHabits && resetHabits.length > 0) {
           // Refresh the workspace to show updated statuses
@@ -663,7 +807,7 @@ export const App: React.FC = () => {
           await loadProjectsRef.current(currentSpacePath);
         }
       } catch (error) {
-        console.error('Failed to check for missed habit resets:', error);
+        console.error("Failed to check for missed habit resets:", error);
       }
     };
 
@@ -681,8 +825,6 @@ export const App: React.FC = () => {
     };
   }, [gtdSpace?.root_path]); // Only depend on root_path, use refs for everything else
 
-
-
   // Show loading screen while app is initializing
   if (isAppInitializing) {
     return (
@@ -694,12 +836,15 @@ export const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
-      <div key={themeKey} className="flex flex-col h-screen bg-background text-foreground">
+      <div
+        key={themeKey}
+        className="flex flex-col h-screen bg-background text-foreground"
+      >
         <Toaster />
 
         {/* Header */}
         <AppHeader
-          fileName={activeTab?.file.name || ''}
+          fileName={activeTab?.file.name || ""}
           hasCurrentFileUnsavedChanges={activeTab?.hasUnsavedChanges || false}
           hasAnyUnsavedChanges={hasUnsavedChanges}
           tabCount={tabState.openTabs.length}
@@ -715,46 +860,55 @@ export const App: React.FC = () => {
           }}
           onOpenSettings={() => setShowSettings(true)}
           onToggleTheme={toggleTheme}
-          onOpenCalendar={isGTDSpace ? () => {
-            // Open calendar in a new tab
-            openTab({
-              id: 'calendar',
-              name: 'Calendar',
-              path: '::calendar::',
-              size: 0,
+          onOpenCalendar={
+            isGTDSpace
+              ? () => {
+                  // Open calendar in a new tab
+                  openTab({
+                    id: "calendar",
+                    name: "Calendar",
+                    path: "::calendar::",
+                    size: 0,
                     last_modified: Math.floor(Date.now() / 1000),
-              extension: '',
-            });
-          } : undefined}
-          onOpenDashboard={isGTDSpace ? () => {
-            // Close all tabs to show dashboard
-            if (tabState.openTabs.length > 0) {
-              // Close all tabs which will automatically show the dashboard
-              tabState.openTabs.forEach(tab => closeTab(tab.id));
-            }
-          } : undefined}
-          onOpenKeyboardShortcuts={() => openModal('keyboardShortcuts')}
+                    extension: "",
+                  });
+                }
+              : undefined
+          }
+          onOpenDashboard={
+            isGTDSpace
+              ? () => {
+                  // Close all tabs to show dashboard
+                  if (tabState.openTabs.length > 0) {
+                    // Close all tabs which will automatically show the dashboard
+                    tabState.openTabs.forEach((tab) => closeTab(tab.id));
+                  }
+                }
+              : undefined
+          }
+          onOpenKeyboardShortcuts={() => openModal("keyboardShortcuts")}
         />
 
         {/* Main content area */}
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar */}
           <div
-            className={`relative flex-shrink-0 transition-all duration-300 ${sidebarCollapsed ? 'w-0' : ''
-              } overflow-hidden`}
+            className={`relative flex-shrink-0 transition-all duration-300 ${
+              sidebarCollapsed ? "w-0" : ""
+            } overflow-hidden`}
             style={{
               width: sidebarCollapsed ? 0 : `${sidebarWidth}px`,
               minWidth: sidebarCollapsed ? 0 : `${MIN_SIDEBAR_WIDTH}px`,
-              maxWidth: sidebarCollapsed ? 0 : `${MAX_SIDEBAR_WIDTH}px`
+              maxWidth: sidebarCollapsed ? 0 : `${MAX_SIDEBAR_WIDTH}px`,
             }}
           >
             <GTDWorkspaceSidebar
-              key={`sidebar-${gtdSpace?.root_path || 'none'}`}
+              key={`sidebar-${gtdSpace?.root_path || "none"}`}
               currentFolder={fileState.currentFolder}
               onFolderSelect={handleFolderLoad}
               onFileSelect={handleFileSelect}
               onRefresh={refreshFileList}
-              className={sidebarCollapsed ? 'invisible' : ''}
+              className={sidebarCollapsed ? "invisible" : ""}
               gtdSpace={gtdSpace}
               checkGTDSpace={checkGTDSpace}
               loadProjects={loadProjects}
@@ -763,8 +917,11 @@ export const App: React.FC = () => {
             {/* Resize Handle */}
             {!sidebarCollapsed && (
               <div
-                className={`absolute top-0 right-0 w-1 h-full cursor-col-resize transition-colors ${isResizing ? 'bg-primary/40' : 'bg-transparent hover:bg-primary/20'
-                  }`}
+                className={`absolute top-0 right-0 w-1 h-full cursor-col-resize transition-colors ${
+                  isResizing
+                    ? "bg-primary/40"
+                    : "bg-transparent hover:bg-primary/20"
+                }`}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   setIsResizing(true);
@@ -779,18 +936,23 @@ export const App: React.FC = () => {
                       Math.max(MIN_SIDEBAR_WIDTH, startWidth + delta)
                     );
                     setSidebarWidth(newWidth);
+                    // Update ref with live width to avoid stale closure in handleMouseUp
+                    sidebarWidthRef.current = newWidth;
                   };
 
                   const handleMouseUp = () => {
                     setIsResizing(false);
-                    document.removeEventListener('mousemove', handleMouseMove);
-                    document.removeEventListener('mouseup', handleMouseUp);
-                    // Save the width preference
-                    localStorage.setItem('gtdspace-sidebar-width', String(sidebarWidth));
+                    document.removeEventListener("mousemove", handleMouseMove);
+                    document.removeEventListener("mouseup", handleMouseUp);
+                    // Save the width preference using the ref to get the final width
+                    localStorage.setItem(
+                      "gtdspace-sidebar-width",
+                      String(sidebarWidthRef.current)
+                    );
                   };
 
-                  document.addEventListener('mousemove', handleMouseMove);
-                  document.addEventListener('mouseup', handleMouseUp);
+                  document.addEventListener("mousemove", handleMouseMove);
+                  document.addEventListener("mouseup", handleMouseUp);
                 }}
               />
             )}
@@ -806,7 +968,9 @@ export const App: React.FC = () => {
                     size="sm"
                     onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
                     className="ml-1 gap-1.5"
-                    aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+                    aria-label={
+                      sidebarCollapsed ? "Show sidebar" : "Hide sidebar"
+                    }
                   >
                     {sidebarCollapsed ? (
                       <>
@@ -820,7 +984,11 @@ export const App: React.FC = () => {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="right">
-                  <p>{sidebarCollapsed ? 'Show sidebar (⌘B)' : 'Hide sidebar (⌘B)'}</p>
+                  <p>
+                    {sidebarCollapsed
+                      ? "Show sidebar (⌘B)"
+                      : "Hide sidebar (⌘B)"}
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -855,21 +1023,31 @@ export const App: React.FC = () => {
                 <div className="flex-1 flex flex-col min-h-0">
                   {displayedTab ? (
                     // Check if this is the calendar tab
-                    displayedTab.file.path === '::calendar::' ? (
+                    displayedTab.file.path === "::calendar::" ? (
                       <CalendarView
                         onFileSelect={handleFileSelect}
-                        spacePath={gtdSpace?.root_path || fileState.currentFolder || ''}
+                        spacePath={
+                          gtdSpace?.root_path || fileState.currentFolder || ""
+                        }
                         gtdSpace={gtdSpace}
                         files={fileState.files}
                       />
                     ) : (
                       (() => {
                         // Detect Habit files first to render HabitPage
-                        const habitsDir = gtdSpace?.root_path ? `${gtdSpace.root_path}/Habits/` : undefined;
-                        const pathLooksLikeHabit = habitsDir ? isUnder(displayedTab.file.path, habitsDir) : isHabitPath(displayedTab.file.path);
+                        const habitsDir = gtdSpace?.root_path
+                          ? `${gtdSpace.root_path}/Habits/`
+                          : undefined;
+                        const pathLooksLikeHabit = habitsDir
+                          ? isUnder(displayedTab.file.path, habitsDir)
+                          : isHabitPath(displayedTab.file.path);
                         const contentHasHabitMarkers =
-                          /\[!checkbox:habit-status:/i.test(displayedTab.content) ||
-                          /\[!singleselect:habit-frequency:/i.test(displayedTab.content);
+                          /\[!checkbox:habit-status:/i.test(
+                            displayedTab.content
+                          ) ||
+                          /\[!singleselect:habit-frequency:/i.test(
+                            displayedTab.content
+                          );
                         const isHabitFile =
                           (pathLooksLikeHabit || contentHasHabitMarkers) &&
                           !/(^|\/)README\.md$/i.test(displayedTab.file.path);
@@ -879,7 +1057,139 @@ export const App: React.FC = () => {
                             <HabitPage
                               key={displayedTab.id}
                               content={displayedTab.content}
-                              onChange={(value) => updateTabContent(displayedTab.id, value)}
+                              onChange={(value) =>
+                                updateTabContent(displayedTab.id, value)
+                              }
+                              filePath={displayedTab.filePath}
+                              className="flex-1"
+                            />
+                          );
+                        }
+
+                        // Detect Area of Focus files
+                        const areasDir = gtdSpace?.root_path
+                          ? `${gtdSpace.root_path}/Areas of Focus/`
+                          : undefined;
+                        const pathLooksLikeArea = areasDir
+                          ? isUnder(displayedTab.file.path, areasDir)
+                          : /\/Areas of Focus\//i.test(
+                              displayedTab.file.path.replace(/\\/g, "/")
+                            );
+                        const contentHasAreaMarkers =
+                          /\[!singleselect:area-status:/i.test(
+                            displayedTab.content
+                          ) ||
+                          /\[!singleselect:area-review-cadence:/i.test(
+                            displayedTab.content
+                          );
+                        const isAreaFile =
+                          (pathLooksLikeArea || contentHasAreaMarkers) &&
+                          displayedTab.file.path !== "::calendar::";
+
+                        if (isAreaFile) {
+                          return (
+                            <AreaPage
+                              key={displayedTab.id}
+                              content={displayedTab.content}
+                              onChange={(value) =>
+                                updateTabContent(displayedTab.id, value)
+                              }
+                              filePath={displayedTab.filePath}
+                              className="flex-1"
+                            />
+                          );
+                        }
+
+                        // Detect Goal files
+                        const goalsDir = gtdSpace?.root_path
+                          ? `${gtdSpace.root_path}/Goals/`
+                          : undefined;
+                        const pathLooksLikeGoal = goalsDir
+                          ? isUnder(displayedTab.file.path, goalsDir)
+                          : /\/Goals\//i.test(
+                              displayedTab.file.path.replace(/\\/g, "/")
+                            );
+                        const contentHasGoalMarkers =
+                          /\[!singleselect:goal-status:/i.test(
+                            displayedTab.content
+                          ) ||
+                          /\[!datetime:goal-target-date:/i.test(
+                            displayedTab.content
+                          );
+                        const isGoalFile =
+                          (pathLooksLikeGoal || contentHasGoalMarkers) &&
+                          displayedTab.file.path !== "::calendar::";
+
+                        if (isGoalFile) {
+                          return (
+                            <GoalPage
+                              key={displayedTab.id}
+                              content={displayedTab.content}
+                              onChange={(value) =>
+                                updateTabContent(displayedTab.id, value)
+                              }
+                              filePath={displayedTab.filePath}
+                              className="flex-1"
+                            />
+                          );
+                        }
+
+                        // Detect Vision files
+                        const visionDir = gtdSpace?.root_path
+                          ? `${gtdSpace.root_path}/Vision/`
+                          : undefined;
+                        const pathLooksLikeVision = visionDir
+                          ? isUnder(displayedTab.file.path, visionDir)
+                          : /\/Vision\//i.test(
+                              displayedTab.file.path.replace(/\\/g, "/")
+                            );
+                        const contentHasVisionMarkers =
+                          /\[!singleselect:vision-horizon:/i.test(
+                            displayedTab.content
+                          );
+                        const isVisionFile =
+                          (pathLooksLikeVision || contentHasVisionMarkers) &&
+                          displayedTab.file.path !== "::calendar::";
+
+                        if (isVisionFile) {
+                          return (
+                            <VisionPage
+                              key={displayedTab.id}
+                              content={displayedTab.content}
+                              onChange={(value) =>
+                                updateTabContent(displayedTab.id, value)
+                              }
+                              filePath={displayedTab.filePath}
+                              className="flex-1"
+                            />
+                          );
+                        }
+
+                        // Detect Purpose & Principles files
+                        const purposeDir = gtdSpace?.root_path
+                          ? `${gtdSpace.root_path}/Purpose & Principles/`
+                          : undefined;
+                        const pathLooksLikePurpose = purposeDir
+                          ? isUnder(displayedTab.file.path, purposeDir)
+                          : /\/Purpose\s*&\s*Principles\//i.test(
+                              displayedTab.file.path.replace(/\\/g, "/")
+                            );
+                        const likelyPurposeHeadings =
+                          /##\s+Purpose\s+Statement/i.test(
+                            displayedTab.content
+                          );
+                        const isPurposeFile =
+                          (pathLooksLikePurpose || likelyPurposeHeadings) &&
+                          displayedTab.file.path !== "::calendar::";
+
+                        if (isPurposeFile) {
+                          return (
+                            <PurposePage
+                              key={displayedTab.id}
+                              content={displayedTab.content}
+                              onChange={(value) =>
+                                updateTabContent(displayedTab.id, value)
+                              }
                               filePath={displayedTab.filePath}
                               className="flex-1"
                             />
@@ -887,26 +1197,48 @@ export const App: React.FC = () => {
                         }
 
                         // Detect Action files: under Projects/ and not README.md
-                        const projectsDir = gtdSpace?.root_path ? `${gtdSpace.root_path}/Projects/` : undefined;
-                        const underProjects = projectsDir ? isUnder(displayedTab.file.path, projectsDir) : false;
-                        const isReadme = /(^|\/)README\.md$/i.test(displayedTab.file.path);
+                        const projectsDir = gtdSpace?.root_path
+                          ? `${gtdSpace.root_path}/Projects/`
+                          : undefined;
+                        const underProjects = projectsDir
+                          ? isUnder(displayedTab.file.path, projectsDir)
+                          : false;
+                        const isReadme = /(^|\/)README\.md$/i.test(
+                          displayedTab.file.path
+                        );
                         // Narrow routing: only render ActionPage when the file is clearly an action
                         // 1) Path heuristic: in an "Actions/" subfolder under a project, or
                         // 2) Content heuristic: has action markers
-                        const pathLooksLikeAction = /(^|\/)Actions\//i.test(displayedTab.file.path);
-                        const contentHasActionMarkers = /\[!singleselect:status:/i.test(displayedTab.content)
-                          || /\[!singleselect:effort:/i.test(displayedTab.content)
-                          || /\[!multiselect:contexts:/i.test(displayedTab.content)
-                          || /\[!datetime:focus_date:/i.test(displayedTab.content)
-                          || /\[!datetime:due_date:/i.test(displayedTab.content);
-                        const isActionFile = underProjects && !isReadme && (pathLooksLikeAction || contentHasActionMarkers);
+                        const pathLooksLikeAction = /(^|\/)Actions\//i.test(
+                          displayedTab.file.path
+                        );
+                        const contentHasActionMarkers =
+                          /\[!singleselect:status:/i.test(
+                            displayedTab.content
+                          ) ||
+                          /\[!singleselect:effort:/i.test(
+                            displayedTab.content
+                          ) ||
+                          /\[!multiselect:contexts:/i.test(
+                            displayedTab.content
+                          ) ||
+                          /\[!datetime:focus_date:/i.test(
+                            displayedTab.content
+                          ) ||
+                          /\[!datetime:due_date:/i.test(displayedTab.content);
+                        const isActionFile =
+                          underProjects &&
+                          !isReadme &&
+                          (pathLooksLikeAction || contentHasActionMarkers);
 
                         if (isActionFile) {
                           return (
                             <ActionPage
                               key={displayedTab.id}
                               content={displayedTab.content}
-                              onChange={(content) => updateTabContent(displayedTab.id, content)}
+                              onChange={(content) =>
+                                updateTabContent(displayedTab.id, content)
+                              }
                               filePath={displayedTab.filePath}
                               className="flex-1"
                             />
@@ -918,7 +1250,9 @@ export const App: React.FC = () => {
                           <EnhancedTextEditor
                             key={displayedTab.id}
                             content={displayedTab.content}
-                            onChange={(content) => updateTabContent(displayedTab.id, content)}
+                            onChange={(content) =>
+                              updateTabContent(displayedTab.id, content)
+                            }
                             mode={settings.editor_mode as EditorMode}
                             showLineNumbers={true}
                             readOnly={false}
@@ -954,9 +1288,15 @@ export const App: React.FC = () => {
               <div className="h-full flex items-center justify-center text-muted-foreground">
                 <div className="text-center p-8">
                   <Target className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <h2 className="text-2xl font-semibold mb-2">Welcome to GTD Space</h2>
-                  <p className="text-lg mb-6">Your personal productivity system</p>
-                  <p className="mb-4">Select a folder from the sidebar to get started</p>
+                  <h2 className="text-2xl font-semibold mb-2">
+                    Welcome to GTD Space
+                  </h2>
+                  <p className="text-lg mb-6">
+                    Your personal productivity system
+                  </p>
+                  <p className="mb-4">
+                    Select a folder from the sidebar to get started
+                  </p>
                   <Button onClick={selectFolder} size="lg">
                     <Folder className="h-5 w-5 mr-2" />
                     Select Folder
@@ -973,7 +1313,9 @@ export const App: React.FC = () => {
             events={watcherState.recentEvents}
             openTabs={tabState.openTabs}
             onReloadFile={async (filePath) => {
-              const tab = tabState.openTabs.find(t => t.file.path === filePath);
+              const tab = tabState.openTabs.find(
+                (t) => t.file.path === filePath
+              );
               if (tab) {
                 await openTab(tab.file);
               }
@@ -986,7 +1328,8 @@ export const App: React.FC = () => {
         {/* Environment warning (development) */}
         {!isTauriEnvironment && (
           <div className="fixed bottom-4 right-4 bg-yellow-500 text-black px-4 py-2 rounded shadow-lg">
-            Warning: Not running in Tauri environment. File operations will not work.
+            Warning: Not running in Tauri environment. File operations will not
+            work.
           </div>
         )}
 
@@ -1025,7 +1368,7 @@ export const App: React.FC = () => {
 
       {/* Global Search */}
       <GlobalSearchLazy
-        isOpen={isModalOpen('globalSearch')}
+        isOpen={isModalOpen("globalSearch")}
         onClose={closeModal}
         currentFolder={fileState.currentFolder}
         onResultSelect={handleSearchResultClick}
@@ -1033,7 +1376,7 @@ export const App: React.FC = () => {
 
       {/* Keyboard Shortcuts Reference */}
       <KeyboardShortcutsReferenceLazy
-        isOpen={isModalOpen('keyboardShortcuts')}
+        isOpen={isModalOpen("keyboardShortcuts")}
         onClose={closeModal}
       />
 

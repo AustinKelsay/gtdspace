@@ -48,11 +48,11 @@ use tokio::sync::Mutex as TokioMutex;
 // Import seed data module
 mod seed_data;
 use seed_data::{
-    generate_action_template, generate_area_of_focus_template_with_refs,
+    core_values_template, generate_action_template, generate_area_of_focus_template_with_refs,
     generate_goal_template_with_refs, generate_project_readme, generate_project_readme_with_refs,
-    generate_vision_document_template_with_refs, generate_weekly_review_habit, ProjectReadmeParams,
-    AREAS_OF_FOCUS_OVERVIEW_TEMPLATE, CABINET_GTD_PRINCIPLES_TEMPLATE, CORE_VALUES_TEMPLATE,
-    GOALS_OVERVIEW_TEMPLATE, LIFE_MISSION_TEMPLATE, PURPOSE_PRINCIPLES_OVERVIEW_TEMPLATE,
+    generate_vision_document_template_with_refs, generate_weekly_review_habit,
+    life_mission_template, ProjectReadmeParams, AREAS_OF_FOCUS_OVERVIEW_TEMPLATE,
+    CABINET_GTD_PRINCIPLES_TEMPLATE, GOALS_OVERVIEW_TEMPLATE, PURPOSE_PRINCIPLES_OVERVIEW_TEMPLATE,
     SOMEDAY_LEARN_LANGUAGE_TEMPLATE, VISION_OVERVIEW_TEMPLATE, WELCOME_TEMPLATE,
 };
 
@@ -970,8 +970,9 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
         });
     }
 
-    // Check which GTD horizon we're in
+    // Normalize horizon detection
     let is_in_projects = dir_path.components().any(|c| c.as_os_str() == "Projects");
+    let is_in_habits = dir_path.components().any(|c| c.as_os_str() == "Habits");
     let is_in_vision = dir_path.components().any(|c| c.as_os_str() == "Vision");
     let is_in_goals = dir_path.components().any(|c| c.as_os_str() == "Goals");
     let is_in_areas = dir_path
@@ -980,9 +981,8 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
     let is_in_purpose = dir_path
         .components()
         .any(|c| c.as_os_str() == "Purpose & Principles");
-    let is_in_habits = dir_path.components().any(|c| c.as_os_str() == "Habits");
 
-    // Check if this is a project directory (has README.md)
+    // For project actions, require README.md to distinguish from project root creation
     let is_project_dir = dir_path.join("README.md").exists();
 
     // Create appropriate template content based on GTD horizon
@@ -1014,148 +1014,116 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
             chrono::Local::now().to_rfc3339()
         )
     } else if is_in_vision {
-        // Vision template with purpose references
         format!(
             r#"# {}
 
-## Living My Purpose
+## Horizon
+[!singleselect:vision-horizon:3-years]
 
+## Projects References
+[!projects-references:]
+
+## Goals References
+[!goals-references:]
+
+## Areas References
+[!areas-references:]
+
+## Purpose & Principles References (optional)
 [!purpose-references:]
 
-## The Picture of Success
-*Describe what success looks like in 3-5 years...*
-
-## Supporting Goals
-
-[!goals-list]
-
-## Supporting Areas
-
-[!areas-list]
-
-## Supporting Projects
-
-[!projects-list]
-
-## Related Habits
-
-[!habits-list]
-
----
+## Created
 [!datetime:created_date_time:{}]
+
+## Narrative
+*Describe the vivid picture of your desired future state and the key themes you want to realize.*
 "#,
             clean_name,
             chrono::Local::now().to_rfc3339()
         )
     } else if is_in_goals {
-        // Goals template with vision and purpose references
         format!(
             r#"# {}
 
-## Target Date
+## Status
+[!singleselect:goal-status:in-progress]
 
-[!datetime:target_date:]
+## Target Date (optional)
+[!datetime:goal-target-date:]
 
-## Outcome
-*What specific outcome will be achieved?*
+## Projects References
+[!projects-references:]
 
-## Aligned With
+## Areas References
+[!areas-references:]
 
+## Vision References (optional)
 [!vision-references:]
 
+## Purpose & Principles References (optional)
 [!purpose-references:]
 
-## Supporting Areas
-
-[!areas-list]
-
-## Projects
-
-[!projects-list]
-
-## Related Habits
-
-[!habits-list]
-
----
+## Created
 [!datetime:created_date_time:{}]
+
+## Description
+*Describe the desired outcome, success criteria, and why this goal matters.*
 "#,
             clean_name,
             chrono::Local::now().to_rfc3339()
         )
     } else if is_in_areas {
-        // Areas of Focus template with all horizon references
         format!(
             r#"# {}
 
-## Purpose
-*Why is this area important?*
+## Status
+[!singleselect:area-status:steady]
 
-## Standards
-*What does excellence look like in this area?*
+## Review Cadence
+[!singleselect:area-review-cadence:monthly]
 
-## Aligned With
+## Projects References
+[!projects-references:]
 
+## Goals References
 [!goals-references:]
 
+## Vision References (optional)
 [!vision-references:]
 
+## Purpose & Principles References (optional)
 [!purpose-references:]
 
-## Supporting Projects
-
-[!projects-list]
-
-## Related Habits
-
-[!habits-list]
-
-## References
-
-[!references:]
-
----
+## Created
 [!datetime:created_date_time:{}]
+
+## Description
+*Summarize the scope, responsibilities, and commitments for this area.*
 "#,
             clean_name,
             chrono::Local::now().to_rfc3339()
         )
     } else if is_in_purpose {
-        // Purpose & Principles template
         format!(
             r#"# {}
 
-## Core Principle
-*What fundamental truth or value does this represent?*
+## Projects References
+[!projects-references:]
 
-## Why It Matters
-*How does this guide your decisions and actions?*
+## Goals References
+[!goals-references:]
 
-## Living This Principle
-*What does it look like when you embody this?*
+## Vision References
+[!vision-references:]
 
-## Supporting Visions
+## Areas References (optional)
+[!areas-references:]
 
-[!visions-list]
-
-## Supporting Goals
-
-[!goals-list]
-
-## Supporting Areas
-
-[!areas-list]
-
-## Supporting Projects
-
-[!projects-list]
-
-## Related Habits
-
-[!habits-list]
-
----
+## Created
 [!datetime:created_date_time:{}]
+
+## Description
+*Capture the purpose and guiding principles that anchor your commitments.*
 "#,
             clean_name,
             chrono::Local::now().to_rfc3339()
@@ -3153,7 +3121,7 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                 // Create Life Mission document
                 let mission_file = dir_path.join("Life Mission.md");
                 if !mission_file.exists() {
-                    if let Err(e) = fs::write(&mission_file, LIFE_MISSION_TEMPLATE) {
+                    if let Err(e) = fs::write(&mission_file, life_mission_template()) {
                         log::warn!("Failed to create life mission document: {}", e);
                     } else {
                         log::info!("Created life mission document");
@@ -3163,7 +3131,7 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                 // Create Core Values document
                 let values_file = dir_path.join("Core Values.md");
                 if !values_file.exists() {
-                    if let Err(e) = fs::write(&values_file, CORE_VALUES_TEMPLATE) {
+                    if let Err(e) = fs::write(&values_file, core_values_template()) {
                         log::warn!("Failed to create core values document: {}", e);
                     } else {
                         log::info!("Created core values document");

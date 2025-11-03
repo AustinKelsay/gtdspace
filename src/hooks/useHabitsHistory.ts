@@ -9,6 +9,7 @@ import { extractMetadata, extractHorizonReferences } from '@/utils/metadata-extr
 import { readFileText } from './useFileManager';
 import { localISODate } from '@/utils/time';
 import type { GTDHabit, MarkdownFile } from '@/types';
+import { createScopedLogger } from '@/utils/logger';
 
 export interface HabitHistoryEntry {
   date: string;
@@ -68,6 +69,9 @@ interface UseHabitsHistoryReturn {
 /**
  * Parse habit history from markdown table format
  */
+const historyLog = createScopedLogger('parseHabitHistory');
+const habitsLog = createScopedLogger('useHabitsHistory');
+
 const parseHabitHistory = (content: string): HabitHistoryEntry[] => {
   const history: HabitHistoryEntry[] = [];
 
@@ -75,12 +79,12 @@ const parseHabitHistory = (content: string): HabitHistoryEntry[] => {
   const tableRegex = /\|\s*Date\s*\|\s*Time\s*\|\s*Status\s*\|\s*Action\s*\|\s*Details\s*\|[\s\S]*?\n(?:\|[^|\n]+\|[^|\n]+\|[^|\n]+\|[^|\n]+\|[^|\n]+\|\n?)+/gi;
   const tableMatch = content.match(tableRegex);
 
-  console.log('[parseHabitHistory] Looking for history table...');
+  historyLog.debug('Looking for history table');
 
   if (tableMatch && tableMatch[0]) {
-    console.log('[parseHabitHistory] Found history table!');
+    historyLog.debug('Found history table');
     const lines = tableMatch[0].split('\n');
-    console.log('[parseHabitHistory] Processing', lines.length, 'lines');
+    historyLog.debug('Processing lines', lines.length);
 
     for (const line of lines) {
       // Skip header and separator lines
@@ -100,15 +104,15 @@ const parseHabitHistory = (content: string): HabitHistoryEntry[] => {
             note: details || action || undefined
           };
           history.push(entry);
-          console.log('[parseHabitHistory] Added entry:', entry);
+          historyLog.debug('Added entry', entry);
         }
       }
     }
   } else {
-    console.log('[parseHabitHistory] No history table found in content');
+    historyLog.debug('No history table found in content');
   }
 
-  console.log('[parseHabitHistory] Parsed', history.length, 'history entries');
+  historyLog.debug('Parsed history entries', history.length);
   return history;
 };
 
@@ -332,10 +336,10 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
   const [cachedSpacePath, setCachedSpacePath] = useState<string>('');
   
   const loadHabits = useCallback(async (spacePath: string) => {
-    console.log('[useHabitsHistory] Loading habits from path:', spacePath);
+    habitsLog.debug('Loading habits from path', spacePath);
 
     if (!spacePath || spacePath.trim() === '') {
-      console.error('[useHabitsHistory] Invalid spacePath provided:', spacePath);
+      habitsLog.error('Invalid spacePath provided', spacePath);
       setError('Invalid workspace path');
       setHabits([]);
       return;
@@ -347,7 +351,7 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
 
     try {
       const habitsPath = `${spacePath}/Habits`;
-      console.log('[useHabitsHistory] Attempting to list files from:', habitsPath);
+      habitsLog.debug('Attempting to list files from', habitsPath);
 
       // Try to list files with better error handling
       let habitFiles: MarkdownFile[] = [];
@@ -358,12 +362,15 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
           []
         );
       } catch (invokeError) {
-        console.error('[useHabitsHistory] Error invoking list_markdown_files:', invokeError);
+        habitsLog.error('Error invoking list_markdown_files', invokeError);
         // Return empty array but continue - the directory might just not exist yet
         habitFiles = [];
       }
 
-      console.log('[useHabitsHistory] Found habit files:', habitFiles.length, habitFiles.map(f => f.name));
+      habitsLog.debug('Found habit files', {
+        count: habitFiles.length,
+        names: habitFiles.map(f => f.name),
+      });
       
       const loadedHabits = await Promise.all(
         habitFiles.map(async (file) => {
@@ -383,11 +390,11 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
             
             // Parse history
             const history = parseHabitHistory(content);
-            console.log(`[useHabitsHistory] Habit "${file.name}" has ${history.length} history entries`);
+            habitsLog.debug(`Habit "${file.name}" history entries`, history.length);
 
             // Filter inactive if needed
             if (!includeInactive && history.length === 0) {
-              console.log(`[useHabitsHistory] Filtering out inactive habit: ${file.name}`);
+              habitsLog.debug(`Filtering out inactive habit: ${file.name}`);
               return null;
             }
             
@@ -437,17 +444,20 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
             
             return habit;
           } catch (err) {
-            console.error(`Failed to load habit ${file.name}:`, err);
+            habitsLog.error(`Failed to load habit ${file.name}`, err);
             return null;
           }
         })
       );
       
       const validHabits = loadedHabits.filter((h): h is HabitWithHistory => h !== null);
-      console.log('[useHabitsHistory] Successfully loaded habits:', validHabits.length, validHabits.map(h => h.name));
+      habitsLog.info('Successfully loaded habits', {
+        count: validHabits.length,
+        names: validHabits.map(h => h.name),
+      });
       setHabits(validHabits);
     } catch (err) {
-      console.error('[useHabitsHistory] Failed to load habits:', err);
+      habitsLog.error('Failed to load habits', err);
       setError(err instanceof Error ? err.message : 'Failed to load habits');
       setHabits([]);
     } finally {
@@ -532,14 +542,14 @@ ${newRow}
 
       // Check if write succeeded
       if (!writeResult) {
-        console.error('[updateHabitStatus] Failed to write file');
+        habitsLog.error('[updateHabitStatus] Failed to write file');
         throw new Error('Failed to save habit changes');
       }
 
       // Reload to get updated analytics
       await refresh();
     } catch (err) {
-      console.error('Failed to update habit status:', err);
+      habitsLog.error('Failed to update habit status', err);
       throw err;
     }
   }, [refresh]);

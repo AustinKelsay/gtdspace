@@ -1,35 +1,39 @@
-import React from 'react';
-import { Search, X } from 'lucide-react';
+import React from "react";
+import { Search, X } from "lucide-react";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
-import { extractMetadata } from '@/utils/metadata-extractor';
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { EnhancedTextEditor } from "@/components/editor/EnhancedTextEditor";
+import { extractMetadata } from "@/utils/metadata-extractor";
 import {
   buildAreaMarkdown,
   DEFAULT_AREA_DESCRIPTION,
   type AreaReferenceGroups,
-} from '@/utils/gtd-markdown-helpers';
-import { syncHorizonBacklink } from '@/utils/horizon-backlinks';
-import { checkTauriContextAsync } from '@/utils/tauri-ready';
-import { safeInvoke } from '@/utils/safe-invoke';
-import { useErrorHandler } from '@/hooks/useErrorHandler';
-import type { GTDAreaReviewCadence, GTDAreaStatus, MarkdownFile } from '@/types';
+} from "@/utils/gtd-markdown-helpers";
+import { syncHorizonBacklink } from "@/utils/horizon-backlinks";
+import { checkTauriContextAsync } from "@/utils/tauri-ready";
+import { safeInvoke } from "@/utils/safe-invoke";
+import { useErrorHandler } from "@/hooks/useErrorHandler";
+import type {
+  GTDAreaReviewCadence,
+  GTDAreaStatus,
+  MarkdownFile,
+} from "@/types";
 
 export interface AreaPageProps {
   content: string;
@@ -38,13 +42,13 @@ export interface AreaPageProps {
   className?: string;
 }
 
-type AreaReferenceKey = 'projects' | 'goals' | 'vision' | 'purpose';
+type AreaReferenceKey = "projects" | "goals" | "vision" | "purpose";
 
 const HORIZON_DIRS: Record<AreaReferenceKey, string> = {
-  projects: 'Projects',
-  goals: 'Goals',
-  vision: 'Vision',
-  purpose: 'Purpose & Principles',
+  projects: "Projects",
+  goals: "Goals",
+  vision: "Vision",
+  purpose: "Purpose & Principles",
 };
 
 type AreaReferenceOption = {
@@ -68,24 +72,27 @@ interface AreaSections {
 }
 
 const AREA_STATUS_OPTIONS: Array<{ value: GTDAreaStatus; label: string }> = [
-  { value: 'steady', label: 'Steady' },
-  { value: 'watch', label: 'Watch' },
-  { value: 'incubating', label: 'Incubating' },
-  { value: 'delegated', label: 'Delegated' },
+  { value: "steady", label: "Steady" },
+  { value: "watch", label: "Watch" },
+  { value: "incubating", label: "Incubating" },
+  { value: "delegated", label: "Delegated" },
 ];
 
-const AREA_REVIEW_CADENCE_OPTIONS: Array<{ value: GTDAreaReviewCadence; label: string }> = [
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'quarterly', label: 'Quarterly' },
-  { value: 'annually', label: 'Annually' },
+const AREA_REVIEW_CADENCE_OPTIONS: Array<{
+  value: GTDAreaReviewCadence;
+  label: string;
+}> = [
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "annually", label: "Annually" },
 ];
 
 const REFERENCE_LABELS: Record<AreaReferenceKey, string> = {
-  projects: 'Projects References',
-  goals: 'Goals References',
-  vision: 'Vision References',
-  purpose: 'Purpose & Principles References',
+  projects: "Projects References",
+  goals: "Goals References",
+  vision: "Vision References",
+  purpose: "Purpose & Principles References",
 };
 
 const CANONICAL_METADATA_HEADINGS: RegExp[] = [
@@ -130,77 +137,97 @@ function parseAreaSections(content: string): AreaSections {
   }
 
   const description = buffer.length
-    ? buffer.join('\n').replace(/^\s*\n+/, '').trimEnd()
-    : '';
+    ? buffer
+        .join("\n")
+        .replace(/^\s*\n+/, "")
+        .trimEnd()
+    : "";
 
   return { description };
 }
 
 function normalizeAreaStatus(raw: unknown): GTDAreaStatus {
-  switch (typeof raw === 'string' ? raw.trim().toLowerCase() : '') {
-    case 'steady':
-    case 'watch':
-    case 'incubating':
-    case 'delegated':
-      return raw as GTDAreaStatus;
+  switch (typeof raw === "string" ? raw.trim().toLowerCase() : "") {
+    case "steady":
+    case "watch":
+    case "incubating":
+    case "delegated":
+      return (
+        typeof raw === "string" ? raw.trim().toLowerCase() : "steady"
+      ) as GTDAreaStatus;
     default:
-      return 'steady';
+      return "steady";
   }
 }
 
 function normalizeReviewCadence(raw: unknown): GTDAreaReviewCadence {
-  switch (typeof raw === 'string' ? raw.trim().toLowerCase() : '') {
-    case 'weekly':
-    case 'monthly':
-    case 'quarterly':
-    case 'annually':
-      return raw as GTDAreaReviewCadence;
+  switch (typeof raw === "string" ? raw.trim().toLowerCase() : "") {
+    case "weekly":
+    case "monthly":
+    case "quarterly":
+    case "annually":
+      return (
+        typeof raw === "string" ? raw.trim().toLowerCase() : "monthly"
+      ) as GTDAreaReviewCadence;
     default:
-      return 'monthly';
+      return "monthly";
   }
 }
 
 function displayNameForReference(ref: string): string {
-  const normalized = ref.replace(/\\/g, '/');
-  const leaf = normalized.split('/').pop();
+  const normalized = ref.replace(/\\/g, "/");
+  const leaf = normalized.split("/").pop();
   if (!leaf) return normalized;
-  return leaf.replace(/\.(md|markdown)$/i, '');
+  return leaf.replace(/\.(md|markdown)$/i, "");
 }
 
 function toStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value
-      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
       .filter(Boolean);
   }
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) return [];
-    return trimmed.split(',').map((entry) => entry.trim()).filter(Boolean);
+    return trimmed
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
   }
   return [];
 }
 
 function formatDisplayDate(iso?: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return "—";
   const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return '—';
+  if (Number.isNaN(parsed.getTime())) return "—";
   try {
     return new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
+      dateStyle: "medium",
+      timeStyle: "short",
     }).format(parsed);
   } catch {
     return parsed.toISOString();
   }
 }
 
-const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, className }) => {
-  const meta = React.useMemo(() => extractMetadata(content || ''), [content]);
-  const parsedSections = React.useMemo(() => parseAreaSections(content || ''), [content]);
+const AreaPage: React.FC<AreaPageProps> = ({
+  content,
+  onChange,
+  filePath,
+  className,
+}) => {
+  const meta = React.useMemo(() => extractMetadata(content || ""), [content]);
+  const parsedSections = React.useMemo(
+    () => parseAreaSections(content || ""),
+    [content]
+  );
 
   const initialTitle =
-    typeof meta.title === 'string' && meta.title.trim().length > 0 ? meta.title.trim() : 'Untitled Area';
+    typeof meta.title === "string" && meta.title.trim().length > 0
+      ? meta.title.trim()
+      : "Untitled Area";
 
   const initialReferences = React.useMemo<AreaReferenceGroups>(
     () => ({
@@ -214,27 +241,31 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
   );
 
   const [title, setTitle] = React.useState<string>(initialTitle);
-  const [status, setStatus] = React.useState<GTDAreaStatus>(normalizeAreaStatus((meta as any).areaStatus));
-  const [reviewCadence, setReviewCadence] = React.useState<GTDAreaReviewCadence>(
-    normalizeReviewCadence((meta as any).areaReviewCadence)
+  const [status, setStatus] = React.useState<GTDAreaStatus>(
+    normalizeAreaStatus((meta as any).areaStatus)
   );
-  const [references, setReferences] = React.useState<AreaReferenceGroups>(initialReferences);
-  const [activePicker, setActivePicker] = React.useState<AreaReferenceKey | null>(null);
-  const [pickerOptions, setPickerOptions] = React.useState<AreaReferenceOption[]>([]);
+  const [reviewCadence, setReviewCadence] =
+    React.useState<GTDAreaReviewCadence>(
+      normalizeReviewCadence((meta as any).areaReviewCadence)
+    );
+  const [references, setReferences] =
+    React.useState<AreaReferenceGroups>(initialReferences);
+  const [activePicker, setActivePicker] =
+    React.useState<AreaReferenceKey | null>(null);
+  const [pickerOptions, setPickerOptions] = React.useState<
+    AreaReferenceOption[]
+  >([]);
   const [pickerLoading, setPickerLoading] = React.useState(false);
-  const [pickerSearch, setPickerSearch] = React.useState('');
+  const [pickerSearch, setPickerSearch] = React.useState("");
   const { withErrorHandling } = useErrorHandler();
 
-  const normalizeSection = React.useCallback(
-    (value: string) => {
-      const trimmed = value?.trim() ?? '';
-      if (trimmed === DEFAULT_AREA_DESCRIPTION.trim()) {
-        return '';
-      }
-      return trimmed;
-    },
-    []
-  );
+  const normalizeSection = React.useCallback((value: string) => {
+    const trimmed = value?.trim() ?? "";
+    if (trimmed === DEFAULT_AREA_DESCRIPTION.trim()) {
+      return "";
+    }
+    return trimmed;
+  }, []);
 
   const [description, setDescription] = React.useState<string>(
     normalizeSection(parsedSections.description)
@@ -250,12 +281,15 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
     if (!createdInitialized.current) {
       const fromMeta = (meta as any).createdDateTime;
       createdRef.current =
-        typeof fromMeta === 'string' && fromMeta.trim().length > 0
+        typeof fromMeta === "string" && fromMeta.trim().length > 0
           ? fromMeta.trim()
           : new Date().toISOString();
       createdInitialized.current = true;
       setCreatedDisplayValue(formatDisplayDate(createdRef.current));
-    } else if (typeof (meta as any).createdDateTime === 'string' && (meta as any).createdDateTime.trim().length > 0) {
+    } else if (
+      typeof (meta as any).createdDateTime === "string" &&
+      (meta as any).createdDateTime.trim().length > 0
+    ) {
       createdRef.current = (meta as any).createdDateTime.trim();
       setCreatedDisplayValue(formatDisplayDate(createdRef.current));
     }
@@ -263,7 +297,9 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
 
   React.useEffect(() => {
     const nextTitle =
-      typeof meta.title === 'string' && meta.title.trim().length > 0 ? meta.title.trim() : 'Untitled Area';
+      typeof meta.title === "string" && meta.title.trim().length > 0
+        ? meta.title.trim()
+        : "Untitled Area";
     setTitle(nextTitle);
     setStatus(normalizeAreaStatus((meta as any).areaStatus));
     setReviewCadence(normalizeReviewCadence((meta as any).areaReviewCadence));
@@ -274,52 +310,62 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
       vision: toStringArray((meta as any).visionReferences),
       purpose: toStringArray((meta as any).purposeReferences),
     });
-    const updatedSections = parseAreaSections(content || '');
+    const updatedSections = parseAreaSections(content || "");
     setDescription(normalizeSection(updatedSections.description));
   }, [meta, content, normalizeSection]);
 
   const loadReferenceOptions = React.useCallback(
     async (key: AreaReferenceKey): Promise<AreaReferenceOption[]> => {
-      const spacePath = window.localStorage.getItem('gtdspace-current-path') || '';
+      const spacePath =
+        window.localStorage.getItem("gtdspace-current-path") || "";
       if (!spacePath) return [];
 
       const inTauri = await checkTauriContextAsync();
       if (!inTauri) return [];
 
-      const result = await withErrorHandling(async () => {
-        if (key === 'projects') {
-          const projects = await safeInvoke<Array<{ name: string; path: string }>>(
-            'list_gtd_projects',
-            { spacePath },
+      const result = await withErrorHandling(
+        async () => {
+          if (key === "projects") {
+            const projects = await safeInvoke<
+              Array<{ name: string; path: string }>
+            >("list_gtd_projects", { spacePath }, []);
+            if (!projects) return [];
+            return projects
+              .map((project) => ({
+                path: (
+                  project.path ||
+                  `${spacePath}/${HORIZON_DIRS.projects}/${project.name}`
+                ).replace(/\\/g, "/"),
+                name: project.name,
+                horizon: key,
+              }))
+              .sort((a, b) =>
+                a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+              );
+          }
+
+          const dirName = HORIZON_DIRS[key];
+          const dirPath = `${spacePath}/${dirName}`;
+          const files = await safeInvoke<MarkdownFile[]>(
+            "list_markdown_files",
+            { path: dirPath },
             []
           );
-          if (!projects) return [];
-          return projects
-            .map((project) => ({
-              path: (project.path || `${spacePath}/${HORIZON_DIRS.projects}/${project.name}`).replace(/\\/g, '/'),
-              name: project.name,
+          if (!files) return [];
+          return files
+            .filter((file) => !README_REGEX.test(file.path.replace(/\\/g, "/")))
+            .map((file) => ({
+              path: file.path.replace(/\\/g, "/"),
+              name: file.name.replace(/\.(md|markdown)$/i, ""),
               horizon: key,
             }))
-            .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-        }
-
-        const dirName = HORIZON_DIRS[key];
-        const dirPath = `${spacePath}/${dirName}`;
-        const files = await safeInvoke<MarkdownFile[]>(
-          'list_markdown_files',
-          { path: dirPath },
-          []
-        );
-        if (!files) return [];
-        return files
-          .filter((file) => !README_REGEX.test(file.path.replace(/\\/g, '/')))
-          .map((file) => ({
-            path: file.path.replace(/\\/g, '/'),
-            name: file.name.replace(/\.(md|markdown)$/i, ''),
-            horizon: key,
-          }))
-          .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-      }, 'Failed to load references', `area-${key}-references`);
+            .sort((a, b) =>
+              a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+            );
+        },
+        "Failed to load references",
+        `area-${key}-references`
+      );
 
       return result ?? [];
     },
@@ -330,7 +376,7 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
     if (!activePicker) return;
     let cancelled = false;
     setPickerLoading(true);
-    setPickerSearch('');
+    setPickerSearch("");
     setPickerOptions([]);
 
     loadReferenceOptions(activePicker)
@@ -360,7 +406,10 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
     });
   }, [pickerOptions, pickerSearch]);
 
-  const normalizedFilePath = React.useMemo(() => (filePath ? filePath.replace(/\\/g, '/') : ''), [filePath]);
+  const normalizedFilePath = React.useMemo(
+    () => (filePath ? filePath.replace(/\\/g, "/") : ""),
+    [filePath]
+  );
 
   const emitRebuild = React.useCallback(
     (overrides?: EmitOverrides) => {
@@ -388,19 +437,21 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
 
   const handleReferenceToggle = React.useCallback(
     (key: AreaReferenceKey, value: string) => {
-      const normalizedTarget = value.replace(/\\/g, '/');
+      const normalizedTarget = value.replace(/\\/g, "/");
       setReferences((current) => {
         const group = current[key] ?? [];
         const isPresent = group.includes(value);
-        const nextGroup = isPresent ? group.filter((ref) => ref !== value) : [...group, value];
+        const nextGroup = isPresent
+          ? group.filter((ref) => ref !== value)
+          : [...group, value];
         const next = { ...current, [key]: nextGroup };
         emitRebuild({ references: next });
         if (normalizedFilePath && normalizedTarget) {
           void syncHorizonBacklink({
             sourcePath: normalizedFilePath,
-            sourceKind: 'areas',
+            sourceKind: "areas",
             targetPath: normalizedTarget,
-            action: isPresent ? 'remove' : 'add',
+            action: isPresent ? "remove" : "add",
           });
         }
         return next;
@@ -411,7 +462,7 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
 
   const handleReferenceRemove = React.useCallback(
     (key: AreaReferenceKey, value: string) => {
-      const normalizedTarget = value.replace(/\\/g, '/');
+      const normalizedTarget = value.replace(/\\/g, "/");
       setReferences((current) => {
         const nextGroup = (current[key] ?? []).filter((item) => item !== value);
         const next = { ...current, [key]: nextGroup };
@@ -419,9 +470,9 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
         if (normalizedFilePath && normalizedTarget) {
           void syncHorizonBacklink({
             sourcePath: normalizedFilePath,
-            sourceKind: 'areas',
+            sourceKind: "areas",
             targetPath: normalizedTarget,
-            action: 'remove',
+            action: "remove",
           });
         }
         return next;
@@ -431,7 +482,11 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
   );
 
   return (
-    <div className={`flex flex-col min-h-0 h-full overflow-y-auto bg-background text-foreground ${className ?? ''}`}>
+    <div
+      className={`flex flex-col min-h-0 h-full overflow-y-auto bg-background text-foreground ${
+        className ?? ""
+      }`}
+    >
       <div className="px-12 pt-10 pb-6 space-y-6">
         <input
           type="text"
@@ -470,7 +525,9 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
           </div>
 
           <div className="grid grid-cols-[140px_1fr] gap-x-4 items-center">
-            <span className="text-sm text-muted-foreground">Review Cadence</span>
+            <span className="text-sm text-muted-foreground">
+              Review Cadence
+            </span>
             <Select
               value={reviewCadence}
               onValueChange={(value) => {
@@ -479,7 +536,10 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
                 emitRebuild({ reviewCadence: next });
               }}
             >
-              <SelectTrigger className="h-9 text-sm" aria-label="Area review cadence">
+              <SelectTrigger
+                className="h-9 text-sm"
+                aria-label="Area review cadence"
+              >
                 <SelectValue placeholder="Select cadence" />
               </SelectTrigger>
               <SelectContent>
@@ -494,7 +554,9 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
 
           <div className="grid grid-cols-[140px_1fr] gap-x-4 items-center">
             <span className="text-sm text-muted-foreground">Created</span>
-            <div className="text-sm text-muted-foreground">{createdDisplayValue}</div>
+            <div className="text-sm text-muted-foreground">
+              {createdDisplayValue}
+            </div>
           </div>
         </div>
         <div className="grid md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
@@ -542,7 +604,9 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
                       </Badge>
                     ))
                   ) : (
-                    <span className="text-xs text-muted-foreground">No references yet.</span>
+                    <span className="text-xs text-muted-foreground">
+                      No references yet.
+                    </span>
                   )}
                 </div>
               </div>
@@ -566,9 +630,12 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
               return (
                 <>
                   <DialogHeader>
-                    <DialogTitle>Manage {REFERENCE_LABELS[activePicker]}</DialogTitle>
+                    <DialogTitle>
+                      Manage {REFERENCE_LABELS[activePicker]}
+                    </DialogTitle>
                     <DialogDescription>
-                      Select items to link with this area. Existing selections stay highlighted.
+                      Select items to link with this area. Existing selections
+                      stay highlighted.
                     </DialogDescription>
                   </DialogHeader>
 
@@ -584,10 +651,13 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
 
                   <ScrollArea className="h-[360px] border border-border rounded-md">
                     {pickerLoading ? (
-                      <div className="py-12 text-center text-muted-foreground">Loading references...</div>
+                      <div className="py-12 text-center text-muted-foreground">
+                        Loading references...
+                      </div>
                     ) : filteredPickerOptions.length === 0 ? (
                       <div className="py-12 text-center text-muted-foreground">
-                        No items found. Add files to the {HORIZON_DIRS[activePicker]} folder to link them here.
+                        No items found. Add files to the{" "}
+                        {HORIZON_DIRS[activePicker]} folder to link them here.
                       </div>
                     ) : (
                       <div className="p-4 space-y-2">
@@ -597,15 +667,24 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
                             <button
                               key={option.path}
                               type="button"
-                              onClick={() => handleReferenceToggle(activePicker, option.path)}
+                              onClick={() =>
+                                handleReferenceToggle(activePicker, option.path)
+                              }
                               className={`w-full text-left px-4 py-3 rounded-md transition-colors ${
-                                isSelected ? 'bg-muted text-muted-foreground' : 'hover:bg-accent'
+                                isSelected
+                                  ? "bg-muted text-muted-foreground"
+                                  : "hover:bg-accent"
                               }`}
                             >
                               <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">{option.name}</span>
+                                <span className="text-sm font-medium">
+                                  {option.name}
+                                </span>
                                 {isSelected && (
-                                  <Badge variant="secondary" className="text-[10px]">
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-[10px]"
+                                  >
                                     Linked
                                   </Badge>
                                 )}
@@ -635,7 +714,8 @@ const AreaPage: React.FC<AreaPageProps> = ({ content, onChange, filePath, classN
           <EnhancedTextEditor
             content={description || DEFAULT_AREA_DESCRIPTION}
             onChange={(next) => {
-              const clean = next.trim() === DEFAULT_AREA_DESCRIPTION.trim() ? '' : next;
+              const clean =
+                next.trim() === DEFAULT_AREA_DESCRIPTION.trim() ? "" : next;
               setDescription(clean);
               emitRebuild({ description: clean });
             }}

@@ -21,7 +21,7 @@ import { createScopedLogger } from '@/utils/logger';
  * - Managing GTD-specific operations
  */
 export function useGTDSpace() {
-  const log = createScopedLogger('useGTDSpace');
+  const log = useMemo(() => createScopedLogger('useGTDSpace'), []);
   const [gtdSpace, setGTDSpace] = useState<GTDSpace | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -394,7 +394,7 @@ export function useGTDSpace() {
       log.debug('loadProjectsInternal completed', { projectCount: result?.length ?? 0 });
       return result || [];
     },
-    [withErrorHandling]
+    [withErrorHandling, log]
   );
 
   // Track the last spacePath to avoid redundant calls
@@ -426,7 +426,7 @@ export function useGTDSpace() {
       500, // 500ms debounce to batch rapid calls
       { leading: true, trailing: true, maxWait: 1000 } // Run immediately and flush the last call within the window
     ),
-    [loadProjectsInternal]
+    [loadProjectsInternal, log]
   );
 
   /**
@@ -437,7 +437,7 @@ export function useGTDSpace() {
       log.debug('loadProjects called for path', spacePath);
       return debouncedLoadProjects(spacePath);
     },
-    [debouncedLoadProjects]
+    [debouncedLoadProjects, log]
   );
 
   /**

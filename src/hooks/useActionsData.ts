@@ -135,7 +135,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
     includeCompleted = true,
     includeCancelled = false
   } = options;
-  const log = createScopedLogger('useActionsData');
+  const log = useMemo(() => createScopedLogger('useActionsData'), []);
 
   const [actions, setActions] = useState<ActionItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -256,7 +256,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
     return () => {
       cancelled = true;
     };
-  }, [includeCompleted, includeCancelled]);
+  }, [includeCompleted, includeCancelled, log]);
   
   const updateActionStatus = useCallback(async (actionIdOrPath: string, newStatus: string, actionPath?: string): Promise<boolean> => {
     try {
@@ -340,7 +340,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       });
       return false;
     }
-  }, []);
+  }, [log]);
   
   const refresh = useCallback(async () => {
     if (cachedProjects.length > 0) {
@@ -401,7 +401,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       // Will need projects to be passed in
       log.debug('Auto-load enabled but no projects available yet');
     }
-  }, [autoLoad, cachedProjects]);
+  }, [autoLoad, cachedProjects, log]);
 
   return {
     actions,

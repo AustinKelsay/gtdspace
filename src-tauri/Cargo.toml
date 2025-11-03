@@ -18,7 +18,7 @@ tauri-build = { version = "2.0", features = [] }
 tauri = { version = "2.7", features = [
   "devtools",
 ] }
-tauri-plugin-dialog = "2.3"
+tauri-plugin-dialog = "2.4"
 tauri-plugin-fs = "2.4"
 tauri-plugin-store = "2.4"
 serde = { version = "1", features = ["derive"] }

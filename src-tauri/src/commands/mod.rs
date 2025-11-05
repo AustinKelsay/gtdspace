@@ -747,7 +747,7 @@ pub fn list_markdown_files(path: String) -> Result<Vec<MarkdownFile>, String> {
 }
 
 /// List only project action files (markdown) in a project directory
-/// Skips the project's README.md
+/// Skips the project's README (README.md/README.markdown)
 #[tauri::command]
 pub fn list_project_actions(project_path: String) -> Result<Vec<MarkdownFile>, String> {
     log::info!("Listing project actions in: {}", project_path);
@@ -768,9 +768,18 @@ pub fn list_project_actions(project_path: String) -> Result<Vec<MarkdownFile>, S
                 if path.is_file() {
                     if let Some(extension) = path.extension() {
                         let ext_str = extension.to_string_lossy().to_lowercase();
-                        if (ext_str == "md" || ext_str == "markdown")
-                            && path.file_name() != Some(std::ffi::OsStr::new("README.md"))
-                        {
+                        if ext_str == "md" || ext_str == "markdown" {
+                            let is_readme = path
+                                .file_name()
+                                .and_then(|name| name.to_str())
+                                .map(|name| {
+                                    let lower = name.to_ascii_lowercase();
+                                    lower == "readme.md" || lower == "readme.markdown"
+                                })
+                                .unwrap_or(false);
+                            if is_readme {
+                                continue;
+                            }
                             if let Ok(metadata) = entry.metadata() {
                                 use std::collections::hash_map::DefaultHasher;
                                 use std::hash::{Hash, Hasher};

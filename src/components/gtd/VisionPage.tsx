@@ -28,6 +28,7 @@ import {
 import { syncHorizonBacklink } from '@/utils/horizon-backlinks';
 import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { safeInvoke } from '@/utils/safe-invoke';
+import { formatDisplayDate } from '@/utils/format-display-date';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import type { GTDVisionHorizon, MarkdownFile } from '@/types';
 
@@ -169,20 +170,6 @@ function displayNameForReference(ref: string): string {
   const leaf = normalized.split('/').pop();
   if (!leaf) return normalized;
   return leaf.replace(/\.(md|markdown)$/i, '');
-}
-
-function formatDisplayDate(iso?: string | null): string {
-  if (!iso) return '—';
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return '—';
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(parsed);
-  } catch {
-    return parsed.toISOString();
-  }
 }
 
 const VisionPage: React.FC<VisionPageProps> = ({ content, onChange, filePath, className }) => {

@@ -45,6 +45,7 @@ import {
 import { calculateNextReset } from '@/hooks/useHabitsHistory';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { checkTauriContextAsync } from '@/utils/tauri-ready';
+import { formatDisplayDate } from '@/utils/format-display-date';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useHabitTracking } from '@/hooks/useHabitTracking';
 import type { GTDHabitFrequency, GTDHabitStatus, MarkdownFile } from '@/types';
@@ -376,29 +377,19 @@ function toDateFromHistory(row: { date?: string; time?: string }): Date | null {
   return Number.isNaN(fallback.getTime()) ? null : fallback;
 }
 
-function formatDisplayDate(date: Date | null): string {
-  if (!date) return '—';
-  try {
-    const datePart = new Intl.DateTimeFormat(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }).format(date);
-    const timePart = new Intl.DateTimeFormat(undefined, {
-      hour: 'numeric',
-      minute: '2-digit',
-    }).format(date);
-    return `${datePart} • ${timePart}`;
-  } catch {
-    return date.toLocaleString();
-  }
+function formatHabitDisplayDate(date: Date | null): string {
+  return formatDisplayDate(date, {
+    includeTime: true,
+    timeSeparator: ' • ',
+    timeStyle: 'short',
+  });
 }
 
 function formatLastCompletion(rows: HabitHistoryRow[]): string {
   for (let i = rows.length - 1; i >= 0; i--) {
     const row = rows[i];
     if (/complete/i.test(row.status)) {
-      return formatDisplayDate(toDateFromHistory(row));
+      return formatHabitDisplayDate(toDateFromHistory(row));
     }
   }
   return '—';
@@ -711,7 +702,7 @@ export const HabitPage: React.FC<HabitPageProps> = ({
   const createdDisplay = React.useMemo(() => {
     const parsedDate = new Date(created);
     if (!Number.isNaN(parsedDate.getTime())) {
-      return formatDisplayDate(parsedDate);
+      return formatHabitDisplayDate(parsedDate);
     }
     return created || '—';
   }, [created]);
@@ -741,7 +732,7 @@ export const HabitPage: React.FC<HabitPageProps> = ({
   const nextResetDisplay = React.useMemo(() => {
     if (!nextResetDate) return '—';
     if (nextResetDate.getTime() <= nowTick) return 'Now';
-    return formatDisplayDate(nextResetDate);
+    return formatHabitDisplayDate(nextResetDate);
   }, [nextResetDate, nowTick]);
 
   const toggleStatus = async () => {

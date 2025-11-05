@@ -498,49 +498,43 @@ pub fn generate_project_readme_with_refs(params: ProjectReadmeParams) -> String 
     format!(
         r#"# {}
 
-## Desired Outcome
-{}
-
 ## Status
 [!singleselect:project-status:{}]
 
-## Due Date
+## Due Date (optional)
 [!datetime:due_date:{}]
+
+## Desired Outcome
+{}
+
+## Horizon References
+[!areas-references:{}]
+[!goals-references:{}]
+[!vision-references:{}]
+[!purpose-references:{}]
+
+## References (optional)
+[!references:{}]
 
 ## Created
 [!datetime:created_date_time:{}]
 
-## Horizon References
-[!areas-references:{}]
-
-[!goals-references:{}]
-
-[!vision-references:{}]
-
-[!purpose-references:{}]
-
 ## Actions
 [!actions-list]
 
-## Related Habits
+## Related Habits (optional)
 [!habits-list]
-
-## Notes
-<!-- Add any additional notes, context, or resources for this project here -->
-
-## References
-[!references:{}]
 "#,
         params.name,
-        params.description,
         params.status,
         due_date_value,
-        Local::now().to_rfc3339(),
+        params.description,
         params.areas_refs,
         params.goals_refs,
         params.vision_refs,
         params.purpose_refs,
-        params.general_refs
+        params.general_refs,
+        Local::now().to_rfc3339(),
     )
 }
 

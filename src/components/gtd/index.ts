@@ -11,6 +11,7 @@ export { GTDTagSelector, GTDTagExample } from './GTDTagSelector';
 export { ActionPage } from './ActionPage';
 export { default as HabitPage } from './HabitPage';
 export { default as AreaPage } from './AreaPage';
+export { default as ProjectPage } from './ProjectPage';
 export { default as GoalPage } from './GoalPage';
 export { default as VisionPage } from './VisionPage';
 export { default as PurposePage } from './PurposePage';

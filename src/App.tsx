@@ -27,6 +27,7 @@ import {
 import { FileChangeManager } from "@/components/file-browser/FileChangeManager";
 import { EnhancedTextEditor } from "@/components/editor/EnhancedTextEditor";
 import { ActionPage } from "@/components/gtd/ActionPage";
+import ProjectPage from "@/components/gtd/ProjectPage";
 import AreaPage from "@/components/gtd/AreaPage";
 import GoalPage from "@/components/gtd/GoalPage";
 import VisionPage from "@/components/gtd/VisionPage";
@@ -1196,16 +1197,49 @@ export const App: React.FC = () => {
                           );
                         }
 
-                        // Detect Action files: under Projects/ and not README.md
+                        // Detect Action files: under Projects/ and not README.(md|markdown)
                         const projectsDir = gtdSpace?.root_path
                           ? `${gtdSpace.root_path}/Projects/`
                           : undefined;
                         const underProjects = projectsDir
                           ? isUnder(displayedTab.file.path, projectsDir)
                           : false;
-                        const isReadme = /(^|\/)README\.md$/i.test(
+                        const isReadme = /(^|\/)README\.(md|markdown)$/i.test(
                           displayedTab.file.path
                         );
+
+                        let isProjectReadme = false;
+                        let projectFolderPath: string | null = null;
+                        if (underProjects && isReadme && projectsDir) {
+                          const normalizedRoot = projectsDir.replace(/\\/g, "/");
+                          const normalizedPath = displayedTab.file.path.replace(/\\/g, "/");
+                          if (normalizedPath.startsWith(normalizedRoot)) {
+                            const relative = normalizedPath.slice(normalizedRoot.length);
+                            const segments = relative.split("/").filter(Boolean);
+                            if (
+                              segments.length >= 2 &&
+                              /^README\.(md|markdown)$/i.test(segments[segments.length - 1])
+                            ) {
+                              isProjectReadme = true;
+                              projectFolderPath = normalizedPath.replace(/\/README\.(md|markdown)$/i, "");
+                            }
+                          }
+                        }
+
+                        if (isProjectReadme) {
+                          return (
+                            <ProjectPage
+                              key={displayedTab.id}
+                              content={displayedTab.content}
+                              onChange={(value) =>
+                                updateTabContent(displayedTab.id, value)
+                              }
+                              filePath={displayedTab.filePath}
+                              className="flex-1"
+                            />
+                          );
+                        }
+
                         // Narrow routing: only render ActionPage when the file is clearly an action
                         // 1) Path heuristic: in an "Actions/" subfolder under a project, or
                         // 2) Content heuristic: has action markers

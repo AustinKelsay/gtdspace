@@ -28,6 +28,7 @@ import {
 import { syncHorizonBacklink } from '@/utils/horizon-backlinks';
 import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { safeInvoke } from '@/utils/safe-invoke';
+import { formatDisplayDate } from '@/utils/format-display-date';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import type { GTDGoalStatus, MarkdownFile } from '@/types';
 
@@ -186,20 +187,6 @@ function toStringArray(value: unknown): string[] {
     return trimmed.split(',').map((entry) => normalizeReference(entry)).filter(Boolean);
   }
   return [];
-}
-
-function formatDisplayDate(iso?: string | null): string {
-  if (!iso) return '—';
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return '—';
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(parsed);
-  } catch {
-    return parsed.toISOString();
-  }
 }
 
 const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, className }) => {

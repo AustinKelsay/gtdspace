@@ -81,6 +81,14 @@ export const useFileManager = () => {
       if (directoryExists === false) {
         console.log('Folder missing, attempting to initialize GTD space at:', normalizedPath);
         await safeInvoke<string>('initialize_gtd_space', { spacePath: normalizedPath }, null);
+
+        try {
+          console.log('Seeding example GTD content for newly initialized space');
+          await safeInvoke<string>('seed_example_gtd_content', { spacePath: normalizedPath }, null);
+        } catch (seedError) {
+          console.warn('Failed to seed example GTD content:', seedError);
+        }
+
         directoryExists = await safeInvoke<boolean>('check_directory_exists', { path: normalizedPath }, null);
       }
 

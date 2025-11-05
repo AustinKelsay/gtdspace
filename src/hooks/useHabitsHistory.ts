@@ -185,8 +185,10 @@ export const calculateNextReset = (frequency: GTDHabit['frequency'], lastUpdate?
 
     case '5-minute': {
       const nextFive = new Date(last);
-      nextFive.setSeconds(0, 0); // Round down to start of minute
-      nextFive.setMinutes(nextFive.getMinutes() + 5);
+      const currentMinutes = nextFive.getMinutes();
+      const minutesToAdd = (5 - (currentMinutes % 5)) % 5 || 5;
+      nextFive.setMinutes(currentMinutes + minutesToAdd);
+      nextFive.setSeconds(0, 0);
       return nextFive.toISOString();
     }
       

@@ -127,6 +127,11 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
   const [manualReference, setManualReference] = useState('');
   const { withErrorHandling } = useErrorHandler();
   const { showSuccess } = useToast();
+  const activeReferenceKeyRef = React.useRef<ReferenceKey | null>(null);
+
+  React.useEffect(() => {
+    activeReferenceKeyRef.current = activeReferenceKey;
+  }, [activeReferenceKey]);
 
   const updateReferenceGroup = React.useCallback(
     (key: ReferenceKey, updater: (current: string[]) => string[]) => {
@@ -152,11 +157,14 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
     async (key: ReferenceKey) => {
       const requestKey = key;
       if (!spacePath) {
-        setReferenceOptions([]);
+        if (activeReferenceKeyRef.current === requestKey) {
+          setReferenceOptions([]);
+          setReferencesLoading(false);
+        }
         return;
       }
 
-      if (activeReferenceKey === requestKey) {
+      if (activeReferenceKeyRef.current === requestKey) {
         setReferencesLoading(true);
       }
       try {
@@ -196,7 +204,7 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
           (option, index, arr) => arr.findIndex((candidate) => candidate.path === option.path) === index
         );
 
-        if (activeReferenceKey === requestKey) {
+        if (activeReferenceKeyRef.current === requestKey) {
           setReferenceOptionCache((prev) => ({
             ...prev,
             [key]: unique,
@@ -205,7 +213,7 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
         }
       } catch (error) {
         console.error('[CreateHabitDialog] Failed to load references', error);
-        if (activeReferenceKey === requestKey) {
+        if (activeReferenceKeyRef.current === requestKey) {
           setReferenceOptionCache((prev) => ({
             ...prev,
             [key]: [],
@@ -213,12 +221,12 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
           setReferenceOptions([]);
         }
       } finally {
-        if (activeReferenceKey === requestKey) {
+        if (activeReferenceKeyRef.current === requestKey) {
           setReferencesLoading(false);
         }
       }
     },
-    [spacePath, activeReferenceKey]
+    [spacePath]
   );
 
   React.useEffect(() => {

@@ -71,6 +71,36 @@ const HORIZON_DEFINITIONS = [
   { name: 'Cabinet', altitude: 'Reference', order: 7 }
 ];
 
+type HorizonReferenceKey = 'projects' | 'areas' | 'goals' | 'vision' | 'purpose';
+
+const HORIZON_DIR_MAP: Record<HorizonReferenceKey, string> = {
+  projects: 'Projects',
+  areas: 'Areas of Focus',
+  goals: 'Goals',
+  vision: 'Vision',
+  purpose: 'Purpose & Principles'
+};
+
+const ABSOLUTE_PATH_REGEX = /^(?:[A-Za-z]:\/|\/)/;
+const VALID_REFERENCE_KEYS: HorizonReferenceKey[] = ['projects', 'areas', 'goals', 'vision', 'purpose'];
+
+const joinPathPreservingUNC = (base: string, ...segments: string[]): string => {
+  let acc = base;
+  segments.forEach((segment) => {
+    if (!segment) return;
+    const cleaned = segment.replace(/^\/+/, '').replace(/\/+$/, '');
+    if (!cleaned) return;
+    if (!acc) {
+      acc = cleaned;
+    } else if (acc.endsWith('/')) {
+      acc += cleaned;
+    } else {
+      acc += `/${cleaned}`;
+    }
+  });
+  return acc;
+};
+
 /**
  * Extract horizon references from content
  */
@@ -83,18 +113,6 @@ const extractHorizonReferences = (content: string, _currentLevel: string) => {
     areas: extracted.areas,
     projects: extracted.projects
   };
-};
-
-/**
- * Ensure a file path has a markdown extension
- */
-const ensureMd = (filename: string): string => {
-  // If already has .md or .markdown extension, return as-is
-  if (filename.endsWith('.md') || filename.endsWith('.markdown')) {
-    return filename;
-  }
-  // Otherwise append .md
-  return `${filename}.md`;
 };
 
 /**
@@ -126,6 +144,96 @@ const extractContentPreview = (content: string): string => {
   }
   
   return previewLines.join(' ').substring(0, 200);
+};
+
+/**
+ * Ensure markdown extension for non-project references.
+ */
+const ensureMarkdownFile = (input: string): string => {
+  if (/\.(md|markdown)$/i.test(input)) {
+    return input;
+  }
+  return `${input}.md`;
+};
+
+/**
+ * Normalize project references to README paths.
+ */
+const ensureProjectReadme = (input: string): string => {
+  const normalized = input.replace(/\/+$/, '');
+
+  const lower = normalized.toLowerCase();
+  if (lower.endsWith('/readme.md') || lower.endsWith('/readme.markdown')) {
+    return normalized;
+  }
+  if (/\.(md|markdown)$/i.test(normalized)) {
+    return normalized;
+  }
+  return `${normalized}/README.md`;
+};
+
+/**
+ * Resolve a horizon reference token into a fully-qualified markdown path.
+ */
+const resolveReferencePath = (
+  spacePath: string,
+  refLevel: HorizonReferenceKey,
+  rawValue: string
+): string | null => {
+  const trimmed = rawValue?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = trimmed.replace(/\\/g, '/');
+  const isAbsolute = ABSOLUTE_PATH_REGEX.test(normalized);
+  const dirName = HORIZON_DIR_MAP[refLevel];
+
+  if (refLevel === 'projects') {
+    if (isAbsolute) {
+      return ensureProjectReadme(normalized);
+    }
+
+    let relative = normalized.replace(/^\/+/, '');
+    if (relative.toLowerCase().startsWith('projects/')) {
+      relative = relative.slice('Projects/'.length);
+    }
+
+    const ensured = ensureProjectReadme(relative);
+    return joinPathPreservingUNC(spacePath, dirName, ensured);
+  }
+
+  if (isAbsolute) {
+    return ensureMarkdownFile(normalized);
+  }
+
+  let relative = normalized.replace(/^\/+/, '');
+
+  const dirLower = dirName.toLowerCase();
+  if (relative.toLowerCase().startsWith(`${dirLower}/`)) {
+    relative = relative.slice(dirLower.length + 1);
+  }
+
+  const ensured = ensureMarkdownFile(relative);
+  return joinPathPreservingUNC(spacePath, dirName, ensured);
+};
+
+/**
+ * Derive a status-like value for display purposes based on horizon level.
+ */
+const deriveStatusForLevel = (levelName: string, metadata: Record<string, unknown>): string | undefined => {
+  switch (levelName) {
+    case 'Projects':
+      return (metadata.projectStatus as string) || (metadata.status as string) || undefined;
+    case 'Goals':
+      return (metadata.goalStatus as string) || (metadata.status as string) || undefined;
+    case 'Areas of Focus':
+      return (metadata.areaStatus as string) || (metadata.status as string) || undefined;
+    case 'Vision':
+      return (metadata.visionHorizon as string) || (metadata.status as string) || undefined;
+    default:
+      return (metadata.status as string) || undefined;
+  }
 };
 
 /**
@@ -223,20 +331,22 @@ export function useHorizonsRelationships(
                     const content = await readFileText(readmePath);
                     const metadata = extractMetadata(content);
                     const references = extractHorizonReferences(content, 'Projects');
-                    
-                    const linkedTo: string[] = [];
-                    
-                    // Build linked paths from references
+                    const linkedSet = new Set<string>();
+
                     Object.entries(references).forEach(([refLevel, refFiles]) => {
+                      if (!Array.isArray(refFiles) || refFiles.length === 0) {
+                        return;
+                      }
+                      const keyStr = refLevel as string;
+                      if (!VALID_REFERENCE_KEYS.includes(keyStr as HorizonReferenceKey)) {
+                        return;
+                      }
+                      const key = keyStr as HorizonReferenceKey;
                       refFiles.forEach(refFile => {
-                        // Convert reference to probable path
-                        const levelName = refLevel === 'areas' ? 'Areas of Focus' :
-                                        refLevel === 'goals' ? 'Goals' :
-                                        refLevel === 'vision' ? 'Vision' :
-                                        refLevel === 'purpose' ? 'Purpose & Principles' :
-                                        'Projects';
-                        const possiblePath = `${spacePath}/${levelName}/${ensureMd(refFile)}`;
-                        linkedTo.push(possiblePath);
+                        const resolved = resolveReferencePath(spacePath, key, refFile);
+                        if (resolved) {
+                          linkedSet.add(resolved);
+                        }
                       });
                     });
                     
@@ -248,11 +358,11 @@ export function useHorizonsRelationships(
                       last_modified: Math.floor(Date.now() / 1000),
                       extension: 'md',
                       horizonLevel: 'Projects',
-                      linkedTo,
+                      linkedTo: Array.from(linkedSet),
                       linkedFrom: [],
                       content: project.description || extractContentPreview(content),
                       tags: Array.isArray(metadata.tags) ? metadata.tags : [],
-                      status: project.status,
+                      status: project.status ?? deriveStatusForLevel('Projects', metadata),
                       dueDate: project.dueDate || undefined
                     };
                     
@@ -280,37 +390,43 @@ export function useHorizonsRelationships(
                     const metadata = extractMetadata(content);
                     const references = extractHorizonReferences(content, horizon.name);
                     
-                    const linkedTo: string[] = [];
-                    
-                    // Build linked paths
-                    Object.entries(references).forEach(([refLevel, refFiles]) => {
-                      refFiles.forEach(refFile => {
-                        const levelName = refLevel === 'areas' ? 'Areas of Focus' :
-                                        refLevel === 'goals' ? 'Goals' :
-                                        refLevel === 'vision' ? 'Vision' :
-                                        refLevel === 'purpose' ? 'Purpose & Principles' :
-                                        'Projects';
+                    const linkedSet = new Set<string>();
 
-                        if (refLevel === 'projects' && refFile.includes('/')) {
-                          // Project reference includes folder name
-                          linkedTo.push(`${spacePath}/Projects/${refFile}/README.md`);
-                        } else {
-                          // Regular file reference
-                          const possiblePath = `${spacePath}/${levelName}/${ensureMd(refFile)}`;
-                          linkedTo.push(possiblePath);
+                    Object.entries(references).forEach(([refLevel, refFiles]) => {
+                      if (!Array.isArray(refFiles) || refFiles.length === 0) {
+                        return;
+                      }
+                      const keyStr = refLevel as string;
+                      if (!VALID_REFERENCE_KEYS.includes(keyStr as HorizonReferenceKey)) {
+                        return;
+                      }
+                      const key = keyStr as HorizonReferenceKey;
+                      refFiles.forEach(refFile => {
+                        const resolved = resolveReferencePath(spacePath, key, refFile);
+                        if (resolved) {
+                          linkedSet.add(resolved);
                         }
                       });
                     });
+
+                    const derivedStatus = deriveStatusForLevel(horizon.name, metadata as Record<string, unknown>);
+                    const derivedDueDate =
+                      horizon.name === 'Goals'
+                        ? (metadata.goalTargetDate as string) ||
+                          (metadata.targetDate as string) ||
+                          (metadata.dueDate as string) ||
+                          undefined
+                        : (metadata.dueDate as string) || undefined;
                     
                     const file: HorizonFile = {
                       ...mdFile,
                       horizonLevel: horizon.name,
-                      linkedTo,
+                      linkedTo: Array.from(linkedSet),
                       linkedFrom: [],
                       content: extractContentPreview(content),
                       tags: Array.isArray(metadata.tags) ? metadata.tags : [],
-                      status: metadata.status as string || undefined,
-                      dueDate: metadata.dueDate as string || undefined
+                      status: derivedStatus,
+                      dueDate: derivedDueDate
                     };
                     
                     return file;

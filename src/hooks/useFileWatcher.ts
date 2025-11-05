@@ -127,7 +127,7 @@ export function useFileWatcher(): FileWatcherHookResult {
 
       const normalizedPath = folderPath.trim();
       const directoryExists = await safeInvoke<boolean>('check_directory_exists', { path: normalizedPath }, null);
-      if (directoryExists === false) {
+      if (directoryExists !== true) {
         console.warn('Skipping file watcher; directory missing:', normalizedPath);
         setState(prev => ({
           ...prev,

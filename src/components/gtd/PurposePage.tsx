@@ -85,6 +85,21 @@ function toStringArray(value: unknown): string[] {
   if (typeof value === 'string') {
     const trimmed = value.trim();
     if (!trimmed) return [];
+
+    // Try to decode and parse as JSON first
+    try {
+      const decoded = decodeURIComponent(trimmed);
+      const parsed = JSON.parse(decoded);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => (typeof item === 'string' ? item.trim().replace(/\\+/g, '/') : ''))
+          .filter(Boolean);
+      }
+    } catch {
+      // Fall through to CSV parsing
+    }
+
+    // Fall back to CSV split
     return trimmed
       .split(',')
       .map((entry) => entry.trim().replace(/\\+/g, '/'))

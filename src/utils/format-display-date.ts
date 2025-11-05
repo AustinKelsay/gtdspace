@@ -43,23 +43,31 @@ export function formatDisplayDate(
     }
     stringFallback = trimmed;
 
-    const dateOnlyMatch = trimmed.match(DATE_ONLY_PATTERN);
-    if (dateOnlyMatch) {
-      const [, yearStr, monthStr, dayStr] = dateOnlyMatch;
-      const year = Number(yearStr);
-      const month = Number(monthStr);
-      const day = Number(dayStr);
-      if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
-        return trimmed;
-      }
+      const dateOnlyMatch = trimmed.match(DATE_ONLY_PATTERN);
+      if (dateOnlyMatch) {
+        const [, yearStr, monthStr, dayStr] = dateOnlyMatch;
+        const year = Number(yearStr);
+        const month = Number(monthStr);
+        const day = Number(dayStr);
+        if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
+          return trimmed;
+        }
 
-      resolvedDate = toLocalDateFromParts(year, month, day);
-      if (Number.isNaN(resolvedDate.getTime())) {
-        return trimmed;
-      }
-      if (includeTimeOverride === undefined) {
-        includeTime = false;
-      }
+        resolvedDate = toLocalDateFromParts(year, month, day);
+        if (Number.isNaN(resolvedDate.getTime())) {
+          return trimmed;
+        }
+        // Verify the constructed date matches the input parts to catch rollovers
+        if (
+          resolvedDate.getFullYear() !== year ||
+          resolvedDate.getMonth() + 1 !== month ||
+          resolvedDate.getDate() !== day
+        ) {
+          return trimmed;
+        }
+        if (includeTimeOverride === undefined) {
+          includeTime = false;
+        }
     } else {
       const parsed = new Date(trimmed);
       if (Number.isNaN(parsed.getTime())) {

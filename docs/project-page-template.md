@@ -9,12 +9,14 @@ This document defines the standardized Project page template for GTD Space. It b
 - Maps each UI element to existing hooks, blocks, and utilities so implementation reuses proven flows instead of inventing new ones.
 
 ## Goals
+
 - Deliver a consistent, low-friction authoring experience for projects that mirrors the Action template but surfaces folder-wide context.
 - Keep metadata tokens predictable to simplify parsing, migrations, and cross-linking with Horizons and Actions.
 - Make Desired Outcome, linked references, and live action lists easy to scan without overwhelming the reading experience.
 - Lean on shared theming primitives for accessibility and light/dark parity.
 
 ## At-a-Glance
+
 - Layout: Same `px-12` left gutter, compact header plus divider, bare BlockNote body used across modern templates.
 - Title: H1 input that mirrors Actions; editing prompts rename of the containing project folder when the saved name differs.
 - Header fields: Project Status, Due Date, Created timestamp, Areas references, Goals references, Vision references, Purpose & Principles references, and generic References.
@@ -25,6 +27,7 @@ This document defines the standardized Project page template for GTD Space. It b
 ## UI Specification
 
 ### Header (Compact Grid)
+
 - Left gutter: `px-12` from the page edge (reuse the shared page shell).
 - Title: `text-5xl font-bold` input; typing updates the H1 and triggers `rename_gtd_project` prompts when the persisted folder name diverges.
 - Field grid (2 columns, `gap-y-2 gap-x-6`):
@@ -42,6 +45,7 @@ This document defines the standardized Project page template for GTD Space. It b
 - Divider: `border-t border-border` separates header and body in line with other standardized templates.
 
 ### Body
+
 - Desired Outcome block: Bare BlockNote editor describing success, constraints, and key deliverables. Parent adds `align-with-header` so the first line aligns with the header gutter.
 - Supporting sections: Optional headings such as “Scope”, “Notes”, or “Resources” remain in canonical order after Desired Outcome but are authored in the same BlockNote surface.
 - List blocks: `[!actions-list]` renders read-only live status of child actions; `[!habits-list]` (optional) spotlights reinforcing habits. Both blocks adopt the existing block renderer styles.
@@ -50,7 +54,7 @@ This document defines the standardized Project page template for GTD Space. It b
 
 Project README markdown is rebuilt in this exact sequence. Blank lines separate logical sections; optional sections are omitted when empty.
 
-```
+```markdown
 # <Project Title>
 
 ## Status
@@ -88,6 +92,7 @@ Notes:
 - `[!habits-list]` is omitted entirely when the user removes the block.
 
 ## Behaviors and Data Flow
+
 - Live rebuild: Editing header fields or body content regenerates canonical markdown and updates the open tab. The shared no-op guard prevents redundant writes.
 - Stable Created: Captured on first render using existing created timestamp utilities; never regenerated once set.
 - Reference dialogs: Reuses the horizon reference dialog leveraged by Area, Goal, and Habit templates. Selections write JSON arrays into the corresponding horizon markers and CSV into `[!references:]`.
@@ -96,6 +101,7 @@ Notes:
 - Sidebar metadata: Status, due date, and action counts surface in the Projects sidebar and dashboard cards using `GTDProject` objects documented in `docs/gtd-data-model.md`.
 
 ## Implementation Map
+
 - Entry point: `src/components/gtd/ProjectPage.tsx` combines the shared page shell, header builder, BlockNote body, and list blocks. It lives beside `ActionPage`, `HabitPage`, and `AreaPage`.
 - Routing: Ensure the editor router mounts `ProjectPage` for `Projects/**/README.md`. Other files within the folder (actions) continue to use `ActionPage`.
 - Markdown builder: Add `buildProjectMarkdown()` to `src/utils/gtd-markdown-helpers.ts`, enforcing ordering, JSON normalization for horizon references, and CSV preservation for `[!references:]`.
@@ -104,12 +110,14 @@ Notes:
 - Blocks: Confirm the BlockNote schema includes stub nodes for `[!actions-list]` and `[!habits-list]`, and that migration utilities inject them when missing.
 
 ## Theming and Accessibility
+
 - Header controls inherit theme variables (`--background`, `--foreground`, `--border`); focus states mirror the Action template for consistency.
 - Status badges and read-only timestamps use `text-muted-foreground` to de-emphasize non-editable fields without reducing contrast.
 - BlockNote content respects reduced motion settings and screen readers announce section headings in canonical order.
 - Chip groups expose keyboard navigation (arrow keys, enter/delete) and convey selection state via aria attributes.
 
 ## QA Checklist (Projects)
+
 - Title aligns with the first body line; header divider renders once.
 - Updating Project Status only modifies the `[!singleselect:project-status:]` marker.
 - Clearing or changing Due Date updates only the `[!datetime:due_date:]` token and handles timezone normalization.
@@ -120,7 +128,8 @@ Notes:
 - `[!habits-list]` hides automatically when removed from the page.
 
 ## Future Enhancements
-- Inline summary chips for action counts (e.g., “4 open actions”) beside the header once supporting metrics land.
+
+- Inline summary chips for action counts (e.g., "4 open actions") beside the header once supporting metrics land.
 - Optional “Next Review” field that ties into cadence reminders shared with Areas.
 - Dedicated “Key Resources” block that reuses Cabinet previews without cluttering the generic References section.
 - Project health indicators (e.g., status vs. due date) surfaced in the sidebar and dashboard once analytics mature.

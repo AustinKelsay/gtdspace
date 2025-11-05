@@ -9,12 +9,14 @@ This document defines the standardized Goal horizon page template for GTD Space.
 - Maps UI elements to existing hooks, blocks, and utilities so implementation can reuse proven flows.
 
 ## Goals
+
 - Deliver a motivating yet lightweight authoring surface for Goals that stays consistent with other Horizons pages.
 - Keep metadata tokens predictable to simplify parsing, migrations, and cross-linking with Areas and Projects.
 - Spotlight the target date, success criteria, and supporting references without overwhelming the reading experience.
 - Lean on shared theming primitives for accessibility and light/dark parity.
 
 ## At-a-Glance
+
 - Layout: Same `px-12` left gutter, compact header plus divider, bare BlockNote body.
 - Title: H1 input identical to Actions; no background chrome.
 - Header fields: Goal Status, Target Date, Created timestamp, Projects references, Areas references, optional Vision and Purpose references.
@@ -25,6 +27,7 @@ This document defines the standardized Goal horizon page template for GTD Space.
 ## UI Specification
 
 ### Header (Compact Grid)
+
 - Left gutter: `px-12` from the page edge (reuse the shared page shell).
 - Title: `text-5xl font-bold` input; typing updates the H1 and triggers rename prompts when the saved name differs.
 - Field grid (2 columns, `gap-y-2 gap-x-6`):
@@ -41,6 +44,7 @@ This document defines the standardized Goal horizon page template for GTD Space.
 - Divider: `border-t border-border` separates header and body in line with Action/Habit/Area designs.
 
 ### Body
+
 - Description block: Bare BlockNote editor for framing the desired outcome, success criteria, and motivational context. Parent adds `align-with-header` to keep the first line aligned with the header gutter.
 - The body preserves author-controlled ordering; only the metadata sections are canonicalized.
 
@@ -48,7 +52,7 @@ This document defines the standardized Goal horizon page template for GTD Space.
 
 The renderer rebuilds Goal markdown in this exact sequence. Blank lines separate logical sections; optional sections are omitted entirely when empty.
 
-```
+```markdown
 # <Goal Title>
 
 ## Status
@@ -81,6 +85,7 @@ Notes:
 - `Description` is the only non-optional body section; an empty state inserts a single placeholder paragraph so the section survives canonicalization.
 
 ## Behaviors and Data Flow
+
 - Live rebuild: Editing header fields or body content regenerates canonical markdown and updates the open tab. No-op guard prevents redundant writes.
 - Stable Created: Captured on first render using existing created timestamp utilities; never regenerated once set.
 - Reference dialogs: Reuses the horizon reference dialog leveraged by Habit and Area templates. Selections write JSON arrays into the corresponding markers.
@@ -88,6 +93,7 @@ Notes:
 - Sidebar metadata: Status, target date, and reference badges surface in the Horizons sidebar once the corresponding TypeScript interfaces are formalized.
 
 ## Implementation Map
+
 - Entry point: Introduce `src/components/gtd/GoalPage.tsx`, mirroring `ActionPage`, `HabitPage`, and `AreaPage` structure (header builder, markdown orchestrator, BlockNote body).
 - Routing: Extend the editor router to mount `GoalPage` for files under `/Goals/`.
 - Metadata helpers: Add `buildGoalMarkdown()` to `src/utils/gtd-markdown-helpers.ts`, enforcing the ordering above while preserving the description body content.
@@ -96,11 +102,13 @@ Notes:
 - Body section: Extend the BlockNote schema with a `Description` delimiter so canonical rebuild can remount it in order while leaving content untouched.
 
 ## Theming and Accessibility
+
 - All header controls inherit theme variables (`--background`, `--foreground`, `--border`). Ensure focus states match Action/Habit/Area patterns.
 - Status badges and read-only timestamps use `text-muted-foreground` to de-emphasize non-editable fields without compromising contrast.
 - Description copy respects reduced motion settings and leverages semantic markup for screen reader clarity.
 
 ## QA Checklist (Goals)
+
 - Title aligns with the first body line; header divider renders once.
 - Updating Goal Status only modifies the `[!singleselect:goal-status:]` token.
 - Clearing or changing Target Date updates only the `[!datetime:goal-target-date:]` token and handles timezone normalization.
@@ -110,6 +118,7 @@ Notes:
 - Exporting the file (save/reopen) produces no diff when the content already matches the template.
 
 ## Future Enhancements
+
 - Add progress visualization (e.g., milestone completion pill) inline once supporting data is available.
 - Surface linked Projects’ next actions inline when focus mode is active.
 - Explore optional `Key Results` field that syncs to dashboard metrics without bloating the main body.

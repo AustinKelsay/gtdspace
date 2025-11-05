@@ -1209,7 +1209,6 @@ export const App: React.FC = () => {
                         );
 
                         let isProjectReadme = false;
-                        let projectFolderPath: string | null = null;
                         if (underProjects && isReadme && projectsDir) {
                           const normalizedRoot = projectsDir.replace(/\\/g, "/");
                           const normalizedPath = displayedTab.file.path.replace(/\\/g, "/");
@@ -1221,7 +1220,6 @@ export const App: React.FC = () => {
                               /^README\.(md|markdown)$/i.test(segments[segments.length - 1])
                             ) {
                               isProjectReadme = true;
-                              projectFolderPath = normalizedPath.replace(/\/README\.(md|markdown)$/i, "");
                             }
                           }
                         }

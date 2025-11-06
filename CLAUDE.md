@@ -38,6 +38,32 @@ npm run release:major  # 0.1.0 → 1.0.0 with git tag
 - **First run**: `npm install` then `npm run tauri:dev`
 - **Google Calendar**: Configure OAuth in Settings UI (or `.env` with `GOOGLE_CALENDAR_CLIENT_ID` and `GOOGLE_CALENDAR_CLIENT_SECRET`)
 
+### Claude AI Settings Configuration
+
+If you're using Claude Code (claude.ai/code) with this repository, you'll need to configure local settings:
+
+1. **Copy the example file**:
+   ```bash
+   cp .claude/settings.local.json.example .claude/settings.local.json
+   ```
+
+2. **Edit `.claude/settings.local.json`** and replace the placeholder paths:
+   - Replace `/path/to/your/workspace/**` with your actual workspace absolute path (e.g., `/Users/yourname/Desktop/code/gtdspace/**`)
+   - If you need access to other directories, add additional `Read()` entries with specific paths
+
+3. **Permissions are scoped to essential commands only**:
+   - Development: `npm run tauri:dev`, `npm run dev`, `npm run build`
+   - Code quality: `npm run type-check`, `npm run lint`, `cargo check`, `cargo clippy`, `cargo fmt`
+   - Testing: `npm test`, `npm run test:run`
+   - Git operations: `git add`, `git commit` (for PR work)
+   - Utilities: `find`, `grep`, `cat`, `ls`, `rg`, `jq`, `diff`, `sed`, `rm`, `mkdir`
+
+4. **Important**: 
+   - `.claude/settings.local.json` is gitignored and contains machine-specific paths
+   - Never commit your local settings file
+   - The example file (`.claude/settings.local.json.example`) is sanitized and safe to commit
+   - If you need additional permissions, add them to your local file only, not the example
+
 ## Architecture Overview
 
 **Stack**: React 18 + TypeScript + Vite + Tauri 2.x (Rust backend) + BlockNote editor v0.37 (pinned)

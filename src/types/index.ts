@@ -416,7 +416,7 @@ export interface SearchResponse {
 /**
  * GTD Project status options
  */
-export type GTDProjectStatus = 'in-progress' | 'waiting' | 'completed';
+export type GTDProjectStatus = 'in-progress' | 'waiting' | 'completed' | 'cancelled';
 
 /**
  * GTD Action status options

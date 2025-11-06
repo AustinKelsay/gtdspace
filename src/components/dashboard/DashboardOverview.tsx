@@ -93,7 +93,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const overdue = projects.filter(p => {
-      if (!p.dueDate || p.status === 'completed') return false;
+      if (!p.dueDate || p.status === 'completed' || p.status === 'cancelled') return false;
       const due = parseLocalDate(p.dueDate);
       return !isNaN(due.getTime()) && due < today;
     }).length;
@@ -287,7 +287,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     
     const upcomingProjects = projects
       .filter(p => {
-        if (!p.dueDate || p.status === 'completed') return false;
+        if (!p.dueDate || p.status === 'completed' || p.status === 'cancelled') return false;
         if (onlyOverdue) {
           const due = parseLocalDate(p.dueDate);
           return !isNaN(due.getTime()) && due < today;

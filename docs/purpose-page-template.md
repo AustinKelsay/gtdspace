@@ -9,12 +9,14 @@ This document defines the standardized Purpose & Principles horizon page templat
 - Maps UI elements to existing hooks, blocks, and utilities so implementation can reuse proven flows.
 
 ## Goals
+
 - Provide a grounded authoring surface for purpose statements and guiding principles that stays consistent with other Horizons pages.
 - Keep metadata tokens predictable to simplify parsing, migrations, and cross-linking with Goals, Projects, and Vision narratives.
 - Highlight the overarching purpose, principles, and supporting references without overwhelming the reading experience.
 - Lean on shared theming primitives for accessibility and light/dark parity.
 
 ## At-a-Glance
+
 - Layout: Same `px-12` left gutter, compact header plus divider, bare BlockNote body.
 - Title: H1 input identical to other pages; no background chrome.
 - Header fields: Created timestamp, Projects references, Goals references, Vision references, optional Areas references.
@@ -25,6 +27,7 @@ This document defines the standardized Purpose & Principles horizon page templat
 ## UI Specification
 
 ### Header (Compact Grid)
+
 - Left gutter: `px-12` from the page edge (reuse the shared page shell).
 - Title: `text-5xl font-bold` input; typing updates the H1 and triggers rename prompts when the saved name differs.
 - Field grid (2 columns, `gap-y-2 gap-x-6`):
@@ -38,6 +41,7 @@ This document defines the standardized Purpose & Principles horizon page templat
 - Divider: `border-t border-border` separates header and body in line with other horizon designs.
 
 ### Body
+
 - Description block: Bare BlockNote editor for articulating purpose and guiding principles together. Defaults to a succinct placeholder paragraph.
 - The body preserves author-controlled ordering; only the metadata sections are canonicalized.
 
@@ -45,7 +49,7 @@ This document defines the standardized Purpose & Principles horizon page templat
 
 The renderer rebuilds Purpose & Principles markdown in this exact sequence. Blank lines separate logical sections; optional sections are omitted entirely when empty.
 
-```
+```markdown
 # <Purpose & Principles Title>
 
 ## Projects References
@@ -72,12 +76,14 @@ Notes:
 - `Description` is the only non-optional body section; an empty state inserts a placeholder paragraph so the section survives canonicalization.
 
 ## Behaviors and Data Flow
+
 - Live rebuild: Editing header fields or body content regenerates canonical markdown and updates the open tab. No-op guard prevents redundant writes.
 - Stable Created: Captured on first render using existing created timestamp utilities; never regenerated once set.
 - Reference dialogs: Reuses the horizon reference dialog leveraged by Vision and Goal templates. Selections write JSON arrays into the corresponding markers.
 - Sidebar metadata: Reference badges surface in the Horizons sidebar once the corresponding TypeScript interfaces are formalized.
 
 ## Implementation Map
+
 - Entry point: Introduce `src/components/gtd/PurposePage.tsx`, mirroring `VisionPage`, `GoalPage`, and `AreaPage` structure (header builder, markdown orchestrator, BlockNote body).
 - Routing: Extend the editor router to mount `PurposePage` for files under `/Purpose & Principles/`.
 - Metadata helpers: Add `buildPurposeMarkdown()` (or similar) to `src/utils/gtd-markdown-helpers.ts`, enforcing the ordering above while preserving both body sections.
@@ -86,11 +92,13 @@ Notes:
 - Body sections: Extend the BlockNote schema with a `Description` delimiter so canonical rebuild can remount it in order while leaving content untouched.
 
 ## Theming and Accessibility
+
 - All header controls inherit theme variables (`--background`, `--foreground`, `--border`). Ensure focus states match other horizon patterns.
 - Read-only timestamps use `text-muted-foreground` to de-emphasize non-editable fields without compromising contrast.
 - Principles lists respect reduced motion settings and leverage semantic list markup for screen reader clarity.
 
 ## QA Checklist (Purpose & Principles)
+
 - Title aligns with the first body line; header divider renders once.
 - Reference chips mirror JSON array order; removing a chip updates the token immediately.
 - Created timestamp remains unchanged after edits.
@@ -98,6 +106,7 @@ Notes:
 - Exporting the file (save/reopen) produces no diff when the content already matches the template.
 
 ## Future Enhancements
+
 - Add optional `Key Relationships` section for stakeholders or communities impacted by the purpose.
 - Surface linked Goals’ target dates inline when focus mode is active.
 - Explore a summary badge showing the number of principles defined.

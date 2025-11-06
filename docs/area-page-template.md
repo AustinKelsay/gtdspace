@@ -9,12 +9,14 @@ This document defines the standardized Area of Focus page template for GTD Space
 - Maps UI elements to existing hooks, blocks, and utilities so implementation can reuse proven flows.
 
 ## Goals
+
 - Deliver a rich but lightweight authoring surface for Areas that stays consistent with Action and Habit pages.
 - Keep metadata tokens predictable to simplify parsing, migrations, and cross-linking.
 - Highlight responsibilities, success criteria, and metrics without overwhelming the reading experience.
 - Lean on shared theming primitives for accessibility and light/dark parity.
 
 ## At-a-Glance
+
 - Layout: Same `px-12` left gutter, compact header plus divider, bare BlockNote body.
 - Title: H1 input identical to Actions; no background chrome.
 - Header fields: Area Status, Review Cadence, Created timestamp, Projects references, Goals references, optional Vision and Purpose references.
@@ -25,6 +27,7 @@ This document defines the standardized Area of Focus page template for GTD Space
 ## UI Specification
 
 ### Header (Compact Grid)
+
 - Left gutter: `px-12` from the page edge (reuse the shared page shell).
 - Title: `text-5xl font-bold` input; typing updates the H1 and triggers rename prompts when the saved name differs.
 - Field grid (2 columns, `gap-y-2 gap-x-6`):
@@ -41,6 +44,7 @@ This document defines the standardized Area of Focus page template for GTD Space
 - Divider: `border-t border-border` separates header and body in line with Action/Habit designs.
 
 ### Body
+
 - Description block: Bare BlockNote editor for describing the responsibility, desired outcomes, and scope. Parent adds `align-with-header` to keep the first line aligned with the header gutter.
 - The body preserves author-controlled ordering; only the metadata sections are canonicalized.
 
@@ -48,7 +52,7 @@ This document defines the standardized Area of Focus page template for GTD Space
 
 The renderer rebuilds Area markdown in this exact sequence. Blank lines separate logical sections; optional sections are omitted entirely when empty.
 
-```
+```markdown
 # <Area Title>
 
 ## Status
@@ -81,12 +85,14 @@ Notes:
 - `Description` is the only non-optional body section; an empty state inserts a single placeholder paragraph so the section survives canonicalization.
 
 ## Behaviors and Data Flow
+
 - Live rebuild: Editing header fields or body content regenerates canonical markdown and updates the open tab. No-op guard prevents redundant writes.
 - Stable Created: Captured on first render using existing created timestamp utilities; never regenerated once set.
 - Reference dialogs: Reuses the horizon reference dialog leveraged by Habit and upcoming Project templates. Selections write JSON arrays into the corresponding markers.
 - Sidebar metadata: Status and cadence values surface in the Horizons sidebar summary once the corresponding TypeScript interfaces are formalized.
 
 ## Implementation Map
+
 - Entry point: Introduce `src/components/gtd/AreaPage.tsx`, mirroring `ActionPage` and `HabitPage` structure (header builder, markdown orchestrator, BlockNote body).
 - Routing: Extend the editor router to mount `AreaPage` for files under `/Areas of Focus/`.
 - Metadata helpers: Add `buildAreaMarkdown()` to `src/utils/gtd-markdown-helpers.ts`, enforcing the ordering above while preserving optional sections that contain content.
@@ -94,11 +100,13 @@ Notes:
 - Reference dialog: Reuse existing horizon picker with props to toggle which groups appear (Projects, Goals, Vision, Purpose). Group chips in the header using Tailwind utilities defined in `src/styles`.
 
 ## Theming and Accessibility
+
 - All header controls inherit theme variables (`--background`, `--foreground`, `--border`). Ensure focus states match Action/Habit patterns.
 - Derived badges (Created timestamp) use `text-muted-foreground` to de-emphasize read-only fields without compromising contrast.
 - Body sections respect reduced motion settings.
 
 ## QA Checklist (Areas)
+
 - Title aligns with the first body line; header divider renders once.
 - Updating Area Status only modifies the `[!singleselect:area-status:]` token.
 - Review Cadence updates propagate to sidebar summaries (once implemented) without rewrites elsewhere.
@@ -108,6 +116,7 @@ Notes:
 - Exporting the file (save/reopen) produces no diff when the content already matches the template.
 
 ## Future Enhancements
+
 - Display aggregated metrics (e.g., project load, habit coverage) inline once supporting data is available.
 - Add optional `Key Resources` field that embeds Cabinet files for quick access.
 - Explore timeline visualization for review cadence adherence (e.g., last review indicator).

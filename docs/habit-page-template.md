@@ -9,12 +9,14 @@ This document captures the emerging Habit page template for GTD Space. It mirror
 - Maps UI pieces to existing hooks, utilities, and commands so implementation can reuse proven flows.
 
 ## Goals
+
 - Deliver a frictionless authoring surface for Habits that matches the Action template conventions.
 - Keep metadata tokens ordered predictably to minimize merge churn and simplify parsing.
 - Surface habit-specific insights (status, reset cadence, recent completion) without overwhelming the layout.
 - Lean on shared theming primitives for accessibility and light/dark parity.
 
 ## At‑a‑Glance
+
 - Layout: Same `px-12` left gutter, compact header + divider, bare BlockNote body.
 - Title: H1 input identical to Actions, with inline checkbox affordance for quick toggling.
 - Header fields: Habit Status (checkbox), Frequency (singleselect), Next Reset (read-only), Last Completion (read-only), References (grouped chips), Created timestamp.
@@ -25,6 +27,7 @@ This document captures the emerging Habit page template for GTD Space. It mirror
 ## UI Specification
 
 ### Header (Compact Grid)
+
 - Left gutter: `px-12` from page edge (reuse Action layout wrapper).
 - Title row:
   - Title: `text-5xl font-bold` input.
@@ -44,6 +47,7 @@ This document captures the emerging Habit page template for GTD Space. It mirror
 - Divider: `border-t border-border` separates header and body.
 
 ### Body
+
 - Notes block (optional): Bare BlockNote editor region for narrative or instructions (`align-with-header` class to maintain gutter alignment). Content persists directly in markdown between metadata and history.
 - History block:
   - Standard markdown table (rendered via existing history parser).
@@ -55,7 +59,7 @@ This document captures the emerging Habit page template for GTD Space. It mirror
 
 The renderer rebuilds habit markdown in this exact sequence. Blank lines separate logical sections; freeform notes stay between References and History.
 
-```
+```markdown
 # <Habit Title>
 
 ## Status
@@ -98,6 +102,7 @@ Notes:
 - `## Notes` heading is skipped entirely when no rich text content exists (avoids empty sections).
 
 ## Behaviors & Data Flow
+
 - Status toggle fires `update_habit_status` (Tauri) with debounce guard; optimistic UI updates history table immediately (`Habits Implementation` doc behavior).
 - Frequency changes re-run the scheduler from `useHabitTracking`, prompting recalculation of next reset and upcoming history entries.
 - Header derived fields:
@@ -107,6 +112,7 @@ Notes:
 - Reference pickers reuse Horizon reference dialog, writing normalized JSON string tokens and dispatching `habit-content-changed` for live refresh.
 
 ## Implementation Map
+
 - Entry point: new `src/components/gtd/HabitPage.tsx` (mirrors `ActionPage.tsx` structure with header builder + markdown orchestrator).
 - Editor integration: extend `src/components/editor/BlockNoteEditor.tsx` detection around existing habit-specific logic to mount `HabitPage` when files live under `/Habits/` and contain `## History`.
 - Header controls:
@@ -120,6 +126,7 @@ Notes:
 - Scheduler hooks: confirm `useHabitTracking` remains the single source for reset polling; header should subscribe but avoid duplicating timers.
 
 ## Theming & Accessibility
+
 - All header controls adopt theme tokens (`bg-card`, `border-border`, `text-foreground`) to maintain contrast (see `docs/theming.md`).
 - Checkbox focus ring uses `outline outline-2 outline-primary/60` for keyboard visibility.
 - Derived badges (`Next Reset`, `Last Completion`) use `bg-secondary text-secondary-foreground` to differentiate from editable fields without breaking dark mode.
@@ -127,6 +134,7 @@ Notes:
 - Ensure chips respect reduced motion preferences and provide accessible names (`aria-label="Remove <Project>"`).
 
 ## QA Checklist (Habits)
+
 - Header aligns with body gutter; divider renders once.
 - Toggling status writes only the checkbox token and appends correct history entry (Manual Complete / Manual To Do).
 - Auto-reset events append “Auto-Reset” rows without duplicating manual entries; UI updates `Next Reset` immediately after reset.
@@ -137,6 +145,7 @@ Notes:
 - Markdown rebuild is idempotent: saving immediately after load produces no diff when file already matches template.
 
 ## Future Enhancements
+
 - Consider streak visualization badges in header once `useHabitsHistory` exposes streak counts.
 - Investigate optional “Reminders” field tied to notifications before finalizing layout.
 - Explore collapsing history table for long-running habits (e.g., newest 30 entries + “Load More”) to reduce initial render cost.

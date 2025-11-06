@@ -1197,23 +1197,24 @@ export const App: React.FC = () => {
                           );
                         }
 
+                        // Normalize path once for cross-platform comparison (Windows backslashes → forward slashes)
+                        const normalizedPath = displayedTab.file.path.replace(/\\/g, "/");
+
                         // Detect Action files: under Projects/ and not README.(md|markdown)
                         const projectsDir = gtdSpace?.root_path
-                          ? `${gtdSpace.root_path}/Projects/`
+                          ? `${gtdSpace.root_path}/Projects/`.replace(/\\/g, "/")
                           : undefined;
                         const underProjects = projectsDir
-                          ? isUnder(displayedTab.file.path, projectsDir)
+                          ? isUnder(normalizedPath, projectsDir)
                           : false;
                         const isReadme = /(^|\/)README\.(md|markdown)$/i.test(
-                          displayedTab.file.path
+                          normalizedPath
                         );
 
                         let isProjectReadme = false;
                         if (underProjects && isReadme && projectsDir) {
-                          const normalizedRoot = projectsDir.replace(/\\/g, "/");
-                          const normalizedPath = displayedTab.file.path.replace(/\\/g, "/");
-                          if (normalizedPath.startsWith(normalizedRoot)) {
-                            const relative = normalizedPath.slice(normalizedRoot.length);
+                          if (normalizedPath.startsWith(projectsDir)) {
+                            const relative = normalizedPath.slice(projectsDir.length);
                             const segments = relative.split("/").filter(Boolean);
                             if (
                               segments.length >= 2 &&
@@ -1242,7 +1243,7 @@ export const App: React.FC = () => {
                         // 1) Path heuristic: in an "Actions/" subfolder under a project, or
                         // 2) Content heuristic: has action markers
                         const pathLooksLikeAction = /(^|\/)Actions\//i.test(
-                          displayedTab.file.path
+                          normalizedPath
                         );
                         const contentHasActionMarkers =
                           /\[!singleselect:status:/i.test(

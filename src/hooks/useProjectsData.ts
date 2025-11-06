@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { extractMetadata, extractHorizonReferences as extractHorizonReferencesUtil } from '@/utils/metadata-extractor';
 import { readFileText } from './useFileManager';
-import type { GTDProject, MarkdownFile } from '@/types';
+import type { GTDProject, GTDProjectStatus, MarkdownFile } from '@/types';
 import { toISOStringFromEpoch } from '@/utils/time';
 import { parseLocalDate } from '@/utils/date-formatting';
 import { migrateGTDObjects } from '@/utils/data-migration';
@@ -46,6 +46,7 @@ interface UseProjectsDataReturn {
     active: number;
     waiting: number;
     completed: number;
+    cancelled: number;
     overdue: number;
     withoutHorizons: number;
     byArea: Record<string, number>;
@@ -58,8 +59,12 @@ interface UseProjectsDataReturn {
 /**
  * Normalize project status values
  */
-const normalizeProjectStatus = (status: string): string => {
+const normalizeProjectStatus = (status: string): GTDProjectStatus => {
   const normalized = status.toLowerCase().trim();
+  
+  if (['cancelled', 'canceled', 'abandoned', 'dropped', 'cancel'].includes(normalized)) {
+    return 'cancelled';
+  }
   
   if (['in-progress', 'active', 'ongoing'].includes(normalized)) {
     return 'in-progress';
@@ -69,7 +74,7 @@ const normalizeProjectStatus = (status: string): string => {
     return 'waiting';
   }
   
-  if (['completed', 'done', 'finished'].includes(normalized)) {
+  if (['completed', 'done', 'finished', 'complete'].includes(normalized)) {
     return 'completed';
   }
   
@@ -477,7 +482,8 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
       total: projects.length,
       active: 0,
       waiting: 0,
-      completed: 0
+      completed: 0,
+      cancelled: 0
     };
     
     projects.forEach(project => {
@@ -492,10 +498,13 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
         case 'completed':
           statusCounts.completed++;
           break;
+        case 'cancelled':
+          statusCounts.cancelled++;
+          break;
       }
       
       // Check overdue
-      if (project.dueDate && project.status !== 'completed') {
+      if (project.dueDate && project.status !== 'completed' && project.status !== 'cancelled') {
         const dueDate = parseLocalDate(project.dueDate);
         if (!isNaN(dueDate.getTime()) && dueDate < today) {
           overdue++;

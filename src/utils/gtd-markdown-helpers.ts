@@ -1,4 +1,5 @@
 import type {
+  GTDActionStatus,
   GTDAreaReviewCadence,
   GTDAreaStatus,
   GTDHabitFrequency,
@@ -15,7 +16,7 @@ import type {
  */
 
 // Canonical token sets for validation
-const STATUS_TOKENS = ['in-progress', 'waiting', 'completed'] as const;
+const STATUS_TOKENS = ['in-progress', 'waiting', 'completed', 'cancelled'] as const satisfies readonly GTDActionStatus[];
 const EFFORT_TOKENS = ['small', 'medium', 'large', 'extra-large'] as const;
 const HABIT_FREQUENCY_TOKENS: ReadonlyArray<GTDHabitFrequency> = [
   '5-minute',

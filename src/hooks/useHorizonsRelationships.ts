@@ -230,7 +230,7 @@ const deriveStatusForLevel = (levelName: string, metadata: Record<string, unknow
     case 'Areas of Focus':
       return (metadata.areaStatus as string) || (metadata.status as string) || undefined;
     case 'Vision':
-      return (metadata.visionHorizon as string) || (metadata.status as string) || undefined;
+      return (metadata.status as string) || (metadata.visionHorizon as string) || undefined;
     default:
       return (metadata.status as string) || undefined;
   }

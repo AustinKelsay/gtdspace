@@ -64,6 +64,7 @@ const PROJECT_STATUS_OPTIONS: Array<{ value: GTDProjectStatus; label: string }> 
   { value: "in-progress", label: "In Progress" },
   { value: "waiting", label: "Waiting" },
   { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
 type HorizonOption = {
@@ -214,11 +215,26 @@ function parseProjectSections(content: string): ProjectSections {
 function normalizeProjectStatus(raw: unknown): GTDProjectStatus {
   const token = typeof raw === "string" ? raw.trim().toLowerCase() : "";
   switch (token) {
+    case "cancelled":
+    case "canceled":
+    case "cancel":
+    case "abandoned":
+    case "dropped":
+      return "cancelled";
     case "waiting":
+    case "on-hold":
+    case "paused":
+    case "blocked":
       return "waiting";
     case "completed":
+    case "complete":
+    case "done":
+    case "finished":
       return "completed";
     case "in-progress":
+    case "active":
+    case "ongoing":
+    case "working":
     default:
       return "in-progress";
   }

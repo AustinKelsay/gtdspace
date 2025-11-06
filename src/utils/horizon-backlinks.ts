@@ -113,6 +113,21 @@ const ensureStringArray = (value: unknown): string[] => {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) return [];
+    
+    // Try to decode URI-encoded JSON payload first (from encodeReferenceArray)
+    try {
+      const decoded = decodeURIComponent(trimmed);
+      const parsed = JSON.parse(decoded);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => (typeof item === "string" ? item.trim() : ""))
+          .filter(Boolean);
+      }
+    } catch {
+      // Fall through to comma-split behavior if decode/parse fails
+    }
+    
+    // Fallback to comma-split/trim behavior
     return trimmed
       .split(",")
       .map((entry) => entry.trim())

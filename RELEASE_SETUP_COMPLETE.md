@@ -30,6 +30,11 @@ Your GTD Space build and release process is now fully configured! Here's what wa
 - **`RELEASING.md`**: Quick reference for creating releases
 - Updated README with download section
 
+### 6. macOS Code Signing & Notarization
+- Added `src-tauri/entitlements/macos.plist` and hardened runtime config
+- Updated GitHub Actions release workflow to import the Developer ID certificate, sign, and notarize DMGs
+- New setup guide at `docs/mac-signing-setup.md`; configure required secrets before the next release
+
 ## Current Status
 
 ✅ **Ready to create your first release! (pipeline not yet tested)**
@@ -89,10 +94,9 @@ Each release will generate:
 ## Future Enhancements
 
 Consider adding:
-1. **Code signing** for trusted installers
-2. **Auto-update** functionality
-3. **Beta/nightly** release channels
-4. **Package manager** distribution (Homebrew, Chocolatey, etc.)
+1. **Auto-update** functionality
+2. **Beta/nightly** release channels
+3. **Package manager** distribution (Homebrew, Chocolatey, etc.)
 
 ## Support
 

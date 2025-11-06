@@ -18,6 +18,7 @@ import type {
 import { extractMetadata, getMetadataChanges } from '@/utils/metadata-extractor';
 import { emitContentChange, emitContentSaved, emitMetadataChange } from '@/utils/content-event-bus';
 import { migrateMarkdownContent, needsMigration } from '@/utils/data-migration';
+import { createScopedLogger } from '@/utils/logger';
 
 // Extend the global Window interface to include our custom callback
 declare global {
@@ -34,6 +35,8 @@ declare global {
  * 
  * @returns Tab manager state and operations
  */
+const log = createScopedLogger('useTabManager');
+
 export const useTabManager = () => {
   
   // === TAB STATE ===
@@ -101,7 +104,7 @@ export const useTabManager = () => {
       };
       localStorage.setItem('gtdspace-tabs', JSON.stringify(persistedState));
     } catch (error) {
-      console.warn('Failed to save tabs to localStorage:', error);
+      log.warn('Failed to save tabs to localStorage', error);
     }
   }, []);
 
@@ -144,7 +147,7 @@ export const useTabManager = () => {
 
           validTabs.push(tab);
         } catch (error) {
-          console.warn(`Failed to restore tab for file: ${tabInfo.filePath}`, error);
+          log.warn(`Failed to restore tab for file: ${tabInfo.filePath}`, error);
           // Skip this tab if file no longer exists or can't be read
         }
       }
@@ -156,7 +159,7 @@ export const useTabManager = () => {
         recentlyClosed: [],
       };
     } catch (error) {
-      console.warn('Failed to load tabs from localStorage:', error);
+      log.warn('Failed to load tabs from localStorage', error);
       return null;
     }
   }, []);
@@ -168,7 +171,7 @@ export const useTabManager = () => {
     try {
       localStorage.removeItem('gtdspace-tabs');
     } catch (error) {
-      console.warn('Failed to clear persisted tabs:', error);
+      log.warn('Failed to clear persisted tabs', error);
     }
   }, []);
 
@@ -178,11 +181,11 @@ export const useTabManager = () => {
    * Open a file in a new tab or activate existing tab
    */
   const openTab = useCallback(async (file: MarkdownFile): Promise<string> => {
-    console.log('useTabManager: openTab called for:', file.path);
+    log.debug('openTab called for', file.path);
     // Check if file is already open
     const existingTab = findTabByFile(file);
     if (existingTab) {
-      console.log('useTabManager: File already open in tab:', existingTab.id);
+      log.debug('File already open in tab', existingTab.id);
       // Activate existing tab
       setTabState(prev => ({
         ...prev,
@@ -206,12 +209,12 @@ export const useTabManager = () => {
         originalContent = '';
       } else {
         // Normal file - load content
-        console.log('Loading file content for new tab:', file.path);
+        log.debug('Loading file content for new tab', file.path);
         content = await safeInvoke<string>('read_file', { path: file.path }, '') || '';
         
         // Apply migrations if needed
         if (needsMigration(content)) {
-          console.log('useTabManager: Applying data migrations to file:', file.path);
+          log.info('Applying data migrations to file', file.path);
           let migrationApplied = false;
           try {
             const migratedContent = migrateMarkdownContent(content);
@@ -221,7 +224,7 @@ export const useTabManager = () => {
             content = migratedContent;
             migrationApplied = true;
           } catch (migrationError) {
-            console.error('Migration failed:', migrationError);
+            log.error('Migration failed', migrationError);
             // Continue with original content without emitting saved events
           }
           
@@ -244,7 +247,7 @@ export const useTabManager = () => {
         }
         
         originalContent = content;
-        console.log('useTabManager: File content loaded, length:', content.length);
+        log.debug('File content loaded', { path: file.path, length: content.length });
       }
 
       // Create new tab
@@ -262,7 +265,7 @@ export const useTabManager = () => {
       };
 
       setTabState(prev => {
-        console.log('TabState updater: prev.openTabs=', prev.openTabs.length);
+        log.debug('TabState updater prev.openTabs', prev.openTabs.length);
         const newTabs = [...prev.openTabs, newTab];
         
         // Enforce max tabs limit
@@ -289,16 +292,19 @@ export const useTabManager = () => {
           openTabs: newTabs.map(tab => ({ ...tab, isActive: tab.id === tabId })),
           activeTabId: tabId,
         };
-        console.log('TabState updater: next.openTabs=', nextState.openTabs.length, 'activeTabId=', nextState.activeTabId);
+        log.debug('TabState updater next.openTabs', {
+          count: nextState.openTabs.length,
+          activeTabId: nextState.activeTabId,
+        });
         return nextState;
       });
 
-      console.log('Opened new tab:', tabId, 'for file:', file.name);
-      console.log('openTab post-setTabState: tabs count will be updated');
+      log.debug('Opened new tab', { tabId, fileName: file.name });
+      log.debug('openTab post-setTabState: tabs count will be updated');
       return tabId;
 
     } catch (error) {
-      console.error('Failed to load file for tab:', error);
+      log.error('Failed to load file for tab', error);
       throw new Error(`Failed to open file: ${error}`);
     }
   }, [findTabByFile, generateTabId]);
@@ -340,7 +346,7 @@ export const useTabManager = () => {
     // If tab has unsaved changes, we should ask for confirmation
     // For now, we'll just close it (confirmation can be added later)
     if (tab.hasUnsavedChanges) {
-      console.warn('Closing tab with unsaved changes:', tab.file.name);
+      log.warn('Closing tab with unsaved changes', tab.file.name);
     }
 
     setTabState(prev => {
@@ -370,7 +376,7 @@ export const useTabManager = () => {
       };
     });
 
-    console.log('Closed tab:', tabId);
+    log.debug('Closed tab', tabId);
     return true;
   }, [tabState.openTabs]);
 
@@ -394,7 +400,7 @@ export const useTabManager = () => {
         
         // Only emit specific events based on what actually changed
         if (Object.keys(metadataChanges).length > 0) {
-          console.log('[TabManager] Metadata changed:', metadataChanges, 'for file:', fp);
+          log.debug('Metadata changed', { metadataChanges, filePath: fp });
           // Emit metadata change event (which will also trigger content:changed via the event bus)
           emitMetadataChange({
             filePath: fp,
@@ -476,7 +482,7 @@ export const useTabManager = () => {
     }
 
     try {
-      console.log('Saving tab content:', tab.file.path);
+      log.debug('Saving tab content', tab.file.path);
       const result = await safeInvoke<string>('save_file', {
         path: tab.file.path,
         content: tab.content,
@@ -495,7 +501,7 @@ export const useTabManager = () => {
         ),
       }));
 
-      console.log('Tab saved successfully:', tabId);
+      log.info('Tab saved successfully', tabId);
       
       // Emit content saved event for sidebar updates
       const metadata = extractMetadata(tab.content);
@@ -512,14 +518,14 @@ export const useTabManager = () => {
         try {
           window.onTabFileSaved(tab.file.path);
         } catch (error) {
-          console.warn('Error calling onTabFileSaved callback:', error);
+          log.warn('Error calling onTabFileSaved callback', error);
         }
       }
       
       return true;
 
     } catch (error) {
-      console.error('Failed to save tab:', error);
+      log.error('Failed to save tab', error);
       throw new Error(`Failed to save file: ${error}`);
     }
   }, [tabState.openTabs]);
@@ -544,7 +550,7 @@ export const useTabManager = () => {
       const originalContent = tab.originalContent || tab.content;
       return currentFileContent !== originalContent;
     } catch (error) {
-      console.error('Failed to check for conflicts:', error);
+      log.error('Failed to check for conflicts', error);
       return false;
     }
   }, [tabState.openTabs]);
@@ -563,7 +569,7 @@ export const useTabManager = () => {
       }
       return content;
     } catch (error) {
-      console.error('Failed to read external content:', error);
+      log.error('Failed to read external content', error);
       return null;
     }
   }, [tabState.openTabs]);
@@ -614,7 +620,7 @@ export const useTabManager = () => {
       await saveTab(tabId);
       return true;
     } catch (error) {
-      console.error('Failed to resolve conflict:', error);
+      log.error('Failed to resolve conflict', error);
       return false;
     }
   }, [tabState.openTabs, getExternalContent, saveTab]);
@@ -655,14 +661,14 @@ export const useTabManager = () => {
         const tab = tabState.openTabs.find(t => t.id === tabId);
         if (tab) {
           // Copy path to clipboard (will implement when we add clipboard support)
-          console.log('Copy path:', tab.file.path);
+          log.info('Copy path', tab.file.path);
         }
         break;
       }
 
       case 'reveal-in-folder':
         // Will implement when we add file system integration
-        console.log('Reveal in folder:', tabId);
+        log.debug('Reveal in folder', tabId);
         break;
     }
   }, [tabState.openTabs, closeTab]);
@@ -686,7 +692,7 @@ export const useTabManager = () => {
 
       return tabId;
     } catch (error) {
-      console.error('Failed to reopen tab:', error);
+      log.error('Failed to reopen tab', error);
       return null;
     }
   }, [tabState.recentlyClosed, openTab]);
@@ -719,7 +725,7 @@ export const useTabManager = () => {
       }
       return true;
     } catch (error) {
-      console.error('Failed to save all tabs:', error);
+      log.error('Failed to save all tabs', error);
       return false;
     }
   }, [tabState.openTabs, saveTab]);
@@ -732,7 +738,7 @@ export const useTabManager = () => {
       ...prev,
       openTabs: newTabs,
     }));
-    console.log('Tabs reordered');
+    log.debug('Tabs reordered');
   }, []);
 
   // === PERSISTENCE EFFECTS ===
@@ -748,10 +754,10 @@ export const useTabManager = () => {
         const restoredState = await loadTabsFromStorage();
         if (restoredState && restoredState.openTabs.length > 0) {
           setTabState(prev => (prev.openTabs.length === 0 ? restoredState : prev));
-          console.log(`Restored ${restoredState.openTabs.length} tabs from previous session`);
+          log.info(`Restored ${restoredState.openTabs.length} tabs from previous session`);
         }
       } catch (error) {
-        console.warn('Failed to initialize tabs from storage:', error);
+        log.warn('Failed to initialize tabs from storage', error);
       }
     };
 
@@ -829,7 +835,7 @@ export const useTabManager = () => {
         };
       });
       
-      console.log(`Updated tab paths for project rename: ${oldPath} -> ${newPath}`);
+      log.debug(`Updated tab paths for project rename: ${oldPath} -> ${newPath}`);
     };
     
     window.addEventListener('project-renamed', handleProjectRename as EventListener);
@@ -870,7 +876,7 @@ export const useTabManager = () => {
         };
       });
       
-      console.log(`Updated tab path for action rename: ${oldPath} -> ${newPath}`);
+      log.debug(`Updated tab path for action rename: ${oldPath} -> ${newPath}`);
     };
     
     window.addEventListener('action-renamed', handleActionRename as EventListener);
@@ -911,7 +917,7 @@ export const useTabManager = () => {
         };
       });
       
-      console.log(`Updated tab path for section file rename: ${oldPath} -> ${newPath}`);
+      log.debug(`Updated tab path for section file rename: ${oldPath} -> ${newPath}`);
     };
     
     window.addEventListener('section-file-renamed', handleSectionFileRename as EventListener);
@@ -927,7 +933,7 @@ export const useTabManager = () => {
   useEffect(() => {
     const handleFileDeleted = (event: CustomEvent<{ path: string }>) => {
       const { path } = event.detail;
-      console.log('[TabManager] File/folder deleted event:', path);
+      log.debug('File/folder deleted event', path);
       
       // Close any tabs that match the deleted path or are within a deleted folder
       setTabState(prev => {
@@ -935,7 +941,7 @@ export const useTabManager = () => {
           // Check if this tab's file was deleted or is within a deleted folder
           const shouldRemove = tab.filePath === path || tab.filePath.startsWith(path + '/');
           if (shouldRemove) {
-            console.log('[TabManager] Closing tab due to deletion:', tab.filePath);
+            log.debug('Closing tab due to deletion', tab.filePath);
           }
           return !shouldRemove;
         });
@@ -969,7 +975,7 @@ export const useTabManager = () => {
       const { path } = event.detail;
       
       if (!path) {
-        console.error('No path provided for reference file');
+        log.error('No path provided for reference file');
         return;
       }
       
@@ -987,9 +993,9 @@ export const useTabManager = () => {
         
         // Open the reference file in a new tab
         await openTab(referenceFile);
-        console.log(`Opened reference file: ${path}`);
+        log.info(`Opened reference file: ${path}`);
       } catch (error) {
-        console.error('Failed to open reference file:', error);
+        log.error('Failed to open reference file', error);
       }
     };
     

@@ -74,16 +74,37 @@ export const useFileManager = () => {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       
       console.log('Loading folder:', folderPath);
+
+      const normalizedPath = folderPath.trim();
+      let directoryExists = await safeInvoke<boolean>('check_directory_exists', { path: normalizedPath }, null);
+
+      if (directoryExists === false) {
+        console.log('Folder missing, attempting to initialize GTD space at:', normalizedPath);
+        await safeInvoke<string>('initialize_gtd_space', { spacePath: normalizedPath }, null);
+
+        try {
+          console.log('Seeding example GTD content for newly initialized space');
+          await safeInvoke<string>('seed_example_gtd_content', { spacePath: normalizedPath }, null);
+        } catch (seedError) {
+          console.warn('Failed to seed example GTD content:', seedError);
+        }
+
+        directoryExists = await safeInvoke<boolean>('check_directory_exists', { path: normalizedPath }, null);
+      }
+
+      if (directoryExists === false) {
+        throw new Error(`Directory does not exist: ${normalizedPath}`);
+      }
       
       // Load files from selected folder
       const files = await safeInvoke<MarkdownFile[]>('list_markdown_files', { 
-        path: folderPath 
+        path: normalizedPath 
       }, []);
       console.log(`Loaded ${files.length} markdown files`);
       
       setState(prev => ({
         ...prev,
-        currentFolder: folderPath,
+        currentFolder: normalizedPath,
         files,
         isLoading: false,
         currentFile: null,
@@ -92,11 +113,11 @@ export const useFileManager = () => {
       }));
       
       // Store the current folder path for references component
-      localStorage.setItem('gtdspace-current-path', folderPath);
+      localStorage.setItem('gtdspace-current-path', normalizedPath);
       
       // Only save to settings if explicitly requested (default is true for backward compatibility)
       if (options?.saveToSettings !== false) {
-        await setLastFolder(folderPath);
+        await setLastFolder(normalizedPath);
       }
       
     } catch (error) {
@@ -104,7 +125,7 @@ export const useFileManager = () => {
       setState(prev => ({
         ...prev,
         isLoading: false,
-        error: typeof error === 'string' ? error : 'Failed to load folder',
+        error: typeof error === 'string' ? error : error instanceof Error ? error.message : 'Failed to load folder',
       }));
     }
   }, [setLastFolder]);

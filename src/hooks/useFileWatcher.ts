@@ -124,9 +124,22 @@ export function useFileWatcher(): FileWatcherHookResult {
         ...prev,
         error: null,
       }));
+
+      const normalizedPath = folderPath.trim();
+      const directoryExists = await safeInvoke<boolean>('check_directory_exists', { path: normalizedPath }, null);
+      if (directoryExists !== true) {
+        console.warn('Skipping file watcher; directory missing:', normalizedPath);
+        setState(prev => ({
+          ...prev,
+          isWatching: false,
+          watchedPath: null,
+          error: 'Folder is unavailable. Select or initialize a GTD workspace first.',
+        }));
+        return;
+      }
       
       // Start the backend file watcher
-      await safeInvoke('start_file_watcher', { folderPath }, null);
+      await safeInvoke('start_file_watcher', { folderPath: normalizedPath }, null);
       
       // Listen for file change events
       const unlisten = await listen<FileChangeEvent>('file-changed', (event) => {
@@ -140,11 +153,11 @@ export function useFileWatcher(): FileWatcherHookResult {
       setState(prev => ({
         ...prev,
         isWatching: true,
-        watchedPath: folderPath,
+        watchedPath: normalizedPath,
         recentEvents: [],
       }));
       
-      console.log('File watcher started for:', folderPath);
+      console.log('File watcher started for:', normalizedPath);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('Failed to start file watcher:', errorMessage);

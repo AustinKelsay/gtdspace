@@ -32,7 +32,11 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
       const fieldMap: Record<string, string> = {
         'status': 'status',
         'effort': 'effort',
-        'project-status': 'projectStatus'
+        'project-status': 'projectStatus',
+        'area-status': 'areaStatus',
+        'area-review-cadence': 'areaReviewCadence',
+        'goal-status': 'goalStatus',
+        'vision-horizon': 'visionHorizon',
       };
       const field = fieldMap[match[1]] || match[1];
       return { key: field, value: match[2] };
@@ -55,7 +59,9 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
         'modified_date': 'modifiedDate',
         'modified_date_time': 'modifiedDateTime',
         'completed_date': 'completedDate',
-        'completed_date_time': 'completedDate' // Maps to completedDate, intentionally dropping time component for simplicity/backward compatibility
+        'completed_date_time': 'completedDate', // Maps to completedDate, intentionally dropping time component for simplicity/backward compatibility
+        'target_date': 'targetDate',
+        'goal-target-date': 'goalTargetDate',
       };
       const field = fieldMap[match[1]] || match[1];
       return { key: field, value: match[2] };
@@ -70,7 +76,8 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
       const fieldMap: Record<string, string> = {
         'tags': 'tags',
         'contexts': 'contexts',
-        'categories': 'categories'
+        'categories': 'categories',
+        'area-stewards': 'areaStewards',
       };
       const field = fieldMap[match[1]] || match[1];
       const values = match[2].split(',').map(v => v.trim());
@@ -87,38 +94,80 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
     { pattern: 'projects-references', key: 'projectsReferences' },
     { pattern: 'references', key: 'references' }
   ].map(({ pattern, key }) => ({
-    pattern: new RegExp(`\\[!${pattern}:([^\\]]*)\\]`, 'g'),
+    pattern: new RegExp(`\\[!${pattern}:(.*?)\\]`, 'gs'),
     extract: (match: RegExpMatchArray) => {
       if (!match[1]) return { key, value: [] };
 
-      const rawValue = match[1].trim();
-      let values: string[] = [];
-
-      // Try JSON array format first (like backend)
-      if (rawValue.startsWith('[') && rawValue.endsWith(']')) {
-        try {
-          const parsed = JSON.parse(rawValue);
-          if (Array.isArray(parsed)) {
-            values = parsed.map(v => String(v).replace(/\\/g, '/'));
-          } else {
-            // If not an array, fall back to CSV
-            values = rawValue.split(',').map(v => v.trim());
+      const decodeLoose = (input: string): string => {
+        let result = input;
+        let attempts = 0;
+        while (attempts < 3 && /%[0-9A-Fa-f]{2}/.test(result)) {
+          try {
+            const decoded = decodeURIComponent(result);
+            if (decoded === result) break;
+            result = decoded;
+            attempts += 1;
+          } catch {
+            break;
           }
-        } catch {
-          // JSON parsing failed, fall back to CSV
-          // Remove the brackets and parse as CSV
-          const csvContent = rawValue.slice(1, -1);
-          values = csvContent.split(',').map(v =>
-            v.trim().replace(/^["']|["']$/g, '').replace(/\\/g, '/')
-          );
         }
-      } else {
-        // Standard CSV format
-        values = rawValue.split(',').map(v => v.trim().replace(/\\/g, '/'));
+        return result;
+      };
+
+      const normalizeEntry = (input: string): string => {
+        const trimmed = decodeLoose(input.trim());
+        if (!trimmed) return '';
+        const withoutQuotes = trimmed.replace(/^['"]|['"]$/g, '');
+        return withoutQuotes.replace(/\\/g, '/').trim();
+      };
+
+      let rawValue = match[1].trim();
+      if (rawValue.startsWith('[') && !rawValue.endsWith(']')) {
+        rawValue = `${rawValue}]`;
+      }
+      const parseJsonArray = (input: string): string[] | null => {
+        try {
+          const parsed = JSON.parse(input);
+          if (!Array.isArray(parsed)) return null;
+          return parsed.map((value) => String(value));
+        } catch {
+          return null;
+        }
+      };
+
+      let parsedValues = parseJsonArray(rawValue);
+      let decodedRawValue: string | null = null;
+
+      if (!parsedValues) {
+        decodedRawValue = decodeLoose(rawValue);
+        if (decodedRawValue !== rawValue) {
+          parsedValues = parseJsonArray(decodedRawValue);
+        }
       }
 
-      // Filter out empty strings
-      return { key, value: values.filter(Boolean) };
+      let values: string[];
+
+      if (parsedValues) {
+        values = parsedValues;
+      } else {
+        let csvSource = rawValue;
+        if (rawValue.startsWith('[') && rawValue.endsWith(']')) {
+          csvSource = rawValue.slice(1, -1);
+        } else if (
+          decodedRawValue &&
+          decodedRawValue.startsWith('[') &&
+          decodedRawValue.endsWith(']')
+        ) {
+          csvSource = decodedRawValue.slice(1, -1);
+        }
+        values = csvSource.split(',');
+      }
+
+      const decodedValues = values
+        .map((value) => normalizeEntry(value))
+        .filter(Boolean);
+
+      return { key, value: decodedValues };
     }
   })),
   

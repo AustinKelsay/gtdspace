@@ -49,3 +49,7 @@ Thumbs.db
 # Temporary files
 .tmp
 .temp
+target/
+
+# Claude AI settings (machine-specific)
+.claude/settings.local.json

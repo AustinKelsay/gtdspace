@@ -59,6 +59,7 @@ import {
   Star,
   Target,
   TrendingUp,
+  XCircle,
   X
 } from 'lucide-react';
 import type { ProjectWithMetadata } from '@/hooks/useProjectsData';
@@ -83,7 +84,8 @@ interface DashboardProjectsProps {
 const STATUS_OPTIONS = [
   { value: 'in-progress', label: 'In Progress', icon: CircleDot, color: 'text-blue-600' },
   { value: 'waiting', label: 'Waiting', icon: Clock, color: 'text-yellow-600' },
-  { value: 'completed', label: 'Completed', icon: CheckCircle2, color: 'text-green-600' }
+  { value: 'completed', label: 'Completed', icon: CheckCircle2, color: 'text-green-600' },
+  { value: 'cancelled', label: 'Cancelled', icon: XCircle, color: 'text-rose-600' }
 ];
 
 // Sort options
@@ -109,20 +111,20 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
   onArchiveProject,
   onAddAction
 }) => {
-  const parseLocal = (d: string) => {
+  const parseLocal = useCallback((d: string) => {
     const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     return new Date(d);
-  };
-  const isPastDueLocal = (due?: string | null, status?: string) => {
-    if (!due || status === 'completed') return false;
+  }, []);
+  const isPastDueLocal = useCallback((due?: string | null, status?: string) => {
+    if (!due || status === 'completed' || status === 'cancelled') return false;
     const dt = parseLocal(due);
     if (isNaN(dt.getTime())) return false;
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dueStart = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
     return dueStart < today;
-  };
+  }, [parseLocal]);
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -202,7 +204,12 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
           compareValue = (a.completionPercentage || 0) - (b.completionPercentage || 0);
           break;
         case 'status': {
-          const order: Record<string, number> = { 'in-progress': 0, 'waiting': 1, 'completed': 2 };
+          const order: Record<string, number> = {
+            'in-progress': 0,
+            'waiting': 1,
+            'completed': 2,
+            'cancelled': 3
+          };
           const aOrder = order[a.status] ?? 99;
           const bOrder = order[b.status] ?? 99;
           compareValue = aOrder - bOrder;
@@ -218,16 +225,16 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
 
   // Group projects by status for kanban view
   const projectsByStatus = useMemo(() => {
-    const grouped: Record<string, ProjectWithMetadata[]> = {
-      'in-progress': [],
-      'waiting': [],
-      'completed': []
-    };
+    const grouped = STATUS_OPTIONS.reduce((acc, status) => {
+      acc[status.value] = [];
+      return acc;
+    }, {} as Record<string, ProjectWithMetadata[]>);
 
     filteredProjects.forEach(project => {
-      if (grouped[project.status]) {
-        grouped[project.status].push(project);
+      if (!grouped[project.status]) {
+        grouped[project.status] = [];
       }
+      grouped[project.status].push(project);
     });
 
     return grouped;
@@ -283,10 +290,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
       return acc;
     }, {} as Record<string, number>);
     
-    const overdue = filteredProjects.filter(p => {
-      if (!p.dueDate || p.status === 'completed') return false;
-      return new Date(p.dueDate) < new Date();
-    }).length;
+    const overdue = filteredProjects.filter(p => isPastDueLocal(p.dueDate, p.status)).length;
 
     const withHorizons = filteredProjects.filter(p =>
       (p.linkedAreas && p.linkedAreas.length > 0) ||
@@ -300,7 +304,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
       : 0;
 
     return { total, byStatus, overdue, withHorizons, avgCompletion };
-  }, [filteredProjects]);
+  }, [filteredProjects, isPastDueLocal]);
 
   // Render project card
   const renderProjectCard = (project: ProjectWithMetadata) => {
@@ -868,7 +872,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
 
           {/* Kanban View */}
           {viewMode === 'kanban' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[60vh]">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 min-h-[60vh]">
               {STATUS_OPTIONS.map(status => {
                 const StatusIcon = status.icon;
                 const projectsInStatus = projectsByStatus[status.value] || [];

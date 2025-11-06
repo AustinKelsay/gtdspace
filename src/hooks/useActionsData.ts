@@ -10,6 +10,7 @@ import { readFileText } from './useFileManager';
 import { toISOStringFromEpoch } from '@/utils/time';
 import { parseLocalDate } from '@/utils/date-formatting';
 import type { GTDProject, MarkdownFile } from '@/types';
+import { createScopedLogger } from '@/utils/logger';
 
 export interface ActionItem {
   id: string;
@@ -134,6 +135,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
     includeCompleted = true,
     includeCancelled = false
   } = options;
+  const log = useMemo(() => createScopedLogger('useActionsData'), []);
 
   const [actions, setActions] = useState<ActionItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -146,7 +148,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
 
 
   const loadActions = useCallback(async (projects: GTDProject[]) => {
-    console.log('[useActionsData] loadActions called with', projects.length, 'projects');
+    log.debug('loadActions called', { projectCount: projects.length });
 
     // Create a cancellation flag for this specific load operation
     let cancelled = false;
@@ -184,7 +186,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
               if (!includeCompleted && status === 'completed') return;
               if (!includeCancelled && status === 'cancelled') return;
               
-              console.log('[useActionsData] Creating action item:', {
+              log.debug('Creating action item', {
                 filePath: file.path,
                 fileName: file.name,
                 projectPath: project.path
@@ -219,32 +221,31 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
                 allActions.push(action);
               }
             } catch (err) {
-              console.error(`Failed to load action ${file.path}:`, err);
+              log.error(`Failed to load action ${file.path}`, err);
             }
           }));
         } catch (err) {
-          console.error(`Failed to load actions for project ${project.path}:`, err);
+          log.error(`Failed to load actions for project ${project.path}`, err);
         }
       }));
 
-      console.log(`[useActionsData] Collected ${allActions.length} actions total`);
-      console.log(`[useActionsData] cancelled=${cancelled}`);
+      log.debug('Collected actions', { total: allActions.length, cancelled });
 
       // Only update state if not cancelled
       if (!cancelled) {
-        console.log(`[useActionsData] About to update state with ${allActions.length} actions`);
+        log.debug('Updating state with actions', allActions.length);
         setActions(allActions);
-        console.log(`[useActionsData] State updated successfully`);
+        log.debug('State updated successfully');
       }
     } catch (err) {
-      console.error('[useActionsData] Error in loadActions:', err);
+      log.error('Error in loadActions', err);
       // Only set error if not cancelled
       if (!cancelled) {
         setError(err instanceof Error ? err.message : 'Failed to load actions');
         setActions([]);
       }
     } finally {
-      console.log(`[useActionsData] loadActions completed. Loading: ${!cancelled ? 'false' : 'skipped'}`);
+      log.debug('loadActions completed', { cancelled });
       // Only update loading state if not cancelled
       if (!cancelled) {
         setIsLoading(false);
@@ -255,7 +256,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
     return () => {
       cancelled = true;
     };
-  }, [includeCompleted, includeCancelled]);
+  }, [includeCompleted, includeCancelled, log]);
   
   const updateActionStatus = useCallback(async (actionIdOrPath: string, newStatus: string, actionPath?: string): Promise<boolean> => {
     try {
@@ -265,25 +266,25 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       if (actionPath) {
         // If path is explicitly provided, use it
         filePath = actionPath;
-        console.log('[updateActionStatus] Using provided path:', filePath);
+        log.debug('[updateActionStatus] Using provided path', filePath);
       } else {
         // Otherwise, try to find it in current actions (using ref for latest state)
         const action = actionsRef.current.find(a => a.id === actionIdOrPath || a.path === actionIdOrPath);
         if (!action) {
-          console.error(`[updateActionStatus] Action not found in state: ${actionIdOrPath}`);
-          console.log('[updateActionStatus] Available actions:', actionsRef.current.map(a => ({ id: a.id, path: a.path })));
+          log.error(`[updateActionStatus] Action not found in state ${actionIdOrPath}`);
+          log.debug('[updateActionStatus] Available actions', actionsRef.current.map(a => ({ id: a.id, path: a.path })));
           return false;
         }
         filePath = action.path;
-        console.log('[updateActionStatus] Found action in state, using path:', filePath);
+        log.debug('[updateActionStatus] Found action in state, using path', filePath);
       }
 
-      console.log('[updateActionStatus] Reading file:', filePath);
+      log.debug('[updateActionStatus] Reading file', filePath);
       const content = await readFileText(filePath);
-      console.log('[updateActionStatus] File content length:', content?.length || 0);
+      log.debug('[updateActionStatus] File content length', content?.length || 0);
 
       const canonicalStatus = normalizeActionStatus(newStatus);
-      console.log('[updateActionStatus] Updating status to:', canonicalStatus);
+      log.debug('[updateActionStatus] Updating status to', canonicalStatus);
 
       // Replace existing status tag
       let updatedContent = content.replace(
@@ -304,16 +305,16 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       }
       const finalContent = updatedContent;
 
-      console.log('[updateActionStatus] Writing updated content to file:', filePath);
+      log.debug('[updateActionStatus] Writing updated content to file', filePath);
       const writeResult = await safeInvoke('save_file', {
         path: filePath,
         content: finalContent
       }, null);
-      console.log('[updateActionStatus] Write result:', writeResult);
+      log.debug('[updateActionStatus] Write result', writeResult);
 
       // Check if the write actually succeeded
       if (!writeResult) {
-        console.error('[updateActionStatus] Write failed - save_file returned null');
+        log.error('[updateActionStatus] Write failed - save_file returned null');
         return false;
       }
 
@@ -327,11 +328,11 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
         detail: { path: filePath, content: finalContent }
       }));
 
-      console.log('[updateActionStatus] Successfully updated action status');
+      log.debug('[updateActionStatus] Successfully updated action status');
       return true;
     } catch (err) {
-      console.error('[updateActionStatus] Failed to update action status:', err);
-      console.error('[updateActionStatus] Error details:', {
+      log.error('[updateActionStatus] Failed to update action status', err);
+      log.error('[updateActionStatus] Error details', {
         actionIdOrPath,
         newStatus,
         actionPath,
@@ -339,7 +340,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       });
       return false;
     }
-  }, []);
+  }, [log]);
   
   const refresh = useCallback(async () => {
     if (cachedProjects.length > 0) {
@@ -398,9 +399,9 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
   useEffect(() => {
     if (autoLoad && cachedProjects.length === 0) {
       // Will need projects to be passed in
-      console.log('[useActionsData] Auto-load enabled but no projects available yet');
+      log.debug('Auto-load enabled but no projects available yet');
     }
-  }, [autoLoad, cachedProjects]);
+  }, [autoLoad, cachedProjects, log]);
 
   return {
     actions,

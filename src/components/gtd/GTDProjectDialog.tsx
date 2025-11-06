@@ -25,14 +25,157 @@ import { safeInvoke } from '@/utils/safe-invoke';
 import { useToast } from '@/hooks/useToast';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { GTDProjectCreate, GTDProjectStatus } from '@/types';
+import { extractMetadata } from '@/utils/metadata-extractor';
 
 // Horizon marker constants used in README
 const HORIZON_MARKERS = {
+  projects: 'projects-references',
   areas: 'areas-references',
   goals: 'goals-references',
   vision: 'vision-references',
   purpose: 'purpose-references',
 } as const;
+
+const normalizeReferencePath = (value: string): string =>
+  value.replace(/\\/g, '/').trim();
+
+const uniqueSortedPaths = (values: string[]): string[] => {
+  const normalized = values
+    .map(normalizeReferencePath)
+    .filter(Boolean);
+  return Array.from(new Set(normalized)).sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' })
+  );
+};
+
+const encodeReferencePayload = (values: string[]): string => {
+  const unique = uniqueSortedPaths(values);
+  if (unique.length === 0) return '';
+  try {
+    return encodeURIComponent(JSON.stringify(unique));
+  } catch {
+    return encodeURIComponent(unique.join(','));
+  }
+};
+
+const escapeForRegex = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const upsertReferenceMarker = (
+  content: string,
+  marker: string,
+  encodedPayload: string,
+  headings: string[]
+): string => {
+  const markerRegex = new RegExp(`\\[!${marker}:[^\\]]*\\]`, 'i');
+  if (markerRegex.test(content)) {
+    return content.replace(markerRegex, `[!${marker}:${encodedPayload}]`);
+  }
+
+  for (const heading of headings) {
+    const headingRegex = new RegExp(
+      `${escapeForRegex(heading)}\\s*(?:\\r?\\n)+`,
+      'i'
+    );
+    if (headingRegex.test(content)) {
+      return content.replace(
+        headingRegex,
+        `${heading}\n[!${marker}:${encodedPayload}]\n\n`
+      );
+    }
+  }
+
+  const fallbackHeading = headings[0] || '## Projects References';
+  const trimmed = content.trimEnd();
+  return `${trimmed}\n\n${fallbackHeading}\n[!${marker}:${encodedPayload}]\n`;
+};
+
+const ensureProjectLinkedInHorizon = async (
+  filePath: string,
+  projectRef: string,
+  horizonType: 'area' | 'goal' | 'vision' | 'purpose'
+) => {
+  const normalizedPath = normalizeReferencePath(filePath);
+  const current = await safeInvoke<string>('read_file', { path: normalizedPath }, null);
+  if (typeof current !== 'string') return;
+
+  const metadata = extractMetadata(current);
+  const existingRaw = metadata.projectsReferences;
+  const existing =
+    Array.isArray(existingRaw)
+      ? existingRaw
+      : typeof existingRaw === 'string' && existingRaw.trim()
+      ? [existingRaw]
+      : [];
+
+  const merged = uniqueSortedPaths([...existing, projectRef]);
+  if (merged.length === existing.length) {
+    // No change needed
+    return;
+  }
+
+  const encodedPayload = encodeReferencePayload(merged);
+  const headings =
+    horizonType === 'area'
+      ? ['## Projects References']
+      : ['## Horizon References', '## Projects References'];
+
+  const updated = upsertReferenceMarker(
+    current,
+    HORIZON_MARKERS.projects,
+    encodedPayload,
+    headings
+  );
+
+  if (updated !== current) {
+    await safeInvoke('save_file', { path: normalizedPath, content: updated }, null);
+  }
+};
+
+const linkProjectToHorizons = async (
+  projectPath: string,
+  horizonSelections: {
+    areas: string[];
+    goals: string[];
+    visions: string[];
+    purposes: string[];
+  }
+) => {
+  const normalizedProjectPath = normalizeReferencePath(projectPath);
+  const operations: Promise<void>[] = [];
+
+  horizonSelections.areas.forEach((areaPath) => {
+    operations.push(
+      ensureProjectLinkedInHorizon(areaPath, normalizedProjectPath, 'area')
+    );
+  });
+
+  horizonSelections.goals.forEach((goalPath) => {
+    operations.push(
+      ensureProjectLinkedInHorizon(goalPath, normalizedProjectPath, 'goal')
+    );
+  });
+
+  horizonSelections.visions.forEach((visionPath) => {
+    operations.push(
+      ensureProjectLinkedInHorizon(visionPath, normalizedProjectPath, 'vision')
+    );
+  });
+
+  horizonSelections.purposes.forEach((purposePath) => {
+    operations.push(
+      ensureProjectLinkedInHorizon(
+        purposePath,
+        normalizedProjectPath,
+        'purpose'
+      )
+    );
+  });
+
+  if (operations.length > 0) {
+    await Promise.all(operations);
+  }
+};
 
 interface GTDProjectDialogProps {
   isOpen: boolean;
@@ -148,6 +291,12 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       console.log('[GTDProjectDialog] createProject result:', result);
 
       if (result) {
+        const horizonSelections = {
+          areas: [...areas],
+          goals: [...goals],
+          visions: [...visions],
+          purposes: [...purposes],
+        };
         // If horizon links were selected, write them to the new README
         const hasAnyHorizon = areas.length || goals.length || visions.length || purposes.length;
         if (hasAnyHorizon) {
@@ -186,6 +335,10 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
           }
         }
 
+        if (areas.length || goals.length || visions.length || purposes.length) {
+          await linkProjectToHorizons(result, horizonSelections);
+        }
+
         // Reset form
         setProjectName('');
         setDescription('');
@@ -207,6 +360,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
       }
     } catch (error) {
       console.error('[GTDProjectDialog] Error creating project:', error);
+      showError('Failed to create project. Please check horizon links and try again.');
     } finally {
       console.log('[GTDProjectDialog] Setting isCreating to false');
       setIsCreating(false);

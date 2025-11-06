@@ -48,11 +48,11 @@ use tokio::sync::Mutex as TokioMutex;
 // Import seed data module
 mod seed_data;
 use seed_data::{
-    generate_action_template, generate_area_of_focus_template_with_refs,
+    core_values_template, generate_action_template, generate_area_of_focus_template_with_refs,
     generate_goal_template_with_refs, generate_project_readme, generate_project_readme_with_refs,
-    generate_vision_document_template_with_refs, generate_weekly_review_habit, ProjectReadmeParams,
-    AREAS_OF_FOCUS_OVERVIEW_TEMPLATE, CABINET_GTD_PRINCIPLES_TEMPLATE, CORE_VALUES_TEMPLATE,
-    GOALS_OVERVIEW_TEMPLATE, LIFE_MISSION_TEMPLATE, PURPOSE_PRINCIPLES_OVERVIEW_TEMPLATE,
+    generate_vision_document_template_with_refs, generate_weekly_review_habit,
+    life_mission_template, ProjectReadmeParams, AREAS_OF_FOCUS_OVERVIEW_TEMPLATE,
+    CABINET_GTD_PRINCIPLES_TEMPLATE, GOALS_OVERVIEW_TEMPLATE, PURPOSE_PRINCIPLES_OVERVIEW_TEMPLATE,
     SOMEDAY_LEARN_LANGUAGE_TEMPLATE, VISION_OVERVIEW_TEMPLATE, WELCOME_TEMPLATE,
 };
 
@@ -747,7 +747,7 @@ pub fn list_markdown_files(path: String) -> Result<Vec<MarkdownFile>, String> {
 }
 
 /// List only project action files (markdown) in a project directory
-/// Skips the project's README.md
+/// Skips the project's README (README.md/README.markdown)
 #[tauri::command]
 pub fn list_project_actions(project_path: String) -> Result<Vec<MarkdownFile>, String> {
     log::info!("Listing project actions in: {}", project_path);
@@ -768,9 +768,18 @@ pub fn list_project_actions(project_path: String) -> Result<Vec<MarkdownFile>, S
                 if path.is_file() {
                     if let Some(extension) = path.extension() {
                         let ext_str = extension.to_string_lossy().to_lowercase();
-                        if (ext_str == "md" || ext_str == "markdown")
-                            && path.file_name() != Some(std::ffi::OsStr::new("README.md"))
-                        {
+                        if ext_str == "md" || ext_str == "markdown" {
+                            let is_readme = path
+                                .file_name()
+                                .and_then(|name| name.to_str())
+                                .map(|name| {
+                                    let lower = name.to_ascii_lowercase();
+                                    lower == "readme.md" || lower == "readme.markdown"
+                                })
+                                .unwrap_or(false);
+                            if is_readme {
+                                continue;
+                            }
                             if let Ok(metadata) = entry.metadata() {
                                 use std::collections::hash_map::DefaultHasher;
                                 use std::hash::{Hash, Hasher};
@@ -970,8 +979,9 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
         });
     }
 
-    // Check which GTD horizon we're in
+    // Normalize horizon detection
     let is_in_projects = dir_path.components().any(|c| c.as_os_str() == "Projects");
+    let is_in_habits = dir_path.components().any(|c| c.as_os_str() == "Habits");
     let is_in_vision = dir_path.components().any(|c| c.as_os_str() == "Vision");
     let is_in_goals = dir_path.components().any(|c| c.as_os_str() == "Goals");
     let is_in_areas = dir_path
@@ -980,9 +990,8 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
     let is_in_purpose = dir_path
         .components()
         .any(|c| c.as_os_str() == "Purpose & Principles");
-    let is_in_habits = dir_path.components().any(|c| c.as_os_str() == "Habits");
 
-    // Check if this is a project directory (has README.md)
+    // For project actions, require README.md to distinguish from project root creation
     let is_project_dir = dir_path.join("README.md").exists();
 
     // Create appropriate template content based on GTD horizon
@@ -1014,148 +1023,116 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
             chrono::Local::now().to_rfc3339()
         )
     } else if is_in_vision {
-        // Vision template with purpose references
         format!(
             r#"# {}
 
-## Living My Purpose
+## Horizon
+[!singleselect:vision-horizon:3-years]
 
+## Projects References
+[!projects-references:]
+
+## Goals References
+[!goals-references:]
+
+## Areas References
+[!areas-references:]
+
+## Purpose & Principles References (optional)
 [!purpose-references:]
 
-## The Picture of Success
-*Describe what success looks like in 3-5 years...*
-
-## Supporting Goals
-
-[!goals-list]
-
-## Supporting Areas
-
-[!areas-list]
-
-## Supporting Projects
-
-[!projects-list]
-
-## Related Habits
-
-[!habits-list]
-
----
+## Created
 [!datetime:created_date_time:{}]
+
+## Narrative
+*Describe the vivid picture of your desired future state and the key themes you want to realize.*
 "#,
             clean_name,
             chrono::Local::now().to_rfc3339()
         )
     } else if is_in_goals {
-        // Goals template with vision and purpose references
         format!(
             r#"# {}
 
-## Target Date
+## Status
+[!singleselect:goal-status:in-progress]
 
-[!datetime:target_date:]
+## Target Date (optional)
+[!datetime:goal-target-date:]
 
-## Outcome
-*What specific outcome will be achieved?*
+## Projects References
+[!projects-references:]
 
-## Aligned With
+## Areas References
+[!areas-references:]
 
+## Vision References (optional)
 [!vision-references:]
 
+## Purpose & Principles References (optional)
 [!purpose-references:]
 
-## Supporting Areas
-
-[!areas-list]
-
-## Projects
-
-[!projects-list]
-
-## Related Habits
-
-[!habits-list]
-
----
+## Created
 [!datetime:created_date_time:{}]
+
+## Description
+*Describe the desired outcome, success criteria, and why this goal matters.*
 "#,
             clean_name,
             chrono::Local::now().to_rfc3339()
         )
     } else if is_in_areas {
-        // Areas of Focus template with all horizon references
         format!(
             r#"# {}
 
-## Purpose
-*Why is this area important?*
+## Status
+[!singleselect:area-status:steady]
 
-## Standards
-*What does excellence look like in this area?*
+## Review Cadence
+[!singleselect:area-review-cadence:monthly]
 
-## Aligned With
+## Projects References
+[!projects-references:]
 
+## Goals References
 [!goals-references:]
 
+## Vision References (optional)
 [!vision-references:]
 
+## Purpose & Principles References (optional)
 [!purpose-references:]
 
-## Supporting Projects
-
-[!projects-list]
-
-## Related Habits
-
-[!habits-list]
-
-## References
-
-[!references:]
-
----
+## Created
 [!datetime:created_date_time:{}]
+
+## Description
+*Summarize the scope, responsibilities, and commitments for this area.*
 "#,
             clean_name,
             chrono::Local::now().to_rfc3339()
         )
     } else if is_in_purpose {
-        // Purpose & Principles template
         format!(
             r#"# {}
 
-## Core Principle
-*What fundamental truth or value does this represent?*
+## Projects References
+[!projects-references:]
 
-## Why It Matters
-*How does this guide your decisions and actions?*
+## Goals References
+[!goals-references:]
 
-## Living This Principle
-*What does it look like when you embody this?*
+## Vision References
+[!vision-references:]
 
-## Supporting Visions
+## Areas References (optional)
+[!areas-references:]
 
-[!visions-list]
-
-## Supporting Goals
-
-[!goals-list]
-
-## Supporting Areas
-
-[!areas-list]
-
-## Supporting Projects
-
-[!projects-list]
-
-## Related Habits
-
-[!habits-list]
-
----
+## Created
 [!datetime:created_date_time:{}]
+
+## Description
+*Capture the purpose and guiding principles that anchor your commitments.*
 "#,
             clean_name,
             chrono::Local::now().to_rfc3339()
@@ -3153,7 +3130,7 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                 // Create Life Mission document
                 let mission_file = dir_path.join("Life Mission.md");
                 if !mission_file.exists() {
-                    if let Err(e) = fs::write(&mission_file, LIFE_MISSION_TEMPLATE) {
+                    if let Err(e) = fs::write(&mission_file, life_mission_template()) {
                         log::warn!("Failed to create life mission document: {}", e);
                     } else {
                         log::info!("Created life mission document");
@@ -3163,7 +3140,7 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                 // Create Core Values document
                 let values_file = dir_path.join("Core Values.md");
                 if !values_file.exists() {
-                    if let Err(e) = fs::write(&values_file, CORE_VALUES_TEMPLATE) {
+                    if let Err(e) = fs::write(&values_file, core_values_template()) {
                         log::warn!("Failed to create core values document: {}", e);
                     } else {
                         log::info!("Created core values document");
@@ -3750,6 +3727,7 @@ pub fn create_gtd_action(
 /// * `habit_name` - Name of the habit
 /// * `frequency` - Habit frequency (daily, every-other-day, twice-weekly, weekly, biweekly, monthly)
 /// * `status` - Habit status (active, paused, completed, archived)
+/// * `references` - Optional horizon references to seed (projects, areas, goals, vision, purpose)
 ///
 /// # Returns
 ///
@@ -3767,6 +3745,21 @@ pub fn create_gtd_action(
 ///   status: 'active'
 /// });
 /// ```
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct HabitReferenceInput {
+    #[serde(default)]
+    projects: Vec<String>,
+    #[serde(default)]
+    areas: Vec<String>,
+    #[serde(default)]
+    goals: Vec<String>,
+    #[serde(default)]
+    vision: Vec<String>,
+    #[serde(default)]
+    purpose: Vec<String>,
+}
+
 #[tauri::command]
 pub fn create_gtd_habit(
     space_path: String,
@@ -3774,6 +3767,7 @@ pub fn create_gtd_habit(
     frequency: String,
     _status: String,            // Always 'todo', kept for API compatibility
     focus_time: Option<String>, // Optional focus time (HH:MM format)
+    references: Option<HabitReferenceInput>,
 ) -> Result<String, String> {
     log::info!("Creating GTD habit: {}", habit_name);
 
@@ -3794,6 +3788,7 @@ pub fn create_gtd_habit(
 
     // Map frequency and status to single select values
     let frequency_value = match frequency.as_str() {
+        "Every 5 Minutes (Testing)" | "5-minute" => "5-minute",
         "Every Day" | "daily" => "daily",
         "Weekdays (Mon-Fri)" | "weekdays" => "weekdays",
         "Every Other Day" | "every-other-day" => "every-other-day",
@@ -3810,22 +3805,55 @@ pub fn create_gtd_habit(
     // Create habit file with template using checkbox for status
     let now = chrono::Local::now();
 
+    let reference_values = references.unwrap_or_default();
+    log::debug!(
+        "create_gtd_habit references -> projects: {:?}, areas: {:?}, goals: {:?}, vision: {:?}, purpose: {:?}",
+        reference_values.projects,
+        reference_values.areas,
+        reference_values.goals,
+        reference_values.vision,
+        reference_values.purpose
+    );
+    let render_reference_token = |items: &[String]| -> String {
+        let normalized: Vec<String> = items
+            .iter()
+            .map(|value| value.trim().replace('\\', "/"))
+            .filter(|value| !value.is_empty())
+            .collect();
+        if normalized.is_empty() {
+            String::new()
+        } else {
+            match serde_json::to_string(&normalized) {
+                Ok(json) => urlencoding::encode(&json).into_owned(),
+                Err(_) => urlencoding::encode(&normalized.join(",")).into_owned(),
+            }
+        }
+    };
+
+    let projects_token = render_reference_token(&reference_values.projects);
+    let areas_token = render_reference_token(&reference_values.areas);
+    let goals_token = render_reference_token(&reference_values.goals);
+    let vision_token = render_reference_token(&reference_values.vision);
+    let purpose_token = render_reference_token(&reference_values.purpose);
+
     // Format focus time if provided
     let focus_time_section = if let Some(time) = focus_time {
         // Validate time format (HH:MM)
         if time.len() == 5 && time.chars().nth(2) == Some(':') {
             // Create a datetime with today's date and the specified time
             format!(
-                "\n## Focus Date\n[!datetime:focus_date:{}T{}:00]\n",
+                "\n## Focus Date\n[!datetime:focus_date:{}T{}:00]\n\n",
                 now.format("%Y-%m-%d"),
                 time
             )
         } else {
-            String::new()
+            "\n".to_string()
         }
     } else {
-        String::new()
+        "\n".to_string()
     };
+
+    let history_template = "*Track your habit completions below:*\n\n| Date | Time | Status | Action | Details |\n|------|------|--------|--------|---------|";
 
     let habit_content = format!(
         r#"# {}
@@ -3835,32 +3863,38 @@ pub fn create_gtd_habit(
 
 ## Frequency
 [!singleselect:habit-frequency:{}]
-{}
-## Horizon References
+{}## Projects References
+[!projects-references:{}]
 
-[!projects-references:]
+## Areas References
+[!areas-references:{}]
 
-[!areas-references:]
+## Goals References
+[!goals-references:{}]
 
-[!goals-references:]
+## Vision References
+[!vision-references:{}]
 
-[!vision-references:]
-
-[!purpose-references:]
+## Purpose & Principles References
+[!purpose-references:{}]
 
 ## Created
 [!datetime:created_date_time:{}]
 
 ## History
-
-*Track your habit completions below:*
-
+{}
 "#,
         habit_name,
         checkbox_value,
         frequency_value,
         focus_time_section,
-        now.to_rfc3339()
+        projects_token,
+        areas_token,
+        goals_token,
+        vision_token,
+        purpose_token,
+        now.to_rfc3339(),
+        history_template
     );
 
     match fs::write(&habit_path, habit_content) {
@@ -3882,16 +3916,26 @@ pub fn create_gtd_habit(
 /// * `new_status` - New status value ("todo" or "completed")
 ///
 /// # Returns
-/// * `Ok(())` if successful
+/// * `Ok(true)` if status changed and history entry added
+/// * `Ok(false)` if status was already the desired value
 /// * `Err(String)` with error message if operation fails
 #[tauri::command]
-pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(), String> {
+pub fn update_habit_status(habit_path: String, new_status: String) -> Result<bool, String> {
     use chrono::Local;
+
+    let normalized_status = match new_status.as_str() {
+        "completed" | "complete" | "done" => "completed".to_string(),
+        "todo" | "to-do" | "pending" => "todo".to_string(),
+        other => {
+            log::error!("Invalid habit status received: {}", other);
+            return Err(format!("Invalid habit status: {}", other));
+        }
+    };
 
     log::info!(
         "Updating habit status: path={}, new_status={}",
         habit_path,
-        new_status
+        normalized_status
     );
 
     // Read and validate habit file
@@ -3932,25 +3976,25 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
         .ok_or("Could not find frequency in habit file")?;
 
     // Skip if status isn't changing
-    if current_status == new_status {
+    if current_status == normalized_status {
         log::info!(
             "Habit status unchanged (current='{}', new='{}'), skipping history update",
             current_status,
-            new_status
+            normalized_status
         );
-        return Ok(());
+        return Ok(false);
     }
 
     log::info!(
         "Habit status changing from '{}' to '{}' (checkbox format: {})",
         current_status,
-        new_status,
+        normalized_status,
         is_checkbox_format
     );
 
     // Create history entry for the manual status change
     let now = Local::now();
-    let status_display = if new_status == "todo" {
+    let status_display = if normalized_status == "todo" {
         "To Do"
     } else {
         "Complete"
@@ -3983,7 +4027,7 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
 
     // Keep the actual status that was set - don't auto-reset
     // The habit should remain checked until the next frequency window
-    let final_status = new_status.as_str();
+    let final_status = normalized_status.as_str();
 
     // Update the status field in the content based on format
     let updated_content = if is_checkbox_format {
@@ -4051,7 +4095,7 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<(),
             return Err(format!("Failed to write habit file: {}", e));
         }
     }
-    Ok(())
+    Ok(true)
 }
 
 /// Checks all habits and resets their status based on frequency
@@ -4292,6 +4336,7 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
     let mut in_history_section = false;
     let mut history_section_idx = None;
     let mut has_table_header = false;
+    let mut table_separator_idx = None;
     let mut has_old_list_format = false;
     let mut old_list_entries: Vec<(usize, &str)> = Vec::new();
 
@@ -4317,6 +4362,7 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
             }
             // Skip table separator line
             else if line.contains("|---") || line.contains("| ---") {
+                table_separator_idx = Some(i);
                 continue;
             }
             // Look for table rows (new format)
@@ -4421,6 +4467,19 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
         let mut new_lines = lines[..=idx].to_vec();
         new_lines.push(entry);
         new_lines.extend_from_slice(&lines[idx + 1..]);
+        new_lines.join("\n")
+    } else if let Some(sep_idx) = table_separator_idx {
+        // Header and separator exist but no data rows yet; insert right after separator
+        log::debug!(
+            "[INSERT-HISTORY] Inserting first row after separator at line {}",
+            sep_idx
+        );
+        let mut new_lines = Vec::new();
+        new_lines.extend_from_slice(&lines[..=sep_idx]);
+        new_lines.push(entry);
+        if sep_idx + 1 < lines.len() {
+            new_lines.extend_from_slice(&lines[sep_idx + 1..]);
+        }
         new_lines.join("\n")
     } else if let Some(idx) = history_section_idx {
         // History section exists but no entries yet

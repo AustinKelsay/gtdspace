@@ -1,3 +1,14 @@
+import type {
+  GTDActionStatus,
+  GTDAreaReviewCadence,
+  GTDAreaStatus,
+  GTDHabitFrequency,
+  GTDHabitStatus,
+  GTDGoalStatus,
+  GTDProjectStatus,
+  GTDVisionHorizon,
+} from '@/types';
+
 /**
  * @fileoverview Helper functions for generating GTD-specific markdown with select fields
  * @author Development Team
@@ -5,8 +16,97 @@
  */
 
 // Canonical token sets for validation
-const STATUS_TOKENS = ['in-progress', 'waiting', 'completed'] as const;
+const STATUS_TOKENS = ['in-progress', 'waiting', 'completed', 'cancelled'] as const satisfies readonly GTDActionStatus[];
 const EFFORT_TOKENS = ['small', 'medium', 'large', 'extra-large'] as const;
+const HABIT_FREQUENCY_TOKENS: ReadonlyArray<GTDHabitFrequency> = [
+  '5-minute',
+  'daily',
+  'every-other-day',
+  'twice-weekly',
+  'weekly',
+  'weekdays',
+  'biweekly',
+  'monthly',
+] as const;
+const AREA_STATUS_TOKENS: ReadonlyArray<GTDAreaStatus> = [
+  'steady',
+  'watch',
+  'incubating',
+  'delegated',
+] as const;
+const AREA_REVIEW_CADENCE_TOKENS: ReadonlyArray<GTDAreaReviewCadence> = [
+  'weekly',
+  'monthly',
+  'quarterly',
+  'annually',
+] as const;
+const GOAL_STATUS_TOKENS: ReadonlyArray<GTDGoalStatus> = [
+  'in-progress',
+  'waiting',
+  'completed',
+] as const;
+const VISION_HORIZON_TOKENS: ReadonlyArray<GTDVisionHorizon> = [
+  '3-years',
+  '5-years',
+  '10-years',
+  'custom',
+] as const;
+
+export interface HabitReferenceGroups {
+  projects: string[];
+  areas: string[];
+  goals: string[];
+  vision: string[];
+  purpose: string[];
+}
+
+export type AreaReferenceGroups = HabitReferenceGroups;
+
+export interface GoalReferenceGroups {
+  areas: string[];
+  projects: string[];
+  vision: string[];
+  purpose: string[];
+}
+
+export interface VisionReferenceGroups {
+  projects: string[];
+  goals: string[];
+  areas: string[];
+  purpose: string[];
+}
+
+export interface PurposeReferenceGroups {
+  projects: string[];
+  goals: string[];
+  vision: string[];
+  areas: string[];
+}
+
+export interface ProjectHorizonReferences {
+  areas: string[];
+  goals: string[];
+  vision: string[];
+  purpose: string[];
+}
+
+export const DEFAULT_HABIT_HISTORY_BODY =
+  '*Track your habit completions below:*\n\n| Date | Time | Status | Action | Details |\n| --- | --- | --- | --- | --- |';
+
+export const DEFAULT_AREA_DESCRIPTION =
+  '*Summarize the scope, responsibilities, and commitments for this area.*';
+
+export const DEFAULT_GOAL_DESCRIPTION =
+  '*Describe the desired outcome, success criteria, and why this goal matters.*';
+
+export const DEFAULT_PROJECT_OUTCOME =
+  '*Describe the desired outcome, key deliverables, and success criteria for this project.*';
+
+export const DEFAULT_VISION_NARRATIVE =
+  '*Describe the vivid picture of your desired future state and the key themes you want to realize.*';
+
+export const DEFAULT_PURPOSE_DESCRIPTION =
+  '*Capture the purpose and guiding principles that anchor your commitments.*';
 
 /**
  * Escapes special characters for safe inclusion in HTML attributes
@@ -72,6 +172,30 @@ function escapeMarkdownInline(str: string): string {
     .replace(/\)/g, '\\)')
     .replace(/\|/g, '\\|')
     .replace(/#/g, '\\#');
+}
+
+export function encodeReferenceArray(values?: string[]): string {
+  const normalized = (values ?? [])
+    .map((ref) => ref.trim())
+    .filter(Boolean)
+    .map((ref) => ref.replace(/\\/g, '/'));
+
+  if (normalized.length === 0) {
+    return '';
+  }
+
+  try {
+    return encodeURIComponent(JSON.stringify(normalized));
+  } catch {
+    return encodeURIComponent(normalized.join(','));
+  }
+}
+
+function encodeReferenceCsv(values?: string[]): string {
+  const normalized = (values ?? [])
+    .map((ref) => ref.replace(/\\/g, '/').trim())
+    .filter(Boolean);
+  return normalized.join(',');
 }
 
 /**
@@ -296,4 +420,391 @@ export function mapLegacyEffort(effort: string): string {
   };
   
   return effortMap[effort] || effort.toLowerCase();
+}
+
+export function buildProjectMarkdown({
+  title,
+  status,
+  dueDate,
+  desiredOutcome,
+  horizonReferences,
+  references,
+  createdDateTime,
+  includeHabitsList = true,
+  additionalContent,
+}: {
+  title: string;
+  status: GTDProjectStatus;
+  dueDate?: string | null;
+  desiredOutcome?: string;
+  horizonReferences: ProjectHorizonReferences;
+  references?: string[];
+  createdDateTime: string;
+  includeHabitsList?: boolean;
+  additionalContent?: string;
+}): string {
+  const safeTitle = title?.trim() || 'Untitled Project';
+  const normalizedStatus = STATUS_TOKENS.includes(status) ? status : 'in-progress';
+  const dueDateValue = dueDate?.trim() ?? '';
+
+  const normalizedHorizon: ProjectHorizonReferences = {
+    areas: horizonReferences?.areas ?? [],
+    goals: horizonReferences?.goals ?? [],
+    vision: horizonReferences?.vision ?? [],
+    purpose: horizonReferences?.purpose ?? [],
+  };
+
+  const outcomeBody = (desiredOutcome ?? '').trim().length > 0
+    ? (desiredOutcome ?? '').trimEnd()
+    : DEFAULT_PROJECT_OUTCOME;
+
+  const referencesCsv = encodeReferenceCsv(references);
+
+  const parts: string[] = [];
+  parts.push(`# ${safeTitle}`);
+
+  parts.push('\n\n## Status\n');
+  parts.push(`[!singleselect:project-status:${normalizedStatus}]\n`);
+
+  parts.push('\n\n## Due Date (optional)\n');
+  parts.push(`[!datetime:due_date:${dueDateValue}]\n`);
+
+  parts.push('\n\n## Desired Outcome\n');
+  parts.push(`${outcomeBody.replace(/\s+$/g, '')}\n`);
+
+  parts.push('\n\n## Horizon References\n');
+  parts.push(`[!areas-references:${encodeReferenceArray(normalizedHorizon.areas)}]\n`);
+  parts.push(`[!goals-references:${encodeReferenceArray(normalizedHorizon.goals)}]\n`);
+  parts.push(`[!vision-references:${encodeReferenceArray(normalizedHorizon.vision)}]\n`);
+  parts.push(`[!purpose-references:${encodeReferenceArray(normalizedHorizon.purpose)}]\n`);
+
+  parts.push('\n\n## References (optional)\n');
+  parts.push(`[!references:${referencesCsv}]\n`);
+
+  parts.push('\n\n## Created\n');
+  parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
+
+  parts.push('\n\n## Actions\n');
+  parts.push('[!actions-list]\n');
+
+  if (includeHabitsList) {
+    parts.push('\n\n## Related Habits (optional)\n');
+    parts.push('[!habits-list]\n');
+  }
+
+  const extra = additionalContent ?? '';
+  if (extra.trim().length > 0) {
+    const normalized = extra.replace(/\s+$/g, '');
+    parts.push('\n\n');
+    parts.push(normalized);
+    if (!/\n$/.test(normalized)) {
+      parts.push('\n');
+    }
+  }
+
+  return `${parts.join('').trimEnd()}\n`;
+}
+
+/**
+ * Builds canonical markdown for a habit file with standardized ordering.
+ */
+export function buildHabitMarkdown({
+  title,
+  status,
+  frequency,
+  focusDateTime,
+  references,
+  createdDateTime,
+  notes,
+  history,
+}: {
+  title: string;
+  status: GTDHabitStatus;
+  frequency: GTDHabitFrequency;
+  focusDateTime?: string | null;
+  references: HabitReferenceGroups;
+  createdDateTime: string;
+  notes?: string;
+  history: string;
+}): string {
+  const parts: string[] = [];
+
+  const safeTitle = title?.trim() || 'Untitled';
+  const normalizedStatus = status === 'completed' ? 'true' : 'false';
+  const normalizedFrequency = HABIT_FREQUENCY_TOKENS.includes(frequency) ? frequency : 'daily';
+
+  parts.push(`# ${safeTitle}`);
+
+  parts.push('\n\n## Status\n');
+  parts.push(`[!checkbox:habit-status:${normalizedStatus}]\n`);
+
+  parts.push('\n\n## Frequency\n');
+  parts.push(`[!singleselect:habit-frequency:${normalizedFrequency}]\n`);
+
+  const focusValue = focusDateTime?.trim() ?? '';
+  if (focusValue.length > 0) {
+    parts.push('\n\n## Focus Date\n');
+    parts.push(`[!datetime:focus_date:${focusValue}]\n`);
+  }
+
+  parts.push('\n\n## Projects References\n');
+  parts.push(`[!projects-references:${encodeReferenceArray(references.projects)}]\n`);
+
+  parts.push('\n\n## Areas References\n');
+  parts.push(`[!areas-references:${encodeReferenceArray(references.areas)}]\n`);
+
+  parts.push('\n\n## Goals References\n');
+  parts.push(`[!goals-references:${encodeReferenceArray(references.goals)}]\n`);
+
+  parts.push('\n\n## Vision References\n');
+  parts.push(`[!vision-references:${encodeReferenceArray(references.vision)}]\n`);
+
+  parts.push('\n\n## Purpose & Principles References\n');
+  parts.push(`[!purpose-references:${encodeReferenceArray(references.purpose)}]\n`);
+
+  parts.push('\n\n## Created\n');
+  parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
+
+  const cleanNotes = notes?.trim() ?? '';
+  if (cleanNotes.length > 0) {
+    parts.push('\n\n## Notes\n');
+    parts.push(`${cleanNotes.replace(/\s+$/g, '')}\n`);
+  }
+
+  const historyBody = history?.trim().length ? history.trim() : DEFAULT_HABIT_HISTORY_BODY;
+  parts.push('\n\n## History\n');
+  parts.push(`${historyBody.replace(/\s+$/g, '')}\n`);
+
+  return `${parts.join('').trimEnd()}\n`;
+}
+
+/**
+ * Builds canonical markdown for an Area of Focus file with standardized ordering.
+ */
+export function buildAreaMarkdown({
+  title,
+  status,
+  reviewCadence,
+  references,
+  createdDateTime,
+  description,
+}: {
+  title: string;
+  status: GTDAreaStatus;
+  reviewCadence: GTDAreaReviewCadence;
+  references: AreaReferenceGroups;
+  createdDateTime: string;
+  description?: string;
+}): string {
+  const safeTitle = title?.trim() || 'Untitled Area';
+  const normalizedStatus = AREA_STATUS_TOKENS.includes(status) ? status : 'steady';
+  const normalizedCadence = AREA_REVIEW_CADENCE_TOKENS.includes(reviewCadence)
+    ? reviewCadence
+    : 'monthly';
+
+  const parts: string[] = [];
+  parts.push(`# ${safeTitle}`);
+
+  parts.push('\n\n## Status\n');
+  parts.push(`[!singleselect:area-status:${normalizedStatus}]\n`);
+
+  parts.push('\n\n## Review Cadence\n');
+  parts.push(`[!singleselect:area-review-cadence:${normalizedCadence}]\n`);
+
+  parts.push('\n\n## Projects References\n');
+  parts.push(`[!projects-references:${encodeReferenceArray(references.projects)}]\n`);
+
+  const encodedAreas = encodeReferenceArray(references.areas);
+  if (encodedAreas) {
+    parts.push('\n\n## Areas References (optional)\n');
+    parts.push(`[!areas-references:${encodedAreas}]\n`);
+  }
+
+  parts.push('\n\n## Goals References\n');
+  parts.push(`[!goals-references:${encodeReferenceArray(references.goals)}]\n`);
+
+  const encodedVision = encodeReferenceArray(references.vision);
+  if (encodedVision) {
+    parts.push('\n\n## Vision References (optional)\n');
+    parts.push(`[!vision-references:${encodedVision}]\n`);
+  }
+
+  const encodedPurpose = encodeReferenceArray(references.purpose);
+  if (encodedPurpose) {
+    parts.push('\n\n## Purpose & Principles References (optional)\n');
+    parts.push(`[!purpose-references:${encodedPurpose}]\n`);
+  }
+
+  parts.push('\n\n## Created\n');
+  parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
+
+  const cleanDescription = (description ?? '').trim();
+  parts.push('\n\n## Description\n');
+  parts.push(
+    `${(cleanDescription.length > 0 ? cleanDescription : DEFAULT_AREA_DESCRIPTION).replace(/\s+$/g, '')}\n`
+  );
+
+  return `${parts.join('').trimEnd()}\n`;
+}
+
+/**
+ * Builds canonical markdown for a Goal file with standardized ordering.
+ */
+export function buildGoalMarkdown({
+  title,
+  status,
+  targetDate,
+  references,
+  createdDateTime,
+  description,
+}: {
+  title: string;
+  status: GTDGoalStatus;
+  targetDate?: string | null;
+  references: GoalReferenceGroups;
+  createdDateTime: string;
+  description?: string;
+}): string {
+  const safeTitle = title?.trim() || 'Untitled Goal';
+  const normalizedStatus = GOAL_STATUS_TOKENS.includes(status) ? status : 'in-progress';
+  const targetDateValue = targetDate?.trim() ?? '';
+
+  const parts: string[] = [];
+  parts.push(`# ${safeTitle}`);
+
+  parts.push('\n\n## Status\n');
+  parts.push(`[!singleselect:goal-status:${normalizedStatus}]\n`);
+
+  const hasTargetDate = targetDateValue.length > 0;
+  if (hasTargetDate) {
+    parts.push('\n\n## Target Date (optional)\n');
+    parts.push(`[!datetime:goal-target-date:${targetDateValue}]\n`);
+  }
+
+  parts.push('\n\n## Projects References\n');
+  parts.push(`[!projects-references:${encodeReferenceArray(references.projects)}]\n`);
+
+  parts.push('\n\n## Areas References\n');
+  parts.push(`[!areas-references:${encodeReferenceArray(references.areas)}]\n`);
+
+  const encodedVision = encodeReferenceArray(references.vision);
+  if (encodedVision) {
+    parts.push('\n\n## Vision References (optional)\n');
+    parts.push(`[!vision-references:${encodedVision}]\n`);
+  }
+
+  const encodedPurpose = encodeReferenceArray(references.purpose);
+  if (encodedPurpose) {
+    parts.push('\n\n## Purpose & Principles References (optional)\n');
+    parts.push(`[!purpose-references:${encodedPurpose}]\n`);
+  }
+
+  parts.push('\n\n## Created\n');
+  parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
+
+  const cleanDescription = (description ?? '').trim();
+  parts.push('\n\n## Description\n');
+  parts.push(
+    `${(cleanDescription.length > 0 ? cleanDescription : DEFAULT_GOAL_DESCRIPTION).replace(/\s+$/g, '')}\n`
+  );
+
+  return `${parts.join('').trimEnd()}\n`;
+}
+
+/**
+ * Builds canonical markdown for a Vision file with standardized ordering.
+ */
+export function buildVisionMarkdown({
+  title,
+  horizon,
+  references,
+  createdDateTime,
+  narrative,
+}: {
+  title: string;
+  horizon: GTDVisionHorizon;
+  references: VisionReferenceGroups;
+  createdDateTime: string;
+  narrative?: string;
+}): string {
+  const safeTitle = title?.trim() || 'Untitled Vision';
+  const normalizedHorizon = VISION_HORIZON_TOKENS.includes(horizon) ? horizon : '3-years';
+
+  const parts: string[] = [];
+  parts.push(`# ${safeTitle}`);
+
+  parts.push('\n\n## Horizon\n');
+  parts.push(`[!singleselect:vision-horizon:${normalizedHorizon}]\n`);
+
+  parts.push('\n\n## Projects References\n');
+  parts.push(`[!projects-references:${encodeReferenceArray(references.projects ?? [])}]\n`);
+
+  parts.push('\n\n## Goals References\n');
+  parts.push(`[!goals-references:${encodeReferenceArray(references.goals ?? [])}]\n`);
+
+  parts.push('\n\n## Areas References\n');
+  parts.push(`[!areas-references:${encodeReferenceArray(references.areas ?? [])}]\n`);
+
+  const encodedPurpose = encodeReferenceArray(references.purpose);
+  if (encodedPurpose) {
+    parts.push('\n\n## Purpose & Principles References (optional)\n');
+    parts.push(`[!purpose-references:${encodedPurpose}]\n`);
+  }
+
+  parts.push('\n\n## Created\n');
+  parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
+
+  const cleanNarrative = (narrative ?? '').trim();
+  parts.push('\n\n## Narrative\n');
+  parts.push(
+    `${(cleanNarrative.length > 0 ? cleanNarrative : DEFAULT_VISION_NARRATIVE).replace(/\s+$/g, '')}\n`
+  );
+
+  return `${parts.join('').trimEnd()}\n`;
+}
+
+/**
+ * Builds canonical markdown for a Purpose & Principles file with standardized ordering.
+ */
+export function buildPurposeMarkdown({
+  title,
+  references,
+  createdDateTime,
+  description,
+}: {
+  title: string;
+  references: PurposeReferenceGroups;
+  createdDateTime: string;
+  description?: string;
+}): string {
+  const safeTitle = title?.trim() || 'Purpose & Principles';
+
+  const parts: string[] = [];
+  parts.push(`# ${safeTitle}`);
+
+  parts.push('\n\n## Projects References\n');
+  parts.push(`[!projects-references:${encodeReferenceArray(references.projects ?? [])}]\n`);
+
+  parts.push('\n\n## Goals References\n');
+  parts.push(`[!goals-references:${encodeReferenceArray(references.goals ?? [])}]\n`);
+
+  parts.push('\n\n## Vision References\n');
+  parts.push(`[!vision-references:${encodeReferenceArray(references.vision ?? [])}]\n`);
+
+  const encodedAreas = encodeReferenceArray(references.areas ?? []);
+  if (encodedAreas) {
+    parts.push('\n\n## Areas References (optional)\n');
+    parts.push(`[!areas-references:${encodedAreas}]\n`);
+  }
+
+  parts.push('\n\n## Created\n');
+  parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
+
+  const cleanDescription = (description ?? '').trim();
+  parts.push('\n\n## Description\n');
+  parts.push(
+    `${(cleanDescription.length > 0 ? cleanDescription : DEFAULT_PURPOSE_DESCRIPTION).replace(/\s+$/g, '')}\n`
+  );
+
+  return `${parts.join('').trimEnd()}\n`;
 }

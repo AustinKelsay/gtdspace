@@ -7,9 +7,10 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { extractMetadata, extractHorizonReferences as extractHorizonReferencesUtil } from '@/utils/metadata-extractor';
 import { readFileText } from './useFileManager';
-import type { GTDProject, MarkdownFile } from '@/types';
+import type { GTDProject, GTDProjectStatus, MarkdownFile } from '@/types';
 import { toISOStringFromEpoch } from '@/utils/time';
 import { parseLocalDate } from '@/utils/date-formatting';
+import { migrateGTDObjects } from '@/utils/data-migration';
 
 export interface ProjectWithMetadata extends GTDProject {
   linkedAreas?: string[];
@@ -45,6 +46,7 @@ interface UseProjectsDataReturn {
     active: number;
     waiting: number;
     completed: number;
+    cancelled: number;
     overdue: number;
     withoutHorizons: number;
     byArea: Record<string, number>;
@@ -57,8 +59,12 @@ interface UseProjectsDataReturn {
 /**
  * Normalize project status values
  */
-const normalizeProjectStatus = (status: string): string => {
+const normalizeProjectStatus = (status: string): GTDProjectStatus => {
   const normalized = status.toLowerCase().trim();
+  
+  if (['cancelled', 'canceled', 'abandoned', 'dropped', 'cancel'].includes(normalized)) {
+    return 'cancelled';
+  }
   
   if (['in-progress', 'active', 'ongoing'].includes(normalized)) {
     return 'in-progress';
@@ -68,7 +74,7 @@ const normalizeProjectStatus = (status: string): string => {
     return 'waiting';
   }
   
-  if (['completed', 'done', 'finished'].includes(normalized)) {
+  if (['completed', 'done', 'finished', 'complete'].includes(normalized)) {
     return 'completed';
   }
   
@@ -177,20 +183,52 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
   const loadProjects = useCallback(async (spacePath: string) => {
     setIsLoading(true);
     setError(null);
-    setCachedSpacePath(spacePath);
+    const normalizedSpacePath = spacePath.trim();
+    setCachedSpacePath(normalizedSpacePath);
     
     try {
+      let workspaceExists = await safeInvoke<boolean>('check_directory_exists', { path: normalizedSpacePath }, null);
+      if (workspaceExists === false) {
+        await safeInvoke<string>('initialize_gtd_space', { spacePath: normalizedSpacePath }, null);
+        workspaceExists = await safeInvoke<boolean>('check_directory_exists', { path: normalizedSpacePath }, null);
+      }
+
+      if (workspaceExists === false) {
+        throw new Error(`Workspace path does not exist: ${normalizedSpacePath}`);
+      }
+
+      let projectsDirExists = await safeInvoke<boolean>(
+        'check_directory_exists',
+        { path: `${normalizedSpacePath}/Projects` },
+        null
+      );
+
+      if (projectsDirExists === false) {
+        await safeInvoke<string>('initialize_gtd_space', { spacePath: normalizedSpacePath }, null);
+        projectsDirExists = await safeInvoke<boolean>(
+          'check_directory_exists',
+          { path: `${normalizedSpacePath}/Projects` },
+          null
+        );
+      }
+
+      if (projectsDirExists === false) {
+        throw new Error(`Projects directory is missing under ${normalizedSpacePath}`);
+      }
+
       // Load base projects via backend if available; otherwise fallback to scanning Projects folder
-      let baseProjects = await safeInvoke<GTDProject[]>(
-        'load_projects',
-        { path: spacePath },
+      const invokedProjects = await safeInvoke<GTDProject[]>(
+        'list_gtd_projects',
+        { spacePath: normalizedSpacePath },
         []
       );
 
-      if (!baseProjects || baseProjects.length === 0) {
+      let baseProjects = migrateGTDObjects(invokedProjects ?? []);
+
+      if (baseProjects.length === 0) {
         // Fallback: build projects from README.md files under spacePath/Projects
         try {
-          const projectsRoot = `${spacePath}/Projects`;
+          const projectsRoot = `${normalizedSpacePath}/Projects`;
           const files = await safeInvoke<MarkdownFile[]>(
             'list_markdown_files',
             { path: projectsRoot },
@@ -444,7 +482,8 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
       total: projects.length,
       active: 0,
       waiting: 0,
-      completed: 0
+      completed: 0,
+      cancelled: 0
     };
     
     projects.forEach(project => {
@@ -459,10 +498,13 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
         case 'completed':
           statusCounts.completed++;
           break;
+        case 'cancelled':
+          statusCounts.cancelled++;
+          break;
       }
       
       // Check overdue
-      if (project.dueDate && project.status !== 'completed') {
+      if (project.dueDate && project.status !== 'completed' && project.status !== 'cancelled') {
         const dueDate = parseLocalDate(project.dueDate);
         if (!isNaN(dueDate.getTime()) && dueDate < today) {
           overdue++;

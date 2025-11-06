@@ -38,6 +38,32 @@ npm run release:major  # 0.1.0 → 1.0.0 with git tag
 - **First run**: `npm install` then `npm run tauri:dev`
 - **Google Calendar**: Configure OAuth in Settings UI (or `.env` with `GOOGLE_CALENDAR_CLIENT_ID` and `GOOGLE_CALENDAR_CLIENT_SECRET`)
 
+### Claude AI Settings Configuration
+
+If you're using Claude Code (claude.ai/code) with this repository, you'll need to configure local settings:
+
+1. **Copy the example file**:
+   ```bash
+   cp .claude/settings.local.json.example .claude/settings.local.json
+   ```
+
+2. **Edit `.claude/settings.local.json`** and replace the placeholder paths:
+   - Replace `/path/to/your/workspace/**` with your actual workspace absolute path (e.g., `/Users/yourname/Desktop/code/gtdspace/**`)
+   - If you need access to other directories, add additional `Read()` entries with specific paths
+
+3. **Permissions are scoped to essential commands only**:
+   - Development: `npm run tauri:dev`, `npm run dev`, `npm run build`
+   - Code quality: `npm run type-check`, `npm run lint`, `cargo check`, `cargo clippy`, `cargo fmt`
+   - Testing: `npm test`, `npm run test:run`
+   - Git operations: `git add`, `git commit` (for PR work)
+   - Utilities: `find`, `grep`, `cat`, `ls`, `rg`, `jq`, `diff`, `sed`, `rm`, `mkdir`
+
+4. **Important**: 
+   - `.claude/settings.local.json` is gitignored and contains machine-specific paths
+   - Never commit your local settings file
+   - The example file (`.claude/settings.local.json.example`) is sanitized and safe to commit
+   - If you need additional permissions, add them to your local file only, not the example
+
 ## Architecture Overview
 
 **Stack**: React 18 + TypeScript + Vite + Tauri 2.x (Rust backend) + BlockNote editor v0.37 (pinned)
@@ -68,12 +94,15 @@ Auto-created at `~/GTD Space` on first run:
 
 ## Core React Hooks
 
-- **`useGTDSpace`**: Project/action CRUD operations
+- **`useGTDSpace`**: Project/action CRUD operations, workspace initialization
 - **`useTabManager`**: Multi-tab editor state (manual save with Cmd/Ctrl+S)
 - **`useFileManager`**: Tauri file operations wrapper
-- **`useCalendarData`**: Aggregates all dated items
-- **`useHabitTracking`**: Auto-reset based on frequency
+- **`useCalendarData`**: Aggregates all dated items (actions, habits, Google Calendar)
+- **`useHabitTracking`**: Auto-reset based on frequency with history logging
 - **`useErrorHandler`**: Wraps all Tauri invokes with error handling
+- **`useActionsData`**: Aggregates and filters actions across projects
+- **`useProjectsData`**: Project metadata and hierarchy management
+- **`useHorizonsRelationships`**: Manages references between GTD horizons
 
 ## Important Patterns
 
@@ -101,7 +130,21 @@ window.dispatchEvent(new CustomEvent('content-updated', { detail: { path } }));
 window.addEventListener('content-updated', handler);
 ```
 
-Events: `content-updated`, `gtd-project-created`, `file-renamed`
+Events: `content-updated`, `gtd-project-created`, `file-renamed`, `habit-status-updated`, `habit-content-changed`, `theme-changed`, `insert-actions-list`
+
+### Window-Level Callbacks
+
+Global callbacks registered on window object for cross-component communication:
+
+```typescript
+// Notifies when a tab file is saved (used to reload projects)
+window.onTabFileSaved: (filePath: string) => Promise<void>
+
+// Updates backlink references in open tabs without saving
+window.applyBacklinkChange: (targetPath: string, mutator: (content: string) => string) => { handled: boolean; wasDirty: boolean }
+```
+
+These callbacks are set up in App.tsx and consumed by hooks/components throughout the app.
 
 ### Custom Markdown Fields
 
@@ -126,6 +169,24 @@ Five-tab layout in `src/components/dashboard/`:
 - **Habits**: Tracking with streaks and auto-reset
 - **Horizons**: GTD hierarchy visualization
 
+### Specialized Page Components
+
+The app routes to specialized editors based on file path and content detection:
+
+- **`ActionPage`**: Actions under `Projects/*/` (not README.md), detected by status/effort fields
+- **`HabitPage`**: Files in `Habits/` with habit-status/habit-frequency fields
+- **`AreaPage`**: Files in `Areas of Focus/` with area-status/area-review-cadence fields
+- **`GoalPage`**: Files in `Goals/` with goal-status/goal-target-date fields
+- **`VisionPage`**: Files in `Vision/` with vision-horizon fields
+- **`PurposePage`**: Files in `Purpose & Principles/` with reference fields
+- **`EnhancedTextEditor`**: Fallback for all other markdown files (README.md, Cabinet, Someday Maybe)
+
+**Routing Logic** (in `App.tsx:900-1066`):
+1. Path heuristic: Check if file path matches expected directory structure
+2. Content heuristic: Check if content contains characteristic metadata fields
+3. Combine both: File qualifies if path OR content matches (allows flexibility)
+4. Route to most specific component, fallback to EnhancedTextEditor
+
 ### Actions List
 
 - Projects show expandable action lists in sidebar
@@ -137,13 +198,24 @@ Five-tab layout in `src/components/dashboard/`:
 **New GTD Field**:
 1. BlockNote component in `src/components/editor/blocks/`
 2. Insertion hook in `src/hooks/use[FieldName]Insertion.ts`
-3. Update `preprocessMarkdownForBlockNote()` and `metadata-extractor.ts`
-4. Register keyboard shortcut
+3. Update `preprocessMarkdownForBlockNote()` in editor preprocessing
+4. Add pattern to `DEFAULT_EXTRACTORS` in `src/utils/metadata-extractor.ts`
+5. Register keyboard shortcut in `useKeyboardShortcuts`
+6. Update type definitions in `src/types/` if needed
 
 **New Tauri Command**:
-1. Implement in `src-tauri/src/commands/`
-2. Register in `src-tauri/src/lib.rs` (NOT main.rs)
-3. Wrap with `withErrorHandling()` in frontend
+1. Implement in `src-tauri/src/commands/` (create new module or add to existing)
+2. Register in `src-tauri/src/lib.rs` invoke_handler (NOT main.rs)
+3. Wrap with `withErrorHandling()` in frontend calls
+4. Use snake_case in Rust, camelCase in TypeScript (auto-converted)
+
+**New Specialized Page Component**:
+1. Create component in `src/components/gtd/[Name]Page.tsx`
+2. Add detection logic to `App.tsx` routing (lines 900-1066)
+3. Define path heuristic (e.g., files in `Horizon Name/` directory)
+4. Define content heuristic (e.g., specific metadata field patterns)
+5. Add to routing switch before fallback to EnhancedTextEditor
+6. Implement template/seeding in backend if needed
 
 ## Technical Constraints
 
@@ -163,10 +235,12 @@ Five-tab layout in `src/components/dashboard/`:
 
 ## Critical Event Flows
 
-- **Save**: Cmd/Ctrl+S → `saveTab()` → Tauri `write_file` → toast notification
-- **File Watch**: External changes detected with 500ms debounce → UI auto-refresh
-- **Content Bus**: Window-level events (`content-updated`, `gtd-project-created`, `file-renamed`)
+- **Save**: Cmd/Ctrl+S → `saveTab()` → Tauri `write_file` → `window.onTabFileSaved()` → reload projects if needed → toast notification
+- **File Watch**: External changes detected with 500ms debounce → UI auto-refresh → close/reload tabs
+- **Content Bus**: Window-level events (`content-updated`, `gtd-project-created`, `file-renamed`, `habit-status-updated`)
 - **Tab System**: Multi-tab with manual save, max 10 tabs, drag-and-drop reordering
+- **Habit Reset**: 1-minute interval checks for expired habits → auto-reset based on frequency → refresh UI
+- **File Routing**: File opened → detect type (path + content) → route to specialized component → render appropriate editor
 
 ## Performance Notes
 
@@ -198,8 +272,26 @@ Five-tab layout in `src/components/dashboard/`:
 
 ## Commit Guidelines
 
-From AGENTS.md:
+From AGENTS.md (full repo guidelines):
 - Use imperative mood with concise scope (e.g., `feat: add calendar week view`)
-- Reference issues when applicable
-- Ensure `type-check` and `lint` pass before committing
+- Reference issues when applicable (e.g., `#123`)
+- Ensure `npm run type-check` and `npm run lint` pass before committing
 - Include screenshots for UI changes in PRs
+- Rust changes must pass `cd src-tauri && cargo clippy -D warnings && cargo fmt --check`
+
+## Path Normalization Utilities
+
+When comparing file paths across platforms (Windows/Unix):
+
+```typescript
+// In App.tsx, used throughout the codebase
+function norm(p?: string | null): string | null | undefined {
+  return p?.toLowerCase().replace(/\\/g, '/');
+}
+
+function isUnder(p?: string | null, dir?: string | null): boolean {
+  // Checks if path p is under directory dir (case-insensitive, normalized)
+}
+```
+
+Always normalize paths before comparison to avoid cross-platform bugs.

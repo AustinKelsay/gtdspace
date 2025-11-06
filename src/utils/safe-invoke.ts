@@ -6,6 +6,9 @@
  */
 
 import { checkTauriContextAsync } from '@/utils/tauri-ready';
+import { createScopedLogger } from '@/utils/logger';
+
+const log = createScopedLogger('safeInvoke');
 
 /**
  * Safely invoke a Tauri command.
@@ -37,12 +40,10 @@ export async function safeInvoke<T>(
     const result = await core.invoke<T>(command, args as Record<string, unknown>);
     return (result ?? (fallback ?? null)) as T | null;
   } catch (error) {
-    // Keep this quiet to avoid noisy UX in non-Tauri/web contexts
-    console.warn(`[safeInvoke] Command failed: ${command}`, error);
+    log.warnOnce(command, 'Command failed', { command, error });
     return (fallback ?? null) as T | null;
   }
 }
-
 
 
 

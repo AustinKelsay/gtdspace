@@ -1035,13 +1035,23 @@ export const App: React.FC = () => {
                       />
                     ) : (
                       (() => {
+                        // Normalize the tab path once for cross-platform comparisons
+                        const candidatePath =
+                          displayedTab.file.path ??
+                          displayedTab.filePath ??
+                          "";
+                        const normalizedPath = candidatePath.replace(
+                          /\\/g,
+                          "/"
+                        );
+
                         // Detect Habit files first to render HabitPage
                         const habitsDir = gtdSpace?.root_path
                           ? `${gtdSpace.root_path}/Habits/`
                           : undefined;
                         const pathLooksLikeHabit = habitsDir
-                          ? isUnder(displayedTab.file.path, habitsDir)
-                          : isHabitPath(displayedTab.file.path);
+                          ? isUnder(normalizedPath, habitsDir)
+                          : isHabitPath(normalizedPath);
                         const contentHasHabitMarkers =
                           /\[!checkbox:habit-status:/i.test(
                             displayedTab.content
@@ -1051,7 +1061,7 @@ export const App: React.FC = () => {
                           );
                         const isHabitFile =
                           (pathLooksLikeHabit || contentHasHabitMarkers) &&
-                          !/(^|\/)README\.md$/i.test(displayedTab.file.path);
+                          !/(^|\/)README\.md$/i.test(normalizedPath);
 
                         if (isHabitFile) {
                           return (
@@ -1072,10 +1082,8 @@ export const App: React.FC = () => {
                           ? `${gtdSpace.root_path}/Areas of Focus/`
                           : undefined;
                         const pathLooksLikeArea = areasDir
-                          ? isUnder(displayedTab.file.path, areasDir)
-                          : /\/Areas of Focus\//i.test(
-                              displayedTab.file.path.replace(/\\/g, "/")
-                            );
+                          ? isUnder(normalizedPath, areasDir)
+                          : /\/Areas of Focus\//i.test(normalizedPath);
                         const contentHasAreaMarkers =
                           /\[!singleselect:area-status:/i.test(
                             displayedTab.content
@@ -1085,7 +1093,7 @@ export const App: React.FC = () => {
                           );
                         const isAreaFile =
                           (pathLooksLikeArea || contentHasAreaMarkers) &&
-                          displayedTab.file.path !== "::calendar::";
+                          normalizedPath !== "::calendar::";
 
                         if (isAreaFile) {
                           return (
@@ -1106,10 +1114,8 @@ export const App: React.FC = () => {
                           ? `${gtdSpace.root_path}/Goals/`
                           : undefined;
                         const pathLooksLikeGoal = goalsDir
-                          ? isUnder(displayedTab.file.path, goalsDir)
-                          : /\/Goals\//i.test(
-                              displayedTab.file.path.replace(/\\/g, "/")
-                            );
+                          ? isUnder(normalizedPath, goalsDir)
+                          : /\/Goals\//i.test(normalizedPath);
                         const contentHasGoalMarkers =
                           /\[!singleselect:goal-status:/i.test(
                             displayedTab.content
@@ -1119,7 +1125,7 @@ export const App: React.FC = () => {
                           );
                         const isGoalFile =
                           (pathLooksLikeGoal || contentHasGoalMarkers) &&
-                          displayedTab.file.path !== "::calendar::";
+                          normalizedPath !== "::calendar::";
 
                         if (isGoalFile) {
                           return (
@@ -1140,17 +1146,15 @@ export const App: React.FC = () => {
                           ? `${gtdSpace.root_path}/Vision/`
                           : undefined;
                         const pathLooksLikeVision = visionDir
-                          ? isUnder(displayedTab.file.path, visionDir)
-                          : /\/Vision\//i.test(
-                              displayedTab.file.path.replace(/\\/g, "/")
-                            );
+                          ? isUnder(normalizedPath, visionDir)
+                          : /\/Vision\//i.test(normalizedPath);
                         const contentHasVisionMarkers =
                           /\[!singleselect:vision-horizon:/i.test(
                             displayedTab.content
                           );
                         const isVisionFile =
                           (pathLooksLikeVision || contentHasVisionMarkers) &&
-                          displayedTab.file.path !== "::calendar::";
+                          normalizedPath !== "::calendar::";
 
                         if (isVisionFile) {
                           return (
@@ -1171,9 +1175,9 @@ export const App: React.FC = () => {
                           ? `${gtdSpace.root_path}/Purpose & Principles/`
                           : undefined;
                         const pathLooksLikePurpose = purposeDir
-                          ? isUnder(displayedTab.file.path, purposeDir)
+                          ? isUnder(normalizedPath, purposeDir)
                           : /\/Purpose\s*&\s*Principles\//i.test(
-                              displayedTab.file.path.replace(/\\/g, "/")
+                              normalizedPath
                             );
                         const likelyPurposeHeadings =
                           /##\s+Purpose\s+Statement/i.test(
@@ -1181,7 +1185,7 @@ export const App: React.FC = () => {
                           );
                         const isPurposeFile =
                           (pathLooksLikePurpose || likelyPurposeHeadings) &&
-                          displayedTab.file.path !== "::calendar::";
+                          normalizedPath !== "::calendar::";
 
                         if (isPurposeFile) {
                           return (
@@ -1196,10 +1200,6 @@ export const App: React.FC = () => {
                             />
                           );
                         }
-
-                        // Normalize path once for cross-platform comparison (Windows backslashes → forward slashes)
-                        const normalizedPath = displayedTab.file.path.replace(/\\/g, "/");
-
                         // Detect Action files: under Projects/ and not README.(md|markdown)
                         const projectsDir = gtdSpace?.root_path
                           ? `${gtdSpace.root_path}/Projects/`.replace(/\\/g, "/")

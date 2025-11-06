@@ -154,6 +154,45 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Import Apple signing certificate
+        if: startsWith(matrix.platform, 'macos')
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CSC_LINK" ] || [ -z "$CSC_KEY_PASSWORD" ] || [ -z "$MACOS_KEYCHAIN_PASSWORD" ]; then
+            echo "Required secrets CSC_LINK, CSC_KEY_PASSWORD, and MACOS_KEYCHAIN_PASSWORD must be configured for macOS signing."
+            exit 1
+          fi
+
+          echo "$CSC_LINK" | base64 --decode > certificate.p12
+
+          security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          security import certificate.p12 -k build.keychain -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$MACOS_KEYCHAIN_PASSWORD" build.keychain
+
+          security find-identity -v -p codesigning build.keychain
+          rm -f certificate.p12
+
+      - name: Resolve Apple signing identity
+        if: startsWith(matrix.platform, 'macos')
+        shell: bash
+        run: |
+          set -euo pipefail
+          CERT_ID=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application" | head -n 1 | sed -E 's/.*"(.+)"/\1/')
+          if [ -z "$CERT_ID" ]; then
+            echo "Unable to locate a Developer ID Application signing identity in build.keychain."
+            exit 1
+          fi
+          echo "Resolved signing identity: $CERT_ID"
+          echo "APPLE_SIGNING_IDENTITY=$CERT_ID" >> $GITHUB_ENV
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -162,6 +201,13 @@ jobs:
             ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: >-
             ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_CERTIFICATE: ${{ secrets.CSC_LINK }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_IDENTITY }}
         with:
           args: ${{ matrix.args }}
 

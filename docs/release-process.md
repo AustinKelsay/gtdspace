@@ -23,6 +23,7 @@ Before creating a release:
    ```
 3. Update the CHANGELOG (if you maintain one)
 4. Ensure you have Git configured for signing commits (optional but recommended)
+5. Configure macOS signing credentials as documented in `docs/mac-signing-setup.md`. The release workflow requires the following GitHub secrets: `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`, and `MACOS_KEYCHAIN_PASSWORD`.
 
 ## Creating a Release
 
@@ -162,7 +163,7 @@ When you push a Git tag matching `v*` (for example `v1.2.3`), the 'Build and Rel
 - Intel: `GTDSpace_v0.1.0_macos-x64.dmg`
 - Apple Silicon: `GTDSpace_v0.1.0_macos-aarch64.dmg`
 - Drag-and-drop installation to Applications folder
-- Code signing (when certificates are configured)
+- Developer ID code signing and notarization (when secrets from `docs/mac-signing-setup.md` are configured)
 
 ### Linux
 
@@ -237,19 +238,16 @@ git push origin v0.1.1
 
 Planned enhancements to the release process:
 
-1. **Code Signing**:
-   - Windows: Certificate signing for SmartScreen
-   - macOS: Apple Developer ID for notarization
-2. **Auto-Update**:
+1. **Auto-Update**:
    - Built-in update checking
    - Seamless background updates
-3. **Release Channels**:
+2. **Release Channels**:
 
    - Stable releases
    - Beta/preview builds
    - Nightly builds (automated)
 
-4. **Package Managers**:
+3. **Package Managers**:
    - Homebrew (macOS)
    - Chocolatey (Windows)
    - Snap/Flatpak (Linux)

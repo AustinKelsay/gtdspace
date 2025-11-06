@@ -46,9 +46,10 @@
       "timestampUrl": ""
     },
     "macOS": {
-      "entitlements": null,
+      "entitlements": "entitlements/macos.plist",
       "exceptionDomain": "",
       "frameworks": [],
+      "hardenedRuntime": true,
       "providerShortName": null,
       "signingIdentity": null
     },

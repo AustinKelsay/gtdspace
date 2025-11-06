@@ -111,12 +111,12 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
   onArchiveProject,
   onAddAction
 }) => {
-  const parseLocal = (d: string) => {
+  const parseLocal = useCallback((d: string) => {
     const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     return new Date(d);
-  };
-  const isPastDueLocal = (due?: string | null, status?: string) => {
+  }, []);
+  const isPastDueLocal = useCallback((due?: string | null, status?: string) => {
     if (!due || status === 'completed' || status === 'cancelled') return false;
     const dt = parseLocal(due);
     if (isNaN(dt.getTime())) return false;
@@ -124,7 +124,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dueStart = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
     return dueStart < today;
-  };
+  }, [parseLocal]);
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -304,7 +304,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
       : 0;
 
     return { total, byStatus, overdue, withHorizons, avgCompletion };
-  }, [filteredProjects]);
+  }, [filteredProjects, isPastDueLocal]);
 
   // Render project card
   const renderProjectCard = (project: ProjectWithMetadata) => {

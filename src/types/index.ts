@@ -341,6 +341,88 @@ export interface UserSettings {
   max_tabs?: number;
   /** Whether to restore tabs on startup */
   restore_tabs?: boolean;
+  /** Automatically initialize a GTD space if one is not found */
+  auto_initialize?: boolean | null;
+  /** Seed example content in new workspaces */
+  seed_example_content?: boolean | null;
+  /** Preferred default GTD space path */
+  default_space_path?: string | null;
+  /** Whether git sync/backups are enabled */
+  git_sync_enabled?: boolean;
+  /** Path to the dedicated git sync repository */
+  git_sync_repo_path?: string | null;
+  /** Optional override for the workspace path to back up */
+  git_sync_workspace_path?: string | null;
+  /** Remote URL (e.g., GitHub) for pushing encrypted backups */
+  git_sync_remote_url?: string | null;
+  /** Branch used for syncing backups */
+  git_sync_branch?: string | null;
+  /** Locally stored encryption key/passphrase */
+  git_sync_encryption_key?: string | null;
+  /** Number of encrypted snapshots to keep in history */
+  git_sync_keep_history?: number | null;
+  /** Optional git author override */
+  git_sync_author_name?: string | null;
+  /** Optional git email override */
+  git_sync_author_email?: string | null;
+  /** Timestamp of the last successful push */
+  git_sync_last_push?: string | null;
+  /** Timestamp of the last successful pull */
+  git_sync_last_pull?: string | null;
+  /** Optional automatic pull interval */
+  git_sync_auto_pull_interval_minutes?: number | null;
+}
+
+/**
+ * Result returned from git sync operations
+ */
+export interface GitOperationResult {
+  /** Whether the operation completed successfully */
+  success: boolean;
+  /** Human-friendly message summarizing the result */
+  message: string;
+  /** File name of the snapshot that was used */
+  backup_file?: string | null;
+  /** Timestamp of the snapshot */
+  timestamp?: string | null;
+  /** Whether data was pushed to the remote */
+  pushed?: boolean;
+  /** Additional context for UI diagnostics */
+  details?: Record<string, unknown> | null;
+}
+
+/**
+ * Status information about the git sync/backups subsystem
+ */
+export interface GitSyncStatus {
+  /** Whether the feature is toggled on */
+  enabled: boolean;
+  /** True when repo, workspace, and key are all configured */
+  configured: boolean;
+  /** Whether an encryption key is available */
+  encryptionConfigured: boolean;
+  /** Path to the repo used for backups */
+  repoPath?: string | null;
+  /** Workspace path used when building archives */
+  workspacePath?: string | null;
+  /** Remote URL (if configured) */
+  remoteUrl?: string | null;
+  /** Branch name */
+  branch?: string | null;
+  /** Timestamp of the latest push */
+  lastPush?: string | null;
+  /** Timestamp of the latest pull */
+  lastPull?: string | null;
+  /** Most recent encrypted snapshot file */
+  latestBackupFile?: string | null;
+  /** Timestamp for that snapshot */
+  latestBackupAt?: string | null;
+  /** Whether git has staged changes waiting to commit */
+  hasPendingCommits?: boolean;
+  /** Whether a remote named `origin` is available */
+  hasRemote?: boolean;
+  /** Additional diagnostic text */
+  message?: string | null;
 }
 
 // === SEARCH TYPES ===

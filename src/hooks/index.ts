@@ -9,6 +9,7 @@ export { useFileManager } from './useFileManager';
 export { useTabManager } from './useTabManager';
 export { useFileWatcher } from './useFileWatcher';
 export { useSettings } from './useSettings';
+export { useGitSync } from './useGitSync';
 
 // UI and interaction hooks
 export { useModalManager } from './useModalManager';

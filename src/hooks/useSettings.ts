@@ -42,6 +42,21 @@ export const useSettings = () => {
     editor_mode: 'split',
     window_width: 1200,
     window_height: 800,
+    auto_initialize: true,
+    seed_example_content: true,
+    default_space_path: null,
+    git_sync_enabled: false,
+    git_sync_repo_path: null,
+    git_sync_workspace_path: null,
+    git_sync_remote_url: null,
+    git_sync_branch: 'main',
+    git_sync_encryption_key: null,
+    git_sync_keep_history: 5,
+    git_sync_author_name: null,
+    git_sync_author_email: null,
+    git_sync_last_push: null,
+    git_sync_last_pull: null,
+    git_sync_auto_pull_interval_minutes: null,
   });
   
   const [isLoading, setIsLoading] = useState(true);

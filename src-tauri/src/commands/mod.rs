@@ -44,9 +44,15 @@ use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_store::StoreBuilder;
 use tokio::sync::Mutex as TokioMutex;
+use tokio::task;
 
 // Import seed data module
 mod seed_data;
+mod git_sync;
+use git_sync::{
+    build_git_sync_config, compute_git_status, perform_git_pull, perform_git_push,
+    GitOperationResultPayload, GitSyncStatusResponse,
+};
 use seed_data::{
     core_values_template, generate_action_template, generate_area_of_focus_template_with_refs,
     generate_goal_template_with_refs, generate_project_readme, generate_project_readme_with_refs,
@@ -254,6 +260,30 @@ pub struct UserSettings {
     pub seed_example_content: Option<bool>,
     /// Preferred default GTD space path override
     pub default_space_path: Option<String>,
+    /// Enable git-based syncing and backups
+    pub git_sync_enabled: Option<bool>,
+    /// Path to the dedicated git repository for encrypted backups
+    pub git_sync_repo_path: Option<String>,
+    /// Optional override for which workspace path to archive
+    pub git_sync_workspace_path: Option<String>,
+    /// Remote URL used for push/pull actions
+    pub git_sync_remote_url: Option<String>,
+    /// Preferred branch name for remote backups
+    pub git_sync_branch: Option<String>,
+    /// Locally stored encryption key (never synced)
+    pub git_sync_encryption_key: Option<String>,
+    /// Number of encrypted snapshots to retain
+    pub git_sync_keep_history: Option<u32>,
+    /// Optional git author override
+    pub git_sync_author_name: Option<String>,
+    /// Optional git email override
+    pub git_sync_author_email: Option<String>,
+    /// Timestamp of the last successful push
+    pub git_sync_last_push: Option<String>,
+    /// Timestamp of the last successful pull
+    pub git_sync_last_pull: Option<String>,
+    /// Optional automatic pull cadence
+    pub git_sync_auto_pull_interval_minutes: Option<u32>,
 }
 
 /// File change event for external file modifications
@@ -1629,6 +1659,18 @@ fn get_default_settings() -> UserSettings {
         auto_initialize: Some(true),
         seed_example_content: Some(true),
         default_space_path: None,
+        git_sync_enabled: Some(false),
+        git_sync_repo_path: None,
+        git_sync_workspace_path: None,
+        git_sync_remote_url: None,
+        git_sync_branch: Some("main".to_string()),
+        git_sync_encryption_key: None,
+        git_sync_keep_history: Some(5),
+        git_sync_author_name: None,
+        git_sync_author_email: None,
+        git_sync_last_push: None,
+        git_sync_last_pull: None,
+        git_sync_auto_pull_interval_minutes: None,
     }
 }
 
@@ -3447,6 +3489,58 @@ pub async fn initialize_default_gtd_space(app: AppHandle) -> Result<String, Stri
     }
 
     Ok(target_path)
+}
+
+/// Retrieve current git sync status information
+#[tauri::command]
+pub async fn git_sync_status(
+    app: AppHandle,
+    workspace_override: Option<String>,
+) -> Result<GitSyncStatusResponse, String> {
+    let settings = load_settings(app).await?;
+    Ok(compute_git_status(&settings, workspace_override))
+}
+
+/// Create an encrypted snapshot and push it via git
+#[tauri::command]
+pub async fn git_sync_push(
+    app: AppHandle,
+    workspace_override: Option<String>,
+) -> Result<GitOperationResultPayload, String> {
+    let mut settings = load_settings(app.clone()).await?;
+    let config = build_git_sync_config(&settings, workspace_override)?;
+
+    let outcome = task::spawn_blocking(move || perform_git_push(config))
+        .await
+        .map_err(|e| format!("Git push task failed: {}", e))??;
+
+    settings.git_sync_last_push = outcome.timestamp.clone();
+    save_settings(app, settings)
+        .await
+        .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
+
+    Ok(outcome)
+}
+
+/// Pull the latest encrypted snapshot and restore the workspace
+#[tauri::command]
+pub async fn git_sync_pull(
+    app: AppHandle,
+    workspace_override: Option<String>,
+) -> Result<GitOperationResultPayload, String> {
+    let mut settings = load_settings(app.clone()).await?;
+    let config = build_git_sync_config(&settings, workspace_override)?;
+
+    let outcome = task::spawn_blocking(move || perform_git_pull(config))
+        .await
+        .map_err(|e| format!("Git pull task failed: {}", e))??;
+
+    settings.git_sync_last_pull = outcome.timestamp.clone();
+    save_settings(app, settings)
+        .await
+        .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
+
+    Ok(outcome)
 }
 
 /// Check if a directory exists

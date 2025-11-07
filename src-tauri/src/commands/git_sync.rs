@@ -498,9 +498,8 @@ fn encrypt_bytes(passphrase: &str, plaintext: &[u8]) -> Result<Vec<u8>, String> 
         .encrypt(nonce, plaintext)
         .map_err(|e| format!("Encryption failed: {}", e))?;
 
-    let mut output = Vec::with_capacity(
-        MAGIC_HEADER.len() + salt.len() + nonce_bytes.len() + ciphertext.len(),
-    );
+    let mut output =
+        Vec::with_capacity(MAGIC_HEADER.len() + salt.len() + nonce_bytes.len() + ciphertext.len());
     output.extend_from_slice(MAGIC_HEADER);
     output.extend_from_slice(&salt);
     output.extend_from_slice(&nonce_bytes);
@@ -608,7 +607,10 @@ fn restore_workspace(workspace: &Path, archive: &[u8]) -> Result<(), String> {
                 );
             }
 
-            Err(format!("Failed to replace workspace after restore: {}", err))
+            Err(format!(
+                "Failed to replace workspace after restore: {}",
+                err
+            ))
         }
     }
 }
@@ -620,9 +622,7 @@ fn clean_directory(target: &Path) -> Result<(), String> {
         return Ok(());
     }
 
-    for entry in fs::read_dir(target)
-        .map_err(|e| format!("Failed to list workspace: {}", e))?
-    {
+    for entry in fs::read_dir(target).map_err(|e| format!("Failed to list workspace: {}", e))? {
         let entry = entry.map_err(|e| format!("Failed to enumerate workspace: {}", e))?;
         let path = entry.path();
         if path.is_dir() {
@@ -643,9 +643,7 @@ fn list_backups(backups_dir: &Path) -> Result<Vec<BackupEntry>, String> {
     }
 
     let mut entries = Vec::new();
-    for entry in fs::read_dir(backups_dir)
-        .map_err(|e| format!("Failed to list backups: {}", e))?
-    {
+    for entry in fs::read_dir(backups_dir).map_err(|e| format!("Failed to list backups: {}", e))? {
         let entry = entry.map_err(|e| format!("Failed to enumerate backups: {}", e))?;
         let path = entry.path();
         if !path.is_file() {
@@ -681,11 +679,7 @@ fn prune_history(backups_dir: &Path, keep: usize) -> Result<(), String> {
     for entry in entries.into_iter().skip(keep) {
         let path = backups_dir.join(&entry.file_name);
         if let Err(err) = fs::remove_file(&path) {
-            warn!(
-                "Failed to delete old backup {}: {}",
-                path.display(),
-                err
-            );
+            warn!("Failed to delete old backup {}: {}", path.display(), err);
         }
     }
 

@@ -84,9 +84,7 @@ export const GitSyncSettings: React.FC = () => {
 
   const handleToggleGitSync = async (checked: boolean) => {
     await updateSettings({ git_sync_enabled: checked });
-    if (checked) {
-      await refreshStatus();
-    }
+    await refreshStatus();
   };
 
   const handleWorkspaceBlur = async (event: React.FocusEvent<HTMLInputElement>) => {

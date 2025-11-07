@@ -47,8 +47,8 @@ use tokio::sync::Mutex as TokioMutex;
 use tokio::task;
 
 // Import seed data module
-mod seed_data;
 mod git_sync;
+mod seed_data;
 use git_sync::{
     build_git_sync_config, compute_git_status, perform_git_pull, perform_git_push,
     GitOperationResultPayload, GitSyncStatusResponse,

@@ -382,7 +382,7 @@ export interface GitOperationResult {
   /** Human-friendly message summarizing the result */
   message: string;
   /** File name of the snapshot that was used */
-  backup_file?: string | null;
+  backupFile?: string | null;
   /** Timestamp of the snapshot */
   timestamp?: string | null;
   /** Whether data was pushed to the remote */

@@ -37,6 +37,7 @@ pub struct GitSyncConfig {
 }
 
 #[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct GitOperationResultPayload {
     pub success: bool,
     pub message: String,
@@ -47,6 +48,7 @@ pub struct GitOperationResultPayload {
 }
 
 #[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct GitSyncStatusResponse {
     pub enabled: bool,
     pub configured: bool,

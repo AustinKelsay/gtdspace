@@ -6,15 +6,16 @@
  */
 
 import React from 'react';
-import { 
-  Settings, 
-  Target, 
-  Palette, 
-  Keyboard, 
-  Wrench, 
+import {
+  Settings,
+  Target,
+  Palette,
+  Keyboard,
+  Wrench,
   Info,
   Calendar,
-  ArrowLeft
+  ArrowLeft,
+  ShieldCheck,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -25,6 +26,7 @@ import { GTDSettings } from './GTDSettings';
 import { AdvancedSettings } from './AdvancedSettings';
 import { AboutSection } from './AboutSection';
 import { GoogleCalendarSettings } from './GoogleCalendarSettings';
+import { GitSyncSettings } from './GitSyncSettings';
 import type { BaseComponentProps, GTDSpace, GTDProject } from '@/types';
 
 export interface SettingsManagerProps extends BaseComponentProps {
@@ -40,7 +42,14 @@ export interface SettingsManagerProps extends BaseComponentProps {
   loadProjects?: (spacePath: string) => Promise<GTDProject[]>;
 }
 
-type TabId = 'appearance' | 'gtd' | 'google-calendar' | 'shortcuts' | 'advanced' | 'about';
+type TabId =
+  | 'appearance'
+  | 'gtd'
+  | 'git-sync'
+  | 'google-calendar'
+  | 'shortcuts'
+  | 'advanced'
+  | 'about';
 
 /**
  * Main settings manager component that provides tabbed interface for all settings
@@ -59,6 +68,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
   const tabs: Array<{ id: TabId; label: string; icon: React.ComponentType<{ className?: string }>; group?: string }> = [
     { id: 'appearance', label: 'Appearance', icon: Palette, group: 'Settings' },
     { id: 'gtd', label: 'GTD Workspace', icon: Target, group: 'Settings' },
+    { id: 'git-sync', label: 'Git Sync & Backups', icon: ShieldCheck, group: 'Settings' },
     { id: 'google-calendar', label: 'Google Calendar', icon: Calendar, group: 'Settings' },
     { id: 'shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard, group: 'Reference' },
     { id: 'advanced', label: 'Advanced', icon: Wrench, group: 'Reference' },
@@ -146,6 +156,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
               />
             )}
             {activeTab === 'google-calendar' && <GoogleCalendarSettings />}
+            {activeTab === 'git-sync' && <GitSyncSettings />}
             {activeTab === 'shortcuts' && <KeyboardShortcuts />}
             {activeTab === 'advanced' && <AdvancedSettings />}
             {activeTab === 'about' && <AboutSection />}

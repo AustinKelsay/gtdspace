@@ -15,7 +15,8 @@ use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
-use tar::{Archive, Builder};
+use tar::{Archive, Builder as TarBuilder};
+use tempfile::Builder as TempDirBuilder;
 use walkdir::WalkDir;
 
 const MAGIC_HEADER: &[u8; 8] = b"GTDENC01";
@@ -106,7 +107,8 @@ pub fn compute_git_status(
         if let Some(repo_str) = &repo_path {
             let repo_buf = PathBuf::from(repo_str);
             if repo_buf.exists() {
-                match list_backups(&repo_buf.join("backups")) {
+                let backups_dir = repo_buf.join("backups");
+                match list_backups(&backups_dir) {
                     Ok(entries) => {
                         latest_backup = entries.into_iter().next();
                     }
@@ -116,13 +118,20 @@ pub fn compute_git_status(
                 }
 
                 if message.is_none() {
-                    match run_git_command(&repo_buf, ["status", "--porcelain", "backups"]) {
-                        Ok(output) => {
-                            has_pending_commits = !output.trim().is_empty();
+                    if backups_dir.exists() {
+                        match run_git_command(&repo_buf, ["status", "--porcelain", "backups"]) {
+                            Ok(output) => {
+                                has_pending_commits = !output.trim().is_empty();
+                            }
+                            Err(err) => {
+                                message = Some(err);
+                            }
                         }
-                        Err(err) => {
-                            message = Some(err);
-                        }
+                    } else {
+                        debug!(
+                            "Skipping git status for missing backups directory at {}",
+                            backups_dir.display()
+                        );
                     }
                 }
 
@@ -413,7 +422,7 @@ fn create_workspace_archive(workspace: &Path) -> Result<Vec<u8>, String> {
 
     let buffer = Vec::new();
     let encoder = GzEncoder::new(buffer, Compression::default());
-    let mut builder = Builder::new(encoder);
+    let mut builder = TarBuilder::new(encoder);
 
     for entry in WalkDir::new(workspace).into_iter() {
         let entry = entry.map_err(|e| format!("Failed to walk workspace: {}", e))?;
@@ -528,12 +537,80 @@ fn decrypt_bytes(passphrase: &str, data: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 fn restore_workspace(workspace: &Path, archive: &[u8]) -> Result<(), String> {
-    clean_directory(workspace)?;
-    let cursor = Cursor::new(archive);
-    let decoder = GzDecoder::new(cursor);
-    let mut tar = Archive::new(decoder);
-    tar.unpack(workspace)
-        .map_err(|e| format!("Failed to unpack archive: {}", e))
+    let workspace_parent = workspace
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    if !workspace_parent.exists() {
+        fs::create_dir_all(&workspace_parent)
+            .map_err(|e| format!("Failed to prepare workspace parent directory: {}", e))?;
+    }
+
+    let temp_dir = TempDirBuilder::new()
+        .prefix("gtdspace-restore-")
+        .tempdir_in(&workspace_parent)
+        .map_err(|e| format!("Failed to create temporary restore directory: {}", e))?;
+
+    {
+        let cursor = Cursor::new(archive);
+        let decoder = GzDecoder::new(cursor);
+        let mut tar = Archive::new(decoder);
+        tar.unpack(temp_dir.path())
+            .map_err(|e| format!("Failed to unpack archive: {}", e))?;
+    }
+
+    let temp_restore_path = temp_dir.into_path();
+    let mut backup_path: Option<PathBuf> = None;
+
+    if workspace.exists() {
+        let backup_dir = TempDirBuilder::new()
+            .prefix("gtdspace-workspace-backup-")
+            .tempdir_in(&workspace_parent)
+            .map_err(|e| format!("Failed to prepare workspace backup directory: {}", e))?;
+        let backup_dir_path = backup_dir.into_path();
+        fs::remove_dir(&backup_dir_path)
+            .map_err(|e| format!("Failed to prepare workspace backup path: {}", e))?;
+        fs::rename(workspace, &backup_dir_path)
+            .map_err(|e| format!("Failed to back up existing workspace: {}", e))?;
+        backup_path = Some(backup_dir_path);
+    }
+
+    match fs::rename(&temp_restore_path, workspace) {
+        Ok(()) => {
+            if let Some(backup) = backup_path {
+                if let Err(err) = fs::remove_dir_all(&backup) {
+                    warn!(
+                        "Failed to remove temporary workspace backup {}: {}",
+                        backup.display(),
+                        err
+                    );
+                }
+            }
+            Ok(())
+        }
+        Err(err) => {
+            if let Some(backup) = &backup_path {
+                if let Err(revert_err) = fs::rename(backup, workspace) {
+                    warn!(
+                        "Failed to restore original workspace from backup {}: {}",
+                        backup.display(),
+                        revert_err
+                    );
+                }
+            }
+
+            if let Err(clean_err) = fs::remove_dir_all(&temp_restore_path) {
+                warn!(
+                    "Failed to clean temporary restore directory {}: {}",
+                    temp_restore_path.display(),
+                    clean_err
+                );
+            }
+
+            Err(format!("Failed to replace workspace after restore: {}", err))
+        }
+    }
 }
 
 fn clean_directory(target: &Path) -> Result<(), String> {

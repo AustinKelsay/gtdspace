@@ -73,7 +73,7 @@ export const useGitSync = ({
 
     const result = await safeInvoke<GitSyncStatus>(
       'git_sync_status',
-      { workspaceOverride: workspacePath ?? null },
+      { workspace_override: workspacePath ?? null },
       {
         ...fallbackStatus,
         enabled: true,
@@ -130,7 +130,7 @@ export const useGitSync = ({
     try {
       const result = await safeInvoke<GitOperationResult>(
         'git_sync_push',
-        { workspaceOverride: workspacePath ?? null },
+        { workspace_override: workspacePath ?? null },
         null,
       );
 
@@ -177,7 +177,7 @@ export const useGitSync = ({
     try {
       const result = await safeInvoke<GitOperationResult>(
         'git_sync_pull',
-        { workspaceOverride: workspacePath ?? null },
+        { workspace_override: workspacePath ?? null },
         null,
       );
 

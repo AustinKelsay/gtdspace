@@ -87,6 +87,7 @@ jobs:
     # Only run on main or staging branches for workflow_dispatch
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'staging'))
     needs: create-release
+    environment: prod
     permissions:
       contents: write
     strategy:

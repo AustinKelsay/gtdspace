@@ -7,11 +7,13 @@ Thanks for helping improve GTD Space! This document outlines how to propose chan
 1. **Discuss first** – Open a GitHub issue or discussion to describe the problem/idea. This prevents duplicate work and lets maintainers provide early guidance.
 2. **Fork & branch** – Fork the repo (or create a feature branch if you have write access) using a descriptive branch name such as `feat/inbox-filters` or `fix/sidebar-layout`.
 3. **Local setup**
+
    ```bash
    npm install
    npm run tauri:dev   # full desktop shell (frontend + Rust backend)
    npm run dev         # frontend-only Vite server when backend changes aren't needed
    ```
+
 4. **Before pushing** – Run `npm run lint`, `npm run type-check`, and any relevant `npm run vitest` suites.
 
 ## Coding Standards

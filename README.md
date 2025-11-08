@@ -45,7 +45,6 @@ npm install
 npm run tauri:dev   # Spins up the desktop app and seeds your local GTD Space
 ```
 
-
 ## Build & Test
 
 - `npm run dev` – Vite frontend only

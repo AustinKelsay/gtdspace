@@ -610,7 +610,6 @@ fn restore_workspace(workspace: &Path, archive: &[u8]) -> Result<(), String> {
     }
 }
 
-
 fn list_backups(backups_dir: &Path) -> Result<Vec<BackupEntry>, String> {
     if !backups_dir.exists() {
         return Ok(Vec::new());

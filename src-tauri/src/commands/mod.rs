@@ -34,6 +34,7 @@ use notify_debouncer_mini::{
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -246,6 +247,15 @@ pub struct UserSettings {
     pub tab_size: u32,
     /// Whether to wrap long lines
     pub word_wrap: bool,
+    /// Preferred editor font family token
+    #[serde(default = "default_font_family")]
+    pub font_family: String,
+    /// Editor line height multiplier
+    #[serde(default = "default_line_height")]
+    pub line_height: f32,
+    /// Customizable keyboard shortcut map
+    #[serde(default = "default_keybindings")]
+    pub keybindings: HashMap<String, String>,
     /// Last opened folder path
     pub last_folder: Option<String>,
     /// Editor mode preference
@@ -1646,12 +1656,32 @@ pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<Str
 /// Get default settings values
 ///
 /// Returns a UserSettings struct with sensible defaults for new users.
+fn default_font_family() -> String {
+    "inter".to_string()
+}
+
+fn default_line_height() -> f32 {
+    1.5
+}
+
+fn default_keybindings() -> HashMap<String, String> {
+    let mut bindings = HashMap::new();
+    bindings.insert("save".to_string(), "mod+s".to_string());
+    bindings.insert("open".to_string(), "mod+o".to_string());
+    bindings.insert("commandPalette".to_string(), "mod+k".to_string());
+    bindings.insert("newNote".to_string(), "mod+shift+n".to_string());
+    bindings
+}
+
 fn get_default_settings() -> UserSettings {
     UserSettings {
         theme: "dark".to_string(),
         font_size: 14,
         tab_size: 2,
         word_wrap: true,
+        font_family: default_font_family(),
+        line_height: default_line_height(),
+        keybindings: default_keybindings(),
         last_folder: None,
         editor_mode: "split".to_string(),
         window_width: Some(1200),

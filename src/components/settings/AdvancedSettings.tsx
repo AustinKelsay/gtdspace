@@ -19,6 +19,7 @@ import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useSettings } from '@/hooks/useSettings';
 import { useToast } from '@/hooks/use-toast';
+import { validateAndCoerceSettings, formatValidationErrors } from '@/utils/settings-validation';
 
 /**
  * Advanced settings component - backup/restore + cache utilities
@@ -63,27 +64,39 @@ export const AdvancedSettings: React.FC = () => {
     setIsImporting(true);
     try {
       const text = await file.text();
-      const importedSettings = JSON.parse(text);
+      const importedData = JSON.parse(text);
 
-      if (!importedSettings.theme || !importedSettings.font_size) {
-        throw new Error('Invalid settings file');
+      const validationResult = validateAndCoerceSettings(importedData);
+      const fatalErrors = validationResult.errors.filter((error) => error.severity === 'fatal');
+
+      if (fatalErrors.length > 0) {
+        throw new Error(formatValidationErrors(fatalErrors));
       }
 
-      await updateSettings(importedSettings);
+      await updateSettings(validationResult.coercedSettings);
 
-      toast({
-        title: 'Settings Imported',
-        description: 'Your settings have been imported successfully',
-      });
-
-      event.target.value = '';
-    } catch (_error) {
+      const warningErrors = validationResult.errors.filter((error) => error.severity === 'warning');
+      if (warningErrors.length > 0) {
+        toast({
+          title: 'Settings Imported with Warnings',
+          description: formatValidationErrors(warningErrors),
+        });
+      } else {
+        toast({
+          title: 'Settings Imported',
+          description: 'Your settings have been imported successfully',
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to import settings. Please check the file format.';
       toast({
         title: 'Import Failed',
-        description: 'Failed to import settings. Please check the file format.',
+        description: errorMessage,
         variant: 'destructive',
       });
+      console.error('Settings import error:', error);
     } finally {
+      event.target.value = '';
       setIsImporting(false);
     }
   };

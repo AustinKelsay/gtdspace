@@ -329,6 +329,12 @@ export interface UserSettings {
   tab_size: number;
   /** Whether to wrap long lines */
   word_wrap: boolean;
+  /** Preferred editor font family token */
+  font_family: string;
+  /** Line height multiplier applied within the editor */
+  line_height: number;
+  /** Customizable keyboard shortcuts mapped by action id */
+  keybindings: Record<string, string>;
   /** Last opened folder path */
   last_folder?: string | null;
   /** Editor mode preference */

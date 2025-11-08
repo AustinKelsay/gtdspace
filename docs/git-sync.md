@@ -7,7 +7,7 @@ GTD Space can now keep your GTD workspace in sync across devices by creating enc
 1. **Workspace Snapshot** – The backend walks your configured workspace directory (skipping `.git`/`.gtdsync`) and builds a compressed archive.
 2. **Client-Side Encryption** – The archive is encrypted with AES-256-GCM using a PBKDF2-derived key from your passphrase.
 3. **Git Repo** – The encrypted artifact is written to a dedicated git repository (separate from your plain workspace) under `backups/backup-YYYYMMDDTHHMMSSZ.tar.gz.enc`.
-4. **Manual Push/Pull** – From the app header or Settings → Advanced you can push the latest snapshot or pull/decrypt the newest backup onto the current machine.
+4. **Manual Push/Pull** – From the app header or Settings → Git Sync & Backups you can push the latest snapshot or pull/decrypt the newest backup onto the current machine.
 
 ## Configuration
 
@@ -30,7 +30,12 @@ Open **Settings → Advanced → Git Sync & Backups** and configure:
 
 - Keep the same encryption key on every device. Losing it means you cannot decrypt previous backups.
 - You can stay “local only” by skipping the remote URL—snapshots stay on disk until you add a remote.
-- Old backups are pruned automatically (defaults to the last 5 snapshots, configurable via `git_sync_keep_history`).
+- Old backups are pruned automatically (defaults to the last 5 snapshots). To change this, edit the `git_sync_keep_history` field in your settings file:
+  - **macOS**: `~/Library/Application Support/com.gtdspace.app/settings.json`
+  - **Windows**: `%APPDATA%\com.gtdspace.app\settings.json`
+  - **Linux**: `~/.config/com.gtdspace.app/settings.json`
+  
+  Open the file and add or modify the `git_sync_keep_history` field in the `user_settings` object. Example: `"git_sync_keep_history": 10` to keep the last 10 snapshots.
 - The git repo intentionally ignores everything except `backups/` so your plain files never leave the workspace unless explicitly encrypted.
 
 ## Troubleshooting

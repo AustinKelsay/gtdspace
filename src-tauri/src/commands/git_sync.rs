@@ -5,7 +5,6 @@ use aes_gcm::{
 };
 use chrono::{DateTime, Utc};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
-use keyring;
 use log::{debug, info, warn};
 use pbkdf2::pbkdf2_hmac;
 use rand::rngs::OsRng;

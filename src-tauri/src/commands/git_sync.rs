@@ -27,6 +27,8 @@ use walkdir::WalkDir;
 
 const LEGACY_MAGIC_HEADER: &[u8; 8] = b"GTDENC01";
 const STREAM_MAGIC_HEADER: &[u8; 8] = b"GTDENC02";
+const STREAM_NONCE_LEN: usize = 7;
+const LEGACY_NONCE_LEN: usize = 12;
 const PBKDF2_ITERATIONS: u32 = 600_000;
 const REMOTE_NAME: &str = "origin";
 const MIN_KEEP_HISTORY: usize = 1;
@@ -582,7 +584,7 @@ fn encrypt_file_to_path(
     let mut writer = BufWriter::new(output_file);
 
     let mut salt = [0u8; 16];
-    let mut nonce_bytes = [0u8; 12];
+    let mut nonce_bytes = [0u8; STREAM_NONCE_LEN];
     let mut rng = OsRng;
     rng.try_fill_bytes(&mut salt)
         .map_err(|e| format!("Failed to generate random salt: {}", e))?;
@@ -673,7 +675,7 @@ fn decrypt_file_to_path(
         .metadata()
         .map_err(|e| format!("Failed to read backup metadata: {}", e))?
         .len();
-    if total_len < (STREAM_MAGIC_HEADER.len() + 16 + 12) as u64 {
+    if total_len < (STREAM_MAGIC_HEADER.len() + 16 + STREAM_NONCE_LEN) as u64 {
         return Err("Encrypted payload is too short".to_string());
     }
 
@@ -699,18 +701,8 @@ fn decrypt_file_to_path(
         .read_exact(&mut salt)
         .map_err(|e| format!("Failed to read salt: {}", e))?;
 
-    let mut nonce_bytes = [0u8; 12];
-    reader
-        .read_exact(&mut nonce_bytes)
-        .map_err(|e| format!("Failed to read nonce: {}", e))?;
-
     let mut key = [0u8; 32];
     pbkdf2_hmac::<Sha256>(passphrase.as_bytes(), &salt, PBKDF2_ITERATIONS, &mut key);
-    let cipher = Aes256Gcm::new_from_slice(&key)
-        .map_err(|e| format!("Failed to initialize cipher: {}", e))?;
-
-    let nonce = StreamNonce::from_slice(&nonce_bytes);
-    let mut decryptor = DecryptorBE32::from_aead(cipher, nonce);
 
     let mut writer = BufWriter::new(
         File::create(output_path)
@@ -719,8 +711,18 @@ fn decrypt_file_to_path(
 
     match format {
         BackupFormat::Stream => {
+            let mut nonce_bytes = [0u8; STREAM_NONCE_LEN];
+            reader
+                .read_exact(&mut nonce_bytes)
+                .map_err(|e| format!("Failed to read nonce: {}", e))?;
+
+            let cipher = Aes256Gcm::new_from_slice(&key)
+                .map_err(|e| format!("Failed to initialize cipher: {}", e))?;
+            let nonce = StreamNonce::from_slice(&nonce_bytes);
+            let mut decryptor = DecryptorBE32::from_aead(cipher, nonce);
+
             let mut remaining = total_len
-                .checked_sub((STREAM_MAGIC_HEADER.len() + 16 + 12) as u64)
+                .checked_sub((STREAM_MAGIC_HEADER.len() + 16 + STREAM_NONCE_LEN) as u64)
                 .ok_or_else(|| "Encrypted payload is too short".to_string())?;
             let chunk_with_tag = PLAINTEXT_CHUNK_SIZE + TAG_SIZE;
             let mut buffer = vec![0u8; chunk_with_tag];
@@ -756,13 +758,16 @@ fn decrypt_file_to_path(
             }
         }
         BackupFormat::Legacy => {
+            let mut nonce_bytes = [0u8; LEGACY_NONCE_LEN];
+            reader
+                .read_exact(&mut nonce_bytes)
+                .map_err(|e| format!("Failed to read nonce: {}", e))?;
+
             let mut ciphertext = Vec::new();
             reader
                 .read_to_end(&mut ciphertext)
                 .map_err(|e| format!("Failed to read legacy encrypted payload: {}", e))?;
 
-            let mut key = [0u8; 32];
-            pbkdf2_hmac::<Sha256>(passphrase.as_bytes(), &salt, PBKDF2_ITERATIONS, &mut key);
             let cipher = Aes256Gcm::new_from_slice(&key)
                 .map_err(|e| format!("Failed to initialize cipher: {}", e))?;
             let nonce = AeadNonce::from_slice(&nonce_bytes);
@@ -773,6 +778,15 @@ fn decrypt_file_to_path(
             writer
                 .write_all(&plaintext)
                 .map_err(|e| format!("Failed to write decrypted chunk: {}", e))?;
+            writer
+                .flush()
+                .map_err(|e| format!("Failed to flush decrypted archive: {}", e))?;
+            writer
+                .into_inner()
+                .map_err(|e| format!("Failed to finalize decrypted archive: {}", e))?
+                .sync_all()
+                .map_err(|e| format!("Failed to sync decrypted archive: {}", e))?;
+            return Ok(());
         }
     }
 

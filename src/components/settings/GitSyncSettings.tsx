@@ -38,6 +38,8 @@ const FieldLabel: React.FC<{ label: string; help: React.ReactNode; id?: string }
   </div>
 );
 
+const SECURE_STORE_FAILURE_TOKEN = '__SECURE_STORE_WRITE_FAILED__';
+
 export const GitSyncSettings: React.FC = () => {
   const { settings, updateSettings } = useSettings();
   const { toast } = useToast();
@@ -61,7 +63,24 @@ export const GitSyncSettings: React.FC = () => {
   } = useGitSync({ settings, workspacePath: gitWorkspaceOverride, autoRefresh: false });
 
   const gitEnabled = settings.git_sync_enabled ?? false;
-  const hasEncryptionKey = Boolean(settings.git_sync_encryption_key);
+  const [hasEncryptionKey, setHasEncryptionKey] = React.useState(false);
+
+  // Check secure storage for encryption key on mount and when status refreshes
+  React.useEffect(() => {
+    const checkEncryptionKey = async () => {
+      try {
+        const key = await safeInvoke<string>(
+          'secure_store_get',
+          { key: 'git_sync_encryption_key' },
+          null,
+        );
+        setHasEncryptionKey(Boolean(key && key.trim().length > 0));
+      } catch {
+        setHasEncryptionKey(false);
+      }
+    };
+    checkEncryptionKey();
+  }, [gitStatus.encryptionConfigured]);
 
   React.useEffect(() => {
     if (settings.git_sync_enabled) {
@@ -141,15 +160,29 @@ export const GitSyncSettings: React.FC = () => {
       return;
     }
     setIsSavingKey(true);
+    const trimmedKey = encryptionKeyInput.trim();
     try {
-      await updateSettings({ git_sync_encryption_key: encryptionKeyInput.trim() });
+      const result = await safeInvoke<string>(
+        'secure_store_set',
+        { key: 'git_sync_encryption_key', value: trimmedKey },
+        SECURE_STORE_FAILURE_TOKEN,
+      );
+
+      if (!result || result === SECURE_STORE_FAILURE_TOKEN) {
+        throw new Error(
+          'Secure storage is unavailable. Unlock your OS keychain or run the desktop app to store the encryption key.',
+        );
+      }
+
       setEncryptionKeyInput('');
+      setHasEncryptionKey(true);
       toast({
         title: 'Encryption key saved',
-        description: 'Stored locally only and never synced.',
+        description: 'Stored securely in OS keychain and never synced.',
       });
       await refreshStatus();
     } catch (error) {
+      setHasEncryptionKey(false);
       toast({
         title: 'Failed to save key',
         description: describeError(error),

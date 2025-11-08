@@ -344,9 +344,9 @@ export interface UserSettings {
   /** Window height (for future use) */
   window_height?: number | null;
   /** Maximum number of tabs to keep open */
-  max_tabs?: number;
+  max_tabs?: number | null;
   /** Whether to restore tabs on startup */
-  restore_tabs?: boolean;
+  restore_tabs?: boolean | null;
   /** Automatically initialize a GTD space if one is not found */
   auto_initialize?: boolean | null;
   /** Seed example content in new workspaces */
@@ -354,7 +354,7 @@ export interface UserSettings {
   /** Preferred default GTD space path */
   default_space_path?: string | null;
   /** Whether git sync/backups are enabled */
-  git_sync_enabled?: boolean;
+  git_sync_enabled?: boolean | null;
   /** Path to the dedicated git sync repository */
   git_sync_repo_path?: string | null;
   /** Optional override for the workspace path to back up */

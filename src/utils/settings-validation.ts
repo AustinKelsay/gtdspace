@@ -345,6 +345,18 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
     coercedSettings.restore_tabs = data.restore_tabs as boolean | null;
   }
 
+  // Reject imported git_sync_encryption_key for security reasons
+  if (data.git_sync_encryption_key !== undefined && data.git_sync_encryption_key !== null) {
+    recordError(
+      'git_sync_encryption_key',
+      'imported secret keys are not allowed; key omitted',
+      data.git_sync_encryption_key,
+      null,
+      'warning',
+    );
+    coercedSettingsRecord['git_sync_encryption_key'] = null;
+  }
+
   // Validate optional string/null fields
   const optionalStringFields: Array<keyof UserSettings> = [
     'default_space_path',
@@ -352,7 +364,6 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
     'git_sync_workspace_path',
     'git_sync_remote_url',
     'git_sync_branch',
-    'git_sync_encryption_key',
     'git_sync_author_name',
     'git_sync_author_email',
     'git_sync_last_push',

@@ -280,7 +280,8 @@ pub struct UserSettings {
     pub git_sync_remote_url: Option<String>,
     /// Preferred branch name for remote backups
     pub git_sync_branch: Option<String>,
-    /// Locally stored encryption key (never synced)
+    /// Locally stored encryption key (never synced) - excluded from serialization, stored in secure storage
+    #[serde(skip)]
     pub git_sync_encryption_key: Option<String>,
     /// Number of encrypted snapshots to retain
     pub git_sync_keep_history: Option<u32>,
@@ -1568,22 +1569,76 @@ pub async fn load_settings(app: AppHandle) -> Result<UserSettings, String> {
     };
 
     // Load settings from store
-    match store.get("user_settings") {
-        Some(value) => match serde_json::from_value::<UserSettings>(value) {
-            Ok(settings) => {
-                log::info!("Loaded existing settings");
-                Ok(settings)
+    let settings = match store.get("user_settings") {
+        Some(value) => {
+            // Check if git_sync_encryption_key exists in the old format for migration
+            let mut value_to_deserialize = value.clone();
+            let mut legacy_encryption_key: Option<String> = None;
+
+            if let Some(key_str) = value
+                .get("git_sync_encryption_key")
+                .and_then(|val| val.as_str())
+            {
+                let trimmed = key_str.trim();
+                if !trimmed.is_empty() {
+                    legacy_encryption_key = Some(trimmed.to_string());
+                    log::info!("Migrating encryption key from settings.json to secure storage");
+                    let service = "com.gtdspace.app";
+                    match keyring::Entry::new(service, "git_sync_encryption_key") {
+                        Ok(entry) => match entry.set_password(trimmed) {
+                            Ok(_) => {
+                                log::info!(
+                                    "Successfully migrated encryption key to secure storage"
+                                );
+                                legacy_encryption_key = None;
+                                if let Some(settings_obj) = value_to_deserialize.as_object_mut() {
+                                    settings_obj.remove("git_sync_encryption_key");
+                                    store.set("user_settings", value_to_deserialize.clone());
+                                    if let Err(e) = store.save() {
+                                        log::warn!(
+                                            "Failed to save settings after migration: {}",
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                log::warn!(
+                                    "Failed to migrate key to secure storage: {}. Keeping legacy value.",
+                                    e
+                                );
+                            }
+                        },
+                        Err(e) => {
+                            log::warn!(
+                                "Unable to access secure storage for migration: {}. Keeping legacy value.",
+                                e
+                            );
+                        }
+                    }
+                }
             }
-            Err(e) => {
-                log::warn!("Failed to parse settings, using defaults: {}", e);
-                Ok(get_default_settings())
+
+            // Now deserialize without the encryption key field (it will be re-attached via legacy_encryption_key)
+            match serde_json::from_value::<UserSettings>(value_to_deserialize) {
+                Ok(mut s) => {
+                    s.git_sync_encryption_key = legacy_encryption_key;
+                    log::info!("Loaded existing settings");
+                    s
+                }
+                Err(e) => {
+                    log::warn!("Failed to parse settings, using defaults: {}", e);
+                    get_default_settings()
+                }
             }
-        },
+        }
         None => {
             log::info!("No existing settings found, using defaults");
-            Ok(get_default_settings())
+            get_default_settings()
         }
-    }
+    };
+
+    Ok(settings)
 }
 
 /// Save user settings to persistent storage
@@ -1636,7 +1691,16 @@ pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<Str
 
     // Save settings to store
     match serde_json::to_value(&settings) {
-        Ok(value) => {
+        Ok(mut value) => {
+            if let Some(legacy_key) = settings.git_sync_encryption_key.clone() {
+                if let Some(settings_obj) = value.as_object_mut() {
+                    settings_obj.insert(
+                        "git_sync_encryption_key".to_string(),
+                        serde_json::Value::String(legacy_key),
+                    );
+                }
+            }
+
             store.set("user_settings", value);
 
             if let Err(e) = store.save() {
@@ -1649,6 +1713,148 @@ pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<Str
         Err(e) => {
             log::error!("Failed to serialize settings: {}", e);
             Err(format!("Failed to serialize settings: {}", e))
+        }
+    }
+}
+
+/// Store a secret value in the OS keychain/credential manager
+///
+/// Stores sensitive data like encryption keys securely using the platform's
+/// native credential storage (macOS Keychain, Windows Credential Manager, etc.)
+///
+/// # Arguments
+///
+/// * `key` - Unique identifier for the secret
+/// * `value` - Secret value to store
+///
+/// # Returns
+///
+/// Success message or error details
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+///
+/// await invoke('secure_store_set', { key: 'git_sync_encryption_key', value: 'my-secret-key' });
+/// ```
+#[tauri::command]
+pub async fn secure_store_set(key: String, value: String) -> Result<String, String> {
+    log::info!("Storing secret in secure storage: {}", key);
+
+    let service = "com.gtdspace.app";
+    let entry = match keyring::Entry::new(service, &key) {
+        Ok(entry) => entry,
+        Err(e) => {
+            log::error!("Failed to create keyring entry: {}", e);
+            return Err(format!("Failed to access secure storage: {}", e));
+        }
+    };
+
+    match entry.set_password(&value) {
+        Ok(_) => {
+            log::info!("Secret stored successfully: {}", key);
+            Ok("Secret stored successfully".to_string())
+        }
+        Err(e) => {
+            log::error!("Failed to store secret: {}", e);
+            Err(format!("Failed to store secret: {}", e))
+        }
+    }
+}
+
+/// Retrieve a secret value from the OS keychain/credential manager
+///
+/// Retrieves sensitive data from secure storage.
+///
+/// # Arguments
+///
+/// * `key` - Unique identifier for the secret
+///
+/// # Returns
+///
+/// Secret value or error if not found
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+///
+/// const key = await invoke<string>('secure_store_get', { key: 'git_sync_encryption_key' });
+/// ```
+#[tauri::command]
+pub async fn secure_store_get(key: String) -> Result<String, String> {
+    log::info!("Retrieving secret from secure storage: {}", key);
+
+    let service = "com.gtdspace.app";
+    let entry = match keyring::Entry::new(service, &key) {
+        Ok(entry) => entry,
+        Err(e) => {
+            log::error!("Failed to create keyring entry: {}", e);
+            return Err(format!("Failed to access secure storage: {}", e));
+        }
+    };
+
+    match entry.get_password() {
+        Ok(value) => {
+            log::info!("Secret retrieved successfully: {}", key);
+            Ok(value)
+        }
+        Err(keyring::Error::NoEntry) => {
+            log::info!("Secret not found: {}", key);
+            Err("Secret not found".to_string())
+        }
+        Err(e) => {
+            log::error!("Failed to retrieve secret: {}", e);
+            Err(format!("Failed to retrieve secret: {}", e))
+        }
+    }
+}
+
+/// Remove a secret value from the OS keychain/credential manager
+///
+/// Deletes sensitive data from secure storage.
+///
+/// # Arguments
+///
+/// * `key` - Unique identifier for the secret
+///
+/// # Returns
+///
+/// Success message or error details
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+///
+/// await invoke('secure_store_remove', { key: 'git_sync_encryption_key' });
+/// ```
+#[tauri::command]
+pub async fn secure_store_remove(key: String) -> Result<String, String> {
+    log::info!("Removing secret from secure storage: {}", key);
+
+    let service = "com.gtdspace.app";
+    let entry = match keyring::Entry::new(service, &key) {
+        Ok(entry) => entry,
+        Err(e) => {
+            log::error!("Failed to create keyring entry: {}", e);
+            return Err(format!("Failed to access secure storage: {}", e));
+        }
+    };
+
+    match entry.delete_password() {
+        Ok(_) => {
+            log::info!("Secret removed successfully: {}", key);
+            Ok("Secret removed successfully".to_string())
+        }
+        Err(keyring::Error::NoEntry) => {
+            log::info!("Secret not found (already removed): {}", key);
+            Ok("Secret not found (already removed)".to_string())
+        }
+        Err(e) => {
+            log::error!("Failed to remove secret: {}", e);
+            Err(format!("Failed to remove secret: {}", e))
         }
     }
 }

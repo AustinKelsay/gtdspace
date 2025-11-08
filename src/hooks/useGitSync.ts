@@ -42,7 +42,7 @@ export const useGitSync = ({
   const [status, setStatus] = useState<GitSyncStatus>({
     ...fallbackStatus,
     enabled: settings.git_sync_enabled ?? false,
-    encryptionConfigured: Boolean(settings.git_sync_encryption_key),
+    encryptionConfigured: false, // Will be updated by backend status check
     repoPath: settings.git_sync_repo_path,
     workspacePath:
       workspacePath ??
@@ -71,34 +71,62 @@ export const useGitSync = ({
       return;
     }
 
-    const result = await safeInvoke<GitSyncStatus>(
-      'git_sync_status',
-      { workspace_override: workspacePath ?? null },
-      {
+    const resolvedWorkspacePath =
+      workspacePath ??
+      settings.git_sync_workspace_path ??
+      settings.default_space_path ??
+      settings.last_folder ??
+      null;
+
+    const optimisticStatus: GitSyncStatus = {
+      ...fallbackStatus,
+      enabled: true,
+      encryptionConfigured: false, // Will be updated by backend status check
+      repoPath: settings.git_sync_repo_path,
+      workspacePath: resolvedWorkspacePath,
+      remoteUrl: settings.git_sync_remote_url,
+      branch: settings.git_sync_branch,
+      lastPush: settings.git_sync_last_push,
+      lastPull: settings.git_sync_last_pull,
+      message: 'Waiting for git status…',
+    };
+
+    try {
+      const result = await safeInvoke<GitSyncStatus>(
+        'git_sync_status',
+        { workspace_override: workspacePath ?? null },
+        optimisticStatus,
+      );
+
+      if (result) {
+        setStatus(result);
+        return;
+      }
+
+      setStatus({
+        ...optimisticStatus,
+        enabled: false,
+        configured: false,
+        message: 'Git status unavailable.',
+      });
+    } catch (error) {
+      setStatus({
         ...fallbackStatus,
-        enabled: true,
-        encryptionConfigured: Boolean(settings.git_sync_encryption_key),
+        enabled: false,
+        configured: false,
         repoPath: settings.git_sync_repo_path,
-        workspacePath:
-          workspacePath ??
-          settings.git_sync_workspace_path ??
-          settings.default_space_path ??
-          settings.last_folder ??
-          null,
+        workspacePath: resolvedWorkspacePath,
         remoteUrl: settings.git_sync_remote_url,
         branch: settings.git_sync_branch,
         lastPush: settings.git_sync_last_push,
         lastPull: settings.git_sync_last_pull,
-        message: 'Waiting for git status…',
-      },
-    );
-
-    if (result) {
-      setStatus(result);
+        hasPendingCommits: false,
+        hasRemote: false,
+        message: `Failed to fetch git status: ${formatError(error)}`,
+      });
     }
   }, [
     settings.git_sync_enabled,
-    settings.git_sync_encryption_key,
     settings.git_sync_repo_path,
     settings.git_sync_workspace_path,
     settings.git_sync_remote_url,

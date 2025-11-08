@@ -11,7 +11,7 @@ GTD Space can now keep your GTD workspace in sync across devices by creating enc
 
 ## Configuration
 
-Open **Settings → Advanced → Git Sync & Backups** and configure:
+Open **Settings → Git Sync & Backups** and configure:
 
 - **Workspace Path** – The GTD Space directory you want to protect.
 - **Git Repository Path** – A separate folder that contains the git repo tracking encrypted backups.

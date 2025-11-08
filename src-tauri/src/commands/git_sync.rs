@@ -5,6 +5,7 @@ use aes_gcm::{
 };
 use chrono::{DateTime, Utc};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
+use keyring;
 use log::{debug, info, warn};
 use pbkdf2::pbkdf2_hmac;
 use rand::rngs::OsRng;
@@ -82,11 +83,37 @@ pub fn compute_git_status(
     workspace_override: Option<String>,
 ) -> GitSyncStatusResponse {
     let enabled = settings.git_sync_enabled.unwrap_or(false);
-    let encryption_configured = settings
-        .git_sync_encryption_key
-        .as_ref()
-        .map(|v| !v.trim().is_empty())
-        .unwrap_or(false);
+    // Check secure storage for encryption key; fall back to legacy settings value if needed
+    let encryption_configured = {
+        let service = "com.gtdspace.app";
+        match keyring::Entry::new(service, "git_sync_encryption_key") {
+            Ok(entry) => entry
+                .get_password()
+                .map(|v| !v.trim().is_empty())
+                .unwrap_or_else(|err| {
+                    if let Some(legacy_key) = &settings.git_sync_encryption_key {
+                        warn!(
+                            "Secure storage locked/unavailable ({}). Falling back to legacy encryption key for status",
+                            err
+                        );
+                        !legacy_key.trim().is_empty()
+                    } else {
+                        false
+                    }
+                }),
+            Err(err) => {
+                if let Some(legacy_key) = &settings.git_sync_encryption_key {
+                    warn!(
+                        "Secure storage inaccessible ({}). Using legacy encryption key for status",
+                        err
+                    );
+                    !legacy_key.trim().is_empty()
+                } else {
+                    false
+                }
+            }
+        }
+    };
 
     let workspace_path = workspace_override
         .filter(|v| !v.trim().is_empty())
@@ -197,11 +224,43 @@ pub fn build_git_sync_config(
         .clone()
         .ok_or_else(|| "Git sync repository path is not configured".to_string())?;
 
-    let encryption_key = settings
-        .git_sync_encryption_key
-        .clone()
-        .filter(|v| !v.trim().is_empty())
-        .ok_or_else(|| "Encryption key has not been set".to_string())?;
+    // Retrieve encryption key from secure storage (fall back to legacy settings key if migration hasn't completed)
+    let encryption_key = {
+        let service = "com.gtdspace.app";
+        match keyring::Entry::new(service, "git_sync_encryption_key") {
+            Ok(entry) => match entry.get_password() {
+                Ok(password) => password,
+                Err(err) => {
+                    if let Some(legacy_key) = settings.git_sync_encryption_key.clone() {
+                        warn!(
+                            "Secure storage entry missing password ({}). Falling back to legacy encryption key.",
+                            err
+                        );
+                        legacy_key
+                    } else {
+                        return Err("Encryption key has not been set".to_string());
+                    }
+                }
+            },
+            Err(err) => {
+                if let Some(legacy_key) = settings.git_sync_encryption_key.clone() {
+                    warn!(
+                        "Secure storage unavailable ({}). Using legacy encryption key from settings until migration succeeds.",
+                        err
+                    );
+                    legacy_key
+                } else {
+                    return Err(format!("Failed to access secure storage: {}", err));
+                }
+            }
+        }
+    };
+
+    let encryption_key = encryption_key.trim().to_string();
+
+    if encryption_key.is_empty() {
+        return Err("Encryption key has not been set".to_string());
+    }
 
     let branch = settings
         .git_sync_branch
@@ -319,7 +378,6 @@ pub fn perform_git_push(config: GitSyncConfig) -> Result<GitOperationResultPaylo
 
 pub fn perform_git_pull(config: GitSyncConfig) -> Result<GitOperationResultPayload, String> {
     ensure_repo(&config)?;
-    ensure_gitignore(&config.repo_path)?;
     let backups_dir = config.repo_path.join("backups");
     fs::create_dir_all(&backups_dir)
         .map_err(|e| format!("Failed to create backups directory: {}", e))?;
@@ -334,6 +392,8 @@ pub fn perform_git_pull(config: GitSyncConfig) -> Result<GitOperationResultPaylo
             )?;
         }
     }
+
+    ensure_gitignore(&config.repo_path)?;
 
     let latest_backup = list_backups(&backups_dir)?
         .into_iter()

@@ -1,7 +1,10 @@
 use super::UserSettings;
 use aes_gcm::{
-    aead::{Aead, KeyInit},
-    Aes256Gcm, Nonce,
+    aead::{
+        stream::{DecryptorBE32, EncryptorBE32, StreamBE32},
+        Aead, KeyInit,
+    },
+    Aes256Gcm, Nonce as AeadNonce,
 };
 use chrono::{DateTime, Utc};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
@@ -14,7 +17,7 @@ use serde_json::json;
 use sha2::Sha256;
 use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
-use std::io::{Cursor, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
@@ -22,11 +25,14 @@ use tar::{Archive, Builder as TarBuilder};
 use tempfile::Builder as TempDirBuilder;
 use walkdir::WalkDir;
 
-const MAGIC_HEADER: &[u8; 8] = b"GTDENC01";
+const LEGACY_MAGIC_HEADER: &[u8; 8] = b"GTDENC01";
+const STREAM_MAGIC_HEADER: &[u8; 8] = b"GTDENC02";
 const PBKDF2_ITERATIONS: u32 = 600_000;
 const REMOTE_NAME: &str = "origin";
 const MIN_KEEP_HISTORY: usize = 1;
 const MAX_KEEP_HISTORY: usize = 20;
+const PLAINTEXT_CHUNK_SIZE: usize = 64 * 1024;
+const TAG_SIZE: usize = 16;
 
 #[derive(Debug, Clone)]
 pub struct GitSyncConfig {
@@ -314,16 +320,23 @@ pub fn perform_git_push(config: GitSyncConfig) -> Result<GitOperationResultPaylo
     fs::create_dir_all(&backups_dir)
         .map_err(|e| format!("Failed to create backups directory: {}", e))?;
 
-    let archive_bytes = create_workspace_archive(&config.workspace_path)?;
-    let encrypted = encrypt_bytes(&config.encryption_key, &archive_bytes)?;
+    let temp_archive_dir = TempDirBuilder::new()
+        .prefix("gtdspace-archive-")
+        .tempdir()
+        .map_err(|e| format!("Failed to prepare temporary archive directory: {}", e))?;
+    let archive_path = temp_archive_dir.path().join("workspace.tar.gz");
+    create_workspace_archive(&config.workspace_path, &archive_path)?;
 
     let now = Utc::now();
-    let slug = now.format("%Y%m%dT%H%M%SZ").to_string();
+    let slug = format!(
+        "{}{:03}",
+        now.format("%Y%m%dT%H%M%S"),
+        now.timestamp_subsec_millis()
+    );
     let backup_file = format!("backup-{}.tar.gz.enc", slug);
     let backup_path = backups_dir.join(&backup_file);
 
-    fs::write(&backup_path, encrypted)
-        .map_err(|e| format!("Failed to write encrypted snapshot: {}", e))?;
+    encrypt_file_to_path(&config.encryption_key, &archive_path, &backup_path)?;
 
     prune_history(&backups_dir, config.keep_history)?;
 
@@ -400,11 +413,14 @@ pub fn perform_git_pull(config: GitSyncConfig) -> Result<GitOperationResultPaylo
         .ok_or_else(|| "No backups are available to restore".to_string())?;
 
     let backup_path = backups_dir.join(&latest_backup.file_name);
-    let encrypted = fs::read(&backup_path)
-        .map_err(|e| format!("Failed to read backup {}: {}", backup_path.display(), e))?;
-    let decrypted = decrypt_bytes(&config.encryption_key, &encrypted)?;
+    let temp_decrypt_dir = TempDirBuilder::new()
+        .prefix("gtdspace-decrypt-")
+        .tempdir()
+        .map_err(|e| format!("Failed to prepare temporary decrypt directory: {}", e))?;
+    let decrypted_archive = temp_decrypt_dir.path().join("workspace.tar.gz");
+    decrypt_file_to_path(&config.encryption_key, &backup_path, &decrypted_archive)?;
 
-    restore_workspace(&config.workspace_path, &decrypted)?;
+    restore_workspace(&config.workspace_path, &decrypted_archive)?;
 
     Ok(GitOperationResultPayload {
         success: true,
@@ -469,13 +485,20 @@ fn ensure_gitignore(repo_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn create_workspace_archive(workspace: &Path) -> Result<Vec<u8>, String> {
+fn create_workspace_archive(workspace: &Path, output_path: &Path) -> Result<(), String> {
     if !workspace.is_dir() {
         return Err("Workspace must be a directory".to_string());
     }
 
-    let buffer = Vec::new();
-    let encoder = GzEncoder::new(buffer, Compression::default());
+    let file = File::create(output_path).map_err(|e| {
+        format!(
+            "Failed to prepare archive file {}: {}",
+            output_path.display(),
+            e
+        )
+    })?;
+    let buf_writer = BufWriter::new(file);
+    let encoder = GzEncoder::new(buf_writer, Compression::default());
     let mut builder = TarBuilder::new(encoder);
 
     for entry in WalkDir::new(workspace).into_iter() {
@@ -513,9 +536,18 @@ fn create_workspace_archive(workspace: &Path) -> Result<Vec<u8>, String> {
     let encoder = builder
         .into_inner()
         .map_err(|e| format!("Failed to finalize archive: {}", e))?;
-    encoder
+    let mut writer = encoder
         .finish()
-        .map_err(|e| format!("Failed to finish compression: {}", e))
+        .map_err(|e| format!("Failed to finish compression: {}", e))?;
+    writer
+        .flush()
+        .map_err(|e| format!("Failed to flush archive writer: {}", e))?;
+    writer
+        .into_inner()
+        .map_err(|e| format!("Failed to finalize archive file: {}", e))?
+        .sync_all()
+        .map_err(|e| format!("Failed to sync archive file: {}", e))?;
+    Ok(())
 }
 
 fn should_skip_path(relative: &Path) -> bool {
@@ -528,10 +560,26 @@ fn should_skip_path(relative: &Path) -> bool {
     })
 }
 
-fn encrypt_bytes(passphrase: &str, plaintext: &[u8]) -> Result<Vec<u8>, String> {
+fn encrypt_file_to_path(
+    passphrase: &str,
+    input_path: &Path,
+    output_path: &Path,
+) -> Result<(), String> {
     if passphrase.trim().is_empty() {
         return Err("Encryption key cannot be empty".to_string());
     }
+
+    let input_file = File::open(input_path)
+        .map_err(|e| format!("Failed to open archive {}: {}", input_path.display(), e))?;
+    let total_len = input_file
+        .metadata()
+        .map_err(|e| format!("Failed to read archive metadata: {}", e))?
+        .len();
+    let mut reader = BufReader::new(input_file);
+
+    let output_file = File::create(output_path)
+        .map_err(|e| format!("Failed to create backup {}: {}", output_path.display(), e))?;
+    let mut writer = BufWriter::new(output_file);
 
     let mut salt = [0u8; 16];
     let mut nonce_bytes = [0u8; 12];
@@ -541,55 +589,215 @@ fn encrypt_bytes(passphrase: &str, plaintext: &[u8]) -> Result<Vec<u8>, String> 
     rng.try_fill_bytes(&mut nonce_bytes)
         .map_err(|e| format!("Failed to generate random nonce: {}", e))?;
 
+    writer
+        .write_all(STREAM_MAGIC_HEADER)
+        .map_err(|e| format!("Failed to write backup header: {}", e))?;
+    writer
+        .write_all(&salt)
+        .map_err(|e| format!("Failed to write salt: {}", e))?;
+    writer
+        .write_all(&nonce_bytes)
+        .map_err(|e| format!("Failed to write nonce: {}", e))?;
+
     let mut key = [0u8; 32];
     pbkdf2_hmac::<Sha256>(passphrase.as_bytes(), &salt, PBKDF2_ITERATIONS, &mut key);
-
     let cipher = Aes256Gcm::new_from_slice(&key)
         .map_err(|e| format!("Failed to initialize cipher: {}", e))?;
-    let nonce = Nonce::from_slice(&nonce_bytes);
 
-    let ciphertext = cipher
-        .encrypt(nonce, plaintext)
-        .map_err(|e| format!("Encryption failed: {}", e))?;
+    let nonce = StreamNonce::from_slice(&nonce_bytes);
+    let mut encryptor = EncryptorBE32::from_aead(cipher, nonce);
 
-    let mut output =
-        Vec::with_capacity(MAGIC_HEADER.len() + salt.len() + nonce_bytes.len() + ciphertext.len());
-    output.extend_from_slice(MAGIC_HEADER);
-    output.extend_from_slice(&salt);
-    output.extend_from_slice(&nonce_bytes);
-    output.extend_from_slice(&ciphertext);
-    Ok(output)
+    if total_len == 0 {
+        let chunk = encryptor
+            .encrypt_last(&[] as &[u8])
+            .map_err(|_| "Encryption failed when finalizing empty archive".to_string())?;
+        writer
+            .write_all(&chunk)
+            .map_err(|e| format!("Failed to write encrypted chunk: {}", e))?;
+    } else {
+        let mut current = vec![0u8; PLAINTEXT_CHUNK_SIZE];
+        let mut current_len = read_chunk(&mut reader, &mut current)
+            .map_err(|e| format!("Failed to read archive data: {}", e))?;
+        if current_len == 0 {
+            let chunk = encryptor
+                .encrypt_last(&[] as &[u8])
+                .map_err(|_| "Encryption failed when finalizing empty archive".to_string())?;
+            writer
+                .write_all(&chunk)
+                .map_err(|e| format!("Failed to write encrypted chunk: {}", e))?;
+        } else {
+            let mut next_buf = vec![0u8; PLAINTEXT_CHUNK_SIZE];
+            loop {
+                let next_len = read_chunk(&mut reader, &mut next_buf)
+                    .map_err(|e| format!("Failed to read archive data: {}", e))?;
+                if next_len == 0 {
+                    let chunk = encryptor
+                        .encrypt_last(&current[..current_len])
+                        .map_err(|_| "Encryption failed while finalizing backup".to_string())?;
+                    writer
+                        .write_all(&chunk)
+                        .map_err(|e| format!("Failed to write encrypted chunk: {}", e))?;
+                    break;
+                } else {
+                    let chunk = encryptor
+                        .encrypt_next(&current[..current_len])
+                        .map_err(|_| "Encryption failed while streaming backup".to_string())?;
+                    writer
+                        .write_all(&chunk)
+                        .map_err(|e| format!("Failed to write encrypted chunk: {}", e))?;
+                    std::mem::swap(&mut current, &mut next_buf);
+                    current_len = next_len;
+                }
+            }
+        }
+    }
+
+    writer
+        .flush()
+        .map_err(|e| format!("Failed to flush encrypted backup: {}", e))?;
+    writer
+        .into_inner()
+        .map_err(|e| format!("Failed to finalize encrypted backup: {}", e))?
+        .sync_all()
+        .map_err(|e| format!("Failed to sync encrypted backup: {}", e))
 }
 
-fn decrypt_bytes(passphrase: &str, data: &[u8]) -> Result<Vec<u8>, String> {
-    if data.len() < MAGIC_HEADER.len() + 16 + 12 {
+fn decrypt_file_to_path(
+    passphrase: &str,
+    backup_path: &Path,
+    output_path: &Path,
+) -> Result<(), String> {
+    let backup_file = File::open(backup_path)
+        .map_err(|e| format!("Failed to open backup {}: {}", backup_path.display(), e))?;
+    let total_len = backup_file
+        .metadata()
+        .map_err(|e| format!("Failed to read backup metadata: {}", e))?
+        .len();
+    if total_len < (STREAM_MAGIC_HEADER.len() + 16 + 12) as u64 {
         return Err("Encrypted payload is too short".to_string());
     }
 
-    if &data[..MAGIC_HEADER.len()] != MAGIC_HEADER {
-        return Err("Invalid encrypted payload header".to_string());
+    let mut reader = BufReader::new(backup_file);
+    let mut header = [0u8; STREAM_MAGIC_HEADER.len()];
+    reader
+        .read_exact(&mut header)
+        .map_err(|e| format!("Failed to read backup header: {}", e))?;
+    enum BackupFormat {
+        Legacy,
+        Stream,
     }
+    let format = if header == *STREAM_MAGIC_HEADER {
+        BackupFormat::Stream
+    } else if header == *LEGACY_MAGIC_HEADER {
+        BackupFormat::Legacy
+    } else {
+        return Err("Invalid encrypted payload header".to_string());
+    };
 
-    let salt_start = MAGIC_HEADER.len();
-    let nonce_start = salt_start + 16;
-    let cipher_start = nonce_start + 12;
+    let mut salt = [0u8; 16];
+    reader
+        .read_exact(&mut salt)
+        .map_err(|e| format!("Failed to read salt: {}", e))?;
 
-    let salt = &data[salt_start..nonce_start];
-    let nonce_bytes = &data[nonce_start..cipher_start];
-    let ciphertext = &data[cipher_start..];
+    let mut nonce_bytes = [0u8; 12];
+    reader
+        .read_exact(&mut nonce_bytes)
+        .map_err(|e| format!("Failed to read nonce: {}", e))?;
 
     let mut key = [0u8; 32];
-    pbkdf2_hmac::<Sha256>(passphrase.as_bytes(), salt, PBKDF2_ITERATIONS, &mut key);
+    pbkdf2_hmac::<Sha256>(passphrase.as_bytes(), &salt, PBKDF2_ITERATIONS, &mut key);
     let cipher = Aes256Gcm::new_from_slice(&key)
         .map_err(|e| format!("Failed to initialize cipher: {}", e))?;
-    let nonce = Nonce::from_slice(nonce_bytes);
 
-    cipher
-        .decrypt(nonce, ciphertext)
-        .map_err(|e| format!("Decryption failed: {}", e))
+    let nonce = StreamNonce::from_slice(&nonce_bytes);
+    let mut decryptor = DecryptorBE32::from_aead(cipher, nonce);
+
+    let mut writer = BufWriter::new(
+        File::create(output_path)
+            .map_err(|e| format!("Failed to create decrypted archive: {}", e))?,
+    );
+
+    match format {
+        BackupFormat::Stream => {
+            let mut remaining = total_len
+                .checked_sub((STREAM_MAGIC_HEADER.len() + 16 + 12) as u64)
+                .ok_or_else(|| "Encrypted payload is too short".to_string())?;
+            let chunk_with_tag = PLAINTEXT_CHUNK_SIZE + TAG_SIZE;
+            let mut buffer = vec![0u8; chunk_with_tag];
+
+            while remaining > 0 {
+                let chunk_len = if remaining as usize > chunk_with_tag {
+                    chunk_with_tag
+                } else {
+                    remaining as usize
+                };
+
+                reader
+                    .read_exact(&mut buffer[..chunk_len])
+                    .map_err(|e| format!("Failed to read encrypted chunk: {}", e))?;
+                remaining -= chunk_len as u64;
+
+                if remaining == 0 {
+                    let plaintext = decryptor
+                        .decrypt_last(&buffer[..chunk_len])
+                        .map_err(|_| "Decryption failed while finalizing backup".to_string())?;
+                    writer
+                        .write_all(&plaintext)
+                        .map_err(|e| format!("Failed to write decrypted chunk: {}", e))?;
+                    break;
+                } else {
+                    let plaintext = decryptor
+                        .decrypt_next(&buffer[..chunk_len])
+                        .map_err(|_| "Decryption failed while streaming backup".to_string())?;
+                    writer
+                        .write_all(&plaintext)
+                        .map_err(|e| format!("Failed to write decrypted chunk: {}", e))?;
+                }
+            }
+        }
+        BackupFormat::Legacy => {
+            let mut ciphertext = Vec::new();
+            reader
+                .read_to_end(&mut ciphertext)
+                .map_err(|e| format!("Failed to read legacy encrypted payload: {}", e))?;
+
+            let mut key = [0u8; 32];
+            pbkdf2_hmac::<Sha256>(passphrase.as_bytes(), &salt, PBKDF2_ITERATIONS, &mut key);
+            let cipher = Aes256Gcm::new_from_slice(&key)
+                .map_err(|e| format!("Failed to initialize cipher: {}", e))?;
+            let nonce = AeadNonce::from_slice(&nonce_bytes);
+
+            let plaintext = cipher
+                .decrypt(nonce, ciphertext.as_ref())
+                .map_err(|e| format!("Decryption failed for legacy backup: {}", e))?;
+            writer
+                .write_all(&plaintext)
+                .map_err(|e| format!("Failed to write decrypted chunk: {}", e))?;
+        }
+    }
+
+    writer
+        .flush()
+        .map_err(|e| format!("Failed to flush decrypted archive: {}", e))?;
+    writer
+        .into_inner()
+        .map_err(|e| format!("Failed to finalize decrypted archive: {}", e))?
+        .sync_all()
+        .map_err(|e| format!("Failed to sync decrypted archive: {}", e))
 }
 
-fn restore_workspace(workspace: &Path, archive: &[u8]) -> Result<(), String> {
+fn read_chunk<R: Read>(reader: &mut R, buffer: &mut [u8]) -> std::io::Result<usize> {
+    let mut total = 0;
+    while total < buffer.len() {
+        match reader.read(&mut buffer[total..])? {
+            0 => break,
+            n => total += n,
+        }
+    }
+    Ok(total)
+}
+
+fn restore_workspace(workspace: &Path, archive_path: &Path) -> Result<(), String> {
     let workspace_parent = workspace
         .parent()
         .map(|p| p.to_path_buf())
@@ -605,13 +813,17 @@ fn restore_workspace(workspace: &Path, archive: &[u8]) -> Result<(), String> {
         .tempdir_in(&workspace_parent)
         .map_err(|e| format!("Failed to create temporary restore directory: {}", e))?;
 
-    {
-        let cursor = Cursor::new(archive);
-        let decoder = GzDecoder::new(cursor);
-        let mut tar = Archive::new(decoder);
-        tar.unpack(temp_dir.path())
-            .map_err(|e| format!("Failed to unpack archive: {}", e))?;
-    }
+    let archive_file = File::open(archive_path).map_err(|e| {
+        format!(
+            "Failed to open decrypted archive {}: {}",
+            archive_path.display(),
+            e
+        )
+    })?;
+    let decoder = GzDecoder::new(archive_file);
+    let mut tar = Archive::new(decoder);
+    tar.unpack(temp_dir.path())
+        .map_err(|e| format!("Failed to unpack archive: {}", e))?;
 
     #[allow(deprecated)]
     let temp_restore_path = temp_dir.into_path();
@@ -753,3 +965,4 @@ fn system_time_to_iso(time: SystemTime) -> Option<String> {
     let datetime: DateTime<Utc> = time.into();
     Some(datetime.to_rfc3339())
 }
+type StreamNonce = aes_gcm::aead::stream::Nonce<Aes256Gcm, StreamBE32<Aes256Gcm>>;

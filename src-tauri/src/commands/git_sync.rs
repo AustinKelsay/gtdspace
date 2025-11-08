@@ -554,7 +554,8 @@ fn restore_workspace(workspace: &Path, archive: &[u8]) -> Result<(), String> {
             .map_err(|e| format!("Failed to unpack archive: {}", e))?;
     }
 
-    let temp_restore_path = temp_dir.keep();
+    #[allow(deprecated)]
+    let temp_restore_path = temp_dir.into_path();
     let mut backup_path: Option<PathBuf> = None;
 
     if workspace.exists() {
@@ -562,7 +563,8 @@ fn restore_workspace(workspace: &Path, archive: &[u8]) -> Result<(), String> {
             .prefix("gtdspace-workspace-backup-")
             .tempdir_in(&workspace_parent)
             .map_err(|e| format!("Failed to prepare workspace backup directory: {}", e))?;
-        let backup_dir_path = backup_dir.keep();
+        #[allow(deprecated)]
+        let backup_dir_path = backup_dir.into_path();
         fs::remove_dir(&backup_dir_path)
             .map_err(|e| format!("Failed to prepare workspace backup path: {}", e))?;
         fs::rename(workspace, &backup_dir_path)

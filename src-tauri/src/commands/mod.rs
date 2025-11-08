@@ -3537,15 +3537,16 @@ pub async fn git_sync_push(
     app: AppHandle,
     workspace_override: Option<String>,
 ) -> Result<GitOperationResultPayload, String> {
-    let mut settings = load_settings(app.clone()).await?;
-    let config = build_git_sync_config(&settings, workspace_override)?;
+    let settings_snapshot = load_settings(app.clone()).await?;
+    let config = build_git_sync_config(&settings_snapshot, workspace_override)?;
 
     let outcome = task::spawn_blocking(move || perform_git_push(config))
         .await
         .map_err(|e| format!("Git push task failed: {}", e))??;
 
-    settings.git_sync_last_push = outcome.timestamp.clone();
-    save_settings(app, settings)
+    let mut latest_settings = load_settings(app.clone()).await?;
+    latest_settings.git_sync_last_push = outcome.timestamp.clone();
+    save_settings(app, latest_settings)
         .await
         .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
 
@@ -3558,15 +3559,16 @@ pub async fn git_sync_pull(
     app: AppHandle,
     workspace_override: Option<String>,
 ) -> Result<GitOperationResultPayload, String> {
-    let mut settings = load_settings(app.clone()).await?;
-    let config = build_git_sync_config(&settings, workspace_override)?;
+    let settings_snapshot = load_settings(app.clone()).await?;
+    let config = build_git_sync_config(&settings_snapshot, workspace_override)?;
 
     let outcome = task::spawn_blocking(move || perform_git_pull(config))
         .await
         .map_err(|e| format!("Git pull task failed: {}", e))??;
 
-    settings.git_sync_last_pull = outcome.timestamp.clone();
-    save_settings(app, settings)
+    let mut latest_settings = load_settings(app.clone()).await?;
+    latest_settings.git_sync_last_pull = outcome.timestamp.clone();
+    save_settings(app, latest_settings)
         .await
         .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
 

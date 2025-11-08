@@ -6,7 +6,7 @@ use aes_gcm::{
     },
     Aes256Gcm, Nonce as AeadNonce,
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Timelike, Utc};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use log::{debug, info, warn};
 use pbkdf2::pbkdf2_hmac;

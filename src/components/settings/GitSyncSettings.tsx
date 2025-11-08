@@ -19,7 +19,7 @@ import { useSettings } from '@/hooks/useSettings';
 import { useGitSync } from '@/hooks/useGitSync';
 import { useToast } from '@/hooks/use-toast';
 import { safeInvoke } from '@/utils/safe-invoke';
-import { formatRelativeTime } from '@/utils/time';
+import { formatRelativeTimeShort } from '@/utils/time';
 import { QuestionMarkTooltip } from '@/components/ui/QuestionMarkTooltip';
 
 const FIELD_IDS = {
@@ -83,9 +83,7 @@ export const GitSyncSettings: React.FC = () => {
   }, [gitStatus.encryptionConfigured]);
 
   React.useEffect(() => {
-    if (settings.git_sync_enabled) {
-      refreshStatus();
-    }
+    refreshStatus();
   }, [
     settings.git_sync_enabled,
     settings.git_sync_repo_path,
@@ -357,9 +355,9 @@ export const GitSyncSettings: React.FC = () => {
               help="Shows when the last push/pull occurred and when the most recent encrypted archive was created."
             />
             <div className="mt-1 space-y-1 text-sm text-muted-foreground">
-              <div id={FIELD_IDS.status}>Last push: {formatRelativeTime(gitStatus.lastPush)}</div>
-              <div>Last pull: {formatRelativeTime(gitStatus.lastPull)}</div>
-              <div>Latest backup: {formatRelativeTime(gitStatus.latestBackupAt)}</div>
+              <div id={FIELD_IDS.status}>Last push: {formatRelativeTimeShort(gitStatus.lastPush)}</div>
+              <div>Last pull: {formatRelativeTimeShort(gitStatus.lastPull)}</div>
+              <div>Latest backup: {formatRelativeTimeShort(gitStatus.latestBackupAt)}</div>
               {gitStatus.latestBackupFile && (
                 <div className="text-xs text-muted-foreground/80">
                   File: {gitStatus.latestBackupFile}

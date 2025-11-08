@@ -1,7 +1,7 @@
 /**
  * Formats an ISO timestamp into a short relative string like "5m ago".
  */
-export function formatRelativeTime(iso?: string | null): string {
+export function formatRelativeTimeShort(iso?: string | null): string {
   if (!iso) return 'Never';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {

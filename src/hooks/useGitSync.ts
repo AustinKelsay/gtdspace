@@ -92,23 +92,23 @@ export const useGitSync = ({
     };
 
     try {
+      setStatus(optimisticStatus);
       const result = await safeInvoke<GitSyncStatus>(
         'git_sync_status',
         { workspace_override: workspacePath ?? null },
-        optimisticStatus,
+        null,
       );
 
       if (result) {
         setStatus(result);
-        return;
+      } else {
+        setStatus({
+          ...optimisticStatus,
+          enabled: false,
+          configured: false,
+          message: 'Git status unavailable.',
+        });
       }
-
-      setStatus({
-        ...optimisticStatus,
-        enabled: false,
-        configured: false,
-        message: 'Git status unavailable.',
-      });
     } catch (error) {
       setStatus({
         ...fallbackStatus,

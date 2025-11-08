@@ -23,7 +23,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Theme, GitSyncStatus } from '@/types';
-import { formatRelativeTime } from '@/utils/time';
+import { formatRelativeTimeShort } from '@/utils/time';
 
 /**
  * Props for the AppHeader component
@@ -135,9 +135,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         return null;
     })();
 
-    const lastPushRelative = formatRelativeTime(gitSyncStatus?.lastPush);
-    const lastPullRelative = formatRelativeTime(gitSyncStatus?.lastPull);
-    const latestBackupRelative = formatRelativeTime(gitSyncStatus?.latestBackupAt);
+    const lastPushRelative = formatRelativeTimeShort(gitSyncStatus?.lastPush);
+    const lastPullRelative = formatRelativeTimeShort(gitSyncStatus?.lastPull);
+    const latestBackupRelative = formatRelativeTimeShort(gitSyncStatus?.latestBackupAt);
     const pushDisabled = !syncConfigured || gitSyncBusy || !onGitPush;
     const pullDisabled = !syncConfigured || gitSyncBusy || !onGitPull;
 

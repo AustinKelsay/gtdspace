@@ -12,7 +12,7 @@ GTD Space is a GTD-first productivity desktop app built with Tauri, React, and R
 - Local-first privacy with instant file access and no background servers.
 - GTD-native workspace that mirrors Horizons of Focus, projects, actions, habits, and references.
 - WYSIWYG BlockNote editor with rich markdown, bidirectional title sync, and multi-tab writing.
-- Integrated calendar that combines due dates, focus dates, habits, and Google Calendar events.
+- Integrated calendar that combines due dates, focus dates, and habit routines in one place.
 - Real-time automation (file watcher, smart notifications, content event system) to keep everything in sync.
 - Cross-platform desktop build powered by Tauri for fast native performance.
 
@@ -24,7 +24,7 @@ Need redundancy without giving up privacy? The new Git Sync & Backups feature en
 - **Manual control** – push and pull on demand, keeping local-first behavior while enabling multi-device workflows.
 - **Automatic key management** – GTD Space stores the encryption secret locally and never transmits it.
 
-See `docs/git-sync.md` for setup details, including key rotation, passphrase recovery, and CI-safe workflows.
+See `docs/git-sync.md` for setup details, recommended repo layouts, and troubleshooting tips.
 
 ## Feature Highlights
 
@@ -32,7 +32,7 @@ See `docs/git-sync.md` for setup details, including key rotation, passphrase rec
 
 **Editor** – WYSIWYG markdown, code highlighting (Shiki), interactive dropdown fields for status and effort, inline metadata chips, and auto-save with parallel writes.
 
-**Calendar & Scheduling** – Weekly and monthly views, two-way Google Calendar sync, habit scheduling, event filtering, and duration heuristics based on effort sizing.
+**Calendar & Scheduling** – Weekly and monthly views, focus/due scheduling, habit planning, event filtering, and duration heuristics based on effort sizing.
 
 **Technical** – Native file operations, global search, theme switching, and encrypted git backups backed by Tauri commands.
 
@@ -45,7 +45,6 @@ npm install
 npm run tauri:dev   # Spins up the desktop app and seeds your local GTD Space
 ```
 
-Optional: add Google Calendar OAuth credentials to `.env` before running the app.
 
 ## Build & Test
 
@@ -61,7 +60,6 @@ Optional: add Google Calendar OAuth credentials to `.env` before running the app
 - `docs/installation.md` – Platform-specific setup
 - `docs/architecture.md` – System overview
 - `docs/GTD_IMPLEMENTATION.md` – Methodology deep dive
-- `docs/calendar.md` – Calendar + Google integration
 - `docs/git-sync.md` – Encrypted git syncing & backups
 - `docs/settings.md` – Preferences and persistence
 

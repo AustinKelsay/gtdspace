@@ -52,6 +52,7 @@ A GTD-first productivity system with integrated WYSIWYG markdown editing, built 
 - **Theme Support** - Light/dark/auto themes
 - **Global Search** - Find text across all markdown files
 - **Native File Operations** - Create, rename, delete with OS dialogs
+- **Encrypted Git Backups** - Manual push/pull buttons encrypt your workspace before syncing via GitHub for multi-device safety
 
 ## Download
 
@@ -108,6 +109,7 @@ To enable Google Calendar synchronization:
 - [Architecture Overview](docs/architecture.md) - System design and patterns
 - [GTD Implementation](docs/GTD_IMPLEMENTATION.md) - Getting Things Done methodology integration
 - [Calendar Integration](docs/calendar.md) - Calendar view and Google Calendar sync
+- [Git Sync & Backups](docs/git-sync.md) - Configure encrypted git-based syncing
 - [MultiSelect Fields](docs/multiselect-fields.md) - Interactive dropdown fields for Status and Effort
 - [DateTime Fields](docs/datetime-fields.md) - Beautiful date and time pickers for deadlines and planning
 - [Theming & Styles](docs/theming.md) - CSS variables and theme system

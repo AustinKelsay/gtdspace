@@ -5,13 +5,13 @@
  */
 
 import React from 'react';
-import { 
+import {
   Database,
   Download,
   Upload,
   RotateCcw,
   HardDrive,
-  AlertTriangle
+  AlertTriangle,
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -19,9 +19,10 @@ import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useSettings } from '@/hooks/useSettings';
 import { useToast } from '@/hooks/use-toast';
+import { validateAndCoerceSettings, formatValidationErrors } from '@/utils/settings-validation';
 
 /**
- * Advanced settings component - simplified to only include working features
+ * Advanced settings component - backup/restore + cache utilities
  */
 export const AdvancedSettings: React.FC = () => {
   const { settings, updateSettings } = useSettings();
@@ -40,7 +41,7 @@ export const AdvancedSettings: React.FC = () => {
       a.download = `gtdspace-settings-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      
+
       toast({
         title: 'Settings Exported',
         description: 'Your settings have been exported successfully',
@@ -63,29 +64,39 @@ export const AdvancedSettings: React.FC = () => {
     setIsImporting(true);
     try {
       const text = await file.text();
-      const importedSettings = JSON.parse(text);
-      
-      // Validate the imported settings have required fields
-      if (!importedSettings.theme || !importedSettings.font_size) {
-        throw new Error('Invalid settings file');
+      const importedData = JSON.parse(text);
+
+      const validationResult = validateAndCoerceSettings(importedData);
+      const fatalErrors = validationResult.errors.filter((error) => error.severity === 'fatal');
+
+      if (fatalErrors.length > 0) {
+        throw new Error(formatValidationErrors(fatalErrors));
       }
 
-      await updateSettings(importedSettings);
-      
-      toast({
-        title: 'Settings Imported',
-        description: 'Your settings have been imported successfully',
-      });
-      
-      // Reset the input
-      event.target.value = '';
-    } catch (_error) {
+      await updateSettings(validationResult.coercedSettings);
+
+      const warningErrors = validationResult.errors.filter((error) => error.severity === 'warning');
+      if (warningErrors.length > 0) {
+        toast({
+          title: 'Settings Imported with Warnings',
+          description: formatValidationErrors(warningErrors),
+        });
+      } else {
+        toast({
+          title: 'Settings Imported',
+          description: 'Your settings have been imported successfully',
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to import settings. Please check the file format.';
       toast({
         title: 'Import Failed',
-        description: 'Failed to import settings. Please check the file format.',
+        description: errorMessage,
         variant: 'destructive',
       });
+      console.error('Settings import error:', error);
     } finally {
+      event.target.value = '';
       setIsImporting(false);
     }
   };
@@ -99,7 +110,7 @@ export const AdvancedSettings: React.FC = () => {
         word_wrap: true,
         editor_mode: 'split',
       });
-      
+
       toast({
         title: 'Settings Reset',
         description: 'All settings have been reset to defaults',
@@ -109,22 +120,20 @@ export const AdvancedSettings: React.FC = () => {
 
   const handleClearCache = async () => {
     try {
-      // Clear localStorage except for essential items
       const essentialKeys = ['gtdspace-current-path', 'gtdspace-tabs', 'gtdspace-sidebar-width'];
       const keysToKeep: Record<string, string> = {};
-      
-      essentialKeys.forEach(key => {
+
+      essentialKeys.forEach((key) => {
         const value = localStorage.getItem(key);
         if (value) keysToKeep[key] = value;
       });
-      
+
       localStorage.clear();
-      
-      // Restore essential items
+
       Object.entries(keysToKeep).forEach(([key, value]) => {
         localStorage.setItem(key, value);
       });
-      
+
       toast({
         title: 'Cache Cleared',
         description: 'Application cache has been cleared successfully',
@@ -146,17 +155,16 @@ export const AdvancedSettings: React.FC = () => {
           Data management and maintenance options
         </p>
 
-        {/* Import/Export */}
         <Card className="p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <Database className="h-5 w-5 text-muted-foreground" />
             <Label className="text-base font-semibold">Settings Backup</Label>
           </div>
-          
+
           <p className="text-sm text-muted-foreground mb-4">
             Export your settings for backup or import them on another device
           </p>
-          
+
           <div className="space-y-3">
             <div className="flex gap-3">
               <Button
@@ -168,7 +176,7 @@ export const AdvancedSettings: React.FC = () => {
                 <Download className="h-4 w-4 mr-2" />
                 {isExporting ? 'Exporting...' : 'Export Settings'}
               </Button>
-              
+
               <div className="flex-1">
                 <input
                   type="file"
@@ -189,7 +197,7 @@ export const AdvancedSettings: React.FC = () => {
                 </Button>
               </div>
             </div>
-            
+
             <Button
               variant="destructive"
               onClick={handleResetSettings}
@@ -201,20 +209,19 @@ export const AdvancedSettings: React.FC = () => {
           </div>
         </Card>
 
-        {/* Cache Management */}
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-4">
             <HardDrive className="h-5 w-5 text-muted-foreground" />
             <Label className="text-base font-semibold">Cache & Storage</Label>
           </div>
-          
+
           <Alert className="mb-4">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
               Clearing cache will remove temporary browser data while preserving essential application state.
             </AlertDescription>
           </Alert>
-          
+
           <div className="space-y-4">
             <Button
               variant="outline"
@@ -224,21 +231,21 @@ export const AdvancedSettings: React.FC = () => {
               <HardDrive className="h-4 w-4 mr-2" />
               Clear Application Cache
             </Button>
-            
+
             <div className="text-xs text-muted-foreground space-y-1">
               <p><strong>What will be cleared:</strong></p>
-              <ul className="ml-4 space-y-1">
-                <li>• Search history and saved searches</li>
-                <li>• Temporary browser cache data</li>
-                <li>• Other non-essential cached information</li>
+              <ul className="ml-4 space-y-1 list-disc">
+                <li>Search history and saved searches</li>
+                <li>Temporary browser cache data</li>
+                <li>Other non-essential cached information</li>
               </ul>
               <p className="mt-3"><strong>What will be preserved:</strong></p>
-              <ul className="ml-4 space-y-1">
-                <li>• Current workspace path</li>
-                <li>• Open tabs and their content</li>
-                <li>• Sidebar width preference</li>
-                <li>• User settings (theme, preferences)</li>
-                <li>• All files on disk (unchanged)</li>
+              <ul className="ml-4 space-y-1 list-disc">
+                <li>Current workspace path</li>
+                <li>Open tabs and their content</li>
+                <li>Sidebar width preference</li>
+                <li>User settings (theme, preferences)</li>
+                <li>All files on disk (unchanged)</li>
               </ul>
               <p className="mt-2 text-muted-foreground/80 italic">
                 This only affects browser storage, not your files or app settings.

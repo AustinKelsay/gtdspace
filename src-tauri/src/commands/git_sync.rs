@@ -554,7 +554,9 @@ fn restore_workspace(workspace: &Path, archive: &[u8]) -> Result<(), String> {
             .map_err(|e| format!("Failed to unpack archive: {}", e))?;
     }
 
-    let temp_restore_path = temp_dir.into_path();
+    let temp_restore_path = temp_dir
+        .keep()
+        .map_err(|e| format!("Failed to persist temporary restore directory: {}", e))?;
     let mut backup_path: Option<PathBuf> = None;
 
     if workspace.exists() {
@@ -562,7 +564,9 @@ fn restore_workspace(workspace: &Path, archive: &[u8]) -> Result<(), String> {
             .prefix("gtdspace-workspace-backup-")
             .tempdir_in(&workspace_parent)
             .map_err(|e| format!("Failed to prepare workspace backup directory: {}", e))?;
-        let backup_dir_path = backup_dir.into_path();
+        let backup_dir_path = backup_dir
+            .keep()
+            .map_err(|e| format!("Failed to persist temporary backup directory: {}", e))?;
         fs::remove_dir(&backup_dir_path)
             .map_err(|e| format!("Failed to prepare workspace backup path: {}", e))?;
         fs::rename(workspace, &backup_dir_path)
@@ -610,27 +614,6 @@ fn restore_workspace(workspace: &Path, archive: &[u8]) -> Result<(), String> {
     }
 }
 
-fn clean_directory(target: &Path) -> Result<(), String> {
-    if !target.exists() {
-        fs::create_dir_all(target)
-            .map_err(|e| format!("Failed to create workspace directory: {}", e))?;
-        return Ok(());
-    }
-
-    for entry in fs::read_dir(target).map_err(|e| format!("Failed to list workspace: {}", e))? {
-        let entry = entry.map_err(|e| format!("Failed to enumerate workspace: {}", e))?;
-        let path = entry.path();
-        if path.is_dir() {
-            fs::remove_dir_all(&path)
-                .map_err(|e| format!("Failed to remove {}: {}", path.display(), e))?;
-        } else {
-            fs::remove_file(&path)
-                .map_err(|e| format!("Failed to remove {}: {}", path.display(), e))?;
-        }
-    }
-
-    Ok(())
-}
 
 fn list_backups(backups_dir: &Path) -> Result<Vec<BackupEntry>, String> {
     if !backups_dir.exists() {

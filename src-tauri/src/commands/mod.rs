@@ -34,6 +34,7 @@ use notify_debouncer_mini::{
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -44,9 +45,15 @@ use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_store::StoreBuilder;
 use tokio::sync::Mutex as TokioMutex;
+use tokio::task;
 
 // Import seed data module
+mod git_sync;
 mod seed_data;
+use git_sync::{
+    build_git_sync_config, compute_git_status, perform_git_pull, perform_git_push,
+    GitOperationResultPayload, GitSyncStatusResponse,
+};
 use seed_data::{
     core_values_template, generate_action_template, generate_area_of_focus_template_with_refs,
     generate_goal_template_with_refs, generate_project_readme, generate_project_readme_with_refs,
@@ -240,6 +247,15 @@ pub struct UserSettings {
     pub tab_size: u32,
     /// Whether to wrap long lines
     pub word_wrap: bool,
+    /// Preferred editor font family token
+    #[serde(default = "default_font_family")]
+    pub font_family: String,
+    /// Editor line height multiplier
+    #[serde(default = "default_line_height")]
+    pub line_height: f32,
+    /// Customizable keyboard shortcut map
+    #[serde(default = "default_keybindings")]
+    pub keybindings: HashMap<String, String>,
     /// Last opened folder path
     pub last_folder: Option<String>,
     /// Editor mode preference
@@ -254,6 +270,31 @@ pub struct UserSettings {
     pub seed_example_content: Option<bool>,
     /// Preferred default GTD space path override
     pub default_space_path: Option<String>,
+    /// Enable git-based syncing and backups
+    pub git_sync_enabled: Option<bool>,
+    /// Path to the dedicated git repository for encrypted backups
+    pub git_sync_repo_path: Option<String>,
+    /// Optional override for which workspace path to archive
+    pub git_sync_workspace_path: Option<String>,
+    /// Remote URL used for push/pull actions
+    pub git_sync_remote_url: Option<String>,
+    /// Preferred branch name for remote backups
+    pub git_sync_branch: Option<String>,
+    /// Locally stored encryption key (never synced) - excluded from serialization, stored in secure storage
+    #[serde(skip)]
+    pub git_sync_encryption_key: Option<String>,
+    /// Number of encrypted snapshots to retain
+    pub git_sync_keep_history: Option<u32>,
+    /// Optional git author override
+    pub git_sync_author_name: Option<String>,
+    /// Optional git email override
+    pub git_sync_author_email: Option<String>,
+    /// Timestamp of the last successful push
+    pub git_sync_last_push: Option<String>,
+    /// Timestamp of the last successful pull
+    pub git_sync_last_pull: Option<String>,
+    /// Optional automatic pull cadence
+    pub git_sync_auto_pull_interval_minutes: Option<u32>,
 }
 
 /// File change event for external file modifications
@@ -1528,22 +1569,76 @@ pub async fn load_settings(app: AppHandle) -> Result<UserSettings, String> {
     };
 
     // Load settings from store
-    match store.get("user_settings") {
-        Some(value) => match serde_json::from_value::<UserSettings>(value) {
-            Ok(settings) => {
-                log::info!("Loaded existing settings");
-                Ok(settings)
+    let settings = match store.get("user_settings") {
+        Some(value) => {
+            // Check if git_sync_encryption_key exists in the old format for migration
+            let mut value_to_deserialize = value.clone();
+            let mut legacy_encryption_key: Option<String> = None;
+
+            if let Some(key_str) = value
+                .get("git_sync_encryption_key")
+                .and_then(|val| val.as_str())
+            {
+                let trimmed = key_str.trim();
+                if !trimmed.is_empty() {
+                    legacy_encryption_key = Some(trimmed.to_string());
+                    log::info!("Migrating encryption key from settings.json to secure storage");
+                    let service = "com.gtdspace.app";
+                    match keyring::Entry::new(service, "git_sync_encryption_key") {
+                        Ok(entry) => match entry.set_password(trimmed) {
+                            Ok(_) => {
+                                log::info!(
+                                    "Successfully migrated encryption key to secure storage"
+                                );
+                                legacy_encryption_key = None;
+                                if let Some(settings_obj) = value_to_deserialize.as_object_mut() {
+                                    settings_obj.remove("git_sync_encryption_key");
+                                    store.set("user_settings", value_to_deserialize.clone());
+                                    if let Err(e) = store.save() {
+                                        log::warn!(
+                                            "Failed to save settings after migration: {}",
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                log::warn!(
+                                    "Failed to migrate key to secure storage: {}. Keeping legacy value.",
+                                    e
+                                );
+                            }
+                        },
+                        Err(e) => {
+                            log::warn!(
+                                "Unable to access secure storage for migration: {}. Keeping legacy value.",
+                                e
+                            );
+                        }
+                    }
+                }
             }
-            Err(e) => {
-                log::warn!("Failed to parse settings, using defaults: {}", e);
-                Ok(get_default_settings())
+
+            // Now deserialize without the encryption key field (it will be re-attached via legacy_encryption_key)
+            match serde_json::from_value::<UserSettings>(value_to_deserialize) {
+                Ok(mut s) => {
+                    s.git_sync_encryption_key = legacy_encryption_key;
+                    log::info!("Loaded existing settings");
+                    s
+                }
+                Err(e) => {
+                    log::warn!("Failed to parse settings, using defaults: {}", e);
+                    get_default_settings()
+                }
             }
-        },
+        }
         None => {
             log::info!("No existing settings found, using defaults");
-            Ok(get_default_settings())
+            get_default_settings()
         }
-    }
+    };
+
+    Ok(settings)
 }
 
 /// Save user settings to persistent storage
@@ -1596,7 +1691,16 @@ pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<Str
 
     // Save settings to store
     match serde_json::to_value(&settings) {
-        Ok(value) => {
+        Ok(mut value) => {
+            if let Some(legacy_key) = settings.git_sync_encryption_key.clone() {
+                if let Some(settings_obj) = value.as_object_mut() {
+                    settings_obj.insert(
+                        "git_sync_encryption_key".to_string(),
+                        serde_json::Value::String(legacy_key),
+                    );
+                }
+            }
+
             store.set("user_settings", value);
 
             if let Err(e) = store.save() {
@@ -1613,15 +1717,177 @@ pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<Str
     }
 }
 
+/// Store a secret value in the OS keychain/credential manager
+///
+/// Stores sensitive data like encryption keys securely using the platform's
+/// native credential storage (macOS Keychain, Windows Credential Manager, etc.)
+///
+/// # Arguments
+///
+/// * `key` - Unique identifier for the secret
+/// * `value` - Secret value to store
+///
+/// # Returns
+///
+/// Success message or error details
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+///
+/// await invoke('secure_store_set', { key: 'git_sync_encryption_key', value: 'my-secret-key' });
+/// ```
+#[tauri::command]
+pub async fn secure_store_set(key: String, value: String) -> Result<String, String> {
+    log::info!("Storing secret in secure storage: {}", key);
+
+    let service = "com.gtdspace.app";
+    let entry = match keyring::Entry::new(service, &key) {
+        Ok(entry) => entry,
+        Err(e) => {
+            log::error!("Failed to create keyring entry: {}", e);
+            return Err(format!("Failed to access secure storage: {}", e));
+        }
+    };
+
+    match entry.set_password(&value) {
+        Ok(_) => {
+            log::info!("Secret stored successfully: {}", key);
+            Ok("Secret stored successfully".to_string())
+        }
+        Err(e) => {
+            log::error!("Failed to store secret: {}", e);
+            Err(format!("Failed to store secret: {}", e))
+        }
+    }
+}
+
+/// Retrieve a secret value from the OS keychain/credential manager
+///
+/// Retrieves sensitive data from secure storage.
+///
+/// # Arguments
+///
+/// * `key` - Unique identifier for the secret
+///
+/// # Returns
+///
+/// Secret value or error if not found
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+///
+/// const key = await invoke<string>('secure_store_get', { key: 'git_sync_encryption_key' });
+/// ```
+#[tauri::command]
+pub async fn secure_store_get(key: String) -> Result<String, String> {
+    log::info!("Retrieving secret from secure storage: {}", key);
+
+    let service = "com.gtdspace.app";
+    let entry = match keyring::Entry::new(service, &key) {
+        Ok(entry) => entry,
+        Err(e) => {
+            log::error!("Failed to create keyring entry: {}", e);
+            return Err(format!("Failed to access secure storage: {}", e));
+        }
+    };
+
+    match entry.get_password() {
+        Ok(value) => {
+            log::info!("Secret retrieved successfully: {}", key);
+            Ok(value)
+        }
+        Err(keyring::Error::NoEntry) => {
+            log::info!("Secret not found: {}", key);
+            Err("Secret not found".to_string())
+        }
+        Err(e) => {
+            log::error!("Failed to retrieve secret: {}", e);
+            Err(format!("Failed to retrieve secret: {}", e))
+        }
+    }
+}
+
+/// Remove a secret value from the OS keychain/credential manager
+///
+/// Deletes sensitive data from secure storage.
+///
+/// # Arguments
+///
+/// * `key` - Unique identifier for the secret
+///
+/// # Returns
+///
+/// Success message or error details
+///
+/// # Examples
+///
+/// ```typescript
+/// import { invoke } from '@tauri-apps/api/core';
+///
+/// await invoke('secure_store_remove', { key: 'git_sync_encryption_key' });
+/// ```
+#[tauri::command]
+pub async fn secure_store_remove(key: String) -> Result<String, String> {
+    log::info!("Removing secret from secure storage: {}", key);
+
+    let service = "com.gtdspace.app";
+    let entry = match keyring::Entry::new(service, &key) {
+        Ok(entry) => entry,
+        Err(e) => {
+            log::error!("Failed to create keyring entry: {}", e);
+            return Err(format!("Failed to access secure storage: {}", e));
+        }
+    };
+
+    match entry.delete_password() {
+        Ok(_) => {
+            log::info!("Secret removed successfully: {}", key);
+            Ok("Secret removed successfully".to_string())
+        }
+        Err(keyring::Error::NoEntry) => {
+            log::info!("Secret not found (already removed): {}", key);
+            Ok("Secret not found (already removed)".to_string())
+        }
+        Err(e) => {
+            log::error!("Failed to remove secret: {}", e);
+            Err(format!("Failed to remove secret: {}", e))
+        }
+    }
+}
+
 /// Get default settings values
 ///
 /// Returns a UserSettings struct with sensible defaults for new users.
+fn default_font_family() -> String {
+    "inter".to_string()
+}
+
+fn default_line_height() -> f32 {
+    1.5
+}
+
+fn default_keybindings() -> HashMap<String, String> {
+    let mut bindings = HashMap::new();
+    bindings.insert("save".to_string(), "mod+s".to_string());
+    bindings.insert("open".to_string(), "mod+o".to_string());
+    bindings.insert("commandPalette".to_string(), "mod+k".to_string());
+    bindings.insert("newNote".to_string(), "mod+shift+n".to_string());
+    bindings
+}
+
 fn get_default_settings() -> UserSettings {
     UserSettings {
         theme: "dark".to_string(),
         font_size: 14,
         tab_size: 2,
         word_wrap: true,
+        font_family: default_font_family(),
+        line_height: default_line_height(),
+        keybindings: default_keybindings(),
         last_folder: None,
         editor_mode: "split".to_string(),
         window_width: Some(1200),
@@ -1629,6 +1895,18 @@ fn get_default_settings() -> UserSettings {
         auto_initialize: Some(true),
         seed_example_content: Some(true),
         default_space_path: None,
+        git_sync_enabled: Some(false),
+        git_sync_repo_path: None,
+        git_sync_workspace_path: None,
+        git_sync_remote_url: None,
+        git_sync_branch: Some("main".to_string()),
+        git_sync_encryption_key: None,
+        git_sync_keep_history: Some(5),
+        git_sync_author_name: None,
+        git_sync_author_email: None,
+        git_sync_last_push: None,
+        git_sync_last_pull: None,
+        git_sync_auto_pull_interval_minutes: None,
     }
 }
 
@@ -3447,6 +3725,60 @@ pub async fn initialize_default_gtd_space(app: AppHandle) -> Result<String, Stri
     }
 
     Ok(target_path)
+}
+
+/// Retrieve current git sync status information
+#[tauri::command]
+pub async fn git_sync_status(
+    app: AppHandle,
+    workspace_override: Option<String>,
+) -> Result<GitSyncStatusResponse, String> {
+    let settings = load_settings(app).await?;
+    Ok(compute_git_status(&settings, workspace_override))
+}
+
+/// Create an encrypted snapshot and push it via git
+#[tauri::command]
+pub async fn git_sync_push(
+    app: AppHandle,
+    workspace_override: Option<String>,
+) -> Result<GitOperationResultPayload, String> {
+    let settings_snapshot = load_settings(app.clone()).await?;
+    let config = build_git_sync_config(&settings_snapshot, workspace_override)?;
+
+    let outcome = task::spawn_blocking(move || perform_git_push(config))
+        .await
+        .map_err(|e| format!("Git push task failed: {}", e))??;
+
+    let mut latest_settings = load_settings(app.clone()).await?;
+    latest_settings.git_sync_last_push = outcome.timestamp.clone();
+    save_settings(app, latest_settings)
+        .await
+        .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
+
+    Ok(outcome)
+}
+
+/// Pull the latest encrypted snapshot and restore the workspace
+#[tauri::command]
+pub async fn git_sync_pull(
+    app: AppHandle,
+    workspace_override: Option<String>,
+) -> Result<GitOperationResultPayload, String> {
+    let settings_snapshot = load_settings(app.clone()).await?;
+    let config = build_git_sync_config(&settings_snapshot, workspace_override)?;
+
+    let outcome = task::spawn_blocking(move || perform_git_pull(config))
+        .await
+        .map_err(|e| format!("Git pull task failed: {}", e))??;
+
+    let mut latest_settings = load_settings(app.clone()).await?;
+    latest_settings.git_sync_last_pull = outcome.timestamp.clone();
+    save_settings(app, latest_settings)
+        .await
+        .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
+
+    Ok(outcome)
 }
 
 /// Check if a directory exists

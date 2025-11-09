@@ -6,19 +6,24 @@
  */
 
 import React from 'react';
-import { 
-    Save, 
-    Settings, 
-    Target, 
-    Sun, 
-    Moon, 
-    Calendar, 
+import {
+    Save,
+    Settings,
+    Target,
+    Sun,
+    Moon,
+    Calendar,
     LayoutDashboard,
-    Keyboard
+    Keyboard,
+    UploadCloud,
+    DownloadCloud,
+    ShieldCheck,
+    Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Theme } from '@/types';
+import type { Theme, GitSyncStatus } from '@/types';
+import { formatRelativeTimeShort } from '@/utils/time';
 
 /**
  * Props for the AppHeader component
@@ -50,6 +55,18 @@ export interface AppHeaderProps {
     onOpenDashboard?: () => void;
     /** Callback to open keyboard shortcuts (optional) */
     onOpenKeyboardShortcuts?: () => void;
+    /** Whether git sync/backups are enabled */
+    gitSyncEnabled?: boolean;
+    /** Current git sync status payload */
+    gitSyncStatus?: GitSyncStatus;
+    /** Whether a git operation is currently running */
+    gitSyncBusy?: boolean;
+    /** Which git operation is in-flight */
+    gitSyncOperation?: 'push' | 'pull' | null;
+    /** Trigger a manual git push backup */
+    onGitPush?: () => Promise<void> | void;
+    /** Trigger a manual git pull restore */
+    onGitPull?: () => Promise<void> | void;
 }
 
 /**
@@ -75,6 +92,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     onOpenCalendar,
     onOpenDashboard,
     onOpenKeyboardShortcuts,
+    gitSyncEnabled,
+    gitSyncStatus,
+    gitSyncBusy,
+    gitSyncOperation,
+    onGitPush,
+    onGitPull,
 }) => {
     /**
      * Get save status text
@@ -100,6 +123,28 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         return fileName.replace(/\.(md|markdown)$/i, '');
     };
 
+    const syncConfigured = Boolean(
+        gitSyncEnabled &&
+        gitSyncStatus?.configured &&
+        gitSyncStatus?.encryptionConfigured,
+    );
+    const syncDisabledReason = (() => {
+        if (!gitSyncEnabled) return 'Git sync disabled';
+        if (!gitSyncStatus?.configured) {
+            return gitSyncStatus?.message ?? 'Git sync not configured';
+        }
+        if (!gitSyncStatus.encryptionConfigured) {
+            return 'Encryption key missing';
+        }
+        return null;
+    })();
+
+    const lastPushRelative = formatRelativeTimeShort(gitSyncStatus?.lastPush);
+    const lastPullRelative = formatRelativeTimeShort(gitSyncStatus?.lastPull);
+    const latestBackupRelative = formatRelativeTimeShort(gitSyncStatus?.latestBackupAt);
+    const pushDisabled = !syncConfigured || gitSyncBusy || !onGitPush;
+    const pullDisabled = !syncConfigured || gitSyncBusy || !onGitPull;
+
     return (
         <header className="h-12 border-b border-border flex items-center justify-between px-4 bg-card">
             <div className="flex items-center space-x-4">
@@ -121,6 +166,100 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                     </span>
                 )}
             </div>
+
+            {gitSyncEnabled && (
+                <div className="flex items-center space-x-1 border-r border-border pr-2">
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={onGitPush}
+                                    disabled={pushDisabled}
+                                    className="h-8 w-8 p-0"
+                                    aria-label="Push encrypted backup"
+                                >
+                                    {gitSyncOperation === 'push' ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <UploadCloud className="h-4 w-4" />
+                                    )}
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>
+                                    {syncConfigured
+                                        ? gitSyncStatus?.hasRemote
+                                            ? 'Push encrypted backup to remote'
+                                            : 'Create local encrypted backup'
+                                        : syncDisabledReason || 'Configure git sync in Settings'}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    Last push: {lastPushRelative}
+                                </p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={onGitPull}
+                                    disabled={pullDisabled}
+                                    className="h-8 w-8 p-0"
+                                    aria-label="Pull encrypted backup"
+                                >
+                                    {gitSyncOperation === 'pull' ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <DownloadCloud className="h-4 w-4" />
+                                    )}
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>
+                                    {syncConfigured
+                                        ? 'Pull and decrypt latest backup'
+                                        : syncDisabledReason || 'Configure git sync in Settings'}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    Last pull: {lastPullRelative}
+                                </p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1 text-[11px] text-muted-foreground px-2 py-1 border border-border/60 rounded-md select-none">
+                                    <ShieldCheck className="h-3.5 w-3.5" />
+                                    <span>
+                                        {syncConfigured
+                                            ? `Latest: ${latestBackupRelative}`
+                                            : syncDisabledReason || 'Not ready'}
+                                    </span>
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>
+                                    Latest file:{' '}
+                                    {gitSyncStatus?.latestBackupFile || 'None yet'}
+                                </p>
+                                {gitSyncStatus?.message && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        {gitSyncStatus.message}
+                                    </p>
+                                )}
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                </div>
+            )}
 
             <div className="flex items-center space-x-2">
                 {/* Save Status */}

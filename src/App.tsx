@@ -44,6 +44,7 @@ import { useFileManager } from "@/hooks/useFileManager";
 import { useTabManager } from "@/hooks/useTabManager";
 import { useFileWatcher } from "@/hooks/useFileWatcher";
 import { useSettings } from "@/hooks/useSettings";
+import { useGitSync } from "@/hooks/useGitSync";
 import { useModalManager } from "@/hooks/useModalManager";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useErrorHandler } from "@/hooks/useErrorHandler";
@@ -169,11 +170,11 @@ export const App: React.FC = () => {
   const { withErrorHandling } = useErrorHandler();
 
   // Refresh file list handler
-  const refreshFileList = async () => {
+  const refreshFileList = React.useCallback(async () => {
     if (fileState.currentFolder) {
       await loadFolder(fileState.currentFolder);
     }
-  };
+  }, [fileState.currentFolder, loadFolder]);
 
   // === THEME MANAGEMENT ===
 
@@ -391,6 +392,52 @@ export const App: React.FC = () => {
 
   // Derived state for GTD space
   const isGTDSpace = gtdSpace?.isGTDSpace || false;
+
+  const activeWorkspacePath = React.useMemo(() => {
+    const gitOverride = settings.git_sync_workspace_path?.trim();
+    if (gitOverride) return gitOverride;
+    return (
+      gtdSpace?.root_path ||
+      fileState.currentFolder ||
+      settings.default_space_path ||
+      settings.last_folder ||
+      null
+    );
+  }, [
+    settings.git_sync_workspace_path,
+    gtdSpace?.root_path,
+    fileState.currentFolder,
+    settings.default_space_path,
+    settings.last_folder,
+  ]);
+
+  const gitSync = useGitSync({
+    settings,
+    workspacePath: activeWorkspacePath,
+  });
+  const {
+    status: gitSyncStatus,
+    isPushing: gitSyncPushing,
+    isPulling: gitSyncPulling,
+    operation: gitSyncOperation,
+    push: gitSyncPush,
+    pull: gitSyncPull,
+  } = gitSync;
+  const currentSpaceRoot = gtdSpace?.root_path;
+
+  const handleGitPush = React.useCallback(async () => {
+    await gitSyncPush();
+  }, [gitSyncPush]);
+
+  const handleGitPull = React.useCallback(async () => {
+    const success = await gitSyncPull();
+    if (success) {
+      await refreshFileList();
+      if (currentSpaceRoot) {
+        await loadProjects(currentSpaceRoot);
+      }
+    }
+  }, [gitSyncPull, refreshFileList, currentSpaceRoot, loadProjects]);
 
   // Set up callback for when files are saved to reload projects
   // This is used by useTabManager to notify when files are saved
@@ -888,6 +935,12 @@ export const App: React.FC = () => {
               : undefined
           }
           onOpenKeyboardShortcuts={() => openModal("keyboardShortcuts")}
+          gitSyncEnabled={gitSyncStatus.enabled}
+          gitSyncStatus={gitSyncStatus}
+          gitSyncBusy={gitSyncPushing || gitSyncPulling}
+          gitSyncOperation={gitSyncOperation}
+          onGitPush={handleGitPush}
+          onGitPull={handleGitPull}
         />
 
         {/* Main content area */}

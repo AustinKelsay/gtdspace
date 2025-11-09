@@ -393,20 +393,23 @@ export const App: React.FC = () => {
   // Derived state for GTD space
   const isGTDSpace = gtdSpace?.isGTDSpace || false;
 
-  const activeWorkspacePath = React.useMemo(
-    () =>
+  const activeWorkspacePath = React.useMemo(() => {
+    const gitOverride = settings.git_sync_workspace_path?.trim();
+    if (gitOverride) return gitOverride;
+    return (
       gtdSpace?.root_path ||
       fileState.currentFolder ||
       settings.default_space_path ||
       settings.last_folder ||
-      null,
-    [
-      gtdSpace?.root_path,
-      fileState.currentFolder,
-      settings.default_space_path,
-      settings.last_folder,
-    ],
-  );
+      null
+    );
+  }, [
+    settings.git_sync_workspace_path,
+    gtdSpace?.root_path,
+    fileState.currentFolder,
+    settings.default_space_path,
+    settings.last_folder,
+  ]);
 
   const gitSync = useGitSync({
     settings,

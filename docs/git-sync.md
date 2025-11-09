@@ -43,3 +43,41 @@ Open **Settings → Git Sync & Backups** and configure:
 - **Missing git binary** – Ensure `git` is available on your PATH. The backend shells out to the system binary.
 - **Auth failures** – Pushing to GitHub uses whatever credentials your system git config provides (token, SSH agent, etc.). Configure those outside of GTD Space.
 - **Key mismatch** – If decryption fails on pull, verify that the same passphrase is saved on the current machine.
+
+## Key Rotation
+
+If you need to rotate your encryption key (e.g., after a security incident or to update a weak passphrase), follow these steps:
+
+1. **Backup Current State** – Ensure all devices have the latest backup pushed before rotating.
+2. **Decrypt Existing Backups** – On a trusted machine, pull and decrypt the latest backup using your current passphrase.
+3. **Update Passphrase** – In Settings → Git Sync & Backups, change your encryption key to the new passphrase.
+4. **Create New Encrypted Backup** – Push a new backup using the new key. This creates a new encrypted snapshot.
+5. **Migrate History** – Old backups encrypted with the previous key remain in the repository but cannot be decrypted with the new key. If you need access to historical backups:
+   - Keep a record of the old passphrase in a secure password manager
+   - Or re-encrypt historical backups manually using the old key, then re-encrypt with the new key
+
+> ⚠️ **Warning**: After key rotation, only backups created after the rotation can be decrypted with the new key. Previous backups require the old passphrase.
+
+## Passphrase Recovery
+
+### Recommended Recovery Options
+
+- **Password Manager** – Store your encryption passphrase in a secure password manager (e.g., 1Password, Bitwarden, or macOS Keychain).
+- **Physical Backup** – Write down your passphrase and store it in a secure physical location (safe, safety deposit box).
+- **Multi-Device Sync** – Use your password manager's sync feature to ensure the passphrase is available on all devices.
+
+### Recovery Steps
+
+If you've lost your passphrase:
+
+1. **Check Password Manager** – Search for "GTD Space" or "git sync" entries.
+2. **Check Settings File** – The passphrase may be stored in your settings file (though it's recommended to use a password manager instead):
+   - **macOS**: `~/Library/Application Support/com.gtdspace.app/settings.json`
+   - **Windows**: `%APPDATA%\com.gtdspace.app\settings.json`
+   - **Linux**: `~/.config/com.gtdspace.app/settings.json`
+3. **If Passphrase is Lost** – Unfortunately, without the passphrase, encrypted backups cannot be decrypted. This is by design for security. You can:
+   - Start fresh with a new encryption key
+   - Create new backups going forward
+   - Old encrypted backups will remain inaccessible without the original passphrase
+
+> ⚠️ **Critical**: There is no recovery mechanism if you lose your passphrase. The encryption is designed so that only someone with the passphrase can decrypt backups. Always store your passphrase securely.

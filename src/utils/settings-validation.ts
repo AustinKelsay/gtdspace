@@ -116,6 +116,9 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
   ) => {
     errors.push({ field, reason, providedValue, defaultValue, severity });
   };
+  const recordWarning = (field: string, reason: string, providedValue: unknown, defaultValue: unknown) => {
+    recordError(field, reason, providedValue, defaultValue, 'warning');
+  };
 
   // Ensure we have an object
   if (typeof importedData !== 'object' || importedData === null || Array.isArray(importedData)) {
@@ -127,7 +130,10 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
   // === REQUIRED FIELD VALIDATION ===
 
   // Validate theme
-  if (typeof data.theme !== 'string' || !VALID_THEMES.includes(data.theme as Theme)) {
+  if (data.theme === undefined || data.theme === null) {
+    recordWarning('theme', `missing, defaulting to ${DEFAULT_SETTINGS.theme}`, data.theme, DEFAULT_SETTINGS.theme);
+    coercedSettings.theme = DEFAULT_SETTINGS.theme;
+  } else if (typeof data.theme !== 'string' || !VALID_THEMES.includes(data.theme as Theme)) {
     recordError(
       'theme',
       `must be one of: ${VALID_THEMES.join(', ')}`,
@@ -141,7 +147,15 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
   }
 
   // Validate font_size
-  if (typeof data.font_size !== 'number' || !VALID_FONT_SIZES.includes(data.font_size)) {
+  if (data.font_size === undefined || data.font_size === null) {
+    recordWarning(
+      'font_size',
+      `missing, defaulting to ${DEFAULT_SETTINGS.font_size}`,
+      data.font_size,
+      DEFAULT_SETTINGS.font_size,
+    );
+    coercedSettings.font_size = DEFAULT_SETTINGS.font_size;
+  } else if (typeof data.font_size !== 'number' || !VALID_FONT_SIZES.includes(data.font_size)) {
     recordError(
       'font_size',
       `must be a number and one of: ${VALID_FONT_SIZES.join(', ')}`,
@@ -155,7 +169,15 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
   }
 
   // Validate tab_size
-  if (typeof data.tab_size !== 'number' || !VALID_TAB_SIZES.includes(data.tab_size)) {
+  if (data.tab_size === undefined || data.tab_size === null) {
+    recordWarning(
+      'tab_size',
+      `missing, defaulting to ${DEFAULT_SETTINGS.tab_size}`,
+      data.tab_size,
+      DEFAULT_SETTINGS.tab_size,
+    );
+    coercedSettings.tab_size = DEFAULT_SETTINGS.tab_size;
+  } else if (typeof data.tab_size !== 'number' || !VALID_TAB_SIZES.includes(data.tab_size)) {
     recordError(
       'tab_size',
       `must be a number and one of: ${VALID_TAB_SIZES.join(', ')}`,
@@ -169,7 +191,15 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
   }
 
   // Validate word_wrap
-  if (typeof data.word_wrap !== 'boolean') {
+  if (data.word_wrap === undefined || data.word_wrap === null) {
+    recordWarning(
+      'word_wrap',
+      `missing, defaulting to ${DEFAULT_SETTINGS.word_wrap}`,
+      data.word_wrap,
+      DEFAULT_SETTINGS.word_wrap,
+    );
+    coercedSettings.word_wrap = DEFAULT_SETTINGS.word_wrap;
+  } else if (typeof data.word_wrap !== 'boolean') {
     recordError('word_wrap', 'must be a boolean', data.word_wrap, DEFAULT_SETTINGS.word_wrap, 'fatal');
     coercedSettings.word_wrap = DEFAULT_SETTINGS.word_wrap;
   } else {
@@ -177,7 +207,15 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
   }
 
   // Validate editor_mode
-  if (typeof data.editor_mode !== 'string' || !VALID_EDITOR_MODES.includes(data.editor_mode as EditorMode)) {
+  if (data.editor_mode === undefined || data.editor_mode === null) {
+    recordWarning(
+      'editor_mode',
+      `missing, defaulting to ${DEFAULT_SETTINGS.editor_mode}`,
+      data.editor_mode,
+      DEFAULT_SETTINGS.editor_mode,
+    );
+    coercedSettings.editor_mode = DEFAULT_SETTINGS.editor_mode;
+  } else if (typeof data.editor_mode !== 'string' || !VALID_EDITOR_MODES.includes(data.editor_mode as EditorMode)) {
     recordError(
       'editor_mode',
       `must be one of: ${VALID_EDITOR_MODES.join(', ')}`,

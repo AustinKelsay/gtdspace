@@ -16,6 +16,7 @@ use serde::Serialize;
 use serde_json::json;
 use sha2::Sha256;
 use std::ffi::OsStr;
+use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
@@ -35,8 +36,7 @@ const MIN_KEEP_HISTORY: usize = 1;
 const MAX_KEEP_HISTORY: usize = 20;
 const PLAINTEXT_CHUNK_SIZE: usize = 64 * 1024;
 const TAG_SIZE: usize = 16;
-
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GitSyncConfig {
     pub repo_path: PathBuf,
     pub workspace_path: PathBuf,
@@ -46,6 +46,21 @@ pub struct GitSyncConfig {
     pub keep_history: usize,
     pub author_name: Option<String>,
     pub author_email: Option<String>,
+}
+
+impl fmt::Debug for GitSyncConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GitSyncConfig")
+            .field("repo_path", &self.repo_path)
+            .field("workspace_path", &self.workspace_path)
+            .field("remote_url", &self.remote_url)
+            .field("branch", &self.branch)
+            .field("encryption_key", &"<redacted>")
+            .field("keep_history", &self.keep_history)
+            .field("author_name", &self.author_name)
+            .field("author_email", &self.author_email)
+            .finish()
+    }
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -956,14 +971,65 @@ fn ensure_remote(repo_path: &Path, remote_url: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_family = "unix")]
+fn askpass_stub() -> &'static OsStr {
+    OsStr::new("/bin/true")
+}
+
+#[cfg(target_family = "windows")]
+fn askpass_stub() -> &'static OsStr {
+    use once_cell::sync::Lazy;
+
+    static STUB_PATH: Lazy<PathBuf> = Lazy::new(|| {
+        let mut path = std::env::temp_dir();
+        path.push("gtdspace-askpass-stub.cmd");
+
+        if !path.exists() {
+            if let Err(err) = fs::write(&path, b"@echo off\r\nexit /b 1\r\n") {
+                warn!(
+                    "Failed to write Windows askpass stub at {}: {}",
+                    path.display(),
+                    err
+                );
+            }
+        }
+
+        path
+    });
+
+    STUB_PATH.as_os_str()
+}
+
+fn should_force_batch_mode_ssh() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        false
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::env::var_os("GIT_SSH_COMMAND").is_none() && std::env::var_os("GIT_SSH").is_none()
+    }
+}
+
 fn run_git_command<I, S>(repo_path: &Path, args: I) -> Result<String, String>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let output = Command::new("git")
+    let mut command = Command::new("git");
+    command
         .current_dir(repo_path)
         .args(args)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_ASKPASS", askpass_stub())
+        .env("SSH_ASKPASS", askpass_stub());
+
+    if should_force_batch_mode_ssh() {
+        command.env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes");
+    }
+
+    let output = command
         .output()
         .map_err(|e| format!("Failed to run git: {}", e))?;
 

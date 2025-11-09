@@ -29,6 +29,12 @@
     "store:allow-keys",
     "store:allow-length",
     "store:allow-load",
-    "store:allow-save"
+    "store:allow-save",
+    "allow-git-sync-status",
+    "allow-git-sync-push",
+    "allow-git-sync-pull",
+    "allow-secure-store-set",
+    "allow-secure-store-get",
+    "allow-secure-store-remove"
   ]
 }

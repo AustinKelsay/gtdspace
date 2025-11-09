@@ -123,7 +123,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         return fileName.replace(/\.(md|markdown)$/i, '');
     };
 
-    const syncConfigured = Boolean(gitSyncEnabled && gitSyncStatus?.configured);
+    const syncConfigured = Boolean(
+        gitSyncEnabled &&
+        gitSyncStatus?.configured &&
+        gitSyncStatus?.encryptionConfigured,
+    );
     const syncDisabledReason = (() => {
         if (!gitSyncEnabled) return 'Git sync disabled';
         if (!gitSyncStatus?.configured) {

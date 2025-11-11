@@ -15,3 +15,4 @@ export { default as ProjectPage } from './ProjectPage';
 export { default as GoalPage } from './GoalPage';
 export { default as VisionPage } from './VisionPage';
 export { default as PurposePage } from './PurposePage';
+export { default as HorizonOverviewPage } from './HorizonOverviewPage';

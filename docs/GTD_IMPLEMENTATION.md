@@ -31,30 +31,44 @@ Your GTD Space/
 The Horizons of Focus provide higher-level perspectives that guide your projects and actions:
 
 ### Areas of Focus (20,000 ft)
+
 Ongoing responsibilities and roles you maintain in life. These never "complete" but require continuous attention:
 - Personal areas (health, family, finances)
 - Professional areas (role responsibilities, team leadership)
 - Life management (home, admin, community)
 
 ### Goals (30,000 ft)
+
 Specific achievements to accomplish within 1-2 years. These provide direction for your projects:
 - Personal goals (health targets, learning objectives)
 - Professional goals (career advancement, skill development)
 - Relationship goals (family experiences, social connections)
 
 ### Vision (40,000 ft)
+
 A vivid picture of where you want to be in 3-5 years. This guides your goal-setting:
 - Life snapshot (where you're living, what you're doing)
 - Key themes (patterns and values expressed)
 - Success factors (capabilities and resources needed)
 
 ### Purpose & Principles (50,000 ft)
+
 Your core values and life mission that drive everything else:
 - Life mission statement (why you exist, what you contribute)
 - Core values (top 5-7 principles)
 - Decision filters (questions to align choices)
 
 Each horizon file includes comprehensive templates to guide your planning and reflection.
+
+### Horizon Overview Pages
+
+Every Horizons folder now includes an instructive `README.md` built from the canonical template in `docs/horizon-readme-template.md`. The overview file:
+
+- Uses the shared header grid (Altitude, Review Cadence, Created) plus explanatory sections (`Why this horizon matters`, `How to work this horizon in GTD Space`, `Horizon Pages Overview`).
+- Embeds `[!<horizon>-references:<json-array>]` and `[!<horizon>-list]` tokens that stay synchronized with the markdown files stored in that folder.
+- Opens whenever you click the horizon row in the sidebar; expanding the row (chevron) reveals the actual horizon pages beneath it.
+
+Reference lists are auto-managed: creating, renaming, or deleting a horizon page triggers a sync that rewrites the README so the Reference Index matches the live filesystem. Existing workspaces are migrated in-place the next time those folders load inside GTD Space.
 
 ## Projects
 

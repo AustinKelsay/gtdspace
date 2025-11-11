@@ -32,6 +32,7 @@ import AreaPage from "@/components/gtd/AreaPage";
 import GoalPage from "@/components/gtd/GoalPage";
 import VisionPage from "@/components/gtd/VisionPage";
 import PurposePage from "@/components/gtd/PurposePage";
+import HorizonOverviewPage from "@/components/gtd/HorizonOverviewPage";
 import { HabitPage } from "@/components/gtd/HabitPage";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import { TabManager } from "@/components/tabs";
@@ -53,6 +54,7 @@ import { ErrorBoundary } from "@/components/error-handling";
 import { Toaster } from "@/components/ui/toaster";
 import type { Theme, MarkdownFile, EditorMode, GTDProject } from "@/types";
 import "./styles/globals.css";
+import { detectHorizonTypeFromPath } from "@/utils/horizon-config";
 
 /**
  * Normalizes a file path by converting it to lowercase and replacing
@@ -1093,10 +1095,25 @@ export const App: React.FC = () => {
                           displayedTab.file.path ??
                           displayedTab.filePath ??
                           "";
-                        const normalizedPath = candidatePath.replace(
-                          /\\/g,
-                          "/"
+                        const normalizedPath = candidatePath.replace(/\\/g, "/");
+                        const isReadmeFile = /(^|\/)README\.(md|markdown)$/i.test(
+                          normalizedPath
                         );
+
+                        const horizonReadmeType = detectHorizonTypeFromPath(
+                          candidatePath
+                        );
+                        if (horizonReadmeType) {
+                          return (
+                            <HorizonOverviewPage
+                              key={displayedTab.id}
+                              content={displayedTab.content}
+                              filePath={displayedTab.filePath}
+                              horizon={horizonReadmeType}
+                              className="flex-1"
+                            />
+                          );
+                        }
 
                         // Detect Habit files first to render HabitPage
                         const habitsDir = gtdSpace?.root_path
@@ -1114,7 +1131,7 @@ export const App: React.FC = () => {
                           );
                         const isHabitFile =
                           (pathLooksLikeHabit || contentHasHabitMarkers) &&
-                          !/(^|\/)README\.md$/i.test(normalizedPath);
+                          !isReadmeFile;
 
                         if (isHabitFile) {
                           return (
@@ -1146,7 +1163,8 @@ export const App: React.FC = () => {
                           );
                         const isAreaFile =
                           (pathLooksLikeArea || contentHasAreaMarkers) &&
-                          normalizedPath !== "::calendar::";
+                          normalizedPath !== "::calendar::" &&
+                          !isReadmeFile;
 
                         if (isAreaFile) {
                           return (
@@ -1178,7 +1196,8 @@ export const App: React.FC = () => {
                           );
                         const isGoalFile =
                           (pathLooksLikeGoal || contentHasGoalMarkers) &&
-                          normalizedPath !== "::calendar::";
+                          normalizedPath !== "::calendar::" &&
+                          !isReadmeFile;
 
                         if (isGoalFile) {
                           return (
@@ -1207,7 +1226,8 @@ export const App: React.FC = () => {
                           );
                         const isVisionFile =
                           (pathLooksLikeVision || contentHasVisionMarkers) &&
-                          normalizedPath !== "::calendar::";
+                          normalizedPath !== "::calendar::" &&
+                          !isReadmeFile;
 
                         if (isVisionFile) {
                           return (
@@ -1238,7 +1258,8 @@ export const App: React.FC = () => {
                           );
                         const isPurposeFile =
                           (pathLooksLikePurpose || likelyPurposeHeadings) &&
-                          normalizedPath !== "::calendar::";
+                          normalizedPath !== "::calendar::" &&
+                          !isReadmeFile;
 
                         if (isPurposeFile) {
                           return (
@@ -1260,9 +1281,7 @@ export const App: React.FC = () => {
                         const underProjects = projectsDir
                           ? isUnder(normalizedPath, projectsDir)
                           : false;
-                        const isReadme = /(^|\/)README\.(md|markdown)$/i.test(
-                          normalizedPath
-                        );
+                        const isReadme = isReadmeFile;
 
                         let isProjectReadme = false;
                         if (underProjects && isReadme && projectsDir) {

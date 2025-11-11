@@ -1,130 +1,172 @@
-# Horizon Readme Modernization Plan
+# Horizons Sidebar & README Modernization Plan
 
 **Author:** Codex (GPT-5)  
-**Date:** November 10, 2025  
+**Date:** November 11, 2025  
 **Scope:** `/Users/plebdev/Desktop/code/gtdspace`
 
-## 1. Objectives & Success Criteria
-- Give every Horizons folder (Purpose & Principles, Vision, Goals, Areas of Focus) the same affordances as Projects in the sidebar: a primary row that opens the folder README plus a collapsible list of child pages.
-- Replace the current “lazy” README seeds with rich, instructive overview pages that teach what each horizon means in GTD, describe how to use that folder inside GTD Space, and surface living metadata.
-- Embed lightweight reference sections inside each README that automatically list the horizon pages stored in that folder so users can scan and navigate even when they are inside the editor.
-- Maintain backwards compatibility for existing workspaces (no data loss, no broken sidebar interactions) while encouraging migrations to the new template format.
+---
 
-## 2. Current State Snapshot
-1. **Folder scaffolding** — `src-tauri/src/commands/mod.rs` + `seed_data.rs` create folders and `README.md` files, but the content is brief and not aligned with the canonical templates (`docs/vision-page-template.md`, etc.).
-2. **Sidebar behavior** — `src/components/gtd/GTDWorkspaceSidebar.tsx` lists each horizon as a `Collapsible` section. Clicking the header opens the README (lines ~1985–2001), but the row does not show metadata (counts, cadence summaries, etc.), and the dropdown simply lists markdown files minus the README (line 285 filter).
-3. **Reference UX** — No mechanism keeps READMEs aware of their child pages. There are GTD list markers like `[!goals-list]` (see `docs/gtd-data-model.md:57-59`), but they are not used in the seed content.
-4. **Templates** — Horizon-specific templates (`docs/*-page-template.md`) describe individual page structures, but not the folder-level README conventions we want.
+## 1. Problem Statement
+Horizons (Purpose & Principles, Vision, Goals, Areas of Focus) are seeded as folders with README files, but today they feel disconnected from the polished template experience:
+- Sidebar rows are collapsible lists that immediately expose child pages; they do not behave like “project cards” where the README opens first.
+- README content is thin, inconsistent with canonical page templates, and offers no live view of the horizon’s child pages.
+- There is no automated wiring between folders and their READMEs, so reference lists drift out of sync as soon as users add or rename pages.
 
-## 3. Requirements (from user brief)
-- Treat every horizon folder like a project node: one clickable row reveals the README plus an expandable drawer of individual horizon pages.
-- Rewrite README seeds to be “instructive informative default pages” that explain each horizon within GTD, describing how GTD Space expects you to use it.
-- Add “simple reference list fields” to the README that enumerate the actual horizon pages in that folder (effectively auto-generated tables of contents).
-- Preserve the ability to add new pages from the sidebar and from dialogs.
+The goal is to make each horizon behave like Projects in the sidebar: a single row acts as the entry point, clicking opens the README, and expanding reveals the curated list of horizon pages. The README itself must function as an instructive landing page with a standardized header plus rendered reference sections listing the actual pages in that folder.
 
-## 4. Proposed Solution Overview
-| Workstream | Description |
-|------------|-------------|
-| A. README Content System | Define canonical README structure + content per horizon, update `seed_data.rs`, and document the structure in `/docs`. |
-| B. Sidebar UI & UX | Refactor the horizon section in `GTDWorkspaceSidebar.tsx` to mirror `Projects` (header row, inline stats, nested file list). |
-| C. Reference List Wiring | Introduce a small utility that syncs horizon folder contents into the README reference block (insert/update tokens). |
-| D. Migration & Backfill | Detect existing workspaces, add missing README sections, and backfill reference lists without overriding user customizations. |
-| E. QA & Telemetry | Extend tests (unit + exploratory) to cover the new sidebar behavior and README token updates. |
+---
 
-## 5. Detailed Implementation Plan
+## 2. Success Criteria
+1. **UI Parity:** Horizon rows follow the same interaction model as Projects (click → README, chevron → expand child list, hidden by default).  
+2. **Instructive READMEs:** Every horizon README ships with rich, GTD-aligned copy explaining the altitude, how to use that folder in GTD Space, and where the rendered list of pages appears.  
+3. **Live Reference Lists:** READMEs contain canonical reference blocks and a rendered `[!<horizon>-list]` section that automatically mirrors the files present in the folder.  
+4. **Backward Compatible:** Existing workspaces keep custom content; migrations only add missing sections/tokens and sync page lists without overwriting user copy.  
+5. **Low Maintenance:** Utilities keep reference tokens updated whenever files change, so READMEs never drift from filesystem reality.
 
-### A. README Content System
-1. **Canonical structure definition**
-   - Create `docs/horizon-readme-template.md` that documents the shared layout:
-     ```markdown
-     # <Horizon Name> Overview
+---
 
-     ## Why this horizon matters
-     <copy>
+## 3. User Stories
+| Persona | Story |
+|---------|-------|
+| New GTD Space user | “When I click `Goals` in the sidebar I first see a rich Goals overview explaining what belongs here and how to review it. I can expand the row to jump to any goal file.” |
+| Experienced user | “When I add or rename a Vision page, the Vision README automatically lists it without manual editing.” |
+| Reviewer | “During my Weekly Review I can skim the Areas README to understand the horizon’s purpose, and immediately see the current Areas underneath without switching to the sidebar.” |
 
-     ## How to work this horizon in GTD Space
-     <context + UI instructions>
+---
 
-     ## Reference Index
-     [!<horizon>-references:<json-array>]
+## 4. Experience Specification
 
-     ## Horizon Pages
-     [!<horizon>-list]
-     ```
-   - Bring over altitude descriptions from the official GTD sources already summarized.
-2. **Seed updates** (`src-tauri/src/commands/seed_data.rs`)
-   - Replace `*_OVERVIEW_TEMPLATE` strings with richer content per the template above.
-   - Inject copy that explains review cadence, what “clicking the folder header” does, and how to create child pages.
-   - Add placeholder reference tokens, e.g., `[!areas-references:[]]`, plus `[!areas-list]` to leverage the existing list-rendering system.
-3. **Shared constants**
-   - Consider storing horizon metadata in `src/utils/horizon-config.ts` so both the frontend and Tauri code share review cadence text, altitude labels, and README snippet copy.
+### 4.1 Sidebar Interaction Model
+- **Row anatomy:** icon, title, optional count badge, secondary actions (`+` create, `…` menu), and chevron.
+- **Primary click (icon/title/README button):** opens `<Horizon>/README.md` in the editor panel. No expansion occurs on this click.
+- **Chevron / keyboard toggle:** expands or collapses the child list (default collapsed). Expansion state should persist per workspace (reuse `expandedSectionsRef`).
+- **Child list contents:** all `.md` files except `README.md`, sorted case-insensitively, rendered identical to project action rows (icon + title + hover menu).
+- **Empty state:** “No pages yet” message plus inline shortcut to create a page.
 
-### B. Sidebar UI & UX
-1. **Componentization**
-   - Extract a `HorizonFolder` component from `GTDWorkspaceSidebar.tsx` responsible for rendering header row, README click action, stats, and child list. This keeps the main component manageable.
-2. **Header behavior**
-   - Mirror `Projects` rows: icon + title, inline stats (e.g., “3 Vision pages”), a `Badge` that reflects the number of markdown files, and a secondary icon for quick actions (create page, open folder).
-   - Clicking the icon or title opens the README (`README.md`). Clicking the chevron toggles expansion only (match project affordances to avoid accidental README opens).
-3. **Child list**
-   - Continue to list `.md` files minus the README, but visually match action list styles (status icon placeholder + rename support).
-   - Add an inline pill showing whether a file is linked elsewhere (optional stretch: show `goal-status` inside Goals list).
-4. **State management**
-   - Store readme metadata in `sectionFileMetadata` (already present) so header rows can display the `last_reviewed` or `created` timestamp once we capture it.
-5. **Keyboard & accessibility**
-   - Ensure `Enter` activates the README; `Space` toggles the collapsible; arrow keys follow WAI-ARIA accordion recommendations.
-6. **Create Flow**
-   - Keep the `+` button but relocate it inside the header action group so it mirrors the project action button placement.
+### 4.2 README Page Structure
+Each README uses the same page frame as other templates (header grid + BlockNote body). Required sections:
+1. **Title:** `<Horizon Name> Overview`
+2. **Header metadata:**  
+   - `Created` datetime (read-only)  
+   - `Altitude` singleselect (tokens: `purpose`, `vision`, `goals`, `areas`).  
+   - Optional `Review Cadence` singleselect (Areas default monthly, Goals quarterly, Vision annually, Purpose on demand).  
+   - `Reference Index` chips for cross-linking to other horizons as needed.
+3. **Body sections (canonical order):**
+   - `## Why this horizon matters` – GTD explanation + review cues.  
+   - `## How to work this horizon in GTD Space` – specific UI instructions (creating pages, referencing, reviews).  
+   - `## Horizon Pages Overview` – short paragraph introducing the rendered list.  
+   - `## Reference Index` – `[!<horizon>-references:<json-array>]` (auto-managed).  
+   - `## Horizon Pages` – `[!<horizon>-list]` block (rendered list of child files, read-only).  
+   - Future optional sections (metrics, review log) can append later without reordering.
 
-### C. Reference List Wiring
-1. **Utility**
-   - Add `syncHorizonReferenceList(folderPath: string, readmePath: string, token: string)` inside `src/utils/gtd-markdown-helpers.ts` or a new `horizon-readme-utils.ts`.
-   - Logic: read README, parse JSON array in `[!<token>-references:...]`, diff against actual files (ordered alphabetically), rewrite the token when there is a change.
-2. **Invocation Points**
-   - Trigger the sync after:
-     - Creating/deleting/moving a horizon page (already have hooks via `CreatePageDialog`, `deleteItem`).
-     - Manual refresh (Refresh button already loops over sections).
-   - In Tauri backend, update initialization to call the sync once after seeding sample pages.
-3. **Error Handling**
-   - Wrap updates in try/catch; on failure surface a toast but do not block UI interactions.
-   - Preserve user edits outside the reference token by using the canonical markdown builder functions.
+### 4.3 Rendered Reference Lists
+- `[!<horizon>-list]` already has renderer support; ensure it supports inline options such as `[!goals-list:show-status=true]` for future enhancements (default `show-status=false`).
+- `[!<horizon>-references:<json-array>]` acts as serialized data for other components (sidebar stats, future dashboards).
+- README copy explicitly mentions that the list is auto-maintained and read-only to set expectations.
 
-### D. Migration & Backfill
-1. **Detection**
-   - During workspace load (`useGTDSpace` or a dedicated migration helper), check for each horizon folder’s README: does it contain `## Reference Index` and `[!<horizon>-list]`? If not, append/migrate.
-2. **Non-destructive update**
-   - Use `migrateMarkdownContent()` to insert missing headings or tokens without altering custom copy.
-   - Log migrations in the developer console for debugging.
-3. **Telemetry / Analytics (optional)**
-   - Emit a custom event when horizon READMEs are updated to monitor adoption.
+---
 
-### E. QA & Observability
-1. **Unit Coverage**
-   - Tests for the new sync utility (input README string + directory listing → expected token JSON).
-   - Snapshot tests for `HorizonFolder` (expanded + collapsed states).
-2. **Manual QA checklist**
-   - Creating a new goal updates the Goals README reference list.
-   - Deleting a vision page removes it from the README list.
-   - Clicking the Goals header opens `/Goals/README.md` while the chevron just expands.
-   - Existing workspaces with custom README copy retain edits; only new sections are appended.
-3. **Docs**
-   - Update `docs/GTD_IMPLEMENTATION.md` (Horizons section) to reflect the new interaction model plus screenshot references once available.
+## 5. Technical Implementation Plan
 
-## 6. Open Questions / Decisions Needed
-1. **Reference token format** — Should we reuse `[!goals-list]` or store explicit JSON arrays? Proposal: use both (JSON token for programmatic use, list block for human scan). Need confirmation.
-2. **Status surfacing** — Do we want inline status chips (e.g., Goal status) in the sidebar list now or later? Not required for the first pass but worth noting.
-3. **Auto-review timestamps** — Should READMEs track “last reviewed” metadata that the sidebar can display? Requires extra UX guidance.
+### 5.1 Frontend: Sidebar Refactor
+1. **Component extraction:** Create `HorizonFolderSection` within `src/components/gtd/sidebar/` that accepts `sectionMeta`, `files`, and callbacks (`onOpenReadme`, `onToggle`, `onCreate`).  
+2. **Interaction logic:**  
+   - `handleSectionClick(sectionPath)` exclusively opens README via `onFileSelect`.  
+   - `toggleSection(sectionPath)` drives `Collapsible` open state, mirroring Projects.  
+3. **State persistence:** Replace `expandedSections` map for horizons with a shared hook (`useSidebarSectionsState`) so Projects and Horizons store identical state semantics.  
+4. **UX polish:**  
+   - Add count badges showing number of horizon pages (excludes README).  
+   - Provide tooltip copy (“Open Goals overview”) to reinforce behavior shift.  
+   - Update keyboard handlers (`Enter` → README, `Space` → toggle).  
+5. **Tests:** Add React Testing Library snapshots for collapsed/expanded states and keyboard interactions.
 
-## 7. Timeline Draft
-| Phase | Deliverables | Owner | ETA |
+### 5.2 README Template System
+1. **Docs:** Author `docs/horizon-readme-template.md` describing canonical markdown ordering, review cadence defaults, and acceptable tokens.  
+2. **Builder helper:** Introduce `buildHorizonReadmeMarkdown(horizonType, contentOverrides)` in `src/utils/gtd-markdown-helpers.ts`. Responsibilities:  
+   - Guarantee header metadata order.  
+   - Inject `[!<horizon>-references:[]]` and `[!<horizon>-list]` if missing.  
+   - Preserve user-edited body paragraphs between canonical sections.  
+3. **Seed updates:**  
+   - Replace `*_OVERVIEW_TEMPLATE` definitions in `src-tauri/src/commands/seed_data.rs` with the new copy + tokens.  
+   - Pre-populate reference arrays with existing sample pages (if any) so the rendered list is non-empty on first launch.  
+4. **Editor rendering:** Ensure BlockNote renders `[!<horizon>-list]` as a read-only component with explanatory hint text (reusing actions list styling but without filters).
+
+### 5.3 Reference Synchronization Utility
+1. **Utility module:** `src/utils/horizon-readme-sync.ts` exporting `syncHorizonReadme(folderPath, horizonType)`.  
+2. **Process:**  
+   - Enumerate markdown files under folder (via existing IPC).  
+   - Generate sorted array of relative paths → JSON encode into `[!<horizon>-references:...]`.  
+   - Rebuild `[!<horizon>-list]` block metadata (if additional attributes needed later).  
+   - Skip `README.md`, ignore hidden files, and respect debounce to avoid spamming writes.  
+3. **Triggers:**  
+   - File create/delete/rename operations (`useWorkspaceFileEvents`, Tauri watchers).  
+   - Manual “Refresh Horizon” command accessible from the sidebar context menu.  
+4. **Error handling:**  
+   - On failure, surface non-blocking toast and log to console; retries happen on next event.  
+   - Protect against concurrent writes with file-lock utility already used by canonical rebuilds.
+
+### 5.4 Data & Type Updates
+1. **TypeScript types:** Formalize `GTDHorizonType = "purpose" | "vision" | "goals" | "areas"` and extend `sectionFileMetadata` to include `readmePath`, `pageCount`, and `lastSynced`.  
+2. **Sidebar stats:** Display `pageCount` badge pulled from reference token length instead of recomputing at render.  
+3. **Telemetry hooks (optional):** When a README sync occurs, emit `horizon_reference_sync` event for debugging adoption.
+
+### 5.5 Backend / Seed Adjustments
+1. **Initialization:** After seeding horizon folders, immediately call the sync utility from Rust via a Tauri command (`sync_horizon_readme`).  
+2. **Existing command surface:** expose `sync_horizon_readme` to the frontend so migrations can invoke it for legacy workspaces.  
+3. **Performance:** Batch sync operations during initialization to avoid N file writes; e.g., gather all horizon updates and issue a single IPC call per horizon.
+
+---
+
+## 6. Migration Strategy
+1. **Detection:** On workspace load, inspect each `<Horizon>/README.md` for:  
+   - Presence of `## Horizon Pages` + `[!<horizon>-list]`  
+   - Presence of `[!<horizon>-references:]` token  
+   - Presence of `## Why this horizon matters` copy.  
+2. **Non-destructive insertion:** Use `migrateMarkdownContent()` to insert missing sections at canonical anchors. Preserve user-written intro paragraphs by placing new sections after the title unless duplicates already exist.  
+3. **One-time sync:** After structural migration, run `syncHorizonReadme` so reference arrays reflect actual files.  
+4. **Audit trail:** Log a concise summary in the developer console or telemetry (e.g., “Migrated Goals README → added Reference Index + 3 pages”).  
+5. **Rollback plan:** Because we only append sections, users can delete the new blocks manually if they truly object; no irreversible mutations occur.
+
+---
+
+## 7. QA & Validation
+1. **Automated tests:**  
+   - Unit tests for `buildHorizonReadmeMarkdown` (fixtures covering blank README, custom copy, legacy order).  
+   - Unit tests for `syncHorizonReadme` (mock FS lists, ensure JSON arrays match).  
+   - Sidebar interaction tests verifying keyboard + mouse behaviors.  
+2. **Manual checklist:**  
+   - Clicking `Vision` opens `Vision/README.md`; chevron toggles list; re-opening preserves state.  
+   - Adding `Vision/My Future Studio.md` updates README reference list within 2 seconds and increments badge count.  
+   - Deleting a Goal file removes it from README list without leaving orphan entries.  
+   - Migrated legacy workspace retains custom copy preceding the new sections.  
+   - README body clearly explains horizon purpose and auto-generated list behavior.  
+3. **Regression watch:** Ensure Projects, Habits, and other sidebar sections are unchanged (no layout regressions).
+
+---
+
+## 8. Timeline & Ownership
+| Phase | Deliverables | Owner | Due |
 |-------|-------------|-------|-----|
-| Day 1 | Finalize README template doc + copywriting | Content & Eng | Nov 12 |
-| Day 2 | Sidebar component refactor + create flow parity | Frontend | Nov 14 |
-| Day 3 | Reference sync utility + backend hooks | Full-stack | Nov 15 |
-| Day 4 | Migration script + QA pass | Full-stack + QA | Nov 17 |
+| P0 | Approve plan + copy outline | Product + Eng | Nov 11 |
+| P1 | README template doc + seed copy + helper | Content + Platform | Nov 13 |
+| P2 | Sidebar refactor + interaction parity | Frontend | Nov 15 |
+| P3 | Reference sync utility + Tauri hook | Full-stack | Nov 16 |
+| P4 | Migration runner + QA + docs update | Full-stack + QA | Nov 18 |
 
-## 8. Acceptance Criteria Checklist
-- [ ] README seeds include Why/How/Reference sections with live list tokens.
-- [ ] Sidebar horizon rows show README on click and child pages in collapsible drawers identical to projects.
-- [ ] Adding/removing horizon pages updates the README reference lists automatically.
-- [ ] Existing spaces migrate without losing custom copy.
-- [ ] Documentation updated (GTD implementation guide + new README template doc).
+---
+
+## 9. Open Questions
+1. Should the `Altitude` singleselect live in the README header UI, or do we hardcode it per folder and hide the control? (Default: render read-only value sourced from config.)  
+2. Do we want badge counts to reflect only “active” pages (e.g., exclude archived/resolved) once status metadata exists?  
+3. Should `[!<horizon>-list]` support grouping (e.g., Goals by status) in this iteration or wait for telemetry feedback?  
+4. Are there compliance concerns with automatically editing user-authored README files, and do we need an opt-out toggle?
+
+---
+
+## 10. Acceptance Checklist
+- [ ] Horizon rows behave exactly like project folders in the sidebar (README on click, dropdown for children, hidden by default).  
+- [ ] Each README ships with standardized header metadata, GTD explanations, and auto-generated `Reference Index` + `Horizon Pages` sections.  
+- [ ] Reference tokens and rendered lists stay synchronized with filesystem contents without manual intervention.  
+- [ ] Legacy workspaces migrate without clobbering user copy.  
+- [ ] Documentation (`docs/horizon-readme-template.md`, `docs/GTD_IMPLEMENTATION.md`) reflects the new behavior.  
+- [ ] QA sign-off includes keyboard accessibility, copy accuracy, and sync reliability tests.

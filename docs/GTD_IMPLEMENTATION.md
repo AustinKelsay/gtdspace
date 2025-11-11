@@ -56,6 +56,16 @@ Your core values and life mission that drive everything else:
 
 Each horizon file includes comprehensive templates to guide your planning and reflection.
 
+### Horizon Overview Pages
+
+Every Horizons folder now includes an instructive `README.md` built from the canonical template in `docs/horizon-readme-template.md`. The overview file:
+
+- Uses the shared header grid (Altitude, Review Cadence, Created) plus explanatory sections (`Why this horizon matters`, `How to work this horizon in GTD Space`, `Horizon Pages Overview`).
+- Embeds `[!<horizon>-references:<json-array>]` and `[!<horizon>-list]` tokens that stay synchronized with the markdown files stored in that folder.
+- Opens whenever you click the horizon row in the sidebar; expanding the row (chevron) reveals the actual horizon pages beneath it.
+
+Reference lists are auto-managed: creating, renaming, or deleting a horizon page triggers a sync that rewrites the README so the Reference Index matches the live filesystem. Existing workspaces are migrated in-place the next time those folders load inside GTD Space.
+
 ## Projects
 
 Projects are outcome-focused goals that require multiple actions to complete.

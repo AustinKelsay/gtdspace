@@ -37,6 +37,8 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
         'area-review-cadence': 'areaReviewCadence',
         'goal-status': 'goalStatus',
         'vision-horizon': 'visionHorizon',
+        'horizon-altitude': 'horizonAltitude',
+        'horizon-review-cadence': 'horizonReviewCadence',
       };
       const field = fieldMap[match[1]] || match[1];
       return { key: field, value: match[2] };

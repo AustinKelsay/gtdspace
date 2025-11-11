@@ -5,20 +5,68 @@
 
 use chrono::{Datelike, Local, Timelike, Weekday};
 
+fn build_horizon_overview_template(
+    title: &str,
+    altitude_token: &str,
+    cadence_token: &str,
+    why_copy: &str,
+    how_copy: &str,
+    overview_copy: &str,
+    reference_token: &str,
+    list_token: &str,
+) -> String {
+    format!(
+        r#"# {title} Overview
+
+## Altitude
+[!singleselect:horizon-altitude:{altitude}]
+
+## Review Cadence
+[!singleselect:horizon-review-cadence:{cadence}]
+
+## Created
+[!datetime:created_date_time:{timestamp}]
+
+## Why this horizon matters
+{why}
+
+## How to work this horizon in GTD Space
+{how}
+
+## Horizon Pages Overview
+{overview}
+
+## Reference Index
+[!{reference_token}:[]]
+
+## Horizon Pages
+[!{list_token}]
+"#,
+        title = title,
+        altitude = altitude_token,
+        cadence = cadence_token,
+        timestamp = Local::now().to_rfc3339(),
+        why = why_copy.trim(),
+        how = how_copy.trim(),
+        overview = overview_copy.trim(),
+        reference_token = reference_token,
+        list_token = list_token
+    )
+}
+
 /// Template for Areas of Focus overview page
-pub const AREAS_OF_FOCUS_OVERVIEW_TEMPLATE: &str = r#"# Areas of Focus (20,000 ft)
-
-**Important spheres of work and life to maintain at standards**
-
-These are your ongoing responsibilities—the roles you play and standards you maintain. Unlike projects (which complete), these require continuous attention.
-
-## Weekly Review Questions
-- What areas need attention this week?
-- Are my current projects supporting the right areas?
-- What's falling through the cracks?
-
-*Each area has its own page. Click to view projects and standards.*
-"#;
+pub fn areas_of_focus_overview_template() -> String {
+    build_horizon_overview_template(
+        "Areas of Focus",
+        "areas",
+        "monthly",
+        "Areas represent ongoing responsibilities—roles and standards that never complete but need balanced attention. Capturing them makes it obvious when a domain is starved or overloaded.",
+        "Create an Area page for each responsibility (team, home, finances, health). Track status and review cadence, then reference the projects, goals, and visions that keep the area healthy. Scan this horizon monthly during your review.",
+        "Every Area page you add to the folder is listed here. Use descriptive titles (e.g., \"Product Leadership\" or \"Family Systems\") so this overview reads like a dashboard.",
+        "areas-references",
+        "areas-list",
+    )
+}
 
 /// Template for individual Area of Focus pages with references
 pub fn generate_area_of_focus_template_with_refs(
@@ -84,19 +132,18 @@ pub fn generate_area_of_focus_template_with_refs(
 }
 
 /// Template for Goals overview page
-pub const GOALS_OVERVIEW_TEMPLATE: &str = r#"# Goals (30,000 ft)
-
-**What you want to achieve in the next 1-2 years**
-
-These accomplishments will require multiple projects to complete. They provide focus and direction for your efforts.
-
-## Quarterly Review
-- What progress have I made?
-- What needs to shift?
-- Are these still the right goals?
-
-*Each goal has its own page with milestones and projects.*
-"#;
+pub fn goals_overview_template() -> String {
+    build_horizon_overview_template(
+        "Goals",
+        "goals",
+        "quarterly",
+        "Goals translate your multi-year vision into concrete 12–24 month outcomes. Keeping them explicit gives Projects and Actions a clear target.",
+        "Create a Goal page for each outcome you want within the next couple of years. Track status, target date, and the Areas or Projects that support it. Review this list quarterly to double-check priorities.",
+        "This automatically generated list mirrors the files inside /Goals. Rename a goal file and the overview updates automatically.",
+        "goals-references",
+        "goals-list",
+    )
+}
 
 /// Template for individual Goal pages with references
 pub fn generate_goal_template_with_refs(
@@ -159,15 +206,18 @@ pub fn generate_goal_template_with_refs(
 }
 
 /// Template for Vision folder
-pub const VISION_OVERVIEW_TEMPLATE: &str = r#"# Vision (40,000 ft)
-
-**What wild success looks like in 3-5 years**
-
-This is your ideal scenario—vivid, inspiring, and achievable. It guides your goals and major decisions.
-
-## Annual Review
-Revisit each year to recalibrate based on progress and life changes.
-"#;
+pub fn vision_overview_template() -> String {
+    build_horizon_overview_template(
+        "Vision",
+        "vision",
+        "annually",
+        "Vision pages describe what wild success looks like three to five years from now. They provide context for every major commitment below this altitude.",
+        "Create separate Vision narratives for each pillar of life or work. Set the horizon length, link relevant goals and areas, and revisit annually (or when strategy shifts).",
+        "Here you will always see the latest Vision documents stored in this folder. Use them during strategic reviews before drilling into individual goals.",
+        "vision-references",
+        "vision-list",
+    )
+}
 
 /// Template for main Vision document with references
 pub fn generate_vision_document_template_with_refs(purpose_refs: &str) -> String {
@@ -212,17 +262,18 @@ I've mastered [skills/knowledge]. I'm exploring [new areas]. I contribute by [te
 }
 
 /// Template for Purpose & Principles folder
-pub const PURPOSE_PRINCIPLES_OVERVIEW_TEMPLATE: &str = r#"# Purpose & Principles (50,000 ft)
-
-**Why you exist and what you stand for**
-
-Your ultimate intention and core standards. These drive everything else.
-
-## When to Review
-- Major life decisions
-- Annual deep reflection
-- When feeling lost or unmotivated
-"#;
+pub fn purpose_principles_overview_template() -> String {
+    build_horizon_overview_template(
+        "Purpose & Principles",
+        "purpose",
+        "on-demand",
+        "Purpose clarifies why you exist and what you stand for; Principles articulate the guardrails that keep decisions aligned. Every other horizon inherits meaning from here.",
+        "Create dedicated Purpose pages for mission statements, principle sets, or value frameworks. Link the goals and projects they influence. Revisit this list when making big commitments or whenever you sense a drift.",
+        "This section lists every Purpose page inside the folder. Think of it as your north-star playbook—add, archive, or reorganize pages as your understanding evolves.",
+        "purpose-references",
+        "purpose-list",
+    )
+}
 
 /// Template for Life Mission document
 pub fn life_mission_template() -> String {

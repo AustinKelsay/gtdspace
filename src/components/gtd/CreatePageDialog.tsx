@@ -257,9 +257,12 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
     };
   }, [isOpen, activeHorizonSection, spacePath, referenceFields]);
 
-  const applyHorizonTemplate = useCallback(async (filePath: string, rawFileName: string) => {
+  const applyHorizonTemplate = useCallback(async (
+    filePath: string,
+    rawFileName: string
+  ): Promise<boolean> => {
     if (!activeHorizonSection) {
-      return;
+      return true;
     }
 
     const normalizedTitle = stripMarkdownExtension(rawFileName).trim();
@@ -333,11 +336,23 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
     }
 
     if (nextContent.trim().length === 0) {
-      return;
+      return true;
     }
 
-    await safeInvoke('save_file', { path: filePath, content: nextContent }, null);
-  }, [activeHorizonSection, referenceSelections, visionHorizonValue]);
+    const writeResult = await safeInvoke('save_file', { path: filePath, content: nextContent }, null);
+
+    if (!writeResult) {
+      console.error('[CreatePageDialog] Failed to apply horizon template', {
+        filePath,
+        fileName: rawFileName,
+        horizonSection: activeHorizonSection,
+        directory,
+      });
+      return false;
+    }
+
+    return true;
+  }, [activeHorizonSection, referenceSelections, visionHorizonValue, directory]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -404,7 +419,10 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
 
           // Overwrite template with enriched metadata when creating horizon pages
           if (filePath && activeHorizonSection) {
-            await applyHorizonTemplate(filePath, fileName);
+            const templateApplied = await applyHorizonTemplate(filePath, fileName);
+            if (!templateApplied) {
+              throw new Error('Failed to apply horizon template to new page');
+            }
           }
 
           return filePath;

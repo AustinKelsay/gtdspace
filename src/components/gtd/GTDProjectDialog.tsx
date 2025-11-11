@@ -384,7 +384,7 @@ export const GTDProjectDialog: React.FC<GTDProjectDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
+      <DialogContent className="w-full max-w-3xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Create New Project</DialogTitle>
           <DialogDescription>

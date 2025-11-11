@@ -371,7 +371,7 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="w-full max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RefreshCw className="h-5 w-5 text-green-600" />

@@ -80,6 +80,13 @@ interface GTDSection {
   color: string;
 }
 
+type PageDialogDirectory = {
+  path: string;
+  name: string;
+  sectionId: string;
+  spacePath: string;
+};
+
 const GTD_SECTIONS: GTDSection[] = [
   {
     id: 'purpose',
@@ -204,7 +211,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const [searchQuery, setSearchQuery] = React.useState('');
   const [showSearch, setShowSearch] = React.useState(false);
   const [showPageDialog, setShowPageDialog] = React.useState(false);
-  const [pageDialogDirectory, setPageDialogDirectory] = React.useState<{ path: string; name: string } | null>(null);
+  const [pageDialogDirectory, setPageDialogDirectory] = React.useState<PageDialogDirectory | null>(null);
   const [showHabitDialog, setShowHabitDialog] = React.useState(false);
   const [sectionFiles, setSectionFiles] = React.useState<{ [sectionPath: string]: MarkdownFile[] }>({});
   const [sectionRefreshKey, setSectionRefreshKey] = React.useState(0);
@@ -925,8 +932,15 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       setShowHabitDialog(true);
     } else {
       // Show page dialog for other sections
-      const fullPath = `${gtdSpace?.root_path || currentFolder}/${section.path}`;
-      setPageDialogDirectory({ path: fullPath, name: section.name });
+      const basePath = (gtdSpace?.root_path || currentFolder || '').replace(/[\\/]+$/, '');
+      const separator = basePath.includes('\\') ? '\\' : '/';
+      const fullPath = basePath ? `${basePath}${separator}${section.path}` : section.path;
+      setPageDialogDirectory({
+        path: fullPath,
+        name: section.name,
+        sectionId: section.id,
+        spacePath: basePath,
+      });
       setShowPageDialog(true);
     }
   };
@@ -2255,6 +2269,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           }}
           directory={pageDialogDirectory.path}
           directoryName={pageDialogDirectory.name}
+          sectionId={pageDialogDirectory.sectionId}
+          spacePath={pageDialogDirectory.spacePath}
           onSuccess={async (filePath) => {
 
             // Create the new file object immediately
@@ -2285,13 +2301,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             });
 
             // Ensure the section is expanded (Cabinet -> cabinet, Someday Maybe -> someday-maybe)
-            const sectionId = pageDialogDirectory.name.toLowerCase().replace(/\s+/g, '-');
-            setExpandedSections(prev => {
-              if (!prev.includes(sectionId)) {
-                return [...prev, sectionId];
-              }
-              return prev;
-            });
+            const sectionKey = pageDialogDirectory.sectionId;
+            if (sectionKey) {
+              setExpandedSections(prev => (
+                prev.includes(sectionKey) ? prev : [...prev, sectionKey]
+              ));
+            }
 
             // Open the newly created file
             onFileSelect(newFile);

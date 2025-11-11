@@ -58,10 +58,10 @@ use seed_data::{
     areas_of_focus_overview_template, core_values_template, generate_action_template,
     generate_area_of_focus_template_with_refs, generate_goal_template_with_refs,
     generate_project_readme, generate_project_readme_with_refs,
-    generate_vision_document_template_with_refs, generate_weekly_review_habit, goals_overview_template,
-    life_mission_template, purpose_principles_overview_template, vision_overview_template,
-    ProjectReadmeParams, CABINET_GTD_PRINCIPLES_TEMPLATE, SOMEDAY_LEARN_LANGUAGE_TEMPLATE,
-    WELCOME_TEMPLATE,
+    generate_vision_document_template_with_refs, generate_weekly_review_habit,
+    goals_overview_template, life_mission_template, purpose_principles_overview_template,
+    vision_overview_template, ProjectReadmeParams, CABINET_GTD_PRINCIPLES_TEMPLATE,
+    SOMEDAY_LEARN_LANGUAGE_TEMPLATE, WELCOME_TEMPLATE,
 };
 
 // ===== REGEX PATTERNS FOR HABIT PARSING =====

@@ -82,7 +82,7 @@ Each README uses the same page frame as other templates (header grid + BlockNote
 
 ### 5.2 README Template System
 1. **Docs:** Author `docs/horizon-readme-template.md` describing canonical markdown ordering, review cadence defaults, and acceptable tokens.  
-2. **Builder helper:** Introduce `buildHorizonReadmeMarkdown(horizonType, contentOverrides)` in `src/utils/gtd-markdown-helpers.ts`. Responsibilities:  
+2. **Builder helper:** Introduce `buildHorizonReadmeMarkdown(horizonType, contentOverrides)` in `src/utils/horizon-readme-utils.ts`. Responsibilities:  
    - Guarantee header metadata order.  
    - Inject `[!<horizon>-references:[]]` and `[!<horizon>-list]` if missing.  
    - Preserve user-edited body paragraphs between canonical sections.  
@@ -92,7 +92,7 @@ Each README uses the same page frame as other templates (header grid + BlockNote
 4. **Editor rendering:** Ensure BlockNote renders `[!<horizon>-list]` as a read-only component with explanatory hint text (reusing actions list styling but without filters).
 
 ### 5.3 Reference Synchronization Utility
-1. **Utility module:** `src/utils/horizon-readme-sync.ts` exporting `syncHorizonReadme(folderPath, horizonType)`.  
+1. **Utility module:** `src/utils/horizon-readme-utils.ts` exporting `syncHorizonReadmeContent(folderPath, horizonType)`.  
 2. **Process:**  
    - Enumerate markdown files under folder (via existing IPC).  
    - Generate sorted array of relative paths → JSON encode into `[!<horizon>-references:...]`.  
@@ -123,7 +123,7 @@ Each README uses the same page frame as other templates (header grid + BlockNote
    - Presence of `[!<horizon>-references:]` token  
    - Presence of `## Why this horizon matters` copy.  
 2. **Non-destructive insertion:** Use `migrateMarkdownContent()` to insert missing sections at canonical anchors. Preserve user-written intro paragraphs by placing new sections after the title unless duplicates already exist.  
-3. **One-time sync:** After structural migration, run `syncHorizonReadme` so reference arrays reflect actual files.  
+3. **One-time sync:** After structural migration, run `syncHorizonReadmeContent` so reference arrays reflect actual files.  
 4. **Audit trail:** Log a concise summary in the developer console or telemetry (e.g., “Migrated Goals README → added Reference Index + 3 pages”).  
 5. **Rollback plan:** Because we only append sections, users can delete the new blocks manually if they truly object; no irreversible mutations occur.
 
@@ -132,7 +132,7 @@ Each README uses the same page frame as other templates (header grid + BlockNote
 ## 7. QA & Validation
 1. **Automated tests:**  
    - Unit tests for `buildHorizonReadmeMarkdown` (fixtures covering blank README, custom copy, legacy order).  
-   - Unit tests for `syncHorizonReadme` (mock FS lists, ensure JSON arrays match).  
+   - Unit tests for `syncHorizonReadmeContent` (mock FS lists, ensure JSON arrays match).  
    - Sidebar interaction tests verifying keyboard + mouse behaviors.  
 2. **Manual checklist:**  
    - Clicking `Vision` opens `Vision/README.md`; chevron toggles list; re-opening preserves state.  

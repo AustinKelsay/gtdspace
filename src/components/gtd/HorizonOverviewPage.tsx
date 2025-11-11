@@ -11,13 +11,14 @@ import {
   extractHorizonSection,
   extractMarkdownTitle,
 } from '@/utils/horizon-readme-utils';
-import { Layers, Calendar, List, FileText, ArrowRight } from 'lucide-react';
+import { Layers, Calendar, List, FileText, ArrowRight, Edit } from 'lucide-react';
 
 interface HorizonOverviewPageProps {
   horizon: HorizonType;
   content: string;
   filePath?: string;
   className?: string;
+  onEdit?: () => void;
 }
 
 const SECTION_HEADINGS = {
@@ -75,6 +76,7 @@ export const HorizonOverviewPage: React.FC<HorizonOverviewPageProps> = ({
   content,
   filePath,
   className = '',
+  onEdit,
 }) => {
   const config = HORIZON_CONFIG[horizon];
   const metadata = React.useMemo<FileMetadata>(
@@ -130,9 +132,22 @@ export const HorizonOverviewPage: React.FC<HorizonOverviewPageProps> = ({
     <div className={cn('flex flex-col gap-6 pb-10', className)}>
       <Card className="p-6 space-y-4">
         <div className="flex flex-col gap-2">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">
-            Horizon Overview
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">
+              Horizon Overview
+            </p>
+            {onEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onEdit}
+                className="flex items-center gap-2"
+              >
+                <Edit className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-bold">{title}</h1>
             <Badge variant="secondary" className="uppercase tracking-wide">

@@ -131,6 +131,18 @@ export const App: React.FC = () => {
     reorderTabs,
   } = useTabManager();
 
+  // Track which horizon README tabs should show editor instead of overview
+  const [horizonTabsInEditorMode, setHorizonTabsInEditorMode] = React.useState<
+    Set<string>
+  >(new Set());
+
+  /**
+   * Switch a horizon README tab to editor mode
+   */
+  const switchHorizonTabToEditor = React.useCallback((tabId: string) => {
+    setHorizonTabsInEditorMode((prev) => new Set(prev).add(tabId));
+  }, []);
+
   // Fallback to last tab if activeTab is not set for any reason
   const displayedTab = React.useMemo(() => {
     return (
@@ -148,6 +160,20 @@ export const App: React.FC = () => {
       activateTab(lastTab.id);
     }
   }, [activeTab, tabState.openTabs, tabState.activeTabId, activateTab]);
+
+  // Clean up editor mode state for closed tabs
+  React.useEffect(() => {
+    const openTabIds = new Set(tabState.openTabs.map((tab) => tab.id));
+    setHorizonTabsInEditorMode((prev) => {
+      const cleaned = new Set<string>();
+      prev.forEach((tabId) => {
+        if (openTabIds.has(tabId)) {
+          cleaned.add(tabId);
+        }
+      });
+      return cleaned;
+    });
+  }, [tabState.openTabs]);
 
   // === FILE WATCHER ===
 
@@ -1104,6 +1130,30 @@ export const App: React.FC = () => {
                           candidatePath
                         );
                         if (horizonReadmeType) {
+                          // Check if this tab should show editor instead of overview
+                          const shouldShowEditor = horizonTabsInEditorMode.has(
+                            displayedTab.id
+                          );
+                          if (shouldShowEditor) {
+                            // Render editor view
+                            return (
+                              <EnhancedTextEditor
+                                key={displayedTab.id}
+                                content={displayedTab.content}
+                                onChange={(content) =>
+                                  updateTabContent(displayedTab.id, content)
+                                }
+                                mode={settings.editor_mode as EditorMode}
+                                showLineNumbers={true}
+                                readOnly={false}
+                                autoFocus={true}
+                                className="flex-1"
+                                data-editor-root
+                                filePath={displayedTab.filePath}
+                              />
+                            );
+                          }
+                          // Render overview page with Edit button
                           return (
                             <HorizonOverviewPage
                               key={displayedTab.id}
@@ -1111,6 +1161,7 @@ export const App: React.FC = () => {
                               filePath={displayedTab.filePath}
                               horizon={horizonReadmeType}
                               className="flex-1"
+                              onEdit={() => switchHorizonTabToEditor(displayedTab.id)}
                             />
                           );
                         }

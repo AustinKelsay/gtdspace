@@ -568,7 +568,7 @@ export const useCalendarData = (
     } finally {
       setIsLoading(false);
     }
-  }, [spacePath, gtdSpace, files, googleEvents]);
+  }, [spacePath, gtdSpace, googleEvents]);
 
   const scheduleCalendarReload = useCallback((reason: string) => {
     if (!spacePath) return;

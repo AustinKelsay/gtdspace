@@ -342,7 +342,7 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
     await safeInvoke('save_file', { path: filePath, content: nextContent }, null);
 
     return true;
-  }, [activeHorizonSection, referenceSelections, visionHorizonValue, directory]);
+  }, [activeHorizonSection, referenceSelections, visionHorizonValue]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -66,6 +66,7 @@ function extractPreamble(markdown: string): string {
 interface ParsedSection {
   heading: string;
   body: string;
+  index: number;
 }
 
 function parseSections(markdown: string): ParsedSection[] {
@@ -77,7 +78,7 @@ function parseSections(markdown: string): ParsedSection[] {
     const start = (match.index ?? 0) + match[0].length;
     const end = index + 1 < matches.length ? matches[index + 1].index ?? normalized.length : normalized.length;
     const body = normalized.slice(start, end).trim();
-    return { heading, body };
+    return { heading, body, index };
   });
 }
 
@@ -173,6 +174,7 @@ export function buildHorizonReadmeMarkdown(options: HorizonReadmeBuildOptions): 
 
   const sections = parseSections(normalized);
   const sectionMap = new Map<string, string>();
+  const canonicalPositions = new Map<string, number>();
   const extras: ParsedSection[] = [];
 
   sections.forEach((section) => {
@@ -180,6 +182,7 @@ export function buildHorizonReadmeMarkdown(options: HorizonReadmeBuildOptions): 
     if (canonical) {
       if (!sectionMap.has(canonical)) {
         sectionMap.set(canonical, section.body.trim());
+        canonicalPositions.set(canonical, section.index);
       }
     } else {
       extras.push(section);
@@ -200,24 +203,44 @@ export function buildHorizonReadmeMarkdown(options: HorizonReadmeBuildOptions): 
 
   const preamble = extractPreamble(normalized);
 
+  const canonicalBlocks = [
+    { heading: '## Altitude', body: `[!singleselect:horizon-altitude:${altitudeValue}]` },
+    { heading: '## Review Cadence', body: `[!singleselect:horizon-review-cadence:${cadenceValue}]` },
+    { heading: '## Created', body: `[!datetime:created_date_time:${createdValue}]` },
+    { heading: '## Why this horizon matters', body: whyBody },
+    { heading: '## How to work this horizon in GTD Space', body: howBody },
+    { heading: '## Horizon Pages Overview', body: overviewBody },
+    { heading: '## Reference Index', body: referenceMarker },
+    { heading: '## Horizon Pages', body: `[!${config.listToken}]` },
+  ];
+
+  const mergedSections = mergeSectionsWithExtras(
+    canonicalBlocks,
+    extras.map((extra) => ({
+      heading: extra.heading,
+      body: sanitizeBlockBody(extra.body),
+      index: extra.index,
+    })),
+    canonicalPositions,
+    sections.length
+  );
+
   const docParts: string[] = [];
   docParts.push(`# ${existingTitle}`);
-  docParts.push(sectionBlock('## Altitude', `[!singleselect:horizon-altitude:${altitudeValue}]`));
-  docParts.push(sectionBlock('## Review Cadence', `[!singleselect:horizon-review-cadence:${cadenceValue}]`));
-  docParts.push(sectionBlock('## Created', `[!datetime:created_date_time:${createdValue}]`));
-  if (preamble) {
-    docParts.push(preamble.trim());
-  }
-  docParts.push(sectionBlock('## Why this horizon matters', whyBody));
-  docParts.push(sectionBlock('## How to work this horizon in GTD Space', howBody));
-  docParts.push(sectionBlock('## Horizon Pages Overview', overviewBody));
-  docParts.push(sectionBlock('## Reference Index', referenceMarker));
-  docParts.push(sectionBlock('## Horizon Pages', `[!${config.listToken}]`));
 
-  extras.forEach((extra) => {
-    const trimmedBody = sanitizeBlockBody(extra.body);
-    docParts.push(sectionBlock(extra.heading, trimmedBody));
+  let preambleInserted = false;
+
+  mergedSections.forEach((block) => {
+    docParts.push(sectionBlock(block.heading, block.body));
+    if (!preambleInserted && block.heading === '## Created' && preamble) {
+      docParts.push(preamble.trim());
+      preambleInserted = true;
+    }
   });
+
+  if (preamble && !preambleInserted) {
+    docParts.splice(1, 0, preamble.trim());
+  }
 
   const finalContent = docParts
     .filter(Boolean)
@@ -232,6 +255,98 @@ export function buildHorizonReadmeMarkdown(options: HorizonReadmeBuildOptions): 
     referenceCount: normalizedRefs.length,
     references: normalizedRefs,
   };
+}
+
+interface SectionBlock {
+  heading: string;
+  body: string;
+}
+
+interface ExtraSection extends SectionBlock {
+  index: number;
+}
+
+function mergeSectionsWithExtras(
+  canonicalBlocks: SectionBlock[],
+  extras: ExtraSection[],
+  canonicalPositions: Map<string, number>,
+  totalSections: number
+): SectionBlock[] {
+  if (extras.length === 0) {
+    return [...canonicalBlocks];
+  }
+
+  const merged = [...canonicalBlocks];
+  const canonicalOrderInfo = canonicalBlocks.map((block, slotIndex) => ({
+    heading: block.heading,
+    slotIndex,
+    originalIndex: canonicalPositions.has(block.heading)
+      ? canonicalPositions.get(block.heading) ?? null
+      : null,
+  }));
+
+  const canonicalWithOriginal = canonicalOrderInfo.filter(
+    (entry): entry is typeof entry & { originalIndex: number } => entry.originalIndex !== null
+  );
+
+  const extrasSorted = [...extras].sort((a, b) => a.index - b.index);
+  const anchorInsertPositions = new Map<string, number>();
+
+  const clampIndex = (value: number) => {
+    if (Number.isNaN(value) || !Number.isFinite(value)) {
+      return merged.length;
+    }
+    return Math.max(0, Math.min(value, merged.length));
+  };
+
+  extrasSorted.forEach((extra) => {
+    const { heading, body, index } = extra;
+
+    let beforeHeading: string | null = null;
+    let beforeIndex = -Infinity;
+    let afterHeading: string | null = null;
+    let afterIndex = Infinity;
+
+    canonicalWithOriginal.forEach((entry) => {
+      const originalIndex = entry.originalIndex;
+      if (originalIndex <= index && originalIndex >= beforeIndex) {
+        beforeIndex = originalIndex;
+        beforeHeading = entry.heading;
+      }
+      if (originalIndex > index && originalIndex < afterIndex) {
+        afterIndex = originalIndex;
+        afterHeading = entry.heading;
+      }
+    });
+
+    const block = { heading, body };
+
+    if (beforeHeading) {
+      const lastInsert = anchorInsertPositions.get(beforeHeading);
+      const beforePos =
+        typeof lastInsert === 'number'
+          ? lastInsert
+          : merged.findIndex((section) => section.heading === beforeHeading);
+      const insertPos = beforePos === -1 ? merged.length : beforePos + 1;
+      merged.splice(insertPos, 0, block);
+      anchorInsertPositions.set(beforeHeading, insertPos);
+      return;
+    }
+
+    if (afterHeading) {
+      const afterPos = merged.findIndex((section) => section.heading === afterHeading);
+      const insertPos = afterPos === -1 ? merged.length : afterPos;
+      merged.splice(insertPos, 0, block);
+      return;
+    }
+
+    const denominator = Math.max(totalSections, 1);
+    const relativePosition = index / denominator;
+    const approximateIndex = clampIndex(Math.round(relativePosition * merged.length));
+    merged.splice(approximateIndex, 0, block);
+  });
+
+  return merged;
 }
 
 export function syncHorizonReadmeContent({

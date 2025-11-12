@@ -3601,7 +3601,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     // Update with references to BOTH Area and Goal
     let areas_ref = format!("{}/Areas of Focus/Professional Excellence.md", &space_path);
     let goals_ref = format!("{}/Goals/Build Financial Freedom.md", &space_path);
-    let vision_ref = format!("{}/Vision/README.md", &space_path);
+    let vision_ref = format!("{}/Vision/My 3-5 Year Vision.md", &space_path);
     let purpose_ref = format!("{}/Purpose & Principles/Core Values.md", &space_path);
     let cabinet_ref = format!("{}/Cabinet/GTD Quick Reference.md", &space_path);
 

@@ -409,10 +409,7 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
 
           // Overwrite template with enriched metadata when creating horizon pages
           if (filePath && activeHorizonSection) {
-            const templateApplied = await applyHorizonTemplate(filePath, fileName);
-            if (!templateApplied) {
-              throw new Error('Failed to apply horizon template to new page');
-            }
+            await applyHorizonTemplate(filePath, fileName);
           }
 
           return filePath;

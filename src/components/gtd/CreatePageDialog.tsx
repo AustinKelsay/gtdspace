@@ -339,17 +339,7 @@ export const CreatePageDialog: React.FC<CreatePageDialogProps> = ({
       return true;
     }
 
-    const writeResult = await safeInvoke('save_file', { path: filePath, content: nextContent }, null);
-
-    if (!writeResult) {
-      console.error('[CreatePageDialog] Failed to apply horizon template', {
-        filePath,
-        fileName: rawFileName,
-        horizonSection: activeHorizonSection,
-        directory,
-      });
-      return false;
-    }
+    await safeInvoke('save_file', { path: filePath, content: nextContent }, null);
 
     return true;
   }, [activeHorizonSection, referenceSelections, visionHorizonValue, directory]);

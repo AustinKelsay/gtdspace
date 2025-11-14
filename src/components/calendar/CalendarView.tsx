@@ -543,8 +543,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         return;
       }
       await invoke('google_calendar_sync');
-      // Refresh calendar data after sync
-      refresh();
+      // Refresh calendar data after sync (no need to rescan files)
+      refresh({ forceFileScan: false });
       // Update sync status
       const status = await invoke<GoogleCalendarSyncStatus>('google_calendar_get_status');
       setGoogleSyncStatus(mapGoogleCalendarSyncStatus(status));
@@ -966,8 +966,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         throw new Error('Failed to save file');
       }
 
-      // Refresh calendar data
-      refresh();
+      // Refresh calendar data without forcing a file rescan
+      refresh({ forceFileScan: false });
       
       // Show success message
       toast({
@@ -1017,8 +1017,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         throw new Error('Failed to save file');
       }
 
-      // Refresh calendar data
-      refresh();
+      // Refresh calendar data without re-scanning the entire file tree
+      refresh({ forceFileScan: false });
       
       // Show success message
       toast({
@@ -1174,7 +1174,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            onClick={refresh}
+            onClick={() => refresh()}
           >
             Refresh
           </Button>

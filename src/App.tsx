@@ -54,7 +54,10 @@ import { ErrorBoundary } from "@/components/error-handling";
 import { Toaster } from "@/components/ui/toaster";
 import type { Theme, MarkdownFile, EditorMode, GTDProject } from "@/types";
 import "./styles/globals.css";
-import { detectHorizonTypeFromPath } from "@/utils/horizon-config";
+import {
+  detectHorizonTypeFromPath,
+  HORIZON_CONFIG,
+} from "@/utils/horizon-config";
 
 /**
  * Normalizes a file path by converting it to lowercase and replacing
@@ -1122,6 +1125,11 @@ export const App: React.FC = () => {
                           displayedTab.filePath ??
                           "";
                         const normalizedPath = candidatePath.replace(/\\/g, "/");
+                        const workspaceRootPath = gtdSpace?.root_path
+                          ? gtdSpace.root_path
+                              .replace(/\\/g, "/")
+                              .replace(/\/+$/, "")
+                          : null;
                         const isReadmeFile = /(^|\/)README\.(md|markdown)$/i.test(
                           normalizedPath
                         );
@@ -1129,7 +1137,41 @@ export const App: React.FC = () => {
                         const horizonReadmeType = detectHorizonTypeFromPath(
                           candidatePath
                         );
-                        if (horizonReadmeType) {
+                        const relativePathToWorkspace = workspaceRootPath
+                          ? (() => {
+                              const normalizedRootLower =
+                                workspaceRootPath.toLowerCase();
+                              const normalizedPathLower =
+                                normalizedPath.toLowerCase();
+                              const rootWithSlashLower = `${normalizedRootLower}/`;
+                              if (
+                                normalizedPathLower === normalizedRootLower ||
+                                normalizedPathLower.startsWith(
+                                  rootWithSlashLower
+                                )
+                              ) {
+                                const sliceIndex = workspaceRootPath.length;
+                                const remainder = normalizedPath
+                                  .slice(sliceIndex)
+                                  .replace(/^\/+/, "");
+                                return remainder;
+                              }
+                              return null;
+                            })()
+                          : null;
+                        const expectedRelativePath = horizonReadmeType
+                          ? `${HORIZON_CONFIG[horizonReadmeType].folderName}/README.md`
+                          : null;
+                        const isWorkspaceHorizonOverview =
+                          !!(
+                            horizonReadmeType &&
+                            relativePathToWorkspace &&
+                            expectedRelativePath &&
+                            relativePathToWorkspace.toLowerCase() ===
+                              expectedRelativePath.toLowerCase()
+                          );
+
+                        if (isWorkspaceHorizonOverview && horizonReadmeType) {
                           // Check if this tab should show editor instead of overview
                           const shouldShowEditor = horizonTabsInEditorMode.has(
                             displayedTab.id

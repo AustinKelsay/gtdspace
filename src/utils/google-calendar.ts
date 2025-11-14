@@ -56,8 +56,13 @@ export function getAutoSyncPreference(defaultValue = true): boolean {
 
 export function setAutoSyncPreference(enabled: boolean): void {
   const storage = getLocalStorage();
-  if (!storage) return;
-  storage.setItem(GOOGLE_CALENDAR_AUTO_SYNC_KEY, enabled ? 'true' : 'false');
+  if (storage) {
+    try {
+      storage.setItem(GOOGLE_CALENDAR_AUTO_SYNC_KEY, enabled ? 'true' : 'false');
+    } catch (error) {
+      console.warn('[GoogleCalendar] Failed to persist auto-sync preference:', error);
+    }
+  }
   if (isBrowser()) {
     window.dispatchEvent(
       new CustomEvent(GOOGLE_CALENDAR_AUTO_SYNC_EVENT, { detail: enabled })

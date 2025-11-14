@@ -35,6 +35,7 @@ import PurposePage from "@/components/gtd/PurposePage";
 import HorizonOverviewPage from "@/components/gtd/HorizonOverviewPage";
 import { HabitPage } from "@/components/gtd/HabitPage";
 import { CalendarView } from "@/components/calendar/CalendarView";
+import { GoogleCalendarAutoSyncManager } from "@/components/calendar/GoogleCalendarAutoSyncManager";
 import { TabManager } from "@/components/tabs";
 import {
   SettingsManagerLazy,
@@ -915,6 +916,7 @@ export const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
+      <GoogleCalendarAutoSyncManager />
       <div
         key={themeKey}
         className="flex flex-col h-screen bg-background text-foreground"

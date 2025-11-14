@@ -6,6 +6,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
+import {
+  getAutoSyncPreference,
+  getLastGoogleCalendarSync,
+  persistGoogleCalendarEvents,
+  setAutoSyncPreference,
+  syncGoogleCalendarEvents,
+} from '@/utils/google-calendar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -22,7 +29,7 @@ export const GoogleCalendarSettings: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [autoSync, setAutoSync] = useState(false);
+  const [autoSync, setAutoSync] = useState(() => getAutoSyncPreference());
   const { toast } = useToast();
 
   // OAuth Configuration state
@@ -180,7 +187,7 @@ export const GoogleCalendarSettings: React.FC = () => {
       console.log('[GoogleCalendarSettings] Authentication status:', isAuthenticated);
 
       if (isAuthenticated) {
-        const lastSync = localStorage.getItem('google-calendar-last-sync');
+        const lastSync = getLastGoogleCalendarSync();
         setSyncStatus({
           isConnected: true,
           lastSync: lastSync,
@@ -289,7 +296,7 @@ export const GoogleCalendarSettings: React.FC = () => {
       });
 
       // Clear stored events
-      localStorage.removeItem('google-calendar-events');
+      persistGoogleCalendarEvents(null);
 
       toast({
         title: 'Google Calendar Disconnected',
@@ -307,49 +314,47 @@ export const GoogleCalendarSettings: React.FC = () => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const events = await safeInvoke('google_calendar_fetch_events', undefined, null);
-      console.log('[GoogleCalendarSettings] Fetched events:', events);
-
-      // Store events in localStorage for now (until we have proper state management)
-      if (Array.isArray(events)) {
-        localStorage.setItem('google-calendar-events', JSON.stringify(events));
-
-        // Store last sync time
-        const now = new Date().toISOString();
-        localStorage.setItem('google-calendar-last-sync', now);
-
-        // Update UI - guard against null prev
-        setSyncStatus(prev => prev ? {
-          ...prev,
-          lastSync: now,
-          syncInProgress: false,
-          error: null
-        } : {
-          isConnected: true,  // Successful sync means we're connected
-          syncInProgress: false,
-          lastSync: now,
-          error: null
-        });
-
-        toast({
-          title: 'Calendar Synced',
-          description: `Successfully synced ${events.length} events from Google Calendar.`,
-        });
-
-        // Dispatch event for calendar view to update
-        window.dispatchEvent(new CustomEvent('google-calendar-synced', {
-          detail: events
-        }));
+      const result = await syncGoogleCalendarEvents();
+      if (!result) {
+        throw new Error('Google Calendar sync is unavailable. Make sure the desktop app is connected.');
       }
+
+      setSyncStatus(prev => prev ? {
+        ...prev,
+        lastSync: result.timestamp,
+        syncInProgress: false,
+        error: null
+      } : {
+        isConnected: true,
+        syncInProgress: false,
+        lastSync: result.timestamp,
+        error: null
+      });
+
+      toast({
+        title: 'Calendar Synced',
+        description: `Successfully synced ${result.events.length} events from Google Calendar.`,
+      });
     } catch (error) {
       toast({
         title: 'Sync Failed',
-        description: error as string,
+        description: error instanceof Error ? error.message : String(error),
         variant: 'destructive',
       });
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  const handleAutoSyncToggle = (enabled: boolean) => {
+    setAutoSync(enabled);
+    setAutoSyncPreference(enabled);
+    toast({
+      title: enabled ? 'Auto-sync enabled' : 'Auto-sync disabled',
+      description: enabled
+        ? 'Events will refresh every 5 minutes while GTD Space is running.'
+        : 'Google Calendar will only refresh when you manually sync.',
+    });
   };
 
   const formatLastSync = (lastSync?: string) => {
@@ -597,13 +602,13 @@ export const GoogleCalendarSettings: React.FC = () => {
                 <div className="space-y-0.5">
                   <Label htmlFor="auto-sync">Auto-sync</Label>
                   <p className="text-sm text-muted-foreground">
-                    Automatically sync calendar every 15 minutes
+                    Automatically sync calendar every 5 minutes
                   </p>
                 </div>
                 <Switch
                   id="auto-sync"
                   checked={autoSync}
-                  onCheckedChange={setAutoSync}
+                  onCheckedChange={handleAutoSyncToggle}
                 />
               </div>
 

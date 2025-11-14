@@ -32,8 +32,10 @@ import AreaPage from "@/components/gtd/AreaPage";
 import GoalPage from "@/components/gtd/GoalPage";
 import VisionPage from "@/components/gtd/VisionPage";
 import PurposePage from "@/components/gtd/PurposePage";
+import HorizonOverviewPage from "@/components/gtd/HorizonOverviewPage";
 import { HabitPage } from "@/components/gtd/HabitPage";
 import { CalendarView } from "@/components/calendar/CalendarView";
+import { GoogleCalendarAutoSyncManager } from "@/components/calendar/GoogleCalendarAutoSyncManager";
 import { TabManager } from "@/components/tabs";
 import {
   SettingsManagerLazy,
@@ -53,6 +55,10 @@ import { ErrorBoundary } from "@/components/error-handling";
 import { Toaster } from "@/components/ui/toaster";
 import type { Theme, MarkdownFile, EditorMode, GTDProject } from "@/types";
 import "./styles/globals.css";
+import {
+  detectHorizonTypeFromPath,
+  HORIZON_CONFIG,
+} from "@/utils/horizon-config";
 
 /**
  * Normalizes a file path by converting it to lowercase and replacing
@@ -129,6 +135,18 @@ export const App: React.FC = () => {
     reorderTabs,
   } = useTabManager();
 
+  // Track which horizon README tabs should show editor instead of overview
+  const [horizonTabsInEditorMode, setHorizonTabsInEditorMode] = React.useState<
+    Set<string>
+  >(new Set());
+
+  /**
+   * Switch a horizon README tab to editor mode
+   */
+  const switchHorizonTabToEditor = React.useCallback((tabId: string) => {
+    setHorizonTabsInEditorMode((prev) => new Set(prev).add(tabId));
+  }, []);
+
   // Fallback to last tab if activeTab is not set for any reason
   const displayedTab = React.useMemo(() => {
     return (
@@ -146,6 +164,20 @@ export const App: React.FC = () => {
       activateTab(lastTab.id);
     }
   }, [activeTab, tabState.openTabs, tabState.activeTabId, activateTab]);
+
+  // Clean up editor mode state for closed tabs
+  React.useEffect(() => {
+    const openTabIds = new Set(tabState.openTabs.map((tab) => tab.id));
+    setHorizonTabsInEditorMode((prev) => {
+      const cleaned = new Set<string>();
+      prev.forEach((tabId) => {
+        if (openTabIds.has(tabId)) {
+          cleaned.add(tabId);
+        }
+      });
+      return cleaned;
+    });
+  }, [tabState.openTabs]);
 
   // === FILE WATCHER ===
 
@@ -884,6 +916,7 @@ export const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
+      <GoogleCalendarAutoSyncManager />
       <div
         key={themeKey}
         className="flex flex-col h-screen bg-background text-foreground"
@@ -1093,10 +1126,89 @@ export const App: React.FC = () => {
                           displayedTab.file.path ??
                           displayedTab.filePath ??
                           "";
-                        const normalizedPath = candidatePath.replace(
-                          /\\/g,
-                          "/"
+                        const normalizedPath = candidatePath.replace(/\\/g, "/");
+                        const workspaceRootPath = gtdSpace?.root_path
+                          ? gtdSpace.root_path
+                              .replace(/\\/g, "/")
+                              .replace(/\/+$/, "")
+                          : null;
+                        const isReadmeFile = /(^|\/)README\.(md|markdown)$/i.test(
+                          normalizedPath
                         );
+
+                        const horizonReadmeType = detectHorizonTypeFromPath(
+                          candidatePath
+                        );
+                        const relativePathToWorkspace = workspaceRootPath
+                          ? (() => {
+                              const normalizedRootLower =
+                                workspaceRootPath.toLowerCase();
+                              const normalizedPathLower =
+                                normalizedPath.toLowerCase();
+                              const rootWithSlashLower = `${normalizedRootLower}/`;
+                              if (
+                                normalizedPathLower === normalizedRootLower ||
+                                normalizedPathLower.startsWith(
+                                  rootWithSlashLower
+                                )
+                              ) {
+                                const sliceIndex = workspaceRootPath.length;
+                                const remainder = normalizedPath
+                                  .slice(sliceIndex)
+                                  .replace(/^\/+/, "");
+                                return remainder;
+                              }
+                              return null;
+                            })()
+                          : null;
+                        const expectedRelativePath = horizonReadmeType
+                          ? `${HORIZON_CONFIG[horizonReadmeType].folderName}/README.md`
+                          : null;
+                        const isWorkspaceHorizonOverview =
+                          !!(
+                            horizonReadmeType &&
+                            relativePathToWorkspace &&
+                            expectedRelativePath &&
+                            relativePathToWorkspace.toLowerCase() ===
+                              expectedRelativePath.toLowerCase()
+                          );
+
+                        if (isWorkspaceHorizonOverview && horizonReadmeType) {
+                          // Check if this tab should show editor instead of overview
+                          const shouldShowEditor = horizonTabsInEditorMode.has(
+                            displayedTab.id
+                          );
+                          if (shouldShowEditor) {
+                            // Render editor view
+                            return (
+                              <EnhancedTextEditor
+                                key={displayedTab.id}
+                                content={displayedTab.content}
+                                onChange={(content) =>
+                                  updateTabContent(displayedTab.id, content)
+                                }
+                                mode={settings.editor_mode as EditorMode}
+                                showLineNumbers={true}
+                                readOnly={false}
+                                autoFocus={true}
+                                className="flex-1"
+                                data-editor-root
+                                filePath={displayedTab.filePath}
+                              />
+                            );
+                          }
+                          // Render overview page with Edit button
+                          return (
+                            <HorizonOverviewPage
+                              key={displayedTab.id}
+                              content={displayedTab.content}
+                              filePath={displayedTab.filePath}
+                              horizon={horizonReadmeType}
+                              className="flex-1"
+                              onEdit={() => switchHorizonTabToEditor(displayedTab.id)}
+                            />
+                          );
+                        }
 
                         // Detect Habit files first to render HabitPage
                         const habitsDir = gtdSpace?.root_path
@@ -1114,7 +1226,7 @@ export const App: React.FC = () => {
                           );
                         const isHabitFile =
                           (pathLooksLikeHabit || contentHasHabitMarkers) &&
-                          !/(^|\/)README\.md$/i.test(normalizedPath);
+                          !isReadmeFile;
 
                         if (isHabitFile) {
                           return (
@@ -1146,7 +1258,8 @@ export const App: React.FC = () => {
                           );
                         const isAreaFile =
                           (pathLooksLikeArea || contentHasAreaMarkers) &&
-                          normalizedPath !== "::calendar::";
+                          normalizedPath !== "::calendar::" &&
+                          !isReadmeFile;
 
                         if (isAreaFile) {
                           return (
@@ -1178,7 +1291,8 @@ export const App: React.FC = () => {
                           );
                         const isGoalFile =
                           (pathLooksLikeGoal || contentHasGoalMarkers) &&
-                          normalizedPath !== "::calendar::";
+                          normalizedPath !== "::calendar::" &&
+                          !isReadmeFile;
 
                         if (isGoalFile) {
                           return (
@@ -1207,7 +1321,8 @@ export const App: React.FC = () => {
                           );
                         const isVisionFile =
                           (pathLooksLikeVision || contentHasVisionMarkers) &&
-                          normalizedPath !== "::calendar::";
+                          normalizedPath !== "::calendar::" &&
+                          !isReadmeFile;
 
                         if (isVisionFile) {
                           return (
@@ -1238,7 +1353,8 @@ export const App: React.FC = () => {
                           );
                         const isPurposeFile =
                           (pathLooksLikePurpose || likelyPurposeHeadings) &&
-                          normalizedPath !== "::calendar::";
+                          normalizedPath !== "::calendar::" &&
+                          !isReadmeFile;
 
                         if (isPurposeFile) {
                           return (
@@ -1260,9 +1376,7 @@ export const App: React.FC = () => {
                         const underProjects = projectsDir
                           ? isUnder(normalizedPath, projectsDir)
                           : false;
-                        const isReadme = /(^|\/)README\.(md|markdown)$/i.test(
-                          normalizedPath
-                        );
+                        const isReadme = isReadmeFile;
 
                         let isProjectReadme = false;
                         if (underProjects && isReadme && projectsDir) {

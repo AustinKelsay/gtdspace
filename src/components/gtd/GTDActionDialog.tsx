@@ -126,7 +126,7 @@ export const GTDActionDialog: React.FC<GTDActionDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
-      <DialogContent className="max-w-md max-h-[90vh] flex flex-col overflow-visible">
+      <DialogContent className="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-visible">
         <DialogHeader>
           <DialogTitle>Add Action to {projectName}</DialogTitle>
           <DialogDescription>

@@ -55,12 +55,13 @@ use git_sync::{
     GitOperationResultPayload, GitSyncStatusResponse,
 };
 use seed_data::{
-    core_values_template, generate_action_template, generate_area_of_focus_template_with_refs,
-    generate_goal_template_with_refs, generate_project_readme, generate_project_readme_with_refs,
+    areas_of_focus_overview_template, core_values_template, generate_action_template,
+    generate_area_of_focus_template_with_refs, generate_goal_template_with_refs,
+    generate_project_readme, generate_project_readme_with_refs,
     generate_vision_document_template_with_refs, generate_weekly_review_habit,
-    life_mission_template, ProjectReadmeParams, AREAS_OF_FOCUS_OVERVIEW_TEMPLATE,
-    CABINET_GTD_PRINCIPLES_TEMPLATE, GOALS_OVERVIEW_TEMPLATE, PURPOSE_PRINCIPLES_OVERVIEW_TEMPLATE,
-    SOMEDAY_LEARN_LANGUAGE_TEMPLATE, VISION_OVERVIEW_TEMPLATE, WELCOME_TEMPLATE,
+    goals_overview_template, life_mission_template, purpose_principles_overview_template,
+    vision_overview_template, ProjectReadmeParams, CABINET_GTD_PRINCIPLES_TEMPLATE,
+    SOMEDAY_LEARN_LANGUAGE_TEMPLATE, WELCOME_TEMPLATE,
 };
 
 // ===== REGEX PATTERNS FOR HABIT PARSING =====
@@ -3315,7 +3316,7 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                 // Create overview page
                 let overview_file = dir_path.join("README.md");
                 if !overview_file.exists() {
-                    if let Err(e) = fs::write(&overview_file, AREAS_OF_FOCUS_OVERVIEW_TEMPLATE) {
+                    if let Err(e) = fs::write(&overview_file, areas_of_focus_overview_template()) {
                         log::warn!("Failed to create Areas of Focus overview: {}", e);
                     } else {
                         log::info!("Created Areas of Focus overview");
@@ -3330,7 +3331,7 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                 // Create overview page
                 let overview_file = dir_path.join("README.md");
                 if !overview_file.exists() {
-                    if let Err(e) = fs::write(&overview_file, GOALS_OVERVIEW_TEMPLATE) {
+                    if let Err(e) = fs::write(&overview_file, goals_overview_template()) {
                         log::warn!("Failed to create Goals overview: {}", e);
                     } else {
                         log::info!("Created Goals overview");
@@ -3369,7 +3370,7 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                 // Create overview page
                 let overview_file = dir_path.join("README.md");
                 if !overview_file.exists() {
-                    if let Err(e) = fs::write(&overview_file, VISION_OVERVIEW_TEMPLATE) {
+                    if let Err(e) = fs::write(&overview_file, vision_overview_template()) {
                         log::warn!("Failed to create Vision overview: {}", e);
                     } else {
                         log::info!("Created Vision overview");
@@ -3397,7 +3398,8 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                 // Create overview page
                 let overview_file = dir_path.join("README.md");
                 if !overview_file.exists() {
-                    if let Err(e) = fs::write(&overview_file, PURPOSE_PRINCIPLES_OVERVIEW_TEMPLATE)
+                    if let Err(e) =
+                        fs::write(&overview_file, purpose_principles_overview_template())
                     {
                         log::warn!("Failed to create Purpose & Principles overview: {}", e);
                     } else {
@@ -3599,7 +3601,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     // Update with references to BOTH Area and Goal
     let areas_ref = format!("{}/Areas of Focus/Professional Excellence.md", &space_path);
     let goals_ref = format!("{}/Goals/Build Financial Freedom.md", &space_path);
-    let vision_ref = format!("{}/Vision/10 Year Vision.md", &space_path);
+    let vision_ref = format!("{}/Vision/My 3-5 Year Vision.md", &space_path);
     let purpose_ref = format!("{}/Purpose & Principles/Core Values.md", &space_path);
     let cabinet_ref = format!("{}/Cabinet/GTD Quick Reference.md", &space_path);
 

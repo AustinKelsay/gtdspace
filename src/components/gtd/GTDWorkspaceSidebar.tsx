@@ -57,6 +57,8 @@ import { GTDProjectDialog, GTDActionDialog, CreatePageDialog, CreateHabitDialog 
 import { FileSearch } from '@/components/file-browser/FileSearch';
 import type { GTDProject, MarkdownFile, GTDSpace } from '@/types';
 import { normalizeStatus } from '@/utils/gtd-status';
+import { syncHorizonReadmeContent } from '@/utils/horizon-readme-utils';
+import type { HorizonType } from '@/utils/horizon-config';
 
 interface GTDWorkspaceSidebarProps {
   currentFolder: string | null;
@@ -77,6 +79,13 @@ interface GTDSection {
   description: string;
   color: string;
 }
+
+type PageDialogDirectory = {
+  path: string;
+  name: string;
+  sectionId: string;
+  spacePath: string;
+};
 
 const GTD_SECTIONS: GTDSection[] = [
   {
@@ -153,6 +162,18 @@ const GTD_SECTIONS: GTDSection[] = [
   }
 ];
 
+const HORIZON_FOLDER_TO_TYPE: Record<string, HorizonType> = {
+  'Purpose & Principles': 'purpose',
+  'Vision': 'vision',
+  'Goals': 'goals',
+  'Areas of Focus': 'areas',
+};
+
+const getFolderName = (fullPath: string): string => {
+  const segments = fullPath.split(/[/\\]/).filter(Boolean);
+  return segments[segments.length - 1] ?? '';
+};
+
 // normalizeStatus is imported from utils/gtd-status
 
 export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
@@ -180,7 +201,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const [showProjectDialog, setShowProjectDialog] = React.useState(false);
   const [showActionDialog, setShowActionDialog] = React.useState(false);
   const [selectedProject, setSelectedProject] = React.useState<GTDProject | null>(null);
-  const [expandedSections, setExpandedSections] = React.useState<string[]>(['areas', 'projects', 'habits']);
+  const [expandedSections, setExpandedSections] = React.useState<string[]>(['projects', 'habits']);
   const [expandedProjects, setExpandedProjects] = React.useState<string[]>([]);
   // Completed group states (default collapsed)
   const [completedProjectsExpanded, setCompletedProjectsExpanded] = React.useState<boolean>(false);
@@ -190,7 +211,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const [searchQuery, setSearchQuery] = React.useState('');
   const [showSearch, setShowSearch] = React.useState(false);
   const [showPageDialog, setShowPageDialog] = React.useState(false);
-  const [pageDialogDirectory, setPageDialogDirectory] = React.useState<{ path: string; name: string } | null>(null);
+  const [pageDialogDirectory, setPageDialogDirectory] = React.useState<PageDialogDirectory | null>(null);
   const [showHabitDialog, setShowHabitDialog] = React.useState(false);
   const [sectionFiles, setSectionFiles] = React.useState<{ [sectionPath: string]: MarkdownFile[] }>({});
   const [sectionRefreshKey, setSectionRefreshKey] = React.useState(0);
@@ -214,6 +235,33 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const [sectionFileMetadata, setSectionFileMetadata] = React.useState<{ [filePath: string]: { title?: string; currentPath?: string } }>({});
   // Optimistic list of projects added before backend reload confirms them
   const [pendingProjects, setPendingProjects] = React.useState<GTDProject[]>([]);
+
+  const syncHorizonReadme = React.useCallback(
+    async (folderPath: string, files: MarkdownFile[]) => {
+      const folderName = getFolderName(folderPath);
+      const horizonType = HORIZON_FOLDER_TO_TYPE[folderName];
+      if (!horizonType) {
+        return;
+      }
+
+      const readmePath = `${folderPath}/README.md`;
+      try {
+        const existingContent =
+          (await safeInvoke<string>('read_file', { path: readmePath }, '')) ?? '';
+        const { content, changed } = syncHorizonReadmeContent({
+          horizon: horizonType,
+          existingContent,
+          files,
+        });
+        if (changed) {
+          await safeInvoke('save_file', { path: readmePath, content });
+        }
+      } catch (error) {
+        console.error('Failed to sync horizon README', { folderPath, error });
+      }
+    },
+    []
+  );
 
   const loadSectionFiles = React.useCallback(async (sectionPath: string, force: boolean = false) => {
     try {
@@ -245,6 +293,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       setLoadedSections(prev => new Set(prev).add(sectionPath));
       // Force a re-render by updating the refresh key (kept lightweight)
       setSectionRefreshKey(prev => prev + 1);
+      await syncHorizonReadme(sectionPath, sortedFiles);
 
       return sortedFiles;
     } catch (_error) {
@@ -252,7 +301,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     } finally {
       loadingSectionsRef.current.delete(sectionPath);
     }
-  }, [sectionFiles]);
+  }, [sectionFiles, syncHorizonReadme]);
 
   // Parse YYYY-MM-DD as a local date to avoid timezone off-by-one issues
   function parseLocalDateString(dateStr: string): Date | null {
@@ -865,14 +914,33 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     onFileSelect(readmeFile);
   };
 
+  const openHorizonReadme = (folderPath: string) => {
+    const readmeFile: MarkdownFile = {
+      id: `${folderPath}/README.md`,
+      name: 'README.md',
+      path: `${folderPath}/README.md`,
+      size: 0,
+      last_modified: Math.floor(Date.now() / 1000),
+      extension: 'md',
+    };
+    onFileSelect(readmeFile);
+  };
+
   const handleCreatePage = (section: GTDSection) => {
     if (section.id === 'habits') {
       // Show habit dialog for habits section
       setShowHabitDialog(true);
     } else {
       // Show page dialog for other sections
-      const fullPath = `${gtdSpace?.root_path || currentFolder}/${section.path}`;
-      setPageDialogDirectory({ path: fullPath, name: section.name });
+      const basePath = (gtdSpace?.root_path || currentFolder || '').replace(/[\\/]+$/, '');
+      const separator = basePath.includes('\\') ? '\\' : '/';
+      const fullPath = basePath ? `${basePath}${separator}${section.path}` : section.path;
+      setPageDialogDirectory({
+        path: fullPath,
+        name: section.name,
+        sectionId: section.id,
+        spacePath: basePath,
+      });
       setShowPageDialog(true);
     }
   };
@@ -1976,6 +2044,32 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                 }
 
                 // Regular sections (Horizon folders, Habits, Someday Maybe, Cabinet)
+                const isHorizonSection = section.id === 'areas' || section.id === 'goals' || section.id === 'vision' || section.id === 'purpose';
+                const visibleFiles = isHorizonSection
+                  ? files.filter((file) => file.name.toLowerCase() !== 'readme.md')
+                  : files;
+                const showBadge = loadedSections.has(sectionPath) && visibleFiles.length > 0;
+                const canCreatePage =
+                  section.id === 'someday' ||
+                  section.id === 'cabinet' ||
+                  section.id === 'habits' ||
+                  isHorizonSection;
+
+                const createButton = canCreatePage ? (
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCreatePage(section);
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title={`Add ${section.name} Page`}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                ) : null;
+
                 return (
                   <Collapsible
                     key={`${section.id}-${sectionRefreshKey}`}
@@ -1988,48 +2082,55 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                     }}
                   >
                     <div className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors">
-                      <CollapsibleTrigger
-                        className="flex-1 min-w-0"
-                        onClick={() => {
-                          // For horizon folders, also open the README when clicking the header
-                          if (section.id === 'areas' || section.id === 'goals' || section.id === 'vision' || section.id === 'purpose') {
-                            // Open the README.md file
-                            const readmeFile: MarkdownFile = {
-                              id: `${sectionPath}/README.md`,
-                              name: 'README.md',
-                              path: `${sectionPath}/README.md`,
-                              size: 0,
-                              last_modified: Math.floor(Date.now() / 1000),
-                              extension: 'md'
-                            };
-                            onFileSelect(readmeFile);
-                          }
-                        }}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                          <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
-                          <span className="font-medium text-sm truncate">{section.name}</span>
-                          {loadedSections.has(sectionPath) && files.length > 0 && (
-                            <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
-                              {files.length}
-                            </Badge>
-                          )}
-                        </div>
-                      </CollapsibleTrigger>
-                      {(section.id === 'someday' || section.id === 'cabinet' || section.id === 'habits' || section.id === 'areas' || section.id === 'goals' || section.id === 'vision' || section.id === 'purpose') && (
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCreatePage(section);
-                          }}
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title={`Add ${section.name} Page`}
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
+                      {isHorizonSection ? (
+                        <>
+                          <button
+                            type="button"
+                            className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+                            onClick={() => openHorizonReadme(sectionPath)}
+                          >
+                            <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
+                            <div className="flex flex-col flex-1 min-w-0">
+                              <span className="font-medium text-sm truncate">{section.name}</span>
+                              <span className="text-[11px] text-muted-foreground truncate">{section.description}</span>
+                            </div>
+                            {showBadge && (
+                              <Badge variant="secondary" className="text-xs px-1 py-0 h-4">
+                                {visibleFiles.length}
+                              </Badge>
+                            )}
+                          </button>
+                          <div className="flex items-center gap-0.5">
+                            <CollapsibleTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title={`${isExpanded ? 'Collapse' : 'Expand'} ${section.name}`}
+                              >
+                                <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                              </Button>
+                            </CollapsibleTrigger>
+                            {createButton}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <CollapsibleTrigger className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                              <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
+                              <span className="font-medium text-sm truncate">{section.name}</span>
+                              {showBadge && (
+                                <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
+                                  {visibleFiles.length}
+                                </Badge>
+                              )}
+                            </div>
+                          </CollapsibleTrigger>
+                          {createButton}
+                        </>
                       )}
                     </div>
 
@@ -2044,10 +2145,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                               </div>
                             ))}
                           </div>
-                        ) : files.length === 0 ? (
+                        ) : visibleFiles.length === 0 ? (
                           <div className="text-sm text-muted-foreground py-2">No pages yet</div>
                         ) : (
-                          files.map((file) => {
+                          visibleFiles.map((file) => {
                             // Use metadata for title if available
                             const currentTitle = sectionFileMetadata[file.path]?.title || file.name.replace('.md', '');
                             const currentPath = sectionFileMetadata[file.path]?.currentPath || file.path;
@@ -2168,6 +2269,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
           }}
           directory={pageDialogDirectory.path}
           directoryName={pageDialogDirectory.name}
+          sectionId={pageDialogDirectory.sectionId}
+          spacePath={pageDialogDirectory.spacePath}
           onSuccess={async (filePath) => {
 
             // Create the new file object immediately
@@ -2198,13 +2301,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             });
 
             // Ensure the section is expanded (Cabinet -> cabinet, Someday Maybe -> someday-maybe)
-            const sectionId = pageDialogDirectory.name.toLowerCase().replace(/\s+/g, '-');
-            setExpandedSections(prev => {
-              if (!prev.includes(sectionId)) {
-                return [...prev, sectionId];
-              }
-              return prev;
-            });
+            const sectionKey = pageDialogDirectory.sectionId;
+            if (sectionKey) {
+              setExpandedSections(prev => (
+                prev.includes(sectionKey) ? prev : [...prev, sectionKey]
+              ));
+            }
 
             // Open the newly created file
             onFileSelect(newFile);

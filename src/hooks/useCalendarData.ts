@@ -4,10 +4,11 @@
  * @created 2025-01-17
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
 import type { GTDSpace, MarkdownFile } from '@/types';
 import { migrateMarkdownContent, needsMigration } from '@/utils/data-migration';
+import { onMetadataChange, onContentSaved } from '@/utils/content-event-bus';
 
 export interface CalendarItem {
   id: string;
@@ -36,7 +37,7 @@ interface UseCalendarDataReturn {
   items: CalendarItem[];
   isLoading: boolean;
   error: string | null;
-  refresh: () => void;
+  refresh: (options?: { forceFileScan?: boolean }) => void;
 }
 
 // Google Calendar event payload as received from the Tauri backend/local cache
@@ -85,6 +86,9 @@ const getCheckboxRegex = (fieldName: string): RegExp => {
   return CHECKBOX_REGEX_CACHE.get(fieldName)!;
 };
 
+const normalizeFsPath = (value: string | undefined | null): string =>
+  (value ?? '').replace(/\\/g, '/');
+
 // Parse datetime field from markdown content
 const parseDateTimeField = (content: string, fieldName: string): string | undefined => {
   const regex = getDateTimeRegex(fieldName);
@@ -131,6 +135,33 @@ export const useCalendarData = (
   const [error, setError] = useState<string | null>(null);
   
   const [googleEvents, setGoogleEvents] = useState<GoogleEvent[]>([]);
+  const reloadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cache the most recent Markdown file listing so we can diff quickly without
+  // hammering the Tauri backend on every metadata edit. A structural event flips
+  // the flag below, forcing the next load to re-query disk.
+  const filesCacheRef = useRef<MarkdownFile[] | null>(files ?? null);
+  const forceFileRefreshRef = useRef(false);
+  const fileScanVersionRef = useRef(0);
+  const normalizedSpacePath = useMemo(() => normalizeFsPath(spacePath).toLowerCase(), [spacePath]);
+
+  const isPathInSpace = useCallback((candidate?: string) => {
+    if (!candidate || !normalizedSpacePath) return false;
+    return normalizeFsPath(candidate).toLowerCase().startsWith(normalizedSpacePath);
+  }, [normalizedSpacePath]);
+
+  useEffect(() => {
+    if (Array.isArray(files)) {
+      filesCacheRef.current = files;
+    }
+  }, [files]);
+
+  // When the user switches GTD spaces, clear the cached file list so the next
+  // load performs a fresh scan against the new directory.
+  useEffect(() => {
+    filesCacheRef.current = null;
+    forceFileRefreshRef.current = true;
+    fileScanVersionRef.current += 1;
+  }, [spacePath]);
 
   // Listen for Google Calendar sync events
   useEffect(() => {
@@ -174,11 +205,30 @@ export const useCalendarData = (
 
     try {
       console.log('[CalendarData] Starting comprehensive calendar data load...');
-      
+
+      // Ensure we have an up-to-date file snapshot
+      let effectiveFiles = filesCacheRef.current;
+      const needsFreshScan = !effectiveFiles || forceFileRefreshRef.current;
+      const scanVersionAtStart = fileScanVersionRef.current;
+
+      if (needsFreshScan) {
+        console.log('[CalendarData] Refreshing markdown file list from disk...');
+        const fetchedFiles = await safeInvoke<MarkdownFile[]>('list_markdown_files', { path: spacePath }, []);
+        if (Array.isArray(fetchedFiles)) {
+          filesCacheRef.current = fetchedFiles;
+          effectiveFiles = fetchedFiles;
+        } else {
+          effectiveFiles = [];
+        }
+        if (fileScanVersionRef.current === scanVersionAtStart) {
+          forceFileRefreshRef.current = false;
+        }
+      }
+
       // 1. Load all project README files directly
-      if (files) {
-        for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
-          const file = files[fileIndex];
+      if (effectiveFiles) {
+        for (let fileIndex = 0; fileIndex < effectiveFiles.length; fileIndex++) {
+          const file = effectiveFiles[fileIndex];
           // Normalize path for cross-platform compatibility (Windows uses backslashes)
           const normalizedPath = file.path.replace(/\\/g, '/');
           // Create lowercase version for case-insensitive comparisons
@@ -518,14 +568,124 @@ export const useCalendarData = (
     } finally {
       setIsLoading(false);
     }
-  }, [spacePath, gtdSpace, files, googleEvents]);
+  }, [spacePath, gtdSpace, googleEvents]);
+
+  const scheduleCalendarReload = useCallback((reason: string) => {
+    if (!spacePath) return;
+    if (reloadTimeoutRef.current) {
+      clearTimeout(reloadTimeoutRef.current);
+    }
+
+    reloadTimeoutRef.current = setTimeout(() => {
+      console.log('[CalendarData] Reloading calendar due to', reason);
+      loadAllCalendarItems();
+    }, 250);
+  }, [spacePath, loadAllCalendarItems]);
 
   // Load data on mount and when dependencies change
   useEffect(() => {
     loadAllCalendarItems();
   }, [loadAllCalendarItems]);
 
-  const refresh = useCallback(() => {
+  // Listen for metadata/content events to refresh calendar immediately when GTD fields change
+  useEffect(() => {
+    if (!spacePath) return;
+
+    const isRelevantFile = (filePathRaw: string | undefined): boolean => {
+      if (!filePathRaw || !isPathInSpace(filePathRaw)) {
+        return false;
+      }
+      const normalizedLower = normalizeFsPath(filePathRaw).toLowerCase();
+      return normalizedLower.includes('/projects/') || normalizedLower.includes('/habits/');
+    };
+
+    const metadataUnsubscribe = onMetadataChange((event) => {
+      if (!isRelevantFile(event.filePath)) {
+        return;
+      }
+
+      const changedFields = event.changedFields;
+      if (!changedFields) {
+        return;
+      }
+
+      const relevantChange = Object.keys(changedFields).some((key) => {
+        const normalizedKey = key.toLowerCase();
+        return (
+          normalizedKey.includes('focus') ||
+          normalizedKey.includes('due') ||
+          normalizedKey.includes('created') ||
+          normalizedKey.includes('habit') ||
+          normalizedKey.includes('frequency')
+        );
+      });
+
+      if (relevantChange) {
+        scheduleCalendarReload(`metadata change in ${event.filePath}`);
+      }
+    });
+
+    const contentSavedUnsubscribe = onContentSaved((event) => {
+      if (!isRelevantFile(event.filePath)) {
+        return;
+      }
+      scheduleCalendarReload(`content saved for ${event.filePath}`);
+    });
+
+    return () => {
+      metadataUnsubscribe?.();
+      contentSavedUnsubscribe?.();
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+        reloadTimeoutRef.current = null;
+      }
+    };
+  }, [spacePath, scheduleCalendarReload, isPathInSpace]);
+
+  // Listen for structural events (create/rename/delete) to force file list refreshes
+  useEffect(() => {
+    if (!spacePath) return;
+
+    const shouldHandleDetail = (detail?: Record<string, string | undefined>): boolean => {
+      if (!detail) return true;
+      const candidateKeys = ['path', 'projectPath', 'actionPath', 'oldPath', 'newPath'];
+      const hasMatch = candidateKeys.some((key) => isPathInSpace(detail[key]));
+      return hasMatch || Object.keys(detail).length === 0;
+    };
+
+    const structuralEvents: string[] = [
+      'gtd-action-created',
+      'gtd-project-created',
+      'project-renamed',
+      'action-renamed',
+      'section-file-renamed',
+      'file-deleted'
+    ];
+
+    const unsubscribers = structuralEvents.map((eventName) => {
+      const handler: EventListener = (event) => {
+        const detail = (event as CustomEvent<Record<string, string | undefined>>).detail;
+        if (!shouldHandleDetail(detail)) {
+          return;
+        }
+        forceFileRefreshRef.current = true;
+        fileScanVersionRef.current += 1;
+        scheduleCalendarReload(`${eventName} event`);
+      };
+      window.addEventListener(eventName, handler);
+      return () => window.removeEventListener(eventName, handler);
+    });
+
+    return () => {
+      unsubscribers.forEach((unsub) => unsub());
+    };
+  }, [spacePath, isPathInSpace, scheduleCalendarReload]);
+
+  const refresh = useCallback((options?: { forceFileScan?: boolean }) => {
+    if (options?.forceFileScan !== false) {
+      forceFileRefreshRef.current = true;
+      fileScanVersionRef.current += 1;
+    }
     loadAllCalendarItems();
   }, [loadAllCalendarItems]);
 

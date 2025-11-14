@@ -57,6 +57,7 @@ import {
   getEffortFromHeight
 } from '@/utils/update-markdown-fields';
 import { useToast } from '@/hooks/use-toast';
+import { syncGoogleCalendarEvents } from '@/utils/google-calendar';
 
 // Helper to detect if a date has a time component
 // - For strings: return false when the time portion is zero (e.g., "T00:00:00", with optional fractional seconds and timezone)
@@ -536,20 +537,31 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const handleGoogleSync = async () => {
     setIsSyncing(true);
     try {
-      const invoke = await getTauriInvoke();
-      if (!invoke) {
-        console.warn('[CalendarView] Not in Tauri context; skipping Google Calendar sync');
-        setIsSyncing(false);
+      const result = await syncGoogleCalendarEvents();
+      if (!result) {
+        console.warn('[CalendarView] Google Calendar sync unavailable');
+        toast({
+          title: 'Sync unavailable',
+          description: 'Google Calendar sync requires the desktop app to be connected.',
+          variant: 'destructive'
+        });
         return;
       }
-      await invoke('google_calendar_sync');
-      // Refresh calendar data after sync
-      refresh();
+      // Refresh calendar data after sync (no need to rescan files)
+      refresh({ forceFileScan: false });
       // Update sync status
-      const status = await invoke<GoogleCalendarSyncStatus>('google_calendar_get_status');
-      setGoogleSyncStatus(mapGoogleCalendarSyncStatus(status));
+      const invoke = await getTauriInvoke();
+      if (invoke) {
+        const status = await invoke<GoogleCalendarSyncStatus>('google_calendar_get_status');
+        setGoogleSyncStatus(mapGoogleCalendarSyncStatus(status));
+      }
     } catch (error) {
       console.error('Failed to sync Google Calendar:', error);
+      toast({
+        title: 'Sync failed',
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'destructive'
+      });
     } finally {
       setIsSyncing(false);
     }
@@ -966,8 +978,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         throw new Error('Failed to save file');
       }
 
-      // Refresh calendar data
-      refresh();
+      // Refresh calendar data without forcing a file rescan
+      refresh({ forceFileScan: false });
       
       // Show success message
       toast({
@@ -1017,8 +1029,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         throw new Error('Failed to save file');
       }
 
-      // Refresh calendar data
-      refresh();
+      // Refresh calendar data without re-scanning the entire file tree
+      refresh({ forceFileScan: false });
       
       // Show success message
       toast({
@@ -1174,7 +1186,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            onClick={refresh}
+            onClick={() => refresh()}
           >
             Refresh
           </Button>

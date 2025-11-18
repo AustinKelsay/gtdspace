@@ -15,8 +15,8 @@ export interface UseGitSyncResult {
   isPulling: boolean;
   operation: 'push' | 'pull' | null;
   refreshStatus: () => Promise<void>;
-  push: () => Promise<boolean>;
-  pull: () => Promise<boolean>;
+  push: (force?: boolean) => Promise<boolean>;
+  pull: (force?: boolean) => Promise<boolean>;
 }
 
 const fallbackStatus: GitSyncStatus = {
@@ -143,7 +143,7 @@ export const useGitSync = ({
     refreshStatus();
   }, [autoRefresh, refreshStatus]);
 
-  const push = useCallback(async () => {
+  const push = useCallback(async (force = false) => {
     if (!settings.git_sync_enabled) {
       toast({
         title: 'Git sync disabled',
@@ -158,7 +158,7 @@ export const useGitSync = ({
     try {
       const result = await safeInvoke<GitOperationResult>(
         'git_sync_push',
-        { workspace_override: workspacePath ?? null },
+        { workspace_override: workspacePath ?? null, force },
         null,
       );
 
@@ -171,7 +171,7 @@ export const useGitSync = ({
       }
 
       toast({
-        title: 'Backup uploaded',
+        title: force ? 'Backup force pushed' : 'Backup uploaded',
         description: result.message,
       });
 
@@ -179,7 +179,7 @@ export const useGitSync = ({
       return true;
     } catch (error) {
       toast({
-        title: 'Push failed',
+        title: force ? 'Force push failed' : 'Push failed',
         description: formatError(error),
         variant: 'destructive',
       });
@@ -190,7 +190,7 @@ export const useGitSync = ({
     }
   }, [settings.git_sync_enabled, workspacePath, toast, refreshStatus]);
 
-  const pull = useCallback(async () => {
+  const pull = useCallback(async (force = false) => {
     if (!settings.git_sync_enabled) {
       toast({
         title: 'Git sync disabled',
@@ -205,7 +205,7 @@ export const useGitSync = ({
     try {
       const result = await safeInvoke<GitOperationResult>(
         'git_sync_pull',
-        { workspace_override: workspacePath ?? null },
+        { workspace_override: workspacePath ?? null, force },
         null,
       );
 
@@ -218,7 +218,7 @@ export const useGitSync = ({
       }
 
       toast({
-        title: 'Workspace restored',
+        title: force ? 'Workspace force restored' : 'Workspace restored',
         description: result.message,
       });
 
@@ -226,7 +226,7 @@ export const useGitSync = ({
       return true;
     } catch (error) {
       toast({
-        title: 'Pull failed',
+        title: force ? 'Force pull failed' : 'Pull failed',
         description: formatError(error),
         variant: 'destructive',
       });

@@ -333,7 +333,7 @@ pub fn build_git_sync_config(
 /// Verify that only encrypted backup files are staged in git
 fn verify_only_encrypted_files_staged(repo_path: &Path) -> Result<(), String> {
     let staged_output = run_git_command(repo_path, ["diff", "--cached", "--name-only"])?;
-    
+
     if staged_output.trim().is_empty() {
         return Ok(()); // Nothing staged, which is fine
     }
@@ -368,7 +368,10 @@ fn verify_only_encrypted_files_staged(repo_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn perform_git_push(config: GitSyncConfig, force: bool) -> Result<GitOperationResultPayload, String> {
+pub fn perform_git_push(
+    config: GitSyncConfig,
+    force: bool,
+) -> Result<GitOperationResultPayload, String> {
     ensure_repo(&config)?;
     ensure_gitignore(&config.repo_path)?;
     let backups_dir = config.repo_path.join("backups");
@@ -427,19 +430,28 @@ pub fn perform_git_push(config: GitSyncConfig, force: bool) -> Result<GitOperati
         if !remote_url.trim().is_empty() {
             ensure_remote(&config.repo_path, remote_url)?;
             let branch_ref = format!("HEAD:{}", config.branch);
-            
+
             if force {
                 // Force push with lease to avoid overwriting if remote has new commits
                 // --force-with-lease is safer than --force as it checks remote refs
-                match run_git_command(&config.repo_path, ["push", "--force-with-lease", "-u", REMOTE_NAME, &branch_ref]) {
+                match run_git_command(
+                    &config.repo_path,
+                    ["push", "--force-with-lease", "-u", REMOTE_NAME, &branch_ref],
+                ) {
                     Ok(_) => {
                         pushed = true;
                     }
                     Err(e) => {
                         // If --force-with-lease fails, fall back to regular --force
                         // but only after warning
-                        warn!("Force-with-lease failed: {}. Attempting regular force push.", e);
-                        run_git_command(&config.repo_path, ["push", "--force", "-u", REMOTE_NAME, &branch_ref])?;
+                        warn!(
+                            "Force-with-lease failed: {}. Attempting regular force push.",
+                            e
+                        );
+                        run_git_command(
+                            &config.repo_path,
+                            ["push", "--force", "-u", REMOTE_NAME, &branch_ref],
+                        )?;
                         pushed = true;
                     }
                 }
@@ -469,7 +481,10 @@ pub fn perform_git_push(config: GitSyncConfig, force: bool) -> Result<GitOperati
     })
 }
 
-pub fn perform_git_pull(config: GitSyncConfig, force: bool) -> Result<GitOperationResultPayload, String> {
+pub fn perform_git_pull(
+    config: GitSyncConfig,
+    force: bool,
+) -> Result<GitOperationResultPayload, String> {
     ensure_repo(&config)?;
     let backups_dir = config.repo_path.join("backups");
     fs::create_dir_all(&backups_dir)
@@ -479,7 +494,7 @@ pub fn perform_git_pull(config: GitSyncConfig, force: bool) -> Result<GitOperati
         if !remote_url.trim().is_empty() {
             ensure_remote(&config.repo_path, remote_url)?;
             run_git_command(&config.repo_path, ["fetch", REMOTE_NAME])?;
-            
+
             if force {
                 // Force pull: reset local branch to match remote exactly
                 let remote_ref = format!("{}/{}", REMOTE_NAME, config.branch);

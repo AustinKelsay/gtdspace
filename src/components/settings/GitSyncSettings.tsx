@@ -7,6 +7,7 @@ import {
   CloudUpload,
   CloudDownload,
   Info,
+  AlertTriangle,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,16 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useSettings } from '@/hooks/useSettings';
 import { useGitSync } from '@/hooks/useGitSync';
 import { useToast } from '@/hooks/use-toast';
@@ -64,6 +75,8 @@ export const GitSyncSettings: React.FC = () => {
 
   const gitEnabled = settings.git_sync_enabled ?? false;
   const [hasEncryptionKey, setHasEncryptionKey] = React.useState(false);
+  const [showForcePushDialog, setShowForcePushDialog] = React.useState(false);
+  const [showForcePullDialog, setShowForcePullDialog] = React.useState(false);
 
   // Check secure storage for encryption key on mount and when status refreshes
   React.useEffect(() => {
@@ -379,19 +392,35 @@ export const GitSyncSettings: React.FC = () => {
         <div className="flex flex-wrap items-center gap-3 mt-6">
           <Button
             variant="secondary"
-            onClick={pushGitBackup}
+            onClick={() => pushGitBackup(false)}
             disabled={!gitEnabled || !gitStatus.configured || gitPushing}
           >
             <CloudUpload className="h-4 w-4 mr-2" />
             {gitPushing ? 'Pushing…' : 'Push Backup'}
           </Button>
           <Button
+            variant="destructive"
+            onClick={() => setShowForcePushDialog(true)}
+            disabled={!gitEnabled || !gitStatus.configured || gitPushing || !gitStatus.hasRemote}
+          >
+            <AlertTriangle className="h-4 w-4 mr-2" />
+            Force Push
+          </Button>
+          <Button
             variant="outline"
-            onClick={pullGitBackup}
+            onClick={() => pullGitBackup(false)}
             disabled={!gitEnabled || !gitStatus.configured || gitPulling}
           >
             <CloudDownload className="h-4 w-4 mr-2" />
             {gitPulling ? 'Pulling…' : 'Pull & Restore'}
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => setShowForcePullDialog(true)}
+            disabled={!gitEnabled || !gitStatus.configured || gitPulling || !gitStatus.hasRemote}
+          >
+            <AlertTriangle className="h-4 w-4 mr-2" />
+            Force Pull
           </Button>
           <Button
             variant="ghost"
@@ -404,6 +433,78 @@ export const GitSyncSettings: React.FC = () => {
             {gitStatus.hasRemote ? 'Remote linked' : 'Local only'}
           </Badge>
         </div>
+
+        <AlertDialog open={showForcePushDialog} onOpenChange={setShowForcePushDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                Force Push Encrypted Backup
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2">
+                  <div>
+                    Force pushing will overwrite the remote branch with your local changes. This is useful when you know your local version is the latest and the remote has conflicting commits.
+                  </div>
+                  <div className="font-semibold text-foreground">
+                    Safety checks ensure only encrypted backup files (.enc) are pushed—no unencrypted data will be included.
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    The system verifies that only files in the <code className="font-mono bg-muted px-1 py-0.5 rounded">backups/</code> directory with <code className="font-mono bg-muted px-1 py-0.5 rounded">.enc</code> extensions are staged before pushing.
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async () => {
+                  setShowForcePushDialog(false);
+                  await pushGitBackup(true);
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Force Push
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={showForcePullDialog} onOpenChange={setShowForcePullDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                Force Pull Encrypted Backup
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2">
+                  <div>
+                    Force pulling will discard all local changes and reset your workspace to match the remote exactly. This is useful when you know the remote has the latest version you want and you want to completely overwrite local changes.
+                  </div>
+                  <div className="font-semibold text-destructive">
+                    Warning: This will permanently discard any local commits or changes in the git repository. Your workspace will be restored from the latest encrypted backup on the remote.
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    The system will fetch the latest from remote, reset the local branch to match, then decrypt and restore your workspace from the most recent encrypted backup.
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async () => {
+                  setShowForcePullDialog(false);
+                  await pullGitBackup(true);
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Force Pull
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </Card>
     </div>
   );

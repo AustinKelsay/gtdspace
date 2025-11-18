@@ -3744,11 +3744,13 @@ pub async fn git_sync_status(
 pub async fn git_sync_push(
     app: AppHandle,
     workspace_override: Option<String>,
+    force: Option<bool>,
 ) -> Result<GitOperationResultPayload, String> {
     let settings_snapshot = load_settings(app.clone()).await?;
     let config = build_git_sync_config(&settings_snapshot, workspace_override)?;
+    let force_push = force.unwrap_or(false);
 
-    let outcome = task::spawn_blocking(move || perform_git_push(config))
+    let outcome = task::spawn_blocking(move || perform_git_push(config, force_push))
         .await
         .map_err(|e| format!("Git push task failed: {}", e))??;
 
@@ -3766,11 +3768,13 @@ pub async fn git_sync_push(
 pub async fn git_sync_pull(
     app: AppHandle,
     workspace_override: Option<String>,
+    force: Option<bool>,
 ) -> Result<GitOperationResultPayload, String> {
     let settings_snapshot = load_settings(app.clone()).await?;
     let config = build_git_sync_config(&settings_snapshot, workspace_override)?;
+    let force_pull = force.unwrap_or(false);
 
-    let outcome = task::spawn_blocking(move || perform_git_pull(config))
+    let outcome = task::spawn_blocking(move || perform_git_pull(config, force_pull))
         .await
         .map_err(|e| format!("Git pull task failed: {}", e))??;
 

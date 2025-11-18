@@ -330,7 +330,45 @@ pub fn build_git_sync_config(
     })
 }
 
-pub fn perform_git_push(config: GitSyncConfig) -> Result<GitOperationResultPayload, String> {
+/// Verify that only encrypted backup files are staged in git
+fn verify_only_encrypted_files_staged(repo_path: &Path) -> Result<(), String> {
+    let staged_output = run_git_command(repo_path, ["diff", "--cached", "--name-only"])?;
+    
+    if staged_output.trim().is_empty() {
+        return Ok(()); // Nothing staged, which is fine
+    }
+
+    for line in staged_output.lines() {
+        let path = line.trim();
+        if path.is_empty() {
+            continue;
+        }
+
+        // Only allow .gitignore and files in backups/ directory
+        if path == ".gitignore" {
+            continue;
+        }
+
+        if !path.starts_with("backups/") {
+            return Err(format!(
+                "Safety check failed: Non-backup file staged: {}. Only encrypted backups should be committed.",
+                path
+            ));
+        }
+
+        // Verify the file has .enc extension
+        if !path.ends_with(".enc") {
+            return Err(format!(
+                "Safety check failed: File in backups/ does not have .enc extension: {}. Only encrypted files are allowed.",
+                path
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+pub fn perform_git_push(config: GitSyncConfig, force: bool) -> Result<GitOperationResultPayload, String> {
     ensure_repo(&config)?;
     ensure_gitignore(&config.repo_path)?;
     let backups_dir = config.repo_path.join("backups");
@@ -359,6 +397,9 @@ pub fn perform_git_push(config: GitSyncConfig) -> Result<GitOperationResultPaylo
 
     run_git_command(&config.repo_path, ["add", "backups"])?;
 
+    // Safety check: verify only encrypted files are staged
+    verify_only_encrypted_files_staged(&config.repo_path)?;
+
     let status_output = run_git_command(&config.repo_path, ["status", "--porcelain", "backups"])?;
     if status_output.trim().is_empty() {
         return Ok(GitOperationResultPayload {
@@ -386,14 +427,36 @@ pub fn perform_git_push(config: GitSyncConfig) -> Result<GitOperationResultPaylo
         if !remote_url.trim().is_empty() {
             ensure_remote(&config.repo_path, remote_url)?;
             let branch_ref = format!("HEAD:{}", config.branch);
-            run_git_command(&config.repo_path, ["push", "-u", REMOTE_NAME, &branch_ref])?;
-            pushed = true;
+            
+            if force {
+                // Force push with lease to avoid overwriting if remote has new commits
+                // --force-with-lease is safer than --force as it checks remote refs
+                match run_git_command(&config.repo_path, ["push", "--force-with-lease", "-u", REMOTE_NAME, &branch_ref]) {
+                    Ok(_) => {
+                        pushed = true;
+                    }
+                    Err(e) => {
+                        // If --force-with-lease fails, fall back to regular --force
+                        // but only after warning
+                        warn!("Force-with-lease failed: {}. Attempting regular force push.", e);
+                        run_git_command(&config.repo_path, ["push", "--force", "-u", REMOTE_NAME, &branch_ref])?;
+                        pushed = true;
+                    }
+                }
+            } else {
+                run_git_command(&config.repo_path, ["push", "-u", REMOTE_NAME, &branch_ref])?;
+                pushed = true;
+            }
         }
     }
 
     Ok(GitOperationResultPayload {
         success: true,
-        message: "Encrypted snapshot created".to_string(),
+        message: if force {
+            "Encrypted snapshot created and force pushed".to_string()
+        } else {
+            "Encrypted snapshot created".to_string()
+        },
         backup_file: Some(backup_file),
         timestamp: Some(now.to_rfc3339()),
         pushed,
@@ -401,11 +464,12 @@ pub fn perform_git_push(config: GitSyncConfig) -> Result<GitOperationResultPaylo
             "repoPath": config.repo_path,
             "workspacePath": config.workspace_path,
             "branch": config.branch,
+            "force": force,
         })),
     })
 }
 
-pub fn perform_git_pull(config: GitSyncConfig) -> Result<GitOperationResultPayload, String> {
+pub fn perform_git_pull(config: GitSyncConfig, force: bool) -> Result<GitOperationResultPayload, String> {
     ensure_repo(&config)?;
     let backups_dir = config.repo_path.join("backups");
     fs::create_dir_all(&backups_dir)
@@ -415,10 +479,18 @@ pub fn perform_git_pull(config: GitSyncConfig) -> Result<GitOperationResultPaylo
         if !remote_url.trim().is_empty() {
             ensure_remote(&config.repo_path, remote_url)?;
             run_git_command(&config.repo_path, ["fetch", REMOTE_NAME])?;
-            run_git_command(
-                &config.repo_path,
-                ["pull", "--ff-only", REMOTE_NAME, &config.branch],
-            )?;
+            
+            if force {
+                // Force pull: reset local branch to match remote exactly
+                let remote_ref = format!("{}/{}", REMOTE_NAME, config.branch);
+                run_git_command(&config.repo_path, ["reset", "--hard", &remote_ref])?;
+            } else {
+                // Normal pull: only fast-forward merge
+                run_git_command(
+                    &config.repo_path,
+                    ["pull", "--ff-only", REMOTE_NAME, &config.branch],
+                )?;
+            }
         }
     }
 
@@ -441,12 +513,17 @@ pub fn perform_git_pull(config: GitSyncConfig) -> Result<GitOperationResultPaylo
 
     Ok(GitOperationResultPayload {
         success: true,
-        message: "Workspace restored from encrypted backup".to_string(),
+        message: if force {
+            "Workspace force restored from encrypted backup (local changes discarded)".to_string()
+        } else {
+            "Workspace restored from encrypted backup".to_string()
+        },
         backup_file: Some(latest_backup.file_name),
         timestamp: system_time_to_iso(latest_backup.modified),
         pushed: false,
         details: Some(json!({
             "workspacePath": config.workspace_path,
+            "force": force,
         })),
     })
 }

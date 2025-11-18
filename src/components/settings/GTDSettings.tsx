@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
-import type { GTDSpace, GTDProject } from '@/types';
+import type { GTDSpace, GTDProject, UserSettings } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { safeInvoke } from '@/utils/safe-invoke';
 
@@ -96,9 +96,9 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
   // Load default workspace from settings
   const loadDefaultWorkspace = React.useCallback(async () => {
     try {
-      const settings = await safeInvoke<{ default_gtd_space?: string }>('load_settings', undefined, {});
-      if (settings?.default_gtd_space) {
-        setDefaultWorkspace(settings.default_gtd_space);
+      const settings = await safeInvoke<UserSettings>('load_settings', undefined, null);
+      if (settings?.default_space_path) {
+        setDefaultWorkspace(settings.default_space_path);
       }
     } catch (_error) {
       // Failed to load default workspace
@@ -268,10 +268,23 @@ export const GTDSettings: React.FC<GTDSettingsProps> = (props) => {
 
   const handleSetDefault = async (path: string) => {
     try {
-      // Save to settings
-      await safeInvoke('save_settings', {
-        settings: { default_gtd_space: path }
+      const existing = await safeInvoke<UserSettings>('load_settings', undefined, null);
+      if (!existing) {
+        throw new Error('Failed to load current settings');
+      }
+
+      const updated: UserSettings = {
+        ...existing,
+        default_space_path: path,
+      };
+
+      const result = await safeInvoke<string>('save_settings', {
+        settings: updated,
       }, null);
+
+      if (!result) {
+        throw new Error('Failed to save settings');
+      }
 
       setDefaultWorkspace(path);
 

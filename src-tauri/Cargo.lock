@@ -1754,7 +1754,7 @@ dependencies = [
 
 [[package]]
 name = "gtdspace"
-version = "1.0.1"
+version = "1.2.0"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",

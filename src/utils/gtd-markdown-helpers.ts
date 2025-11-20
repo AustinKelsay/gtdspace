@@ -571,7 +571,8 @@ export function buildHabitMarkdown({
     parts.push(`${cleanNotes.replace(/\s+$/g, '')}\n`);
   }
 
-  const historyBody = history?.trim().length ? history.trim() : DEFAULT_HABIT_HISTORY_BODY;
+  const historyBody =
+    history && history.length > 0 ? history : DEFAULT_HABIT_HISTORY_BODY;
   parts.push('\n\n## History\n');
   parts.push(`${historyBody.replace(/\s+$/g, '')}\n`);
 

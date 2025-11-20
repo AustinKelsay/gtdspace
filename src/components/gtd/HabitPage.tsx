@@ -4,13 +4,17 @@ import {
   CheckCircle2,
   CheckSquare,
   Clock,
+  Edit2,
   RefreshCw,
+  Save,
   Search,
   Square,
+  ArrowLeftRight,
   X,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -85,6 +89,12 @@ interface HabitHistoryRow {
   status: string;
   action: string;
   details: string;
+  /**
+   * Any additional columns that follow the standard
+   * Date/Time/Status/Action/Details cells. These are preserved
+   * when rewriting the history table but not edited by the UI.
+   */
+  extraCells?: string[];
 }
 
 interface ParsedHabitContent {
@@ -97,7 +107,9 @@ interface ParsedHabitContent {
   notes: string;
   history: string;
   historyIntro: string[];
+  historyHeader: string[];
   historyRows: HabitHistoryRow[];
+  historyOutro: string;
 }
 
 export interface HabitPageProps {
@@ -309,8 +321,57 @@ function normalizeNoteLines(lines: string[]): string {
   return buffer.join('\n').trim();
 }
 
-function splitHistory(raw: string | undefined): { history: string; intro: string[]; rows: HabitHistoryRow[] } {
-  const effective = raw && raw.trim().length > 0 ? raw.trim() : DEFAULT_HABIT_HISTORY_BODY;
+function reconstructHistory(intro: string[], header: string[], rows: HabitHistoryRow[], outro: string = ''): string {
+  const lines = [...intro];
+
+  // Ensure a blank line before table if the last intro line is not blank
+  if (lines.length > 0 && lines[lines.length - 1].trim() !== '') {
+    lines.push('');
+  }
+
+  // Add table header - reuse original or default if missing
+  if (header.length >= 2) {
+    lines.push(...header);
+  } else {
+    lines.push('| Date | Time | Status | Action | Details |');
+    lines.push('|------|------|--------|--------|---------|');
+  }
+
+  const encodeCell = (s: string) => {
+    // Normalize line endings, then convert newlines to <br> so that
+    // multiline content stays within a single Markdown table cell.
+    const normalized = s.replace(/\r\n/g, '\n');
+    const withBreaks = normalized.replace(/\n/g, '<br>');
+    // Escape pipes to avoid breaking table structure
+    return withBreaks.replace(/\|/g, '\\|');
+  };
+
+  for (const row of rows) {
+    const baseCells = [
+      encodeCell(row.date),
+      encodeCell(row.time),
+      encodeCell(row.status),
+      encodeCell(row.action),
+      encodeCell(row.details),
+    ];
+    const extra = row.extraCells && row.extraCells.length > 0
+      ? row.extraCells.map((cell) => encodeCell(cell))
+      : [];
+
+    const allCells = [...baseCells, ...extra];
+    lines.push(`| ${allCells.join(' | ')} |`);
+  }
+
+  if (outro.length > 0) {
+    lines.push(outro);
+  }
+  
+  return lines.join('\n');
+}
+
+function splitHistory(raw: string | undefined): { history: string; intro: string[]; header: string[]; rows: HabitHistoryRow[]; outro: string } {
+  const hasContent = raw && raw.trim().length > 0;
+  const effective = hasContent ? (raw as string) : DEFAULT_HABIT_HISTORY_BODY;
   const lines = effective.split(/\r?\n/);
 
   let tableStart = lines.findIndex((line) => line.trim().startsWith('|'));
@@ -318,33 +379,88 @@ function splitHistory(raw: string | undefined): { history: string; intro: string
     tableStart = lines.length;
   }
 
-  const intro = lines.slice(0, tableStart).map((line) => line.trim()).filter(Boolean);
-  const tableLines = lines.slice(tableStart);
-
+  // Capture intro as raw lines up to tableStart to preserve formatting
+  const intro = lines.slice(0, tableStart);
+  
   const rows: HabitHistoryRow[] = [];
-  for (const line of tableLines) {
+  const header: string[] = [];
+  let lastTableLineIndex = tableStart - 1;
+
+  for (let i = tableStart; i < lines.length; i++) {
+    const line = lines[i];
     const trimmed = line.trim();
-    if (!trimmed.startsWith('|')) continue;
-    if (/^\|\s*-{2,}\s*\|/.test(trimmed)) continue;
+    
+    // If line is empty, it might be a separator within the table block or end of table
+    // For robustness, we'll treat contiguous pipe lines as table.
+    if (trimmed.startsWith('|')) {
+      lastTableLineIndex = i;
+      
+      // Capture header lines (title row + separator row)
+      if (header.length < 2) {
+        header.push(line); // Preserve original spacing/alignment
+        continue; 
+      }
+      
+      // Safety check: if for some reason we grabbed a non-separator as 2nd line
+      // (unlikely if table is valid, but ensures we don't eat data rows)
+      if (header.length === 2 && !/^\|\s*-/.test(header[1].trim())) {
+         // The previous line wasn't a separator? 
+         // Standard markdown tables require separator.
+         // We'll assume the parser logic above is sound for standard tables.
+      }
 
-    const rawCells = trimmed.split('|').map((cell) => cell.trim());
-    if (rawCells.length < 7) continue;
-    const cells = rawCells.slice(1, rawCells.length - 1);
-    if (cells.length < 5) continue;
-    if (cells[0].toLowerCase() === 'date') continue;
-    if (cells[0].startsWith('------')) continue;
+      // Robust splitting: Handle escaped pipes (\|) in content and convert
+      // <br> tags back into newlines for UI display.
+      const ESCAPED_PIPE_PH = "%%ESCAPED_PIPE%%";
+      const rawCells = trimmed
+        .replace(/\\\|/g, ESCAPED_PIPE_PH)
+        .split('|')
+        .map((cell) => {
+          const restoredPipes = cell.trim().replace(new RegExp(ESCAPED_PIPE_PH, 'g'), '|');
+          // Treat common <br> variants as actual newlines in the UI model
+          return restoredPipes.replace(/<br\s*\/?>/gi, '\n');
+        });
 
-    rows.push({
-      date: cells[0],
-      time: cells[1],
-      status: cells[2],
-      action: cells[3],
-      details: cells[4] ?? '',
-    });
+      if (rawCells.length < 7) continue;
+      
+      // Additional check to avoid reparsing header if loop logic fails
+      if (rawCells[1].toLowerCase() === 'date' && rawCells[2].toLowerCase() === 'time') continue;
+      if (rawCells[1].startsWith('---')) continue;
+
+      const cells = rawCells.slice(1, rawCells.length - 1);
+
+      rows.push({
+        date: cells[0] ?? '',
+        time: cells[1] ?? '',
+        status: cells[2] ?? '',
+        action: cells[3] ?? '',
+        details: cells[4] ?? '',
+        extraCells: cells.length > 5 ? cells.slice(5) : [],
+      });
+    } else if (trimmed === '') {
+      // Allow empty lines inside table block (e.g. spacers)
+      // We track the last valid table line index, so if this is truly the end of the table,
+      // the loop will eventually finish or hit a non-table line that breaks.
+      continue;
+    } else {
+      // Non-empty line that doesn't start with pipe -> End of table block
+      break;
+    }
   }
 
-  return { history: effective, intro, rows };
+  // Capture everything after the table block as outro
+  const outroLines = lines.slice(lastTableLineIndex + 1);
+  const outro = outroLines.join('\n');
+
+  return { history: effective, intro, header, rows, outro };
 }
+
+// Expose internals for unit tests to guard against regressions
+// eslint-disable-next-line react-refresh/only-export-components
+export const __habitHistoryInternals = {
+  splitHistory,
+  reconstructHistory,
+};
 
 function toDateFromHistory(row: { date?: string; time?: string }): Date | null {
   if (!row.date) return null;
@@ -448,7 +564,7 @@ function parseHabitContent(content: string): ParsedHabitContent {
 
   const historyHeadingIdx = lines.findIndex((line) => /^##\s+History\s*$/i.test(line.trim()));
   const historyRaw = historyHeadingIdx >= 0 ? lines.slice(historyHeadingIdx + 1).join('\n') : '';
-  const { history, intro: historyIntro, rows: historyRows } = splitHistory(historyRaw);
+  const { history, intro: historyIntro, rows: historyRows, outro: historyOutro, header: historyHeader } = splitHistory(historyRaw);
   const notes = extractNotes(lines, historyHeadingIdx);
 
   let created = typeof (meta as any).createdDateTime === 'string'
@@ -495,7 +611,9 @@ function parseHabitContent(content: string): ParsedHabitContent {
     notes,
     history,
     historyIntro,
+    historyHeader,
     historyRows,
+    historyOutro,
   };
 }
 
@@ -520,12 +638,17 @@ export const HabitPage: React.FC<HabitPageProps> = ({
   const [notes, setNotes] = React.useState(parsed.notes);
   const [historyRows, setHistoryRows] = React.useState(parsed.historyRows);
   const [historyIntro, setHistoryIntro] = React.useState(parsed.historyIntro);
+  const [historyHeader, setHistoryHeader] = React.useState(parsed.historyHeader);
+  const [historyOutro, setHistoryOutro] = React.useState(parsed.historyOutro);
   const [created, setCreated] = React.useState(parsed.createdDateTime);
   const [nowTick, setNowTick] = React.useState(() => Date.now());
   const [activePicker, setActivePicker] = React.useState<ReferenceKey | null>(null);
   const [pickerOptions, setPickerOptions] = React.useState<HabitReferenceOption[]>([]);
   const [pickerLoading, setPickerLoading] = React.useState(false);
   const [pickerSearch, setPickerSearch] = React.useState('');
+
+  const [editingRowIndex, setEditingRowIndex] = React.useState<number | null>(null);
+  const [editingRowData, setEditingRowData] = React.useState<HabitHistoryRow | null>(null);
 
   const notesRef = React.useRef(notes);
   const historyRef = React.useRef(parsed.history);
@@ -548,6 +671,8 @@ export const HabitPage: React.FC<HabitPageProps> = ({
     setNotes(parsed.notes);
     setHistoryRows(parsed.historyRows);
     setHistoryIntro(parsed.historyIntro);
+    setHistoryHeader(parsed.historyHeader);
+    setHistoryOutro(parsed.historyOutro);
     setCreated(parsed.createdDateTime);
     notesRef.current = parsed.notes;
     historyRef.current = parsed.history;
@@ -674,12 +799,14 @@ export const HabitPage: React.FC<HabitPageProps> = ({
       frequency: GTDHabitFrequency;
       references: HabitReferenceGroups;
       notes: string;
+      history: string;
     }>) => {
       const nextTitle = overrides?.title ?? title;
       const nextStatus = overrides?.status ?? status;
       const nextFrequency = overrides?.frequency ?? frequency;
       const nextReferences = overrides?.references ?? references;
       const nextNotes = overrides?.notes ?? notesRef.current;
+      const nextHistory = overrides?.history ?? historyRef.current;
 
       const built = buildHabitMarkdown({
         title: nextTitle,
@@ -689,7 +816,7 @@ export const HabitPage: React.FC<HabitPageProps> = ({
         references: nextReferences,
         createdDateTime: createdRef.current,
         notes: nextNotes,
-        history: historyRef.current,
+        history: nextHistory,
       });
 
       if (built !== content) {
@@ -756,6 +883,8 @@ export const HabitPage: React.FC<HabitPageProps> = ({
           notesRef.current = refreshed.notes;
           setHistoryRows(refreshed.historyRows);
           setHistoryIntro(refreshed.historyIntro);
+          setHistoryHeader(refreshed.historyHeader);
+          setHistoryOutro(refreshed.historyOutro);
           setCreated(refreshed.createdDateTime);
           setStatus(refreshed.status);
           onChange(latestContent);
@@ -818,6 +947,49 @@ export const HabitPage: React.FC<HabitPageProps> = ({
     setNotes(nextBody);
     notesRef.current = nextBody;
     emitRebuild({ notes: nextBody });
+  };
+
+  const handleEditRow = (index: number) => {
+    setEditingRowIndex(index);
+    setEditingRowData({ ...historyRows[index] });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingRowIndex(null);
+    setEditingRowData(null);
+  };
+
+  const handleSaveRow = () => {
+    if (editingRowIndex === null || !editingRowData) return;
+
+    const newRows = [...historyRows];
+    newRows[editingRowIndex] = editingRowData;
+    setHistoryRows(newRows);
+
+    const newHistory = reconstructHistory(historyIntro, historyHeader, newRows, historyOutro);
+    historyRef.current = newHistory;
+    emitRebuild({ history: newHistory });
+
+    setEditingRowIndex(null);
+    setEditingRowData(null);
+  };
+
+  const handleToggleRowStatus = (index: number) => {
+    const newRows = [...historyRows];
+    const row = { ...newRows[index] };
+    
+    if (row.status.toLowerCase() === 'complete' || row.status.toLowerCase() === 'completed') {
+       row.status = 'To Do';
+    } else {
+       row.status = 'Complete';
+    }
+    
+    newRows[index] = row;
+    setHistoryRows(newRows);
+    
+    const newHistory = reconstructHistory(historyIntro, historyHeader, newRows, historyOutro);
+    historyRef.current = newHistory;
+    emitRebuild({ history: newHistory });
   };
 
   return (
@@ -1071,18 +1243,126 @@ export const HabitPage: React.FC<HabitPageProps> = ({
                     <TableHead className="w-[120px]">Status</TableHead>
                     <TableHead className="w-[140px]">Action</TableHead>
                     <TableHead>Details</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {historyRows.map((row, idx) => (
-                    <TableRow key={`${row.date}-${row.time}-${idx}`}>
-                      <TableCell>{row.date}</TableCell>
-                      <TableCell>{row.time}</TableCell>
-                      <TableCell>{row.status}</TableCell>
-                      <TableCell>{row.action}</TableCell>
-                      <TableCell className="whitespace-pre-wrap">{row.details}</TableCell>
-                    </TableRow>
-                  ))}
+                  {historyRows.map((row, idx) => {
+                    const isEditing = editingRowIndex === idx;
+                    return (
+                      <TableRow key={`${row.date}-${row.time}-${idx}`}>
+                        <TableCell>
+                          {isEditing && editingRowData ? (
+                            <Input
+                              value={editingRowData.date}
+                              onChange={(e) => setEditingRowData({ ...editingRowData, date: e.target.value })}
+                              className="h-8"
+                            />
+                          ) : (
+                            row.date
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isEditing && editingRowData ? (
+                            <Input
+                              value={editingRowData.time}
+                              onChange={(e) => setEditingRowData({ ...editingRowData, time: e.target.value })}
+                              className="h-8"
+                            />
+                          ) : (
+                            row.time
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isEditing && editingRowData ? (
+                            <Select
+                              value={editingRowData.status}
+                              onValueChange={(value) => setEditingRowData({ ...editingRowData, status: value })}
+                            >
+                              <SelectTrigger className="h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Complete">Complete</SelectItem>
+                                <SelectItem value="To Do">To Do</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            row.status
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isEditing && editingRowData ? (
+                            <Input
+                              value={editingRowData.action}
+                              onChange={(e) => setEditingRowData({ ...editingRowData, action: e.target.value })}
+                              className="h-8"
+                            />
+                          ) : (
+                            row.action
+                          )}
+                        </TableCell>
+                        <TableCell className={isEditing ? '' : 'whitespace-pre-wrap'}>
+                          {isEditing && editingRowData ? (
+                            <Textarea
+                              value={editingRowData.details}
+                              onChange={(e) => setEditingRowData({ ...editingRowData, details: e.target.value })}
+                              className="min-h-[64px] text-sm"
+                            />
+                          ) : (
+                            row.details
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            {isEditing ? (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={handleSaveRow}
+                                  title="Save"
+                                >
+                                  <Save className="h-4 w-4 text-green-600" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={handleCancelEdit}
+                                  title="Cancel"
+                                >
+                                  <X className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => handleToggleRowStatus(idx)}
+                                  title="Swap Status"
+                                >
+                                  <ArrowLeftRight className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => handleEditRow(idx)}
+                                  title="Edit Row"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

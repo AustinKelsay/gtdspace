@@ -321,6 +321,14 @@ function normalizeNoteLines(lines: string[]): string {
   return buffer.join('\n').trim();
 }
 
+function normalizeHistoryStatus(raw: string): string {
+  const value = raw.trim().toLowerCase();
+  if (value === 'complete' || value === 'completed') {
+    return 'Complete';
+  }
+  return 'To Do';
+}
+
 function reconstructHistory(intro: string[], header: string[], rows: HabitHistoryRow[], outro: string = ''): string {
   const lines = [...intro];
 
@@ -415,7 +423,7 @@ function splitHistory(raw: string | undefined): { history: string; intro: string
 
       // Robust splitting: Handle escaped pipes (\|) in content and convert
       // <br> tags back into newlines for UI display.
-      const ESCAPED_PIPE_PH = "%%ESCAPED_PIPE%%";
+      const ESCAPED_PIPE_PH = '\uE000';
       const rawCells = trimmed
         .replace(/\\\|/g, ESCAPED_PIPE_PH)
         .split('|')
@@ -436,7 +444,7 @@ function splitHistory(raw: string | undefined): { history: string; intro: string
       rows.push({
         date: cells[0] ?? '',
         time: cells[1] ?? '',
-        status: cells[2] ?? '',
+        status: normalizeHistoryStatus(cells[2] ?? ''),
         action: cells[3] ?? '',
         details: cells[4] ?? '',
         extraCells: cells.length > 5 ? cells.slice(5) : [],
@@ -981,12 +989,8 @@ export const HabitPage: React.FC<HabitPageProps> = ({
   const handleToggleRowStatus = (index: number) => {
     const newRows = [...historyRows];
     const row = { ...newRows[index] };
-    
-    if (row.status.toLowerCase() === 'complete' || row.status.toLowerCase() === 'completed') {
-       row.status = 'To Do';
-    } else {
-       row.status = 'Complete';
-    }
+    const currentStatus = normalizeHistoryStatus(row.status);
+    row.status = currentStatus === 'Complete' ? 'To Do' : 'Complete';
     
     newRows[index] = row;
     setHistoryRows(newRows);

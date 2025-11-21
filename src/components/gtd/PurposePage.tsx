@@ -24,6 +24,7 @@ import { safeInvoke } from '@/utils/safe-invoke';
 import { formatDisplayDate } from '@/utils/format-display-date';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import type { MarkdownFile } from '@/types';
+import { GeneralReferencesField } from '@/components/gtd/GeneralReferencesField';
 
 export interface PurposePageProps {
   content: string;
@@ -51,6 +52,7 @@ const README_REGEX = /(?:^|\/)README(?:\.(md|markdown))?$/i;
 type EmitOverrides = Partial<{
   title: string;
   references: PurposeReferenceGroups;
+  generalReferences: string[];
   description: string;
 }>;
 
@@ -68,6 +70,7 @@ const CANONICAL_METADATA_HEADINGS: RegExp[] = [
   /^##\s+Goals\s+References\b/i,
   /^##\s+Vision\s+References\b/i,
   /^##\s+Areas\s+References\b/i,
+  /^##\s+References\b/i,
   /^##\s+Created\b/i,
   /^##\s+Description\b/i,
 ];
@@ -200,8 +203,14 @@ const PurposePage: React.FC<PurposePageProps> = ({ content, onChange, filePath, 
     [meta]
   );
 
+  const initialGeneralReferences = React.useMemo<string[]>(
+    () => toStringArray((meta as any).references),
+    [meta]
+  );
+
   const [title, setTitle] = React.useState<string>(initialTitle);
   const [references, setReferences] = React.useState<PurposeReferenceGroups>(initialReferences);
+  const [generalReferences, setGeneralReferences] = React.useState<string[]>(initialGeneralReferences);
   const [description, setDescription] = React.useState<string>(
     parsedDescription.trim() === DEFAULT_PURPOSE_DESCRIPTION.trim() ? '' : parsedDescription
   );
@@ -241,6 +250,7 @@ const PurposePage: React.FC<PurposePageProps> = ({ content, onChange, filePath, 
       vision: toStringArray((meta as any).visionReferences),
       areas: toStringArray((meta as any).areasReferences),
     });
+    setGeneralReferences(toStringArray((meta as any).references));
 
     const updatedDescription = parsePurposeDescription(content || '');
     setDescription(
@@ -430,11 +440,13 @@ const PurposePage: React.FC<PurposePageProps> = ({ content, onChange, filePath, 
     (overrides?: EmitOverrides) => {
       const nextTitle = overrides?.title ?? title;
       const nextReferences = overrides?.references ?? references;
+      const nextGeneralReferences = overrides?.generalReferences ?? generalReferences;
       const nextDescription = overrides?.description ?? description;
 
       const built = buildPurposeMarkdown({
         title: nextTitle,
         references: nextReferences,
+        generalReferences: nextGeneralReferences,
         createdDateTime: createdRef.current,
         description: nextDescription,
       });
@@ -443,7 +455,7 @@ const PurposePage: React.FC<PurposePageProps> = ({ content, onChange, filePath, 
         onChange(built);
       }
     },
-    [title, references, description, content, onChange]
+    [title, references, generalReferences, description, content, onChange]
   );
 
   const handleReferenceToggle = React.useCallback(
@@ -619,6 +631,16 @@ const PurposePage: React.FC<PurposePageProps> = ({ content, onChange, filePath, 
             );
           })}
         </div>
+
+        <GeneralReferencesField
+          value={generalReferences}
+          onChange={(next) => {
+            setGeneralReferences(next);
+            emitRebuild({ generalReferences: next });
+          }}
+          filePath={filePath}
+          className="pt-2"
+        />
       </div>
 
       <Dialog

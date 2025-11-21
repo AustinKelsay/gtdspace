@@ -35,6 +35,7 @@ import type {
   GTDAreaStatus,
   MarkdownFile,
 } from "@/types";
+import { GeneralReferencesField } from "@/components/gtd/GeneralReferencesField";
 
 export interface AreaPageProps {
   content: string;
@@ -65,6 +66,7 @@ type EmitOverrides = Partial<{
   status: GTDAreaStatus;
   reviewCadence: GTDAreaReviewCadence;
   references: AreaReferenceGroups;
+  generalReferences: string[];
   description: string;
 }>;
 
@@ -106,6 +108,7 @@ const CANONICAL_METADATA_HEADINGS: RegExp[] = [
   /^##\s+Areas\s+References\b/i,
   /^##\s+Created\b/i,
   /^##\s+Description\b/i,
+  /^##\s+References\b/i,
   /^##\s+Success\s+Criteria\b/i,
   /^##\s+Focus\s+Metrics\b/i,
   /^##\s+Supporting\s+Notes\b/i,
@@ -249,6 +252,11 @@ const AreaPage: React.FC<AreaPageProps> = ({
     [meta]
   );
 
+  const initialGeneralReferences = React.useMemo<string[]>(
+    () => toStringArray((meta as any).references),
+    [meta]
+  );
+
   const [title, setTitle] = React.useState<string>(initialTitle);
   const [status, setStatus] = React.useState<GTDAreaStatus>(
     normalizeAreaStatus((meta as any).areaStatus)
@@ -259,6 +267,9 @@ const AreaPage: React.FC<AreaPageProps> = ({
     );
   const [references, setReferences] =
     React.useState<AreaReferenceGroups>(initialReferences);
+  const [generalReferences, setGeneralReferences] = React.useState<string[]>(
+    initialGeneralReferences
+  );
   const [activePicker, setActivePicker] =
     React.useState<AreaReferenceKey | null>(null);
   const [pickerOptions, setPickerOptions] = React.useState<
@@ -319,6 +330,7 @@ const AreaPage: React.FC<AreaPageProps> = ({
       vision: toStringArray((meta as any).visionReferences),
       purpose: toStringArray((meta as any).purposeReferences),
     });
+    setGeneralReferences(toStringArray((meta as any).references));
     const updatedSections = parseAreaSections(content || "");
     setDescription(normalizeSection(updatedSections.description));
   }, [meta, content, normalizeSection]);
@@ -426,6 +438,7 @@ const AreaPage: React.FC<AreaPageProps> = ({
       const nextStatus = overrides?.status ?? status;
       const nextCadence = overrides?.reviewCadence ?? reviewCadence;
       const nextReferences = overrides?.references ?? references;
+      const nextGeneralReferences = overrides?.generalReferences ?? generalReferences;
       const nextDescription = overrides?.description ?? description;
 
       const built = buildAreaMarkdown({
@@ -433,6 +446,7 @@ const AreaPage: React.FC<AreaPageProps> = ({
         status: nextStatus,
         reviewCadence: nextCadence,
         references: nextReferences,
+        generalReferences: nextGeneralReferences,
         createdDateTime: createdRef.current,
         description: nextDescription,
       });
@@ -441,7 +455,7 @@ const AreaPage: React.FC<AreaPageProps> = ({
         onChange(built);
       }
     },
-    [title, status, reviewCadence, references, description, content, onChange]
+    [title, status, reviewCadence, references, generalReferences, description, content, onChange]
   );
 
   const handleReferenceToggle = React.useCallback(
@@ -629,6 +643,16 @@ const AreaPage: React.FC<AreaPageProps> = ({
             );
           })}
         </div>
+
+        <GeneralReferencesField
+          value={generalReferences}
+          onChange={(next) => {
+            setGeneralReferences(next);
+            emitRebuild({ generalReferences: next });
+          }}
+          filePath={filePath}
+          className="pt-2"
+        />
       </div>
 
       <Dialog

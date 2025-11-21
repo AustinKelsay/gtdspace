@@ -191,7 +191,7 @@ export function encodeReferenceArray(values?: string[]): string {
   }
 }
 
-function encodeReferenceCsv(values?: string[]): string {
+export function encodeReferenceCsv(values?: string[]): string {
   const normalized = (values ?? [])
     .map((ref) => ref.replace(/\\/g, '/').trim())
     .filter(Boolean);
@@ -514,6 +514,7 @@ export function buildHabitMarkdown({
   frequency,
   focusDateTime,
   references,
+  generalReferences,
   createdDateTime,
   notes,
   history,
@@ -523,6 +524,7 @@ export function buildHabitMarkdown({
   frequency: GTDHabitFrequency;
   focusDateTime?: string | null;
   references: HabitReferenceGroups;
+  generalReferences?: string[];
   createdDateTime: string;
   notes?: string;
   history: string;
@@ -562,6 +564,10 @@ export function buildHabitMarkdown({
   parts.push('\n\n## Purpose & Principles References\n');
   parts.push(`[!purpose-references:${encodeReferenceArray(references.purpose)}]\n`);
 
+  const generalReferencesCsv = encodeReferenceCsv(generalReferences);
+  parts.push('\n\n## References\n');
+  parts.push(`[!references:${generalReferencesCsv}]\n`);
+
   parts.push('\n\n## Created\n');
   parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
 
@@ -587,6 +593,7 @@ export function buildAreaMarkdown({
   status,
   reviewCadence,
   references,
+  generalReferences,
   createdDateTime,
   description,
 }: {
@@ -594,6 +601,7 @@ export function buildAreaMarkdown({
   status: GTDAreaStatus;
   reviewCadence: GTDAreaReviewCadence;
   references: AreaReferenceGroups;
+  generalReferences?: string[];
   createdDateTime: string;
   description?: string;
 }): string {
@@ -636,6 +644,10 @@ export function buildAreaMarkdown({
     parts.push(`[!purpose-references:${encodedPurpose}]\n`);
   }
 
+  const generalRefsCsv = encodeReferenceCsv(generalReferences);
+  parts.push('\n\n## References (optional)\n');
+  parts.push(`[!references:${generalRefsCsv}]\n`);
+
   parts.push('\n\n## Created\n');
   parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
 
@@ -656,6 +668,7 @@ export function buildGoalMarkdown({
   status,
   targetDate,
   references,
+  generalReferences,
   createdDateTime,
   description,
 }: {
@@ -663,6 +676,7 @@ export function buildGoalMarkdown({
   status: GTDGoalStatus;
   targetDate?: string | null;
   references: GoalReferenceGroups;
+  generalReferences?: string[];
   createdDateTime: string;
   description?: string;
 }): string {
@@ -700,6 +714,10 @@ export function buildGoalMarkdown({
     parts.push(`[!purpose-references:${encodedPurpose}]\n`);
   }
 
+  const generalRefsCsv = encodeReferenceCsv(generalReferences);
+  parts.push('\n\n## References (optional)\n');
+  parts.push(`[!references:${generalRefsCsv}]\n`);
+
   parts.push('\n\n## Created\n');
   parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
 
@@ -719,12 +737,14 @@ export function buildVisionMarkdown({
   title,
   horizon,
   references,
+  generalReferences,
   createdDateTime,
   narrative,
 }: {
   title: string;
   horizon: GTDVisionHorizon;
   references: VisionReferenceGroups;
+  generalReferences?: string[];
   createdDateTime: string;
   narrative?: string;
 }): string {
@@ -752,6 +772,10 @@ export function buildVisionMarkdown({
     parts.push(`[!purpose-references:${encodedPurpose}]\n`);
   }
 
+  const generalRefsCsv = encodeReferenceCsv(generalReferences);
+  parts.push('\n\n## References (optional)\n');
+  parts.push(`[!references:${generalRefsCsv}]\n`);
+
   parts.push('\n\n## Created\n');
   parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
 
@@ -770,11 +794,13 @@ export function buildVisionMarkdown({
 export function buildPurposeMarkdown({
   title,
   references,
+  generalReferences,
   createdDateTime,
   description,
 }: {
   title: string;
   references: PurposeReferenceGroups;
+  generalReferences?: string[];
   createdDateTime: string;
   description?: string;
 }): string {
@@ -797,6 +823,10 @@ export function buildPurposeMarkdown({
     parts.push('\n\n## Areas References (optional)\n');
     parts.push(`[!areas-references:${encodedAreas}]\n`);
   }
+
+  const generalRefsCsv = encodeReferenceCsv(generalReferences);
+  parts.push('\n\n## References (optional)\n');
+  parts.push(`[!references:${generalRefsCsv}]\n`);
 
   parts.push('\n\n## Created\n');
   parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);

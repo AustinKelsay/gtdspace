@@ -363,6 +363,10 @@ function reconstructHistory(intro: string[], header: string[], rows: HabitHistor
   }
 
   if (outro.length > 0) {
+    // Ensure a blank line between the table and any following content
+    if (lines.length > 0 && lines[lines.length - 1].trim() !== '') {
+      lines.push('');
+    }
     lines.push(outro);
   }
   

@@ -38,7 +38,9 @@ describe('habit history parsing and reconstruction', () => {
     const reparsed = splitHistory(rebuilt);
 
     expect(reparsed.intro).toEqual(parsed.intro);
-    expect(reparsed.outro).toEqual(parsed.outro);
+    // We allow an extra leading blank line between the table and the outro,
+    // but the substantive content (non-empty lines) should be identical.
+    expect(reparsed.outro.trimStart()).toEqual(parsed.outro.trimStart());
   });
 
   it('preserves custom headers and extra columns', () => {

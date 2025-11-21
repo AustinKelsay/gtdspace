@@ -999,6 +999,11 @@ export const App: React.FC = () => {
               gtdSpace={gtdSpace}
               checkGTDSpace={checkGTDSpace}
               loadProjects={loadProjects}
+              activeFilePath={
+                displayedTab?.file?.path ||
+                displayedTab?.filePath ||
+                null
+              }
             />
 
             {/* Resize Handle */}

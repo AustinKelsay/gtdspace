@@ -69,6 +69,7 @@ interface GTDWorkspaceSidebarProps {
   gtdSpace?: GTDSpace | null;
   checkGTDSpace?: (path: string) => Promise<boolean>;
   loadProjects?: (path: string) => Promise<GTDProject[]>;
+  activeFilePath?: string | null;
 }
 
 interface GTDSection {
@@ -174,6 +175,19 @@ const getFolderName = (fullPath: string): string => {
   return segments[segments.length - 1] ?? '';
 };
 
+const normalizePath = (path?: string | null): string | null => {
+  if (!path) return null;
+  return path.replace(/\\/g, '/').toLowerCase();
+};
+
+const isPathDescendant = (parent?: string | null, candidate?: string | null): boolean => {
+  const normParent = normalizePath(parent);
+  const normCandidate = normalizePath(candidate);
+  if (!normParent || !normCandidate) return false;
+  const parentWithSlash = normParent.endsWith('/') ? normParent : `${normParent}/`;
+  return normCandidate === normParent || normCandidate.startsWith(parentWithSlash);
+};
+
 // normalizeStatus is imported from utils/gtd-status
 
 export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
@@ -184,7 +198,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   className = '',
   gtdSpace: propGtdSpace,
   checkGTDSpace: propCheckGTDSpace,
-  loadProjects: propLoadProjects
+  loadProjects: propLoadProjects,
+  activeFilePath = null,
 }) => {
   const {
     gtdSpace: hookGtdSpace,
@@ -221,6 +236,19 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const loadingSectionsRef = React.useRef<Set<string>>(new Set());
   // Track which sections have been loaded at least once
   const [loadedSections, setLoadedSections] = React.useState<Set<string>>(new Set());
+  // Normalized active path for subtle highlighting
+  const normalizedActivePath = React.useMemo(
+    () => normalizePath(activeFilePath),
+    [activeFilePath]
+  );
+  const isPathActive = React.useCallback(
+    (candidatePath?: string | null) => {
+      if (!candidatePath || !normalizedActivePath) return false;
+      return normalizePath(candidatePath) === normalizedActivePath;
+    },
+    [normalizedActivePath]
+  );
+  const activeRowClasses = 'bg-primary/10 ring-1 ring-primary/20';
 
   // Delete dialog state
   const [deleteItem, setDeleteItem] = React.useState<{ type: 'project' | 'action' | 'file'; path: string; name: string } | null>(null);
@@ -1390,11 +1418,13 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                       const normalizedStatus = normalizeStatus(currentStatus);
                       const currentTitle = projectMetadata[project.path]?.title || project.name;
                       const StatusIcon = getProjectStatusIcon(normalizedStatus);
+                      const currentPath = projectMetadata[project.path]?.currentPath || project.path;
+                      const isActiveProject = isPathActive(`${currentPath}/README.md`);
 
                       return (
                         <div
                           key={project.path}
-                          className="group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer"
+                          className={`group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer ${isActiveProject ? activeRowClasses : ''}`}
                           onClick={() => handleProjectClick(project)}
                         >
                           <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(normalizedStatus)}`} />
@@ -1425,11 +1455,13 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                           const normalizedStatus = normalizeStatus(currentStatus);
                           const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
                           const StatusIcon = getActionStatusIcon(normalizedStatus);
+                          const currentPath = actionMetadata[action.path]?.currentPath || action.path;
+                          const isActiveAction = isPathActive(currentPath);
 
                           return (
                             <div
                               key={action.path}
-                              className="group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer"
+                              className={`group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer ${isActiveAction ? activeRowClasses : ''}`}
                               onClick={() => onFileSelect(action)}
                             >
                               <StatusIcon className={`h-3 w-3 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
@@ -1457,11 +1489,13 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                     {files.map((file) => {
                       const metadata = sectionFileMetadata[file.path];
                       const displayName = metadata?.title || file.name.replace('.md', '');
+                      const currentPath = metadata?.currentPath || file.path;
+                      const isActiveFile = isPathActive(currentPath);
 
                       return (
                         <div
                           key={file.path}
-                          className="group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer"
+                          className={`group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer ${isActiveFile ? activeRowClasses : ''}`}
                           onClick={() => onFileSelect(file)}
                         >
                           <FileText className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
@@ -1494,10 +1528,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
                 // Handle Calendar section specially
                 if (section.id === 'calendar') {
+                  const isCalendarActive = isPathActive('::calendar::');
                   return (
                     <div
                       key={section.id}
-                      className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors cursor-pointer"
+                      className={`group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors cursor-pointer ${isCalendarActive ? activeRowClasses : ''}`}
                       onClick={() => {
                         // Open calendar as a special tab
                         const calendarFile: MarkdownFile = {
@@ -1578,10 +1613,14 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                               const normalizedStatus = normalizeStatus(currentStatus);
                               const currentTitle = projectMetadata[project.path]?.title || project.name;
                               const StatusIcon = getProjectStatusIcon(normalizedStatus);
+                              const currentProjectPath = projectMetadata[project.path]?.currentPath || project.path;
+                              const isProjectActive = isPathActive(`${currentProjectPath}/README.md`);
+                              const hasActiveDescendant = !isProjectActive && isPathDescendant(currentProjectPath, activeFilePath);
+                              const shouldHighlightProjectRow = isProjectActive || (hasActiveDescendant && !isProjectExpanded);
 
                               return (
                                 <div key={project.path}>
-                                  <div className="group flex items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors">
+                                  <div className={`group flex items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors ${shouldHighlightProjectRow ? activeRowClasses : ''}`}>
                                     <div
                                       className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer"
                                       role="button"
@@ -1700,10 +1739,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                           const normalizedStatus = normalizeStatus(currentStatus);
                                           const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
                                           const currentPath = actionMetadata[action.path]?.currentPath || action.path;
+                                          const isActionActive = isPathActive(currentPath);
+                                          const opacityClass = faded && !isActionActive ? 'opacity-80' : '';
                                           return (
                                             <div
                                               key={`${faded ? 'completed-' : ''}${action.path}`}
-                                              className={`group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs ${faded ? 'opacity-80' : ''}`}
+                                              className={`group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs ${opacityClass} ${isActionActive ? activeRowClasses : ''}`}
                                             >
                                               <div
                                                 className="flex items-center gap-1 flex-1 cursor-pointer"
@@ -1817,18 +1858,26 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                 onOpenChange={setCompletedProjectsExpanded}
                                 data-sidebar-group="completed-projects"
                               >
-                                <div className="group flex items-center justify-between px-1 py-0.5 mt-1 hover:bg-accent rounded-lg">
-                                  <CollapsibleTrigger className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                      <ChevronRight className={`h-3 w-3 transition-transform ${completedProjectsExpanded ? 'rotate-90' : ''}`} />
-                                      <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                                      <span className="truncate">Completed Projects</span>
-                                      <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
-                                        {completedProjects.length}
-                                      </Badge>
+                                {(() => {
+                                  const activeCompletedProject = completedProjects.find(p =>
+                                    isPathDescendant(p.path, activeFilePath)
+                                  );
+                                  const highlightCompletedGroup = !!activeCompletedProject && !completedProjectsExpanded;
+                                  return (
+                                    <div className={`group flex items-center justify-between px-1 py-0.5 mt-1 hover:bg-accent rounded-lg ${highlightCompletedGroup ? activeRowClasses : ''}`}>
+                                      <CollapsibleTrigger className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                          <ChevronRight className={`h-3 w-3 transition-transform ${completedProjectsExpanded ? 'rotate-90' : ''}`} />
+                                          <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                                          <span className="truncate">Completed Projects</span>
+                                          <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
+                                            {completedProjects.length}
+                                          </Badge>
+                                        </div>
+                                      </CollapsibleTrigger>
                                     </div>
-                                  </CollapsibleTrigger>
-                                </div>
+                                  );
+                                })()}
                                 <CollapsibleContent>
                                   <div className="mt-1 space-y-1">
                                     {completedProjects.map((project) => {
@@ -1838,10 +1887,14 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                       const normalizedStatus = normalizeStatus(currentStatus);
                                       const currentTitle = projectMetadata[project.path]?.title || project.name;
                                       const StatusIcon = getProjectStatusIcon(normalizedStatus);
+                                      const currentProjectPath = projectMetadata[project.path]?.currentPath || project.path;
+                                      const isProjectActive = isPathActive(`${currentProjectPath}/README.md`);
+                                      const hasActiveDescendant = !isProjectActive && isPathDescendant(currentProjectPath, activeFilePath);
+                                      const shouldHighlightProjectRow = isProjectActive || (hasActiveDescendant && !isProjectExpanded);
 
                                       return (
                                         <div key={`completed-${project.path}`}>
-                                          <div className="group flex items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors">
+                                          <div className={`group flex items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors ${shouldHighlightProjectRow ? activeRowClasses : ''}`}>
                                             <div
                                               className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer"
                                               role="button"
@@ -1960,10 +2013,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                           const normalizedStatus = normalizeStatus(currentStatus);
                                                           const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
                                                           const currentPath = actionMetadata[action.path]?.currentPath || action.path;
+                                                          const isActionActive = isPathActive(currentPath);
                                                           return (
                                                             <div
                                                               key={`completed-group-active-${action.path}`}
-                                                              className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs"
+                                                              className={`group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs ${isActionActive ? activeRowClasses : ''}`}
                                                             >
                                                               <div
                                                                 className="flex items-center gap-1 flex-1 cursor-pointer"
@@ -2000,10 +2054,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                                   const normalizedStatus = normalizeStatus(currentStatus);
                                                                   const currentTitle = actionMetadata[action.path]?.title || action.name.replace('.md', '');
                                                                   const currentPath = actionMetadata[action.path]?.currentPath || action.path;
+                                                                  const isActionActive = isPathActive(currentPath);
+                                                                  const opacityClass = isActionActive ? '' : 'opacity-80';
                                                                   return (
                                                                     <div
                                                                       key={`completed-${action.path}`}
-                                                                      className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs opacity-80"
+                                                                      className={`group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs ${opacityClass} ${isActionActive ? activeRowClasses : ''}`}
                                                                     >
                                                                       <div
                                                                         className="flex items-center gap-1 flex-1 cursor-pointer"
@@ -2054,6 +2110,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                   section.id === 'cabinet' ||
                   section.id === 'habits' ||
                   isHorizonSection;
+                const sectionReadmePath = `${sectionPath}/README.md`;
+                const hasActiveSectionChild = isPathDescendant(sectionPath, activeFilePath);
+                const isSectionHeaderActive =
+                  isHorizonSection ? isPathActive(sectionReadmePath) : false;
+                const shouldHighlightSectionHeader =
+                  isSectionHeaderActive || (!isExpanded && hasActiveSectionChild);
 
                 const createButton = canCreatePage ? (
                   <Button
@@ -2081,7 +2143,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                       }
                     }}
                   >
-                    <div className="group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors">
+                    <div className={`group flex items-center justify-between p-1.5 hover:bg-accent rounded-lg transition-colors ${shouldHighlightSectionHeader ? activeRowClasses : ''}`}>
                       {isHorizonSection ? (
                         <>
                           <button
@@ -2152,11 +2214,12 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                             // Use metadata for title if available
                             const currentTitle = sectionFileMetadata[file.path]?.title || file.name.replace('.md', '');
                             const currentPath = sectionFileMetadata[file.path]?.currentPath || file.path;
+                            const isFileActive = isPathActive(currentPath);
 
                             return (
                               <div
                                 key={file.path}
-                                className="group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs"
+                                className={`group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs ${isFileActive ? activeRowClasses : ''}`}
                               >
                                 <div
                                   className="flex items-center gap-1 flex-1 cursor-pointer"

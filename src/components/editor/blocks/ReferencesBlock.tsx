@@ -122,10 +122,43 @@ const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(prop
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
 
-  const parsedReferences = React.useMemo(() =>
-    references ? references.split(',').map(s => s.trim()).filter(Boolean) : [],
-    [references]
-  );
+  const parsedReferences = React.useMemo(() => {
+    const raw = (references || '').trim();
+    if (!raw || raw === '[]') return [];
+
+    const normalize = (value: string) => value.replace(/\\/g, '/').trim();
+    const uniq = new Set<string>();
+
+    let payload = raw;
+    try {
+      const decoded = decodeURIComponent(raw);
+      if (decoded) payload = decoded;
+    } catch {
+      // not encoded
+    }
+
+    if (payload.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(payload);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((item) => {
+            const norm = normalize(String(item));
+            if (norm) uniq.add(norm);
+          });
+          return Array.from(uniq);
+        }
+      } catch {
+        // fall back to CSV below
+      }
+    }
+
+    payload.split(',').forEach((entry) => {
+      const norm = normalize(entry);
+      if (norm) uniq.add(norm);
+    });
+
+    return Array.from(uniq);
+  }, [references]);
 
   const loadAvailableFiles = React.useCallback(async () => {
     setIsLoading(true);
@@ -281,7 +314,12 @@ const ReferencesBlockRenderer = React.memo(function ReferencesBlockRenderer(prop
   const getReferenceInfo = React.useCallback((path: string): { name: string; type: 'cabinet' | 'someday' } => {
     const file = availableFiles.find((f) => f.path === path);
     const normalized = path.replace(/\\/g, '/');
-    const name = normalized.split('/').pop()?.replace(/\.md$/i, '') || 'Unknown';
+    const leaf = normalized.split('/').pop() || '';
+
+    // If the reference targets a README, show the enclosing folder name instead
+    const isReadme = /^readme(\.md|\.markdown)?$/i.test(leaf);
+    const parent = normalized.split('/').filter(Boolean).slice(-2, -1)[0];
+    const name = isReadme && parent ? parent : leaf.replace(/\.(md|markdown)$/i, '') || 'Unknown';
     const type =
       file?.type ??
       (normalized.includes('/Cabinet/')

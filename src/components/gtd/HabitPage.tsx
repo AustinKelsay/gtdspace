@@ -52,6 +52,7 @@ import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { formatDisplayDate } from '@/utils/format-display-date';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useHabitTracking } from '@/hooks/useHabitTracking';
+import { GeneralReferencesField } from '@/components/gtd/GeneralReferencesField';
 import type { GTDHabitFrequency, GTDHabitStatus, MarkdownFile } from '@/types';
 
 const HABIT_FREQUENCY_OPTIONS: Array<{ value: GTDHabitFrequency; label: string }> = [
@@ -103,6 +104,7 @@ interface ParsedHabitContent {
   frequency: GTDHabitFrequency;
   focusDateTime: string;
   references: HabitReferenceGroups;
+  generalReferences: string[];
   createdDateTime: string;
   notes: string;
   history: string;
@@ -128,6 +130,7 @@ const METADATA_SECTION_PATTERNS: RegExp[] = [
   /^##\s+Vision\s+References\s*$/i,
   /^##\s+Purpose\s*&\s+Principles\s+References\s*$/i,
   /^##\s+Horizon\s+References.*$/i,
+  /^##\s+References\s*$/i,
   /^##\s+Created\s*$/i,
 ];
 
@@ -598,6 +601,7 @@ function parseHabitContent(content: string): ParsedHabitContent {
     vision: stripReadmeReferences(references.vision),
     purpose: stripReadmeReferences(references.purpose),
   };
+  const generalReferences = stripReadmeReferences(ensureStringArray((meta as any).references));
 
   let focusDateTime = '';
   const metaFocus = (meta as any).focusDate;
@@ -619,6 +623,7 @@ function parseHabitContent(content: string): ParsedHabitContent {
     frequency: normalizeFrequency((meta as any)['habit-frequency']),
     focusDateTime,
     references: sanitizedReferences,
+    generalReferences,
     createdDateTime: created,
     notes,
     history,
@@ -647,6 +652,9 @@ export const HabitPage: React.FC<HabitPageProps> = ({
     vision: stripReadmeReferences([...parsed.references.vision]),
     purpose: stripReadmeReferences([...parsed.references.purpose]),
   });
+  const [generalReferences, setGeneralReferences] = React.useState<string[]>(
+    stripReadmeReferences([...parsed.generalReferences])
+  );
   const [notes, setNotes] = React.useState(parsed.notes);
   const [historyRows, setHistoryRows] = React.useState(parsed.historyRows);
   const [historyIntro, setHistoryIntro] = React.useState(parsed.historyIntro);
@@ -680,6 +688,7 @@ export const HabitPage: React.FC<HabitPageProps> = ({
       vision: stripReadmeReferences([...parsed.references.vision]),
       purpose: stripReadmeReferences([...parsed.references.purpose]),
     });
+    setGeneralReferences(stripReadmeReferences([...parsed.generalReferences]));
     setNotes(parsed.notes);
     setHistoryRows(parsed.historyRows);
     setHistoryIntro(parsed.historyIntro);
@@ -712,6 +721,7 @@ export const HabitPage: React.FC<HabitPageProps> = ({
       frequency: parsed.frequency,
       focusDateTime: parsed.focusDateTime,
       references: parsed.references,
+      generalReferences: parsed.generalReferences,
       createdDateTime: parsed.createdDateTime,
       notes: parsed.notes,
       history: parsed.history,
@@ -810,6 +820,7 @@ export const HabitPage: React.FC<HabitPageProps> = ({
       status: GTDHabitStatus;
       frequency: GTDHabitFrequency;
       references: HabitReferenceGroups;
+      generalReferences: string[];
       notes: string;
       history: string;
     }>) => {
@@ -817,6 +828,7 @@ export const HabitPage: React.FC<HabitPageProps> = ({
       const nextStatus = overrides?.status ?? status;
       const nextFrequency = overrides?.frequency ?? frequency;
       const nextReferences = overrides?.references ?? references;
+      const nextGeneralReferences = overrides?.generalReferences ?? generalReferences;
       const nextNotes = overrides?.notes ?? notesRef.current;
       const nextHistory = overrides?.history ?? historyRef.current;
 
@@ -826,6 +838,7 @@ export const HabitPage: React.FC<HabitPageProps> = ({
         frequency: nextFrequency,
         focusDateTime: focusRef.current,
         references: nextReferences,
+        generalReferences: nextGeneralReferences,
         createdDateTime: createdRef.current,
         notes: nextNotes,
         history: nextHistory,
@@ -835,7 +848,7 @@ export const HabitPage: React.FC<HabitPageProps> = ({
         onChange(built);
       }
     },
-    [title, status, frequency, references, content, onChange]
+    [title, status, frequency, references, generalReferences, content, onChange]
   );
 
   const createdDisplay = React.useMemo(() => {
@@ -1133,6 +1146,15 @@ export const HabitPage: React.FC<HabitPageProps> = ({
           {/* Spacer to balance grid if odd number of reference groups */}
           <div className="hidden md:block" aria-hidden="true" />
         </div>
+        <GeneralReferencesField
+          value={generalReferences}
+          onChange={(next) => {
+            setGeneralReferences(next);
+            emitRebuild({ generalReferences: next });
+          }}
+          filePath={filePath}
+          className="pt-3"
+        />
       </div>
 
       <Dialog

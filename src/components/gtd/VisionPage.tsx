@@ -31,6 +31,7 @@ import { safeInvoke } from '@/utils/safe-invoke';
 import { formatDisplayDate } from '@/utils/format-display-date';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import type { GTDVisionHorizon, MarkdownFile } from '@/types';
+import { GeneralReferencesField } from '@/components/gtd/GeneralReferencesField';
 
 export interface VisionPageProps {
   content: string;
@@ -59,6 +60,7 @@ type EmitOverrides = Partial<{
   title: string;
   horizon: GTDVisionHorizon;
   references: VisionReferenceGroups;
+  generalReferences: string[];
   narrative: string;
 }>;
 
@@ -88,6 +90,7 @@ const CANONICAL_METADATA_HEADINGS: RegExp[] = [
   /^##\s+Goals\s+References\b/i,
   /^##\s+Areas\s+References\b/i,
   /^##\s+Purpose\s*&\s*Principles\s+References\b/i,
+  /^##\s+References\b/i,
   /^##\s+Created\b/i,
 ];
 
@@ -205,9 +208,15 @@ const VisionPage: React.FC<VisionPageProps> = ({ content, onChange, filePath, cl
     [meta]
   );
 
+  const initialGeneralReferences = React.useMemo<string[]>(
+    () => toStringArray((meta as any).references),
+    [meta]
+  );
+
   const [title, setTitle] = React.useState<string>(initialTitle);
   const [horizon, setHorizon] = React.useState<GTDVisionHorizon>(normalizeVisionHorizon((meta as any).visionHorizon));
   const [references, setReferences] = React.useState<VisionReferenceGroups>(initialReferences);
+  const [generalReferences, setGeneralReferences] = React.useState<string[]>(initialGeneralReferences);
   const [narrative, setNarrative] = React.useState<string>(
     parsedSections.narrative?.trim() === DEFAULT_VISION_NARRATIVE.trim() ? '' : parsedSections.narrative
   );
@@ -248,6 +257,7 @@ const VisionPage: React.FC<VisionPageProps> = ({ content, onChange, filePath, cl
       areas: toStringArray((meta as any).areasReferences),
       purpose: toStringArray((meta as any).purposeReferences),
     });
+    setGeneralReferences(toStringArray((meta as any).references));
 
     const updatedSections = parseVisionSections(content || '');
     setNarrative(
@@ -347,12 +357,14 @@ const VisionPage: React.FC<VisionPageProps> = ({ content, onChange, filePath, cl
       const nextTitle = overrides?.title ?? title;
       const nextHorizon = overrides?.horizon ?? horizon;
       const nextReferences = overrides?.references ?? references;
+      const nextGeneralReferences = overrides?.generalReferences ?? generalReferences;
       const nextNarrative = overrides?.narrative ?? narrative;
 
       const built = buildVisionMarkdown({
         title: nextTitle,
         horizon: nextHorizon,
         references: nextReferences,
+        generalReferences: nextGeneralReferences,
         createdDateTime: createdRef.current,
         narrative: nextNarrative,
       });
@@ -361,7 +373,7 @@ const VisionPage: React.FC<VisionPageProps> = ({ content, onChange, filePath, cl
         onChange(built);
       }
     },
-    [title, horizon, references, narrative, content, onChange]
+    [title, horizon, references, generalReferences, narrative, content, onChange]
   );
 
   const handleReferenceToggle = React.useCallback(
@@ -515,6 +527,16 @@ const VisionPage: React.FC<VisionPageProps> = ({ content, onChange, filePath, cl
             );
           })}
         </div>
+
+        <GeneralReferencesField
+          value={generalReferences}
+          onChange={(next) => {
+            setGeneralReferences(next);
+            emitRebuild({ generalReferences: next });
+          }}
+          filePath={filePath}
+          className="pt-2"
+        />
       </div>
 
       <Dialog

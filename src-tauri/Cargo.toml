@@ -1,6 +1,6 @@
 [package]
 name = "gtdspace"
-version = "1.2.0"
+version = "1.3.0"
 description = "GTD-first productivity system with integrated markdown editing"
 authors = ["you"]
 edition = "2021"

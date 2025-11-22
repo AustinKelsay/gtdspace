@@ -999,6 +999,11 @@ export const App: React.FC = () => {
               gtdSpace={gtdSpace}
               checkGTDSpace={checkGTDSpace}
               loadProjects={loadProjects}
+              activeFilePath={
+                displayedTab?.file?.path ||
+                displayedTab?.filePath ||
+                null
+              }
             />
 
             {/* Resize Handle */}
@@ -1082,18 +1087,20 @@ export const App: React.FC = () => {
           </div>
 
           {/* Main Content Area */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 min-h-0">
             {gtdSpace && isGTDSpace && tabState.openTabs.length === 0 ? (
-              // GTD Dashboard View - Show when in GTD space with no open tabs
-              <GTDDashboard
-                currentFolder={gtdSpace.root_path}
-                gtdSpace={gtdSpace}
-                isLoading={isLoading}
-                loadProjects={loadProjects}
-                onSelectProject={handleFolderLoad}
-                onSelectFile={handleFileSelect}
-                className="flex-1"
-              />
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                {/* GTD Dashboard View - Show when in GTD space with no open tabs */}
+                <GTDDashboard
+                  currentFolder={gtdSpace.root_path}
+                  gtdSpace={gtdSpace}
+                  isLoading={isLoading}
+                  loadProjects={loadProjects}
+                  onSelectProject={handleFolderLoad}
+                  onSelectFile={handleFileSelect}
+                  className="flex-1"
+                />
+              </div>
             ) : fileState.currentFolder || tabState.openTabs.length > 0 ? (
               // Editor View - Show when editing files or when there are open tabs
               <>
@@ -1107,7 +1114,7 @@ export const App: React.FC = () => {
                 />
 
                 {/* Editor */}
-                <div className="flex-1 flex flex-col min-h-0">
+                <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
                   {displayedTab ? (
                     // Check if this is the calendar tab
                     displayedTab.file.path === "::calendar::" ? (
@@ -1485,22 +1492,24 @@ export const App: React.FC = () => {
               </>
             ) : (
               // No folder selected - show welcome screen
-              <div className="h-full flex items-center justify-center text-muted-foreground">
-                <div className="text-center p-8">
-                  <Target className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <h2 className="text-2xl font-semibold mb-2">
-                    Welcome to GTD Space
-                  </h2>
-                  <p className="text-lg mb-6">
-                    Your personal productivity system
-                  </p>
-                  <p className="mb-4">
-                    Select a folder from the sidebar to get started
-                  </p>
-                  <Button onClick={selectFolder} size="lg">
-                    <Folder className="h-5 w-5 mr-2" />
-                    Select Folder
-                  </Button>
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="h-full flex items-center justify-center text-muted-foreground">
+                  <div className="text-center p-8">
+                    <Target className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                    <h2 className="text-2xl font-semibold mb-2">
+                      Welcome to GTD Space
+                    </h2>
+                    <p className="text-lg mb-6">
+                      Your personal productivity system
+                    </p>
+                    <p className="mb-4">
+                      Select a folder from the sidebar to get started
+                    </p>
+                    <Button onClick={selectFolder} size="lg">
+                      <Folder className="h-5 w-5 mr-2" />
+                      Select Folder
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}

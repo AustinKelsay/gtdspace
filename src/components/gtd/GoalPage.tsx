@@ -31,6 +31,7 @@ import { safeInvoke } from '@/utils/safe-invoke';
 import { formatDisplayDate } from '@/utils/format-display-date';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import type { GTDGoalStatus, MarkdownFile } from '@/types';
+import { GeneralReferencesField } from '@/components/gtd/GeneralReferencesField';
 
 export interface GoalPageProps {
   content: string;
@@ -61,6 +62,7 @@ type EmitOverrides = Partial<{
   status: GTDGoalStatus;
   targetDate?: string | null;
   references: GoalReferenceGroups;
+  generalReferences: string[];
   description: string;
 }>;
 
@@ -90,6 +92,7 @@ const CANONICAL_METADATA_HEADINGS: RegExp[] = [
   /^##\s+Areas\s+References\b/i,
   /^##\s+Vision\s+References\b/i,
   /^##\s+Purpose\s*&\s*Principles\s+References\b/i,
+  /^##\s+References\b/i,
   /^##\s+Created\b/i,
 ];
 
@@ -222,6 +225,11 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
     return normalizeReferenceGroups(parsed);
   }, [meta]);
 
+  const initialGeneralReferences = React.useMemo<string[]>(
+    () => toStringArray((meta as any).references),
+    [meta]
+  );
+
   const [title, setTitle] = React.useState<string>(initialTitle);
   const [status, setStatus] = React.useState<GTDGoalStatus>(normalizeGoalStatus((meta as any).goalStatus ?? (meta as any).status));
   const [targetDate, setTargetDate] = React.useState<string>(
@@ -232,6 +240,7 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
         : ''
   );
   const [references, setReferences] = React.useState<GoalReferenceGroups>(initialReferences);
+  const [generalReferences, setGeneralReferences] = React.useState<string[]>(initialGeneralReferences);
   const [description, setDescription] = React.useState<string>(
     parsedSections.description?.trim() === DEFAULT_GOAL_DESCRIPTION.trim() ? '' : parsedSections.description
   );
@@ -281,6 +290,7 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
         purpose: toStringArray((meta as any).purposeReferences),
       })
     );
+    setGeneralReferences(toStringArray((meta as any).references));
 
     const updatedSections = parseGoalSections(content || '');
     setDescription(
@@ -381,6 +391,7 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
       const nextTargetDate =
         overrides?.targetDate === undefined ? targetDate : (overrides.targetDate ?? '');
       const nextReferences = overrides?.references ?? references;
+      const nextGeneralReferences = overrides?.generalReferences ?? generalReferences;
       const nextDescription = overrides?.description ?? description;
 
       const built = buildGoalMarkdown({
@@ -388,6 +399,7 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
         status: nextStatus,
         targetDate: nextTargetDate,
         references: nextReferences,
+        generalReferences: nextGeneralReferences,
         createdDateTime: createdRef.current,
         description: nextDescription,
       });
@@ -401,6 +413,7 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
       status,
       targetDate,
       references,
+      generalReferences,
       description,
       content,
       onChange,
@@ -603,6 +616,16 @@ const GoalPage: React.FC<GoalPageProps> = ({ content, onChange, filePath, classN
             );
           })}
         </div>
+
+        <GeneralReferencesField
+          value={generalReferences}
+          onChange={(next) => {
+            setGeneralReferences(next);
+            emitRebuild({ generalReferences: next });
+          }}
+          filePath={filePath}
+          className="pt-2"
+        />
       </div>
 
       <Dialog

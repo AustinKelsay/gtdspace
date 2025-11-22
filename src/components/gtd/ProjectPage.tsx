@@ -34,6 +34,7 @@ import { normalizeStatus } from "@/utils/gtd-status";
 import { useErrorHandler } from "@/hooks/useErrorHandler";
 import type { GTDProjectStatus, MarkdownFile } from "@/types";
 import { Circle, CircleDot, CheckCircle2, RefreshCw, LayoutList, Activity, CircleOff } from "lucide-react";
+import { GeneralReferencesField } from "@/components/gtd/GeneralReferencesField";
 
 export interface ProjectPageProps {
   content: string;
@@ -71,12 +72,6 @@ type HorizonOption = {
   path: string;
   name: string;
   horizon: HorizonKey;
-};
-
-type GeneralReferenceOption = {
-  path: string;
-  name: string;
-  type: "cabinet" | "someday";
 };
 
 const README_REGEX = /(?:^|\/)README(?:\.(md|markdown))?$/i;
@@ -651,12 +646,6 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
   const [horizonSearch, setHorizonSearch] = React.useState<string>("");
   const [horizonLoading, setHorizonLoading] = React.useState(false);
 
-  const [generalDialogOpen, setGeneralDialogOpen] = React.useState(false);
-  const [generalOptions, setGeneralOptions] = React.useState<GeneralReferenceOption[]>([]);
-  const [generalSearch, setGeneralSearch] = React.useState("");
-  const [generalLoading, setGeneralLoading] = React.useState(false);
-  const [manualReference, setManualReference] = React.useState("");
-
   const createdRef = React.useRef<string>(new Date().toISOString());
   const [createdDisplayValue, setCreatedDisplayValue] = React.useState<string>(
     formatDisplayDate(createdRef.current)
@@ -838,77 +827,6 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
     });
   }, [horizonOptions, horizonSearch]);
 
-  const loadGeneralOptions = React.useCallback(async () => {
-    const spacePath = window.localStorage.getItem("gtdspace-current-path") || "";
-    if (!spacePath) {
-      setGeneralOptions([]);
-      return;
-    }
-
-    const inTauri = await checkTauriContextAsync();
-    if (!inTauri) {
-      setGeneralOptions([]);
-      return;
-    }
-
-    setGeneralLoading(true);
-    try {
-      const cabinetPath = `${spacePath}/Cabinet`;
-      const somedayPath = `${spacePath}/Someday Maybe`;
-
-      const [cabinetResult, somedayResult] = await Promise.all([
-        withErrorHandling(
-          () => safeInvoke<MarkdownFile[]>("list_markdown_files", { path: cabinetPath }, []),
-          "Failed to load Cabinet references",
-          "project-general-references"
-        ),
-        withErrorHandling(
-          () => safeInvoke<MarkdownFile[]>("list_markdown_files", { path: somedayPath }, []),
-          "Failed to load Someday Maybe references",
-          "project-general-references"
-        ),
-      ]);
-
-      const mapToOption = (
-        files: MarkdownFile[] | null | undefined,
-        type: "cabinet" | "someday"
-      ): GeneralReferenceOption[] => {
-        if (!files) return [];
-        return files
-          .map((file) => ({
-            path: file.path.replace(/\\/g, "/"),
-            name: file.name.replace(/\.(md|markdown)$/i, ""),
-            type,
-          }))
-          .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-      };
-
-      setGeneralOptions([
-        ...mapToOption(cabinetResult, "cabinet"),
-        ...mapToOption(somedayResult, "someday"),
-      ]);
-    } finally {
-      setGeneralLoading(false);
-    }
-  }, [withErrorHandling]);
-
-  React.useEffect(() => {
-    if (generalDialogOpen) {
-      setGeneralSearch("");
-      void loadGeneralOptions();
-    }
-  }, [generalDialogOpen, loadGeneralOptions]);
-
-  const filteredGeneralOptions = React.useMemo(() => {
-    if (!generalSearch) return generalOptions;
-    const query = generalSearch.toLowerCase();
-    return generalOptions.filter((option) => {
-      const nameMatch = option.name.toLowerCase().includes(query);
-      const pathMatch = option.path.toLowerCase().includes(query);
-      return nameMatch || pathMatch;
-    });
-  }, [generalOptions, generalSearch]);
-
   const handleHorizonToggle = React.useCallback(
     (key: HorizonKey, value: string) => {
       const normalizedTarget = normalizeReference(value);
@@ -975,33 +893,6 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       });
     },
     [emitRebuild, normalizedFilePath]
-  );
-
-  const handleReferenceAdd = React.useCallback(
-    (value: string) => {
-      const normalized = normalizeReference(value);
-      if (!normalized) return;
-      setReferences((current) => {
-        if (current.includes(normalized)) return current;
-        const next = [...current, normalized];
-        emitRebuild({ references: next });
-        return next;
-      });
-    },
-    [emitRebuild]
-  );
-
-  const handleReferenceRemove = React.useCallback(
-    (value: string) => {
-      const normalized = normalizeReference(value);
-      setReferences((current) => {
-        if (!current.includes(normalized)) return current;
-        const next = current.filter((ref) => ref !== normalized);
-        emitRebuild({ references: next });
-        return next;
-      });
-    },
-    [emitRebuild]
   );
 
   const handleDesiredOutcomeChange = React.useCallback(
@@ -1159,49 +1050,15 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
             })}
           </div>
 
-          <div className="space-y-2 pt-2">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-muted-foreground">References</span>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-muted-foreground">
-                  {references.length} linked
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  onClick={() => setGeneralDialogOpen(true)}
-                >
-                  Manage
-                </Button>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {references.length > 0 ? (
-                references.map((ref) => (
-                  <Badge
-                    key={ref}
-                    variant="outline"
-                    className="px-2 py-0.5 text-xs flex items-center gap-1.5 h-6 max-w-[18rem] truncate"
-                    title={ref}
-                  >
-                    {displayNameForReference(ref)}
-                    <button
-                      type="button"
-                      onClick={() => handleReferenceRemove(ref)}
-                      className="hover:text-muted-foreground transition-colors"
-                      aria-label={`Remove reference ${ref}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))
-              ) : (
-                <span className="text-xs text-muted-foreground">No references yet.</span>
-              )}
-            </div>
-          </div>
+          <GeneralReferencesField
+            value={references}
+            onChange={(next) => {
+              setReferences(next);
+              emitRebuild({ references: next });
+            }}
+            filePath={filePath}
+            className="pt-2"
+          />
         </div>
       </div>
 
@@ -1261,77 +1118,6 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
               </ScrollArea>
             </>
           )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={generalDialogOpen} onOpenChange={setGeneralDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>References</DialogTitle>
-            <DialogDescription>
-              Link Cabinet or Someday Maybe pages, or add external URLs.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex items-center gap-2 mt-4">
-            <Input
-              value={generalSearch}
-              onChange={(event) => setGeneralSearch(event.target.value)}
-              placeholder="Search references"
-            />
-            <Search className="h-4 w-4 text-muted-foreground" />
-          </div>
-
-          <ScrollArea className="mt-4 max-h-72 border border-border rounded-md">
-            <div className="p-3 space-y-3">
-              {generalLoading ? (
-                <span className="text-sm text-muted-foreground">Loading…</span>
-              ) : filteredGeneralOptions.length > 0 ? (
-                filteredGeneralOptions.map((option) => {
-                  const isActive = references.includes(option.path);
-                  return (
-                    <Button
-                      key={option.path}
-                      variant={isActive ? "secondary" : "ghost"}
-                      className="w-full justify-between"
-                      onClick={() =>
-                        isActive
-                          ? handleReferenceRemove(option.path)
-                          : handleReferenceAdd(option.path)
-                      }
-                    >
-                      <span className="truncate text-left">{option.name}</span>
-                      <span className="text-xs text-muted-foreground truncate max-w-[12rem]">
-                        {option.path}
-                      </span>
-                    </Button>
-                  );
-                })
-              ) : (
-                <span className="text-sm text-muted-foreground">No references available.</span>
-              )}
-            </div>
-          </ScrollArea>
-
-          <div className="flex items-center gap-2 mt-4">
-            <Input
-              value={manualReference}
-              onChange={(event) => setManualReference(event.target.value)}
-              placeholder="/path/to/file.md or https://..."
-              className="flex-1"
-            />
-            <Button
-              variant="secondary"
-              onClick={() => {
-                const trimmed = manualReference.trim();
-                if (!trimmed) return;
-                handleReferenceAdd(trimmed);
-                setManualReference("");
-              }}
-            >
-              Add
-            </Button>
-          </div>
         </DialogContent>
       </Dialog>
 

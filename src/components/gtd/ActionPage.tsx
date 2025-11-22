@@ -11,15 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { checkTauriContextAsync } from '@/utils/tauri-ready';
-import { Archive, Lightbulb, Search } from 'lucide-react';
+import { GeneralReferencesField } from '@/components/gtd/GeneralReferencesField';
 import { GTDTagSelector } from '@/components/gtd/GTDTagSelector';
 import { GTDActionEffort, GTDActionStatus } from '@/types';
 import { extractMetadata } from '@/utils/metadata-extractor';
-import { useErrorHandler } from '@/hooks/useErrorHandler';
 
 /**
  * Standardized Action page layout with compact metadata header
@@ -295,7 +290,6 @@ function buildActionMarkdown(
 export const ActionPage: React.FC<ActionPageProps> = ({ content, onChange, filePath, className }) => {
   // Parse current metadata
   const meta = React.useMemo(() => extractMetadata(content || ''), [content]);
-  const { withErrorHandling } = useErrorHandler();
 
   // Local state reflecting header fields
   const [title, setTitle] = React.useState<string>(
@@ -314,11 +308,6 @@ export const ActionPage: React.FC<ActionPageProps> = ({ content, onChange, fileP
   const [references, setReferences] = React.useState<string[]>(Array.isArray((meta as any).references) ? ((meta as any).references as string[]) : []);
   const [ctxPickerOpen, setCtxPickerOpen] = React.useState(false);
   const [focusEdited, setFocusEdited] = React.useState(false);
-  const [refsDialogOpen, setRefsDialogOpen] = React.useState(false);
-  const [availableRefs, setAvailableRefs] = React.useState<Array<{ path: string; name: string; type: 'cabinet' | 'someday' }>>([]);
-  const [refsSearch, setRefsSearch] = React.useState('');
-  const [refsLoading, setRefsLoading] = React.useState(false);
-  const [newReference, setNewReference] = React.useState('');
 
   const horizonRefs: HorizonRefs = React.useMemo(() => ({
     projects: Array.isArray((meta as any).projectsReferences) ? ((meta as any).projectsReferences as string[]) : [],
@@ -445,52 +434,6 @@ export const ActionPage: React.FC<ActionPageProps> = ({ content, onChange, fileP
     [title, status, effort, focusDate, focusTime, dueDate, contexts, references, horizonRefs, content, onChange, focusEdited]
   );
 
-  // Load Cabinet and Someday files for the references picker
-  const loadAvailableReferences = React.useCallback(async () => {
-    try {
-      setRefsLoading(true);
-      const spacePath = window.localStorage.getItem('gtdspace-current-path') || '';
-      if (!spacePath) { setAvailableRefs([]); return; }
-
-      const inTauri = await checkTauriContextAsync();
-      if (!inTauri) { setAvailableRefs([]); return; }
-      const { invoke } = await import('@tauri-apps/api/core');
-
-      const cabinetPath = `${spacePath}/Cabinet`;
-      const somedayPath = `${spacePath}/Someday Maybe`;
-
-      type MarkdownFile = { path: string; name: string };
-      const [cabinetResult, somedayResult] = await Promise.all([
-        withErrorHandling(
-          () => invoke<MarkdownFile[]>('list_markdown_files', { path: cabinetPath }),
-          'Failed to load Cabinet references',
-          'references'
-        ),
-        withErrorHandling(
-          () => invoke<MarkdownFile[]>('list_markdown_files', { path: somedayPath }),
-          'Failed to load Someday Maybe references',
-          'references'
-        ),
-      ]);
-
-      const cabinet = cabinetResult ?? [];
-      const someday = somedayResult ?? [];
-
-      const toRef = (f: MarkdownFile, type: 'cabinet' | 'someday') => ({
-        path: f.path,
-        name: f.name.replace(/\.md$/i, ''),
-        type,
-      });
-
-      setAvailableRefs([
-        ...cabinet.map(f => toRef(f, 'cabinet')),
-        ...someday.map(f => toRef(f, 'someday')),
-      ]);
-    } finally {
-      setRefsLoading(false);
-    }
-  }, [withErrorHandling]);
-
   // Handlers that update state then rebuild
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
@@ -605,152 +548,11 @@ export const ActionPage: React.FC<ActionPageProps> = ({ content, onChange, fileP
             </div>
           </div>
 
-          {/* References */}
-          <div className="grid grid-cols-[120px_1fr] gap-x-6 items-center">
-            <span className="text-sm text-muted-foreground">References</span>
-            <div className="flex items-center gap-2 flex-wrap">
-              {references.map((ref, idx) => (
-                <Badge key={`${ref}-${idx}`} variant="outline" className="px-2 py-0.5 text-xs flex items-center gap-1.5 h-6 max-w-[16rem] truncate">
-                  {ref}
-                  <button onClick={() => { const next = references.filter((_, i) => i !== idx); setReferences(next); emitRebuild({ references: next }); }} className="hover:text-muted-foreground transition-colors" aria-label={`Remove reference`}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-              <button
-                onClick={() => { setRefsDialogOpen(true); loadAvailableReferences(); }}
-                className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-accent transition-colors"
-                aria-label="Add reference"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* References Picker Dialog */}
-          <Dialog open={refsDialogOpen} onOpenChange={setRefsDialogOpen}>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Add References</DialogTitle>
-                <DialogDescription>Select Cabinet or Someday Maybe pages to reference</DialogDescription>
-              </DialogHeader>
-
-              <div className="flex items-center gap-2 mb-4">
-                <Search className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search references..."
-                  value={refsSearch}
-                  onChange={(e) => setRefsSearch(e.target.value)}
-                  className="flex-1"
-                />
-              </div>
-
-              <ScrollArea className="h-[420px] border rounded-md">
-                <div className="p-4 space-y-6">
-                  {refsLoading ? (
-                    <div className="text-center text-muted-foreground py-12">Loading references...</div>
-                  ) : (
-                    <>
-                      {/* Cabinet */}
-                      {availableRefs.some(f => f.type === 'cabinet') && (
-                        <div>
-                          <div className="flex items-center gap-2 mb-3 text-sm font-medium">
-                            <Archive className="h-4 w-4 text-muted-foreground" />
-                            <span>Cabinet</span>
-                          </div>
-                          <div className="pl-6 space-y-2">
-                            {availableRefs
-                              .filter(f => f.type === 'cabinet')
-                              .filter(f => !refsSearch || f.name.toLowerCase().includes(refsSearch.toLowerCase()))
-                              .map((file) => {
-                                const isSelected = references.includes(file.path);
-                                return (
-                                  <button
-                                    key={file.path}
-                                    onClick={() => {
-                                      const next = isSelected
-                                        ? references.filter(r => r !== file.path)
-                                        : [...references, file.path];
-                                      setReferences(next);
-                                      emitRebuild({ references: next });
-                                    }}
-                                    className={`w-full text-left px-4 py-3 rounded-md transition-colors ${isSelected ? 'bg-muted text-muted-foreground' : 'hover:bg-accent'}`}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-sm">{file.name}</span>
-                                      {isSelected && (<span className="text-xs text-muted-foreground">Selected</span>)}
-                                    </div>
-                                  </button>
-                                );
-                              })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Someday Maybe */}
-                      {availableRefs.some(f => f.type === 'someday') && (
-                        <div>
-                          <div className="flex items-center gap-2 mb-3 text-sm font-medium">
-                            <Lightbulb className="h-4 w-4 text-purple-600" />
-                            <span>Someday Maybe</span>
-                          </div>
-                          <div className="pl-6 space-y-2">
-                            {availableRefs
-                              .filter(f => f.type === 'someday')
-                              .filter(f => !refsSearch || f.name.toLowerCase().includes(refsSearch.toLowerCase()))
-                              .map((file) => {
-                                const isSelected = references.includes(file.path);
-                                return (
-                                  <button
-                                    key={file.path}
-                                    onClick={() => {
-                                      const next = isSelected
-                                        ? references.filter(r => r !== file.path)
-                                        : [...references, file.path];
-                                      setReferences(next);
-                                      emitRebuild({ references: next });
-                                    }}
-                                    className={`w-full text-left px-4 py-3 rounded-md transition-colors ${isSelected ? 'bg-muted text-muted-foreground' : 'hover:bg-accent'}`}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-sm">{file.name}</span>
-                                      {isSelected && (<span className="text-xs text-muted-foreground">Selected</span>)}
-                                    </div>
-                                  </button>
-                                );
-                              })}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </ScrollArea>
-
-              {/* Advanced manual add (optional) */}
-              <div className="flex items-center gap-2 mt-4">
-                <Input
-                  value={newReference}
-                  onChange={(e) => setNewReference(e.target.value)}
-                  placeholder="/path/to/file.md or https://..."
-                  className="flex-1"
-                />
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    const trimmed = newReference.trim();
-                    if (!trimmed) return;
-                    const next = [...references, trimmed];
-                    setReferences(next);
-                    setNewReference('');
-                    emitRebuild({ references: next });
-                  }}
-                >
-                  Add
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <GeneralReferencesField
+            value={references}
+            onChange={(next) => { setReferences(next); emitRebuild({ references: next }); }}
+            filePath={filePath}
+          />
 
           {/* Created timestamp (read-only) */}
           <div className="grid grid-cols-[120px_1fr] gap-x-6 items-center">

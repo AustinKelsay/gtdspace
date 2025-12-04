@@ -287,7 +287,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
   // Clear all filters
   const clearFilters = useCallback(() => {
     setSearchQuery('');
-    setStatusFilter([]);
+    setStatusFilter(['in-progress', 'waiting']);
     setEffortFilter([]);
     setProjectFilter([]);
     setHasDeadlineFilter(null);

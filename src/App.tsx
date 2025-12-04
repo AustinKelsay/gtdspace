@@ -748,7 +748,7 @@ export const App: React.FC = () => {
     };
 
     checkTauri();
-  }, [applyTheme]);
+  }, []);
 
   // Show warning toast when not running in Tauri environment
   React.useEffect(() => {

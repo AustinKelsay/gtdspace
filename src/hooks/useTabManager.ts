@@ -575,6 +575,72 @@ export const useTabManager = () => {
   }, [tabState.openTabs]);
 
   /**
+   * Reload tab content from disk, discarding any unsaved changes.
+   *
+   * This is used when a file is modified externally and the user chooses
+   * to reload the content (e.g. from a toast action). Tabs with unsaved
+   * changes are not reloaded to avoid losing local edits.
+   */
+  const reloadTabFromDisk = useCallback(async (tabId: string): Promise<boolean> => {
+    const tab = tabState.openTabs.find(t => t.id === tabId);
+    if (!tab) {
+      return false;
+    }
+
+    // Don't reload special non-file tabs
+    if (tab.file.path === '::calendar::') {
+      return false;
+    }
+
+    // Avoid clobbering local edits
+    if (tab.hasUnsavedChanges) {
+      log.warn('Refusing to reload tab with unsaved changes', { tabId, path: tab.file.path });
+      return false;
+    }
+
+    try {
+      const content = await safeInvoke<string>('read_file', { path: tab.file.path }, null);
+      if (content === null || content === undefined) {
+        throw new Error('Failed to read file');
+      }
+
+      setTabState(prev => ({
+        ...prev,
+        openTabs: prev.openTabs.map(t =>
+          t.id === tabId
+            ? {
+                ...t,
+                content,
+                originalContent: content,
+                hasUnsavedChanges: false,
+              }
+            : t
+        ),
+      }));
+
+      const metadata = extractMetadata(content);
+      emitContentSaved({
+        filePath: tab.file.path,
+        fileName: tab.file.name,
+        content,
+        metadata,
+      });
+      emitMetadataChange({
+        filePath: tab.file.path,
+        fileName: tab.file.name,
+        content,
+        metadata,
+      });
+
+      log.info('Reloaded tab content from disk', { tabId, path: tab.file.path });
+      return true;
+    } catch (error) {
+      log.error('Failed to reload tab from disk', error);
+      return false;
+    }
+  }, [tabState.openTabs]);
+
+  /**
    * Resolve conflict by applying chosen resolution
    */
   const resolveConflict = useCallback(async (tabId: string, resolution: {action: string, content?: string}): Promise<boolean> => {
@@ -1032,6 +1098,7 @@ export const useTabManager = () => {
     checkForConflicts,
     getExternalContent,
     resolveConflict,
+    reloadTabFromDisk,
     
     // Utilities
     findTabByFile,

@@ -127,7 +127,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
   }, [parseLocal]);
   // State
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>(['in-progress', 'waiting']);
   const [hasDeadlineFilter, setHasDeadlineFilter] = useState<boolean | null>(null);
   const [hasHorizonsFilter, setHasHorizonsFilter] = useState<boolean | null>(null);
   const [completionRangeFilter, setCompletionRangeFilter] = useState<[number, number]>([0, 100]);

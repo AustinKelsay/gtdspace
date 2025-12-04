@@ -141,10 +141,11 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
   }, [actions]);
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>(['in-progress', 'waiting']);
   const [effortFilter, setEffortFilter] = useState<string[]>([]);
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [hasDeadlineFilter, setHasDeadlineFilter] = useState<boolean | null>(null);
+  const [hasFocusDateFilter, setHasFocusDateFilter] = useState<boolean | null>(null);
   const [hasContextsFilter, setHasContextsFilter] = useState<boolean | null>(null);
   const [sortBy, setSortBy] = useState('dueDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -187,8 +188,15 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
 
     // Has deadline filter
     if (hasDeadlineFilter !== null) {
-      filtered = filtered.filter(action => 
+      filtered = filtered.filter(action =>
         hasDeadlineFilter ? !!action.dueDate : !action.dueDate
+      );
+    }
+
+    // Has focus date filter
+    if (hasFocusDateFilter !== null) {
+      filtered = filtered.filter(action =>
+        hasFocusDateFilter ? !!action.focusDate : !action.focusDate
       );
     }
 
@@ -247,7 +255,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
     });
 
     return filtered;
-  }, [actions, searchQuery, statusFilter, effortFilter, projectFilter, hasDeadlineFilter, hasContextsFilter, sortBy, sortOrder]);
+  }, [actions, searchQuery, statusFilter, effortFilter, projectFilter, hasDeadlineFilter, hasFocusDateFilter, hasContextsFilter, sortBy, sortOrder]);
 
   // Toggle action selection
   const toggleActionSelection = useCallback((actionId: string) => {
@@ -279,10 +287,11 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
   // Clear all filters
   const clearFilters = useCallback(() => {
     setSearchQuery('');
-    setStatusFilter([]);
+    setStatusFilter(['in-progress', 'waiting']);
     setEffortFilter([]);
     setProjectFilter([]);
     setHasDeadlineFilter(null);
+    setHasFocusDateFilter(null);
     setHasContextsFilter(null);
   }, []);
 
@@ -312,9 +321,10 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
     if (effortFilter.length > 0) count++;
     if (projectFilter.length > 0) count++;
     if (hasDeadlineFilter !== null) count++;
+    if (hasFocusDateFilter !== null) count++;
     if (hasContextsFilter !== null) count++;
     return count;
-  }, [searchQuery, statusFilter, effortFilter, projectFilter, hasDeadlineFilter, hasContextsFilter]);
+  }, [searchQuery, statusFilter, effortFilter, projectFilter, hasDeadlineFilter, hasFocusDateFilter, hasContextsFilter]);
 
   // Stats
   const stats = useMemo(() => {
@@ -442,7 +452,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
         {showFilters && (
           <Card>
             <CardContent className="pt-6">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
                 {/* Status filter */}
                 <div className="space-y-2">
                   <Label>Status</Label>
@@ -555,7 +565,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                 {/* Has deadline filter */}
                 <div className="space-y-2">
                   <Label>Has Deadline</Label>
-                  <Select 
+                  <Select
                     value={hasDeadlineFilter === null ? 'any' : hasDeadlineFilter ? 'yes' : 'no'}
                     onValueChange={(value) => {
                       if (value === 'any') setHasDeadlineFilter(null);
@@ -569,6 +579,27 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                       <SelectItem value="any">Any</SelectItem>
                       <SelectItem value="yes">Has deadline</SelectItem>
                       <SelectItem value="no">No deadline</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Has focus date filter */}
+                <div className="space-y-2">
+                  <Label>Has Focus Date</Label>
+                  <Select
+                    value={hasFocusDateFilter === null ? 'any' : hasFocusDateFilter ? 'yes' : 'no'}
+                    onValueChange={(value) => {
+                      if (value === 'any') setHasFocusDateFilter(null);
+                      else setHasFocusDateFilter(value === 'yes');
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any</SelectItem>
+                      <SelectItem value="yes">Has focus date</SelectItem>
+                      <SelectItem value="no">No focus date</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

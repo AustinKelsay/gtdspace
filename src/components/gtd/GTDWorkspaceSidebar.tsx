@@ -1312,7 +1312,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold flex items-center gap-1">
             <Target className="h-4 w-4 flex-shrink-0" />
-            <span className="truncate">GTD Workspace</span>
+            <span className="truncate inline-block">GTD Workspace</span>
           </h3>
           <div className="flex items-center gap-0.5 flex-shrink-0">
             <Button
@@ -1358,11 +1358,11 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
         <div className="flex gap-3 text-xs">
           <div className="flex items-center gap-1 min-w-0">
             <Briefcase className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-            <span className="truncate">{gtdSpace.projects?.length || 0} Projects</span>
+            <span className="truncate inline-block">{gtdSpace.projects?.length || 0} Projects</span>
           </div>
           <div className="flex items-center gap-1 min-w-0">
             <FileText className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-            <span className="truncate">
+            <span className="truncate inline-block">
               {gtdSpace.projects?.reduce((sum, p) => sum + (p.action_count || 0), 0) || 0} Actions
             </span>
           </div>
@@ -1380,7 +1380,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             className="w-full justify-start"
           >
             <Search className="h-3.5 w-3.5 mr-1.5 flex-shrink-0" />
-            <span className="truncate">Search</span>
+            <span className="truncate inline-block">Search</span>
           </Button>
         </div>
 
@@ -1428,7 +1428,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                           onClick={() => handleProjectClick(project)}
                         >
                           <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(normalizedStatus)}`} />
-                          <span className="text-sm truncate">{currentTitle}</span>
+                          <span className="text-sm truncate inline-block">{currentTitle}</span>
                         </div>
                       );
                     })}
@@ -1465,7 +1465,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                               onClick={() => onFileSelect(action)}
                             >
                               <StatusIcon className={`h-3 w-3 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
-                              <span className="text-sm truncate">{currentTitle}</span>
+                              <span className="text-sm truncate inline-block">{currentTitle}</span>
                             </div>
                           );
                         })}
@@ -1499,7 +1499,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                           onClick={() => onFileSelect(file)}
                         >
                           <FileText className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                          <span className="text-sm truncate">{displayName}</span>
+                          <span className="text-sm truncate inline-block">{displayName}</span>
                         </div>
                       );
                     })}
@@ -1567,7 +1567,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                           <div className="flex items-center gap-1.5">
                             <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                             <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
-                            <span className="font-medium text-sm truncate">{section.name}</span>
+                            <span className="font-medium text-sm truncate inline-block">{section.name}</span>
                             {(!isLoading && filteredProjects.length > 0) && (
                               <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
                                 {filteredProjects.length}
@@ -1620,7 +1620,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
                               return (
                                 <div key={project.path}>
-                                  <div className={`group flex items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors ${shouldHighlightProjectRow ? activeRowClasses : ''}`}>
+                                  <div className={`group flex w-full items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors min-w-0 max-w-full ${shouldHighlightProjectRow ? activeRowClasses : ''}`}>
                                     <div
                                       className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer"
                                       role="button"
@@ -1648,9 +1648,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                       </Button>
                                       <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(normalizedStatus)}`} />
                                       <div className="flex-1 min-w-0 ml-1">
-                                        <div className="font-medium text-sm truncate">{currentTitle}</div>
+                                        <div className="font-medium text-sm break-words whitespace-normal">{currentTitle}</div>
                                         <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                          <span className="truncate">{project.action_count || 0} actions</span>
+                                          <span className="truncate inline-block">{project.action_count || 0} actions</span>
                                           {(() => {
                                             const dueStr = projectMetadata[project.path]?.due_date ?? project.dueDate ?? '';
                                             if (!dueStr || dueStr.trim() === '') return null;
@@ -1658,7 +1658,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                             return date ? (
                                               <span className="flex items-center flex-shrink-0">
                                                 <Calendar className="h-2.5 w-2.5 mr-0.5" />
-                                                <span className="truncate">{date.toLocaleDateString()}</span>
+                                                <span className="truncate inline-block">{date.toLocaleDateString()}</span>
                                               </span>
                                             ) : null;
                                           })()}
@@ -1744,10 +1744,10 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                           return (
                                             <div
                                               key={`${faded ? 'completed-' : ''}${action.path}`}
-                                              className={`group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs ${opacityClass} ${isActionActive ? activeRowClasses : ''}`}
+                                              className={`group flex w-full items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs min-w-0 max-w-full ${opacityClass} ${isActionActive ? activeRowClasses : ''}`}
                                             >
                                               <div
-                                                className="flex items-center gap-1 flex-1 cursor-pointer"
+                                                className="flex items-center gap-1 flex-1 min-w-0 overflow-hidden cursor-pointer"
                                                 role="button"
                                                 tabIndex={0}
                                                 onClick={() => {
@@ -1761,7 +1761,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                 }}
                                               >
                                                 <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
-                                                <span className="truncate flex-1">{currentTitle}</span>
+                                                <span className="flex-1 min-w-0 break-words whitespace-normal">{currentTitle}</span>
                                                 {actionMetadata[action.path]?.due_date && actionMetadata[action.path].due_date.trim() !== '' && (() => {
                                                   const date = parseLocalDateString(actionMetadata[action.path].due_date);
                                                   return date ? (
@@ -1869,7 +1869,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                                           <ChevronRight className={`h-3 w-3 transition-transform ${completedProjectsExpanded ? 'rotate-90' : ''}`} />
                                           <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                                          <span className="truncate">Completed Projects</span>
+                                          <span className="truncate inline-block">Completed Projects</span>
                                           <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
                                             {completedProjects.length}
                                           </Badge>
@@ -1894,7 +1894,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
 
                                       return (
                                         <div key={`completed-${project.path}`}>
-                                          <div className={`group flex items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors ${shouldHighlightProjectRow ? activeRowClasses : ''}`}>
+                                          <div className={`group flex w-full items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors min-w-0 max-w-full ${shouldHighlightProjectRow ? activeRowClasses : ''}`}>
                                             <div
                                               className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer"
                                               role="button"
@@ -1922,9 +1922,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                               </Button>
                                               <StatusIcon className={`h-3.5 w-3.5 flex-shrink-0 ${getProjectStatusColor(normalizedStatus)}`} />
                                               <div className="flex-1 min-w-0 ml-1">
-                                                <div className="font-medium text-sm truncate">{currentTitle}</div>
+                                                <div className="font-medium text-sm break-words whitespace-normal">{currentTitle}</div>
                                                 <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                                  <span className="truncate">{project.action_count || 0} actions</span>
+                                                  <span className="truncate inline-block">{project.action_count || 0} actions</span>
                                                   {(() => {
                                                     const dueStr = projectMetadata[project.path]?.due_date ?? project.dueDate ?? '';
                                                     if (!dueStr || dueStr.trim() === '') return null;
@@ -1932,7 +1932,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                     return date ? (
                                                       <span className="flex items-center flex-shrink-0">
                                                         <Calendar className="h-2.5 w-2.5 mr-0.5" />
-                                                        <span className="truncate">{date.toLocaleDateString()}</span>
+                                                        <span className="truncate inline-block">{date.toLocaleDateString()}</span>
                                                       </span>
                                                     ) : null;
                                                   })()}
@@ -2017,16 +2017,16 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                           return (
                                                             <div
                                                               key={`completed-group-active-${action.path}`}
-                                                              className={`group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs ${isActionActive ? activeRowClasses : ''}`}
+                                                              className={`group flex w-full items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs min-w-0 ${isActionActive ? activeRowClasses : ''}`}
                                                             >
                                                               <div
-                                                                className="flex items-center gap-1 flex-1 cursor-pointer"
+                                                                className="flex items-center gap-1 flex-1 min-w-0 overflow-hidden cursor-pointer"
                                                                 role="button"
                                                                 tabIndex={0}
                                                                 onClick={() => onFileSelect({ ...action, path: currentPath })}
                                                               >
                                                                 <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
-                                                                <span className="truncate flex-1">{currentTitle}</span>
+                                                                <span className="flex-1 min-w-0 break-words whitespace-normal">{currentTitle}</span>
                                                               </div>
                                                             </div>
                                                           );
@@ -2059,21 +2059,21 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                                                   return (
                                                                     <div
                                                                       key={`completed-${action.path}`}
-                                                                      className={`group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs ${opacityClass} ${isActionActive ? activeRowClasses : ''}`}
+                                                                      className={`group flex w-full items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs min-w-0 max-w-full ${opacityClass} ${isActionActive ? activeRowClasses : ''}`}
                                                                     >
                                                                       <div
-                                                                        className="flex items-center gap-1 flex-1 cursor-pointer"
+                                                                        className="flex items-center gap-1 flex-1 min-w-0 overflow-hidden cursor-pointer"
                                                                         role="button"
                                                                         tabIndex={0}
                                                                         onClick={() => onFileSelect({ ...action, path: currentPath })}
                                                                       >
                                                                         <FileText className={`h-2.5 w-2.5 flex-shrink-0 ${getActionStatusColor(normalizedStatus)}`} />
-                                                                        <span className="truncate flex-1">{currentTitle}</span>
+                                                                <span className="flex-1 min-w-0 break-words whitespace-normal">{currentTitle}</span>
                                                                       </div>
                                                                     </div>
                                                                   );
-                                                                })}
-                                                              </div>
+                                                        })}
+                                                      </div>
                                                             </CollapsibleContent>
                                                           </Collapsible>
                                                         )}
@@ -2153,8 +2153,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                           >
                             <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
                             <div className="flex flex-col flex-1 min-w-0">
-                              <span className="font-medium text-sm truncate">{section.name}</span>
-                              <span className="text-[11px] text-muted-foreground truncate">{section.description}</span>
+                              <span className="font-medium text-sm truncate inline-block">{section.name}</span>
+                              <span className="text-[11px] text-muted-foreground truncate inline-block">{section.description}</span>
                             </div>
                             {showBadge && (
                               <Badge variant="secondary" className="text-xs px-1 py-0 h-4">
@@ -2183,7 +2183,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                             <div className="flex items-center gap-1.5">
                               <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                               <section.icon className={`h-3.5 w-3.5 ${section.color} flex-shrink-0`} />
-                              <span className="font-medium text-sm truncate">{section.name}</span>
+                              <span className="font-medium text-sm truncate inline-block">{section.name}</span>
                               {showBadge && (
                                 <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
                                   {visibleFiles.length}
@@ -2237,7 +2237,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                                   }}
                                 >
                                   <FileText className="h-2.5 w-2.5 flex-shrink-0 text-muted-foreground" />
-                                  <span className="truncate">{currentTitle}</span>
+                                  <span className="truncate inline-block">{currentTitle}</span>
                                 </div>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>

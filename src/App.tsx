@@ -24,7 +24,7 @@ import {
   GTDQuickActions,
   GTDInitDialog,
 } from "@/components/gtd";
-import { FileChangeManager } from "@/components/file-browser/FileChangeManager";
+import { useToast } from "@/hooks/useToast";
 import { EnhancedTextEditor } from "@/components/editor/EnhancedTextEditor";
 import { ActionPage } from "@/components/gtd/ActionPage";
 import ProjectPage from "@/components/gtd/ProjectPage";
@@ -133,6 +133,7 @@ export const App: React.FC = () => {
     handleTabAction,
     saveAllTabs,
     reorderTabs,
+    reloadTabFromDisk,
   } = useTabManager();
 
   // Track which horizon README tabs should show editor instead of overview
@@ -182,6 +183,10 @@ export const App: React.FC = () => {
   // === FILE WATCHER ===
 
   const { state: watcherState, startWatching } = useFileWatcher();
+
+  // === TOAST NOTIFICATIONS ===
+
+  const { showFileModified, showFileDeleted, showFileCreated, showWarning } = useToast();
 
   // === SETTINGS MANAGEMENT ===
 
@@ -303,14 +308,16 @@ export const App: React.FC = () => {
     // Handle different types of file changes
     switch (latestEvent.event_type) {
       case "created":
-        // New file created - refresh file list
+        // New file created - refresh file list and show toast
+        showFileCreated(latestEvent.file_name);
         if (fileState.currentFolder) {
           loadFolder(fileState.currentFolder);
         }
         break;
 
       case "deleted": {
-        // File deleted - close tab if open and refresh file list
+        // File deleted - close tab if open, refresh file list, and show toast
+        showFileDeleted(latestEvent.file_name);
         const deletedTab = tabState.openTabs.find(
           (tab) => norm(tab.file.path) === norm(latestEvent.file_path)
         );
@@ -328,8 +335,18 @@ export const App: React.FC = () => {
         const modifiedTab = tabState.openTabs.find(
           (tab) => norm(tab.file.path) === norm(latestEvent.file_path)
         );
-        if (modifiedTab && !modifiedTab.hasUnsavedChanges) {
-          // File was modified externally
+        if (modifiedTab) {
+          if (!modifiedTab.hasUnsavedChanges) {
+            // Offer to reload content from disk when there are no local edits
+            showFileModified(latestEvent.file_name, {
+              onReload: () => {
+                void reloadTabFromDisk(modifiedTab.id);
+              },
+            });
+          } else {
+            // For tabs with unsaved changes, just notify without auto-reload
+            showFileModified(latestEvent.file_name);
+          }
         }
         break;
       }
@@ -340,6 +357,10 @@ export const App: React.FC = () => {
     tabState.openTabs,
     loadFolder,
     closeTab,
+    showFileCreated,
+    showFileDeleted,
+    showFileModified,
+    reloadTabFromDisk,
   ]);
 
   // === KEYBOARD SHORTCUTS ===
@@ -714,6 +735,8 @@ export const App: React.FC = () => {
 
   const [isTauriEnvironment, setIsTauriEnvironment] = React.useState(false);
 
+  const [tauriChecked, setTauriChecked] = React.useState(false);
+
   React.useEffect(() => {
     // Check for Tauri environment after component mount
     const checkTauri = async () => {
@@ -721,10 +744,18 @@ export const App: React.FC = () => {
       // Use safeInvoke which gracefully handles non-Tauri environments
       const result = await safeInvoke<string>("ping", undefined, null);
       setIsTauriEnvironment(result !== null);
+      setTauriChecked(true);
     };
 
     checkTauri();
-  }, [applyTheme]);
+  }, []);
+
+  // Show warning toast when not running in Tauri environment
+  React.useEffect(() => {
+    if (tauriChecked && !isTauriEnvironment) {
+      showWarning("Not running in Tauri environment. File operations will not work.");
+    }
+  }, [tauriChecked, isTauriEnvironment, showWarning]);
 
   // Listen for habit status updates to refresh the editor
   React.useEffect(() => {
@@ -1516,31 +1547,6 @@ export const App: React.FC = () => {
           </div>
         </div>
 
-        {/* File change notification */}
-        {watcherState.isWatching && watcherState.recentEvents.length > 0 && (
-          <FileChangeManager
-            events={watcherState.recentEvents}
-            openTabs={tabState.openTabs}
-            onReloadFile={async (filePath) => {
-              const tab = tabState.openTabs.find(
-                (t) => t.file.path === filePath
-              );
-              if (tab) {
-                await openTab(tab.file);
-              }
-            }}
-            onCloseTab={closeTab}
-            onRefreshFileList={refreshFileList}
-          />
-        )}
-
-        {/* Environment warning (development) */}
-        {!isTauriEnvironment && (
-          <div className="fixed bottom-4 right-4 bg-yellow-500 text-black px-4 py-2 rounded shadow-lg">
-            Warning: Not running in Tauri environment. File operations will not
-            work.
-          </div>
-        )}
 
         {/* GTD Quick Actions */}
         {isGTDSpace && (

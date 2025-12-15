@@ -209,7 +209,8 @@ export const App: React.FC = () => {
   // Refresh file list handler
   const refreshFileList = React.useCallback(async () => {
     if (fileState.currentFolder) {
-      await loadFolder(fileState.currentFolder);
+      // Use saveToSettings: false to prevent re-persisting currentFolder on refresh
+      await loadFolder(fileState.currentFolder, { saveToSettings: false });
     }
   }, [fileState.currentFolder, loadFolder]);
 
@@ -311,7 +312,8 @@ export const App: React.FC = () => {
         // New file created - refresh file list and show toast
         showFileCreated(latestEvent.file_name);
         if (fileState.currentFolder) {
-          loadFolder(fileState.currentFolder);
+          // Use saveToSettings: false to prevent re-persisting currentFolder on refresh
+          loadFolder(fileState.currentFolder, { saveToSettings: false });
         }
         break;
 
@@ -325,7 +327,8 @@ export const App: React.FC = () => {
           closeTab(deletedTab.id);
         }
         if (fileState.currentFolder) {
-          loadFolder(fileState.currentFolder);
+          // Use saveToSettings: false to prevent re-persisting currentFolder on refresh
+          loadFolder(fileState.currentFolder, { saveToSettings: false });
         }
         break;
       }
@@ -676,6 +679,31 @@ export const App: React.FC = () => {
 
   // Separate effect for workspace initialization after settings load
   React.useEffect(() => {
+    // Helper to validate that a path is a valid GTD root (not a subfolder)
+    const isValidGTDRoot = (path: string): boolean => {
+      // Normalize path separators for Windows compatibility
+      const normalized = path.replace(/\\/g, '/');
+      // Reject paths that END with a GTD subfolder name
+      const gtdSubfolderPattern = /\/(Projects|Habits|Areas of Focus|Goals|Vision|Purpose & Principles|Cabinet|Someday Maybe)$/i;
+      return !gtdSubfolderPattern.test(normalized);
+    };
+
+    // Helper to extract GTD root from a corrupted subfolder path
+    const extractGTDRoot = (path: string): string | null => {
+      // Normalize path separators for Windows compatibility
+      const normalized = path.replace(/\\/g, '/');
+      // Only extract root if path ENDS with a GTD subfolder name
+      const gtdSubfolderPattern = /^(.+)\/(Projects|Habits|Areas of Focus|Goals|Vision|Purpose & Principles|Cabinet|Someday Maybe)$/i;
+      const match = normalized.match(gtdSubfolderPattern);
+      if (match) {
+        // Find where the GTD folder starts in the original path and slice there
+        const gtdFolderName = match[2];
+        const lastSepIndex = path.replace(/\\/g, '/').lastIndexOf('/' + gtdFolderName);
+        return lastSepIndex > 0 ? path.substring(0, lastSepIndex) : match[1];
+      }
+      return null;
+    };
+
     const initWorkspace = async () => {
       // Wait for settings to load
       if (isLoadingSettings) {
@@ -693,10 +721,35 @@ export const App: React.FC = () => {
       try {
         // Check if settings has a last_folder saved
         if (settings.last_folder && settings.last_folder !== "") {
-          // Use the saved workspace
-          await handleFolderLoad(settings.last_folder);
-          const isGTDNow = await checkGTDSpace(settings.last_folder);
-          if (isGTDNow) await loadProjects(settings.last_folder);
+          let workspacePath = settings.last_folder;
+
+          // Validate the saved path - if it looks like a subfolder, try to recover
+          if (!isValidGTDRoot(workspacePath)) {
+            console.warn("Detected corrupted workspace path:", workspacePath);
+            const recoveredPath = extractGTDRoot(workspacePath);
+            if (recoveredPath) {
+              console.log("Recovering GTD root from corrupted path:", recoveredPath);
+              workspacePath = recoveredPath;
+              // Fix the corrupted setting
+              await setLastFolder(recoveredPath);
+            } else {
+              // Can't recover - use default instead
+              console.warn("Cannot recover GTD root, using default");
+              const spacePath = await initializeDefaultSpaceIfNeeded();
+              if (spacePath) {
+                await handleFolderLoad(spacePath);
+                const isGTDNow = await checkGTDSpace(spacePath);
+                if (isGTDNow) await loadProjects(spacePath);
+                setShowGTDInit(false);
+              }
+              return;
+            }
+          }
+
+          // Use the (possibly recovered) workspace path
+          await handleFolderLoad(workspacePath);
+          const isGTDNow = await checkGTDSpace(workspacePath);
+          if (isGTDNow) await loadProjects(workspacePath);
           setShowGTDInit(false);
         } else {
           // No saved workspace, initialize default
@@ -724,6 +777,7 @@ export const App: React.FC = () => {
     checkGTDSpace,
     loadProjects,
     initializeDefaultSpaceIfNeeded,
+    setLastFolder,
   ]);
 
   // Apply theme when it changes

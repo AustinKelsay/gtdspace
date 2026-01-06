@@ -48,6 +48,14 @@ export const useTabManager = () => {
     recentlyClosed: [],
   });
 
+  // Ref to always access the latest tabState (prevents stale closures)
+  const tabStateRef = useRef<TabManagerState>(tabState);
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    tabStateRef.current = tabState;
+  }, [tabState]);
+
   // Store for debounced metadata processing
   const metadataProcessingRef = useRef<Map<string, ReturnType<typeof debounce>>>(new Map());
   
@@ -575,6 +583,76 @@ export const useTabManager = () => {
   }, [tabState.openTabs]);
 
   /**
+   * Reload tab content from disk, discarding any unsaved changes.
+   *
+   * This is used when a file is modified externally and the user chooses
+   * to reload the content (e.g. from a toast action). Tabs with unsaved
+   * changes are not reloaded to avoid losing local edits.
+   * 
+   * Uses tabStateRef to always read the latest state, preventing stale
+   * closure issues when the callback is created before user edits.
+   */
+  const reloadTabFromDisk = useCallback(async (tabId: string): Promise<boolean> => {
+    // Use ref to always read the latest state (prevents stale closures)
+    const currentTab = tabStateRef.current.openTabs.find(t => t.id === tabId);
+    if (!currentTab) {
+      return false;
+    }
+
+    // Don't reload special non-file tabs
+    if (currentTab.file.path === '::calendar::') {
+      return false;
+    }
+
+    // Avoid clobbering local edits - check latest state, not stale closure
+    if (currentTab.hasUnsavedChanges) {
+      log.warn('Refusing to reload tab with unsaved changes', { tabId, path: currentTab.file.path });
+      return false;
+    }
+
+    try {
+      const content = await safeInvoke<string>('read_file', { path: currentTab.file.path }, null);
+      if (content === null || content === undefined) {
+        throw new Error('Failed to read file');
+      }
+
+      setTabState(prev => ({
+        ...prev,
+        openTabs: prev.openTabs.map(t =>
+          t.id === tabId
+            ? {
+                ...t,
+                content,
+                originalContent: content,
+                hasUnsavedChanges: false,
+              }
+            : t
+        ),
+      }));
+
+      const metadata = extractMetadata(content);
+      emitContentSaved({
+        filePath: currentTab.file.path,
+        fileName: currentTab.file.name,
+        content,
+        metadata,
+      });
+      emitMetadataChange({
+        filePath: currentTab.file.path,
+        fileName: currentTab.file.name,
+        content,
+        metadata,
+      });
+
+      log.info('Reloaded tab content from disk', { tabId, path: currentTab.file.path });
+      return true;
+    } catch (error) {
+      log.error('Failed to reload tab from disk', error);
+      return false;
+    }
+  }, []);
+
+  /**
    * Resolve conflict by applying chosen resolution
    */
   const resolveConflict = useCallback(async (tabId: string, resolution: {action: string, content?: string}): Promise<boolean> => {
@@ -1032,6 +1110,7 @@ export const useTabManager = () => {
     checkForConflicts,
     getExternalContent,
     resolveConflict,
+    reloadTabFromDisk,
     
     // Utilities
     findTabByFile,

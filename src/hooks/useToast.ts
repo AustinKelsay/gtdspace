@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { useToast as useShadcnToast } from '@/hooks/use-toast';
 
 // Store for deduplication
@@ -139,6 +139,65 @@ export function useToast() {
     }
   }, [dismissFromHook]);
 
+  /**
+   * Show a file modified notification
+   *
+   * Optionally includes an action to reload the file content from disk.
+   */
+  const showFileModified = useCallback(
+    (fileName: string, options?: { onReload?: () => void }) => {
+      const key = `file-modified:${fileName}`;
+      if (!shouldShowToast(key)) return;
+
+      const action =
+        options?.onReload
+          ? React.createElement(
+              'button',
+              {
+                type: 'button',
+                className:
+                  'ml-4 inline-flex items-center rounded-md border border-input bg-background px-3 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-accent',
+                onClick: options.onReload,
+              },
+              'Reload file'
+            )
+          : undefined;
+
+      toast({
+        title: 'Warning',
+        description: `"${fileName}" was modified externally`,
+        action,
+      });
+    },
+    [toast, shouldShowToast]
+  );
+
+  /**
+   * Show a file deleted notification
+   */
+  const showFileDeleted = useCallback((fileName: string) => {
+    const key = `file-deleted:${fileName}`;
+    if (!shouldShowToast(key)) return;
+
+    toast({
+      title: 'Warning',
+      description: `"${fileName}" was deleted`,
+    });
+  }, [toast, shouldShowToast]);
+
+  /**
+   * Show a file created notification
+   */
+  const showFileCreated = useCallback((fileName: string) => {
+    const key = `file-created:${fileName}`;
+    if (!shouldShowToast(key)) return;
+
+    toast({
+      title: 'Info',
+      description: `New file "${fileName}" was created`,
+    });
+  }, [toast, shouldShowToast]);
+
   return {
     toasts,
     showSuccess,
@@ -147,6 +206,9 @@ export function useToast() {
     showWarning,
     showLoading,
     dismiss,
+    showFileModified,
+    showFileDeleted,
+    showFileCreated,
   };
 }
 

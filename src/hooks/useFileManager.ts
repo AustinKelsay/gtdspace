@@ -78,7 +78,27 @@ export const useFileManager = () => {
       const normalizedPath = folderPath.trim();
       let directoryExists = await safeInvoke<boolean>('check_directory_exists', { path: normalizedPath }, null);
 
-      if (directoryExists === false) {
+      // Check if this path ENDS with a GTD subfolder name (e.g., ~/GTD Space/Projects)
+      // Normalize path separators for Windows compatibility, then use $ anchor
+      const normalizedForCheck = normalizedPath.replace(/\\/g, '/');
+      const gtdSubfolderPattern = /\/(Projects|Habits|Areas of Focus|Goals|Vision|Purpose & Principles|Cabinet|Someday Maybe)$/i;
+      const endsWithGTDFolder = gtdSubfolderPattern.test(normalizedForCheck);
+
+      // Only flag as subfolder if it ends with a GTD folder name AND parent is a GTD space
+      // This allows legitimate workspaces like ~/Projects while blocking ~/GTD Space/Projects
+      let looksLikeSubfolder = false;
+      if (endsWithGTDFolder) {
+        const lastSlashIndex = normalizedForCheck.lastIndexOf('/');
+        if (lastSlashIndex > 0) {
+          // Extract parent path, preserving original separators
+          const parentPath = normalizedPath.substring(0, lastSlashIndex);
+          const parentIsGTDSpace = await safeInvoke<boolean>('check_is_gtd_space', { path: parentPath }, false);
+          looksLikeSubfolder = parentIsGTDSpace === true;
+        }
+      }
+
+      if (directoryExists === false && !looksLikeSubfolder) {
+        // Only initialize a new GTD space if this is NOT a subfolder path
         console.log('Folder missing, attempting to initialize GTD space at:', normalizedPath);
         await safeInvoke<string>('initialize_gtd_space', { spacePath: normalizedPath }, null);
 
@@ -90,6 +110,10 @@ export const useFileManager = () => {
         }
 
         directoryExists = await safeInvoke<boolean>('check_directory_exists', { path: normalizedPath }, null);
+      } else if (directoryExists === false && looksLikeSubfolder) {
+        // Path is inside an existing GTD space but doesn't exist - this is a corrupted path
+        console.warn('Detected path inside existing GTD space, not initializing:', normalizedPath);
+        throw new Error(`Invalid path: ${normalizedPath} appears to be inside an existing GTD space`);
       }
 
       if (directoryExists === false) {

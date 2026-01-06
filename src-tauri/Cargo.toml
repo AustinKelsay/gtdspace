@@ -40,7 +40,7 @@ urlencoding = "2.1"
 open = "5"
 base64 = "0.22"
 dotenv = "0.15"
-uuid = { version = "1.18", features = ["v4"] }
+uuid = { version = "1.19", features = ["v4"] }
 tempfile = "3.23"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 warp = "0.3"

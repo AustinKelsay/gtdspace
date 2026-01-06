@@ -24,7 +24,7 @@ import {
   GTDQuickActions,
   GTDInitDialog,
 } from "@/components/gtd";
-import { FileChangeManager } from "@/components/file-browser/FileChangeManager";
+import { useToast } from "@/hooks/useToast";
 import { EnhancedTextEditor } from "@/components/editor/EnhancedTextEditor";
 import { ActionPage } from "@/components/gtd/ActionPage";
 import ProjectPage from "@/components/gtd/ProjectPage";
@@ -133,6 +133,7 @@ export const App: React.FC = () => {
     handleTabAction,
     saveAllTabs,
     reorderTabs,
+    reloadTabFromDisk,
   } = useTabManager();
 
   // Track which horizon README tabs should show editor instead of overview
@@ -183,6 +184,10 @@ export const App: React.FC = () => {
 
   const { state: watcherState, startWatching } = useFileWatcher();
 
+  // === TOAST NOTIFICATIONS ===
+
+  const { showFileModified, showFileDeleted, showFileCreated, showWarning } = useToast();
+
   // === SETTINGS MANAGEMENT ===
 
   const {
@@ -204,7 +209,8 @@ export const App: React.FC = () => {
   // Refresh file list handler
   const refreshFileList = React.useCallback(async () => {
     if (fileState.currentFolder) {
-      await loadFolder(fileState.currentFolder);
+      // Use saveToSettings: false to prevent re-persisting currentFolder on refresh
+      await loadFolder(fileState.currentFolder, { saveToSettings: false });
     }
   }, [fileState.currentFolder, loadFolder]);
 
@@ -293,24 +299,46 @@ export const App: React.FC = () => {
 
   /**
    * Handle external file changes from file watcher
+   *
+   * Uses a ref to track processed events by their unique timestamp+path combination
+   * to prevent duplicate notifications when other dependencies (like tabState.openTabs)
+   * trigger effect re-runs after the toast deduplication window expires.
    */
+  const processedFileEventsRef = React.useRef(new Set<string>());
+
   React.useEffect(() => {
     if (watcherState.recentEvents.length === 0) return;
 
-    const latestEvent =
-      watcherState.recentEvents[watcherState.recentEvents.length - 1];
+    // useFileWatcher prepends new events, so the newest is at index 0
+    const latestEvent = watcherState.recentEvents[0];
+
+    // Create a unique key for this event to prevent duplicate processing
+    const eventKey = `${latestEvent.timestamp}-${latestEvent.file_path}-${latestEvent.event_type}`;
+    if (processedFileEventsRef.current.has(eventKey)) {
+      return; // Already processed this event
+    }
+    processedFileEventsRef.current.add(eventKey);
+
+    // Limit the set size to prevent memory growth (keep last 100 events)
+    if (processedFileEventsRef.current.size > 100) {
+      const entries = Array.from(processedFileEventsRef.current);
+      processedFileEventsRef.current = new Set(entries.slice(-50));
+    }
 
     // Handle different types of file changes
     switch (latestEvent.event_type) {
       case "created":
-        // New file created - refresh file list
+        // New file created - refresh file list and show toast
+        showFileCreated(latestEvent.file_name);
         if (fileState.currentFolder) {
-          loadFolder(fileState.currentFolder);
+          // Use saveToSettings: false to prevent re-persisting currentFolder on refresh
+          loadFolder(fileState.currentFolder, { saveToSettings: false });
         }
         break;
 
       case "deleted": {
-        // File deleted - close tab if open and refresh file list
+        // File deleted - close tab if open, refresh file list, and show toast
+        showFileDeleted(latestEvent.file_name);
         const deletedTab = tabState.openTabs.find(
           (tab) => norm(tab.file.path) === norm(latestEvent.file_path)
         );
@@ -318,7 +346,8 @@ export const App: React.FC = () => {
           closeTab(deletedTab.id);
         }
         if (fileState.currentFolder) {
-          loadFolder(fileState.currentFolder);
+          // Use saveToSettings: false to prevent re-persisting currentFolder on refresh
+          loadFolder(fileState.currentFolder, { saveToSettings: false });
         }
         break;
       }
@@ -328,8 +357,18 @@ export const App: React.FC = () => {
         const modifiedTab = tabState.openTabs.find(
           (tab) => norm(tab.file.path) === norm(latestEvent.file_path)
         );
-        if (modifiedTab && !modifiedTab.hasUnsavedChanges) {
-          // File was modified externally
+        if (modifiedTab) {
+          if (!modifiedTab.hasUnsavedChanges) {
+            // Offer to reload content from disk when there are no local edits
+            showFileModified(latestEvent.file_name, {
+              onReload: () => {
+                void reloadTabFromDisk(modifiedTab.id);
+              },
+            });
+          } else {
+            // For tabs with unsaved changes, just notify without auto-reload
+            showFileModified(latestEvent.file_name);
+          }
         }
         break;
       }
@@ -340,6 +379,10 @@ export const App: React.FC = () => {
     tabState.openTabs,
     loadFolder,
     closeTab,
+    showFileCreated,
+    showFileDeleted,
+    showFileModified,
+    reloadTabFromDisk,
   ]);
 
   // === KEYBOARD SHORTCUTS ===
@@ -655,6 +698,52 @@ export const App: React.FC = () => {
 
   // Separate effect for workspace initialization after settings load
   React.useEffect(() => {
+    // Helper to validate that a path is a valid GTD root (not a subfolder)
+    // Only flags paths as invalid if they end with a GTD folder name AND
+    // the parent directory is actually a GTD space. This allows legitimate
+    // workspaces like ~/Projects while blocking ~/GTD Space/Projects.
+    const isValidGTDRoot = async (path: string): Promise<boolean> => {
+      // Normalize path separators for Windows compatibility
+      const normalized = path.replace(/\\/g, '/');
+      const gtdSubfolderPattern = /\/(Projects|Habits|Areas of Focus|Goals|Vision|Purpose & Principles|Cabinet|Someday Maybe)$/i;
+      const endsWithGTDFolder = gtdSubfolderPattern.test(normalized);
+
+      // If path doesn't end with a GTD folder name, it's valid
+      if (!endsWithGTDFolder) {
+        return true;
+      }
+
+      // Check if parent directory is actually a GTD space
+      const lastSlashIndex = normalized.lastIndexOf('/');
+      if (lastSlashIndex <= 0) {
+        // No parent directory, so it's valid (e.g., just "Projects" as root)
+        return true;
+      }
+
+      // Extract parent path, preserving original separators
+      const parentPath = path.substring(0, lastSlashIndex);
+      const parentIsGTDSpace = await safeInvoke<boolean>('check_is_gtd_space', { path: parentPath }, false);
+
+      // Only invalid if parent is a GTD space (meaning this is a subfolder)
+      return parentIsGTDSpace !== true;
+    };
+
+    // Helper to extract GTD root from a corrupted subfolder path
+    const extractGTDRoot = (path: string): string | null => {
+      // Normalize path separators for Windows compatibility
+      const normalized = path.replace(/\\/g, '/');
+      // Only extract root if path ENDS with a GTD subfolder name
+      const gtdSubfolderPattern = /^(.+)\/(Projects|Habits|Areas of Focus|Goals|Vision|Purpose & Principles|Cabinet|Someday Maybe)$/i;
+      const match = normalized.match(gtdSubfolderPattern);
+      if (match) {
+        // Find where the GTD folder starts in the original path and slice there
+        const gtdFolderName = match[2];
+        const lastSepIndex = path.replace(/\\/g, '/').lastIndexOf('/' + gtdFolderName);
+        return lastSepIndex > 0 ? path.substring(0, lastSepIndex) : match[1];
+      }
+      return null;
+    };
+
     const initWorkspace = async () => {
       // Wait for settings to load
       if (isLoadingSettings) {
@@ -672,10 +761,36 @@ export const App: React.FC = () => {
       try {
         // Check if settings has a last_folder saved
         if (settings.last_folder && settings.last_folder !== "") {
-          // Use the saved workspace
-          await handleFolderLoad(settings.last_folder);
-          const isGTDNow = await checkGTDSpace(settings.last_folder);
-          if (isGTDNow) await loadProjects(settings.last_folder);
+          let workspacePath = settings.last_folder;
+
+          // Validate the saved path - if it looks like a subfolder, try to recover
+          const isValid = await isValidGTDRoot(workspacePath);
+          if (!isValid) {
+            console.warn("Detected corrupted workspace path:", workspacePath);
+            const recoveredPath = extractGTDRoot(workspacePath);
+            if (recoveredPath) {
+              console.log("Recovering GTD root from corrupted path:", recoveredPath);
+              workspacePath = recoveredPath;
+              // Fix the corrupted setting
+              await setLastFolder(recoveredPath);
+            } else {
+              // Can't recover - use default instead
+              console.warn("Cannot recover GTD root, using default");
+              const spacePath = await initializeDefaultSpaceIfNeeded();
+              if (spacePath) {
+                await handleFolderLoad(spacePath);
+                const isGTDNow = await checkGTDSpace(spacePath);
+                if (isGTDNow) await loadProjects(spacePath);
+                setShowGTDInit(false);
+              }
+              return;
+            }
+          }
+
+          // Use the (possibly recovered) workspace path
+          await handleFolderLoad(workspacePath);
+          const isGTDNow = await checkGTDSpace(workspacePath);
+          if (isGTDNow) await loadProjects(workspacePath);
           setShowGTDInit(false);
         } else {
           // No saved workspace, initialize default
@@ -703,6 +818,7 @@ export const App: React.FC = () => {
     checkGTDSpace,
     loadProjects,
     initializeDefaultSpaceIfNeeded,
+    setLastFolder,
   ]);
 
   // Apply theme when it changes
@@ -714,6 +830,8 @@ export const App: React.FC = () => {
 
   const [isTauriEnvironment, setIsTauriEnvironment] = React.useState(false);
 
+  const [tauriChecked, setTauriChecked] = React.useState(false);
+
   React.useEffect(() => {
     // Check for Tauri environment after component mount
     const checkTauri = async () => {
@@ -721,10 +839,18 @@ export const App: React.FC = () => {
       // Use safeInvoke which gracefully handles non-Tauri environments
       const result = await safeInvoke<string>("ping", undefined, null);
       setIsTauriEnvironment(result !== null);
+      setTauriChecked(true);
     };
 
     checkTauri();
-  }, [applyTheme]);
+  }, []);
+
+  // Show warning toast when not running in Tauri environment
+  React.useEffect(() => {
+    if (tauriChecked && !isTauriEnvironment) {
+      showWarning("Not running in Tauri environment. File operations will not work.");
+    }
+  }, [tauriChecked, isTauriEnvironment, showWarning]);
 
   // Listen for habit status updates to refresh the editor
   React.useEffect(() => {
@@ -1516,31 +1642,6 @@ export const App: React.FC = () => {
           </div>
         </div>
 
-        {/* File change notification */}
-        {watcherState.isWatching && watcherState.recentEvents.length > 0 && (
-          <FileChangeManager
-            events={watcherState.recentEvents}
-            openTabs={tabState.openTabs}
-            onReloadFile={async (filePath) => {
-              const tab = tabState.openTabs.find(
-                (t) => t.file.path === filePath
-              );
-              if (tab) {
-                await openTab(tab.file);
-              }
-            }}
-            onCloseTab={closeTab}
-            onRefreshFileList={refreshFileList}
-          />
-        )}
-
-        {/* Environment warning (development) */}
-        {!isTauriEnvironment && (
-          <div className="fixed bottom-4 right-4 bg-yellow-500 text-black px-4 py-2 rounded shadow-lg">
-            Warning: Not running in Tauri environment. File operations will not
-            work.
-          </div>
-        )}
 
         {/* GTD Quick Actions */}
         {isGTDSpace && (

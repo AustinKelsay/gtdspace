@@ -699,12 +699,33 @@ export const App: React.FC = () => {
   // Separate effect for workspace initialization after settings load
   React.useEffect(() => {
     // Helper to validate that a path is a valid GTD root (not a subfolder)
-    const isValidGTDRoot = (path: string): boolean => {
+    // Only flags paths as invalid if they end with a GTD folder name AND
+    // the parent directory is actually a GTD space. This allows legitimate
+    // workspaces like ~/Projects while blocking ~/GTD Space/Projects.
+    const isValidGTDRoot = async (path: string): Promise<boolean> => {
       // Normalize path separators for Windows compatibility
       const normalized = path.replace(/\\/g, '/');
-      // Reject paths that END with a GTD subfolder name
       const gtdSubfolderPattern = /\/(Projects|Habits|Areas of Focus|Goals|Vision|Purpose & Principles|Cabinet|Someday Maybe)$/i;
-      return !gtdSubfolderPattern.test(normalized);
+      const endsWithGTDFolder = gtdSubfolderPattern.test(normalized);
+
+      // If path doesn't end with a GTD folder name, it's valid
+      if (!endsWithGTDFolder) {
+        return true;
+      }
+
+      // Check if parent directory is actually a GTD space
+      const lastSlashIndex = normalized.lastIndexOf('/');
+      if (lastSlashIndex <= 0) {
+        // No parent directory, so it's valid (e.g., just "Projects" as root)
+        return true;
+      }
+
+      // Extract parent path, preserving original separators
+      const parentPath = path.substring(0, lastSlashIndex);
+      const parentIsGTDSpace = await safeInvoke<boolean>('check_is_gtd_space', { path: parentPath }, false);
+
+      // Only invalid if parent is a GTD space (meaning this is a subfolder)
+      return parentIsGTDSpace !== true;
     };
 
     // Helper to extract GTD root from a corrupted subfolder path
@@ -743,7 +764,8 @@ export const App: React.FC = () => {
           let workspacePath = settings.last_folder;
 
           // Validate the saved path - if it looks like a subfolder, try to recover
-          if (!isValidGTDRoot(workspacePath)) {
+          const isValid = await isValidGTDRoot(workspacePath);
+          if (!isValid) {
             console.warn("Detected corrupted workspace path:", workspacePath);
             const recoveredPath = extractGTDRoot(workspacePath);
             if (recoveredPath) {

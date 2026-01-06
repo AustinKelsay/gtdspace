@@ -100,7 +100,7 @@ jobs:
             artifact-name: "macos-aarch64"
             artifact-ext: ".dmg"
 
-          - platform: "macos-13" # Intel
+          - platform: "macos-latest" # Cross-compile Intel from ARM
             rust-targets: "x86_64-apple-darwin"
             args: "--target x86_64-apple-darwin"
             artifact-name: "macos-x64"

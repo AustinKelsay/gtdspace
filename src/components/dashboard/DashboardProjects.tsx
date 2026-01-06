@@ -88,6 +88,9 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelled', icon: XCircle, color: 'text-rose-600' }
 ];
 
+// Default status filter (used to determine if filter is "active" vs default state)
+const DEFAULT_STATUS_FILTER = ['in-progress', 'waiting'];
+
 // Sort options
 const SORT_OPTIONS = [
   { value: 'name', label: 'Name' },
@@ -262,11 +265,14 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
     setCompletionRangeFilter([0, 100]);
   }, []);
 
-  // Get active filter count
+  // Get active filter count (only counts filters that differ from default state)
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (searchQuery) count++;
-    if (statusFilter.length > 0) count++;
+    // Check if status filter differs from default
+    const isStatusNonDefault = statusFilter.length !== DEFAULT_STATUS_FILTER.length ||
+      statusFilter.some(s => !DEFAULT_STATUS_FILTER.includes(s));
+    if (isStatusNonDefault) count++;
     if (hasDeadlineFilter !== null) count++;
     if (hasHorizonsFilter !== null) count++;
     if (completionRangeFilter[0] > 0 || completionRangeFilter[1] < 100) count++;

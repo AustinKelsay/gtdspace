@@ -299,12 +299,31 @@ export const App: React.FC = () => {
 
   /**
    * Handle external file changes from file watcher
+   *
+   * Uses a ref to track processed events by their unique timestamp+path combination
+   * to prevent duplicate notifications when other dependencies (like tabState.openTabs)
+   * trigger effect re-runs after the toast deduplication window expires.
    */
+  const processedFileEventsRef = React.useRef(new Set<string>());
+
   React.useEffect(() => {
     if (watcherState.recentEvents.length === 0) return;
 
     const latestEvent =
       watcherState.recentEvents[watcherState.recentEvents.length - 1];
+
+    // Create a unique key for this event to prevent duplicate processing
+    const eventKey = `${latestEvent.timestamp}-${latestEvent.file_path}-${latestEvent.event_type}`;
+    if (processedFileEventsRef.current.has(eventKey)) {
+      return; // Already processed this event
+    }
+    processedFileEventsRef.current.add(eventKey);
+
+    // Limit the set size to prevent memory growth (keep last 100 events)
+    if (processedFileEventsRef.current.size > 100) {
+      const entries = Array.from(processedFileEventsRef.current);
+      processedFileEventsRef.current = new Set(entries.slice(-50));
+    }
 
     // Handle different types of file changes
     switch (latestEvent.event_type) {

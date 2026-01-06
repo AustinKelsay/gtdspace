@@ -90,6 +90,9 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelled', icon: X, color: 'text-gray-500' }
 ];
 
+// Default status filter (used to determine if filter is "active" vs default state)
+const DEFAULT_STATUS_FILTER = ['in-progress', 'waiting'];
+
 // Effort options
 const EFFORT_OPTIONS = [
   { value: 'small', label: 'Small (<30m)', icon: Timer, color: 'text-blue-500' },
@@ -313,11 +316,14 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
   // Use shared date formatting utility
   const formatDate = formatRelativeDate;
 
-  // Get active filter count
+  // Get active filter count (only counts filters that differ from default state)
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (searchQuery) count++;
-    if (statusFilter.length > 0) count++;
+    // Check if status filter differs from default
+    const isStatusNonDefault = statusFilter.length !== DEFAULT_STATUS_FILTER.length ||
+      statusFilter.some(s => !DEFAULT_STATUS_FILTER.includes(s));
+    if (isStatusNonDefault) count++;
     if (effortFilter.length > 0) count++;
     if (projectFilter.length > 0) count++;
     if (hasDeadlineFilter !== null) count++;

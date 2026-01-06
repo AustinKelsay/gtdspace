@@ -309,8 +309,8 @@ export const App: React.FC = () => {
   React.useEffect(() => {
     if (watcherState.recentEvents.length === 0) return;
 
-    const latestEvent =
-      watcherState.recentEvents[watcherState.recentEvents.length - 1];
+    // useFileWatcher prepends new events, so the newest is at index 0
+    const latestEvent = watcherState.recentEvents[0];
 
     // Create a unique key for this event to prevent duplicate processing
     const eventKey = `${latestEvent.timestamp}-${latestEvent.file_path}-${latestEvent.event_type}`;

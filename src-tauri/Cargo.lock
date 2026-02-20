@@ -155,7 +155,7 @@ dependencies = [
  "serde",
  "serde_repr",
  "tokio",
- "url 2.5.7",
+ "url 2.5.8",
  "wayland-backend",
  "wayland-client",
  "wayland-protocols",
@@ -1728,7 +1728,7 @@ dependencies = [
  "serde_with",
  "tokio",
  "tower-service",
- "url 2.5.7",
+ "url 2.5.8",
  "yup-oauth2",
 ]
 
@@ -1787,7 +1787,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
- "url 2.5.7",
+ "url 2.5.8",
  "urlencoding",
  "uuid",
  "walkdir",
@@ -3092,7 +3092,7 @@ dependencies = [
  "serde_path_to_error",
  "sha2",
  "thiserror 1.0.69",
- "url 2.5.7",
+ "url 2.5.8",
 ]
 
 [[package]]
@@ -4160,7 +4160,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tower-service",
- "url 2.5.7",
+ "url 2.5.8",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-streams",
@@ -4394,7 +4394,7 @@ dependencies = [
  "schemars_derive",
  "serde",
  "serde_json",
- "url 2.5.7",
+ "url 2.5.8",
  "uuid",
 ]
 
@@ -5000,7 +5000,7 @@ dependencies = [
  "scopeguard",
  "tao-macros",
  "unicode-segmentation",
- "url 2.5.7",
+ "url 2.5.8",
  "windows",
  "windows-core",
  "windows-version",
@@ -5079,7 +5079,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tray-icon",
- "url 2.5.7",
+ "url 2.5.8",
  "urlpattern",
  "webkit2gtk",
  "webview2-com",
@@ -5131,7 +5131,7 @@ dependencies = [
  "tauri-utils",
  "thiserror 2.0.17",
  "time",
- "url 2.5.7",
+ "url 2.5.8",
  "uuid",
  "walkdir",
 ]
@@ -5182,7 +5182,7 @@ dependencies = [
  "tauri-plugin",
  "tauri-plugin-fs",
  "thiserror 2.0.17",
- "url 2.5.7",
+ "url 2.5.8",
 ]
 
 [[package]]
@@ -5204,7 +5204,7 @@ dependencies = [
  "tauri-utils",
  "thiserror 2.0.17",
  "toml 0.9.5",
- "url 2.5.7",
+ "url 2.5.8",
 ]
 
 [[package]]
@@ -5250,7 +5250,7 @@ dependencies = [
  "thiserror 2.0.17",
  "time",
  "tokio",
- "url 2.5.7",
+ "url 2.5.8",
  "windows-sys 0.60.2",
  "zip",
 ]
@@ -5274,7 +5274,7 @@ dependencies = [
  "serde_json",
  "tauri-utils",
  "thiserror 2.0.17",
- "url 2.5.7",
+ "url 2.5.8",
  "webkit2gtk",
  "webview2-com",
  "windows",
@@ -5300,7 +5300,7 @@ dependencies = [
  "tao",
  "tauri-runtime",
  "tauri-utils",
- "url 2.5.7",
+ "url 2.5.8",
  "webkit2gtk",
  "webview2-com",
  "windows",
@@ -5339,7 +5339,7 @@ dependencies = [
  "swift-rs",
  "thiserror 2.0.17",
  "toml 0.9.5",
- "url 2.5.7",
+ "url 2.5.8",
  "urlpattern",
  "uuid",
  "walkdir",
@@ -5766,7 +5766,7 @@ dependencies = [
  "rand 0.8.5",
  "sha1",
  "thiserror 1.0.69",
- "url 2.5.7",
+ "url 2.5.8",
  "utf-8",
 ]
 
@@ -5896,14 +5896,15 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.5.7"
+version = "2.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08bc136a29a3d1758e07a9cca267be308aeebf5cfd5a10f3f67ab2097683ef5b"
+checksum = "ff67a8a4397373c3ef660812acab3268222035010ab8680ec4215f38ba3d0eed"
 dependencies = [
  "form_urlencoded",
  "idna 1.1.0",
  "percent-encoding 2.3.2",
  "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -5921,7 +5922,7 @@ dependencies = [
  "regex",
  "serde",
  "unic-ucd-ident",
- "url 2.5.7",
+ "url 2.5.8",
 ]
 
 [[package]]
@@ -6238,7 +6239,7 @@ dependencies = [
  "ndk-context",
  "objc2 0.6.2",
  "objc2-foundation 0.3.1",
- "url 2.5.7",
+ "url 2.5.8",
  "web-sys",
 ]
 
@@ -6875,7 +6876,7 @@ dependencies = [
  "soup3",
  "tao-macros",
  "thiserror 2.0.17",
- "url 2.5.7",
+ "url 2.5.8",
  "webkit2gtk",
  "webkit2gtk-sys",
  "webview2-com",
@@ -6974,7 +6975,7 @@ dependencies = [
  "time",
  "tokio",
  "tower-service",
- "url 2.5.7",
+ "url 2.5.8",
 ]
 
 [[package]]
@@ -7219,7 +7220,7 @@ dependencies = [
  "endi",
  "enumflags2",
  "serde",
- "url 2.5.7",
+ "url 2.5.8",
  "winnow 0.7.13",
  "zvariant_derive 5.7.0",
  "zvariant_utils 3.2.1",

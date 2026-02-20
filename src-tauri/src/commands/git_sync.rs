@@ -10,8 +10,7 @@ use chrono::{DateTime, Utc};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use log::{debug, info, warn};
 use pbkdf2::pbkdf2_hmac;
-use rand::rngs::OsRng;
-use rand::TryRngCore;
+use rand::RngExt;
 use serde::Serialize;
 use serde_json::json;
 use sha2::Sha256;
@@ -692,11 +691,9 @@ fn encrypt_file_to_path(
 
     let mut salt = [0u8; 16];
     let mut nonce_bytes = [0u8; STREAM_NONCE_LEN];
-    let mut rng = OsRng;
-    rng.try_fill_bytes(&mut salt)
-        .map_err(|e| format!("Failed to generate random salt: {}", e))?;
-    rng.try_fill_bytes(&mut nonce_bytes)
-        .map_err(|e| format!("Failed to generate random nonce: {}", e))?;
+    let mut rng = rand::rng();
+    rng.fill(&mut salt);
+    rng.fill(&mut nonce_bytes);
 
     writer
         .write_all(STREAM_MAGIC_HEADER)

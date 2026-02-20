@@ -1174,7 +1174,11 @@ mod tests {
         }
     }
 
-    fn build_test_config(repo_path: PathBuf, workspace_path: PathBuf, keep_history: usize) -> GitSyncConfig {
+    fn build_test_config(
+        repo_path: PathBuf,
+        workspace_path: PathBuf,
+        keep_history: usize,
+    ) -> GitSyncConfig {
         GitSyncConfig {
             repo_path,
             workspace_path,
@@ -1220,8 +1224,7 @@ mod tests {
     fn ensure_gitignore_appends_missing_lines_without_removing_existing_content() {
         let dir = tempdir().expect("tempdir");
         let gitignore_path = dir.path().join(".gitignore");
-        fs::write(&gitignore_path, "# custom\n!.gitignore\n")
-            .expect("seed existing gitignore");
+        fs::write(&gitignore_path, "# custom\n!.gitignore\n").expect("seed existing gitignore");
 
         ensure_gitignore(dir.path()).expect("update gitignore");
 
@@ -1243,7 +1246,9 @@ mod tests {
 
         let entries = list_backups(&backups_dir).expect("list backups");
         assert_eq!(entries.len(), 2);
-        assert!(entries.iter().all(|entry| entry.file_name.ends_with(".enc")));
+        assert!(entries
+            .iter()
+            .all(|entry| entry.file_name.ends_with(".enc")));
     }
 
     #[test]
@@ -1269,11 +1274,9 @@ mod tests {
         let settings = base_settings();
         let result = build_git_sync_config(&settings, None);
         assert!(result.is_err());
-        assert!(
-            result
-                .expect_err("expected disabled error")
-                .contains("Git sync is disabled")
-        );
+        assert!(result
+            .expect_err("expected disabled error")
+            .contains("Git sync is disabled"));
     }
 
     #[test]
@@ -1313,11 +1316,9 @@ mod tests {
 
         let result = build_git_sync_config(&settings, None);
         assert!(result.is_err());
-        assert!(
-            result
-                .expect_err("expected nested repo error")
-                .contains("outside the workspace")
-        );
+        assert!(result
+            .expect_err("expected nested repo error")
+            .contains("outside the workspace"));
     }
 
     #[test]
@@ -1337,7 +1338,11 @@ mod tests {
         let repo_path = dir.path().join("repo");
         fs::create_dir_all(&workspace_path).expect("create workspace");
         fs::create_dir_all(&repo_path).expect("create repo dir");
-        write_workspace_file(&workspace_path, "Projects/Alpha/README.md", "# Alpha\nContent");
+        write_workspace_file(
+            &workspace_path,
+            "Projects/Alpha/README.md",
+            "# Alpha\nContent",
+        );
 
         let config = build_test_config(repo_path.clone(), workspace_path, 5);
         let result = perform_git_push(config, false).expect("perform git push");
@@ -1378,7 +1383,8 @@ mod tests {
         let result = perform_git_pull(config, false).expect("perform git pull restore");
         assert!(result.success);
 
-        let restored = fs::read_to_string(workspace_path.join(readme_relative)).expect("read restored file");
+        let restored =
+            fs::read_to_string(workspace_path.join(readme_relative)).expect("read restored file");
         assert_eq!(restored, "# Alpha\nOriginal");
         assert!(!workspace_path.join("scratch.md").exists());
     }
@@ -1411,7 +1417,8 @@ mod tests {
         fs::write(repo_dir.path().join("notes.txt"), "plain text").expect("write notes");
         run_git_command(repo_dir.path(), ["add", "notes.txt"]).expect("git add notes");
 
-        let err = verify_only_encrypted_files_staged(repo_dir.path()).expect_err("expected safety failure");
+        let err = verify_only_encrypted_files_staged(repo_dir.path())
+            .expect_err("expected safety failure");
         assert!(err.contains("Non-backup file staged"));
     }
 
@@ -1420,11 +1427,15 @@ mod tests {
         let repo_dir = tempdir().expect("tempdir");
         run_git_command(repo_dir.path(), ["init"]).expect("git init");
         fs::create_dir_all(repo_dir.path().join("backups")).expect("create backups dir");
-        fs::write(repo_dir.path().join("backups/backup.tar.gz"), "not encrypted")
-            .expect("write unencrypted backup");
+        fs::write(
+            repo_dir.path().join("backups/backup.tar.gz"),
+            "not encrypted",
+        )
+        .expect("write unencrypted backup");
         run_git_command(repo_dir.path(), ["add", "backups/backup.tar.gz"]).expect("git add backup");
 
-        let err = verify_only_encrypted_files_staged(repo_dir.path()).expect_err("expected extension failure");
+        let err = verify_only_encrypted_files_staged(repo_dir.path())
+            .expect_err("expected extension failure");
         assert!(err.contains(".enc extension"));
     }
 }

@@ -8,8 +8,25 @@ const __dirname = dirname(__filename);
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['tests/**/*.spec.ts'],
+    include: ['tests/**/*.spec.ts', 'tests/**/*.spec.tsx'],
     globals: true,
+    setupFiles: ['tests/setup-vitest.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov', 'html'],
+      all: true,
+      include: [
+        'src/utils/metadata-extractor.ts',
+        'src/utils/data-migration.ts',
+        'src/utils/gtd-markdown-helpers.ts',
+      ],
+      thresholds: {
+        branches: 45,
+        functions: 55,
+        lines: 55,
+        statements: 55,
+      },
+    },
   },
   resolve: {
     alias: {
@@ -21,4 +38,3 @@ export default defineConfig({
     },
   },
 });
-

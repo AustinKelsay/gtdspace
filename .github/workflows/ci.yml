@@ -45,6 +45,9 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+      - name: Run frontend tests with coverage
+        run: npm run test:coverage
+
   test-build:
     needs: [lint-and-typecheck]
     runs-on: ${{ matrix.platform }}
@@ -164,6 +167,11 @@ jobs:
         run: |
           cd src-tauri
           cargo check
+
+      - name: Run Rust tests
+        run: |
+          cd src-tauri
+          cargo test --lib
 
       - name: Run Rust clippy
         run: |

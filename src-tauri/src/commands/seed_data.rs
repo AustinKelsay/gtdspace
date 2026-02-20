@@ -688,3 +688,106 @@ pub fn generate_action_template(
 
     template
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn areas_overview_template_contains_expected_tokens() {
+        let template = areas_of_focus_overview_template();
+
+        assert!(template.contains("# Areas of Focus Overview"));
+        assert!(template.contains("[!singleselect:horizon-altitude:areas]"));
+        assert!(template.contains("[!singleselect:horizon-review-cadence:monthly]"));
+        assert!(template.contains("[!areas-references:[]]"));
+        assert!(template.contains("[!areas-list]"));
+        assert!(template.contains("[!datetime:created_date_time:"));
+    }
+
+    #[test]
+    fn goal_template_omits_optional_sections_when_refs_are_empty() {
+        let template = generate_goal_template_with_refs(
+            "Get Fit",
+            None,
+            "Build sustainable training habits",
+            "",
+            "",
+        );
+
+        assert!(template.contains("# Get Fit"));
+        assert!(template.contains("[!datetime:goal-target-date:]"));
+        assert!(!template.contains("## Vision References (optional)"));
+        assert!(!template.contains("## Purpose & Principles References (optional)"));
+    }
+
+    #[test]
+    fn goal_template_includes_optional_sections_when_refs_are_present() {
+        let template = generate_goal_template_with_refs(
+            "Launch Product",
+            Some("2026-06-01"),
+            "Ship v1",
+            "Vision/Product.md",
+            "Purpose/Mission.md",
+        );
+
+        assert!(template.contains("[!datetime:goal-target-date:2026-06-01]"));
+        assert!(template.contains("## Vision References (optional)"));
+        assert!(template.contains("[!vision-references:Vision/Product.md]"));
+        assert!(template.contains("## Purpose & Principles References (optional)"));
+        assert!(template.contains("[!purpose-references:Purpose/Mission.md]"));
+    }
+
+    #[test]
+    fn project_readme_with_refs_contains_expected_sections() {
+        let template = generate_project_readme_with_refs(ProjectReadmeParams {
+            name: "Alpha",
+            description: "Alpha description",
+            due_date: Some("2026-04-01".to_string()),
+            status: "in-progress",
+            areas_refs: "Areas/Health.md",
+            goals_refs: "Goals/Fitness.md",
+            vision_refs: "",
+            purpose_refs: "",
+            general_refs: "Cabinet/Context.md",
+        });
+
+        assert!(template.contains("# Alpha"));
+        assert!(template.contains("[!singleselect:project-status:in-progress]"));
+        assert!(template.contains("[!datetime:due_date:2026-04-01]"));
+        assert!(template.contains("[!areas-references:Areas/Health.md]"));
+        assert!(template.contains("[!references:Cabinet/Context.md]"));
+        assert!(template.contains("[!actions-list]"));
+        assert!(template.contains("[!habits-list]"));
+    }
+
+    #[test]
+    fn action_template_formats_due_date_and_contexts() {
+        let template = generate_action_template(
+            "Write tests",
+            "in-progress",
+            Some("2026-02-20T12:00:00Z".to_string()),
+            Some("2026-03-15T09:30:00Z".to_string()),
+            "medium",
+            Some(vec!["deep-work".to_string(), "coding".to_string()]),
+            Some("Finish coverage improvements".to_string()),
+        );
+
+        assert!(template.contains("# Write tests"));
+        assert!(template.contains("[!datetime:focus_date:2026-02-20T12:00:00Z]"));
+        assert!(template.contains("[!datetime:due_date:2026-03-15]"));
+        assert!(template.contains("[!multiselect:contexts:deep-work,coding]"));
+        assert!(template.contains("Finish coverage improvements"));
+    }
+
+    #[test]
+    fn weekly_review_habit_contains_frequency_and_datetime_markers() {
+        let template = generate_weekly_review_habit();
+
+        assert!(template.contains("# Weekly Review"));
+        assert!(template.contains("[!singleselect:habit-frequency:weekly]"));
+        assert!(template.contains("[!checkbox:habit-status:false]"));
+        assert!(template.contains("[!datetime:focus_date:"));
+        assert!(template.contains("Created: "));
+    }
+}

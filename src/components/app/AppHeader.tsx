@@ -146,7 +146,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     const pullDisabled = !syncConfigured || gitSyncBusy || !onGitPull;
 
     return (
-        <header className="h-12 border-b border-border flex items-center justify-between px-4 bg-card">
+        <header className="relative z-20 h-12 shrink-0 border-b border-border bg-card px-4 flex items-center justify-between">
             <div className="flex items-center space-x-4">
                 <h1 className="text-lg font-semibold">
                     {getCurrentFileName()}

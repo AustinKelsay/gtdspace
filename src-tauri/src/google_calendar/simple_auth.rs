@@ -187,9 +187,10 @@ pub fn start_oauth_flow(
     // Generate a random state for security
     let state = general_purpose::URL_SAFE_NO_PAD.encode(uuid::Uuid::new_v4().as_bytes());
 
-    // Generate PKCE code_verifier (cryptographically random, 43-128 chars) using OS CSPRNG
+    // Generate PKCE code_verifier (cryptographically random, 43-128 chars)
+    // using rand's thread-local CSPRNG, which is seeded from the OS.
     let mut code_verifier_bytes = [0u8; 64];
-    // Fill with cryptographically secure random bytes directly from the OS
+    // Fill with cryptographically secure random bytes for the PKCE verifier.
     let mut rng = rand::rng();
     rng.fill(&mut code_verifier_bytes);
     let code_verifier = general_purpose::URL_SAFE_NO_PAD.encode(code_verifier_bytes);

@@ -94,13 +94,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest" # ARM (M1/M2/M3)
+          - platform: "macos-15" # ARM (M1/M2/M3)
             rust-targets: "aarch64-apple-darwin"
             args: "--target aarch64-apple-darwin"
             artifact-name: "macos-aarch64"
             artifact-ext: ".dmg"
 
-          - platform: "macos-latest" # Cross-compile Intel from ARM
+          - platform: "macos-15-intel" # Native Intel packaging avoids dmg failures on arm runners
             rust-targets: "x86_64-apple-darwin"
             args: "--target x86_64-apple-darwin"
             artifact-name: "macos-x64"

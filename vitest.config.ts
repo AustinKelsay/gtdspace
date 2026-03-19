@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['tests/**/*.spec.ts', 'tests/**/*.spec.tsx'],
+    include: ['tests/**/*.{spec,test}.{ts,tsx}'],
     globals: true,
     setupFiles: ['tests/setup-vitest.ts'],
     coverage: {

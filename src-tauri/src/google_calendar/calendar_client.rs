@@ -209,7 +209,7 @@ async fn get_with_retries(
                     let backoff_ms = base_delay_ms.saturating_mul(1u64 << (attempt - 1));
                     // Calculate jitter before await to avoid Send issue
                     let jitter_ms: u64 = {
-                        use rand::Rng;
+                        use rand::RngExt;
                         let mut rng = rand::rng();
                         rng.random_range(0..=backoff_ms / 2 + 1)
                     };
@@ -232,7 +232,7 @@ async fn get_with_retries(
                             let backoff_ms = base_delay_ms.saturating_mul(1u64 << (attempt - 1));
                             // Calculate jitter before await to avoid Send issue
                             let jitter_ms: u64 = {
-                                use rand::Rng;
+                                use rand::RngExt;
                                 let mut rng = rand::rng();
                                 rng.random_range(0..=backoff_ms / 2 + 1)
                             };
@@ -266,7 +266,7 @@ async fn get_with_retries(
                     let backoff_ms = base_delay_ms.saturating_mul(1u64 << (attempt - 1));
                     // Calculate jitter before await to avoid Send issue
                     let jitter_ms: u64 = {
-                        use rand::Rng;
+                        use rand::RngExt;
                         let mut rng = rand::rng();
                         rng.random_range(0..=backoff_ms / 2 + 1)
                     };

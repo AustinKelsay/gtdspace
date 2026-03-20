@@ -1,6 +1,6 @@
 # Goal Page Template - UI and Markdown Standard
 
-Updated: November 2, 2025
+Updated: March 20, 2026
 
 This document defines the standardized Goal horizon page template for GTD Space. It mirrors the Action, Habit, and Area templates so designers, engineers, and content contributors share a single blueprint for the Horizons of Focus experience.
 
@@ -90,14 +90,14 @@ Notes:
 - Stable Created: Captured on first render using existing created timestamp utilities; never regenerated once set.
 - Reference dialogs: Reuses the horizon reference dialog leveraged by Habit and Area templates. Selections write JSON arrays into the corresponding markers.
 - Status tokens: Write only the constrained `goal-status` values to avoid conflicts with Action `status` markers.
-- Sidebar metadata: Status, target date, and reference badges surface in the Horizons sidebar once the corresponding TypeScript interfaces are formalized.
+- Sidebar metadata: Status, target date, and reference badges surface in the Horizons sidebar using the existing horizon types and metadata parsing pipeline.
 
 ## Implementation Map
 
-- Entry point: Introduce `src/components/gtd/GoalPage.tsx`, mirroring `ActionPage`, `HabitPage`, and `AreaPage` structure (header builder, markdown orchestrator, BlockNote body).
-- Routing: Extend the editor router to mount `GoalPage` for files under `/Goals/`.
-- Metadata helpers: Add `buildGoalMarkdown()` to `src/utils/gtd-markdown-helpers.ts`, enforcing the ordering above while preserving the description body content.
-- Tokens: Extend `src/types/index.ts` with `GTDGoalStatus`, `GTDGoal`, and related helpers (see `docs/gtd-data-model.md` for baseline structure). Update the metadata extractor to parse the singleselect marker `goal-status`, `goal-target-date`, and horizon reference tokens.
+- Entry point: `src/components/gtd/GoalPage.tsx`, mirroring the shared GTD page structure (header builder, markdown orchestrator, BlockNote body).
+- Routing: The editor mounts `GoalPage` for files under `/Goals/`.
+- Metadata helpers: `buildGoalMarkdown()` in `src/utils/gtd-markdown-helpers.ts` enforces the ordering above while preserving the description body content.
+- Tokens: Reuse the existing `GTDGoalStatus`, `GTDGoal`, and related helpers in `src/types/index.ts`, along with metadata parsing for `goal-status`, `goal-target-date`, and horizon reference tokens.
 - Reference dialog: Reuse existing horizon picker with props to toggle which groups appear (Areas, Projects, Vision, Purpose). Group chips in the header using Tailwind utilities defined in `src/styles`.
 - Body section: Extend the BlockNote schema with a `Description` delimiter so canonical rebuild can remount it in order while leaving content untouched.
 

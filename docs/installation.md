@@ -2,11 +2,13 @@
 
 This guide provides detailed instructions for setting up GTD Space on your development machine.
 
+For native build prerequisites, see [build-setup.md](build-setup.md). For the documentation map, start at [README.md](README.md).
+
 ## Prerequisites
 
 ### Required Software
 
-1. **Node.js v18 or higher**
+1. **Node.js 20.19.0 or higher**
    - Download from [nodejs.org](https://nodejs.org/)
    - Verify installation: `node --version`
    - npm is included with Node.js
@@ -86,7 +88,7 @@ sudo pacman -S webkit2gtk \
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/gtdspace.git
+git clone https://github.com/AustinKelsay/gtdspace.git
 cd gtdspace
 ```
 
@@ -175,6 +177,6 @@ cargo update
 ## Next Steps
 
 After successful installation:
-1. Read the [Architecture Overview](architecture.md) to understand the codebase
-2. Check [Development Workflow](development.md) for coding guidelines
-3. See [Contributing Guidelines](../CONTRIBUTING.md) before submitting PRs
+1. Read the [Documentation Index](README.md) to find the most relevant guide.
+2. Read the [Architecture Overview](architecture.md) to understand the runtime boundaries.
+3. See [Contributing Guidelines](../CONTRIBUTING.md) before submitting PRs.

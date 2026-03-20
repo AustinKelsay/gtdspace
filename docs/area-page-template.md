@@ -1,6 +1,6 @@
 # Area of Focus Page Template - UI and Markdown Standard
 
-Updated: October 27, 2025
+Updated: March 20, 2026
 
 This document defines the standardized Area of Focus page template for GTD Space. It mirrors the Action and Habit templates so designers, engineers, and content contributors share a single blueprint for the Horizons of Focus experience.
 
@@ -88,15 +88,15 @@ Notes:
 
 - Live rebuild: Editing header fields or body content regenerates canonical markdown and updates the open tab. No-op guard prevents redundant writes.
 - Stable Created: Captured on first render using existing created timestamp utilities; never regenerated once set.
-- Reference dialogs: Reuses the horizon reference dialog leveraged by Habit and upcoming Project templates. Selections write JSON arrays into the corresponding markers.
-- Sidebar metadata: Status and cadence values surface in the Horizons sidebar summary once the corresponding TypeScript interfaces are formalized.
+- Reference dialogs: Reuses the shared horizon reference dialog used across the modern GTD page templates. Selections write JSON arrays into the corresponding markers.
+- Sidebar metadata: Status and cadence values surface in the Horizons sidebar summary through the existing horizon types and metadata parsing flow.
 
 ## Implementation Map
 
-- Entry point: Introduce `src/components/gtd/AreaPage.tsx`, mirroring `ActionPage` and `HabitPage` structure (header builder, markdown orchestrator, BlockNote body).
-- Routing: Extend the editor router to mount `AreaPage` for files under `/Areas of Focus/`.
-- Metadata helpers: Add `buildAreaMarkdown()` to `src/utils/gtd-markdown-helpers.ts`, enforcing the ordering above while preserving optional sections that contain content.
-- Tokens: Extend `src/types/index.ts` with `GTDAreaStatus`, `GTDAreaReviewCadence`, and `GTDArea` (see `docs/gtd-data-model.md` for baseline structure). Update metadata extractor to parse the singleselect markers and horizon reference tokens.
+- Entry point: `src/components/gtd/AreaPage.tsx`, mirroring the shared GTD page structure (header builder, markdown orchestrator, BlockNote body).
+- Routing: The editor mounts `AreaPage` for files under `/Areas of Focus/`.
+- Metadata helpers: `buildAreaMarkdown()` in `src/utils/gtd-markdown-helpers.ts` enforces the ordering above while preserving optional sections that contain content.
+- Tokens: Reuse the existing `GTDAreaStatus`, `GTDAreaReviewCadence`, and `GTDArea` types in `src/types/index.ts`, along with metadata parsing for the singleselect markers and horizon reference tokens.
 - Reference dialog: Reuse existing horizon picker with props to toggle which groups appear (Projects, Goals, Vision, Purpose). Group chips in the header using Tailwind utilities defined in `src/styles`.
 
 ## Theming and Accessibility

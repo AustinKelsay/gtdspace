@@ -56,11 +56,12 @@ npm run tauri:dev   # Spins up the desktop app and seeds your local GTD Space
 
 ## Documentation
 
-- `docs/installation.md` – Platform-specific setup
-- `docs/architecture.md` – System overview
-- `docs/GTD_IMPLEMENTATION.md` – Methodology deep dive
-- `docs/git-sync.md` – Encrypted git syncing & backups
-- `docs/settings.md` – Preferences and persistence
+- `docs/README.md` - documentation index and navigation
+- `spec/gtd-spec.md` - canonical GTD behavior and markdown spec
+- `docs/installation.md` - contributor setup and local development
+- `docs/build-setup.md` - native build and icon requirements
+- `docs/architecture.md` - current application architecture
+- `docs/release-process.md` - build and release workflow
 
 ## Contributing
 

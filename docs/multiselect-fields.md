@@ -1,6 +1,13 @@
 # MultiSelect Fields in GTD Space
 
+Updated: March 20, 2026
+
 > **Note**: Single-select fields are now the primary implementation for Status, Effort, and Project Status. See [SingleSelect Fields](singleselect-fields.md) for the current approach. This document covers multi-select fields which are still supported for tags and legacy content.
+
+Authoritative reference:
+
+- The canonical marker rules live in [`../spec/02-markdown-schema.md`](../spec/02-markdown-schema.md).
+- Use this file as a focused implementation note for multiselect behavior and legacy migration.
 
 ## Overview
 

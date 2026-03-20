@@ -1,6 +1,6 @@
 # Action Page Template — UI and Markdown Standard
 
-Updated: October 21, 2025
+Updated: March 20, 2026
 
 This document defines the standardized Action page template in GTD Space. It serves two purposes:
 - Documentation of what is implemented today (UI and markdown composition).
@@ -136,7 +136,7 @@ The template pattern is intentionally reusable:
   - Fields: Title, Project Status (`[!singleselect:project-status:*]`), Due Date, Desired Outcome/Description, References, Created, Actions list (`[!actions-list]`).
   - Keep the same references dialog.
 - Horizons (Areas, Goals, Vision, Purpose)
-  - Fields vary by horizon; use singleselects and datetimes where relevant (e.g., goal `target_date`).
+  - Fields vary by horizon; use singleselects and datetimes where relevant (e.g., goal `goal-target-date`).
   - Provide horizon‑specific references pickers (projects/areas/goals) using the same dialog pattern.
 
 3) Preserve canonical ordering in markdown
@@ -152,5 +152,4 @@ The template pattern is intentionally reusable:
 
 ---
 
-This document complements the data model in `docs/gtd-data-model.md` by specifying the user‑facing layout and canonical markdown ordering for Action pages. Use it as the source of truth when creating standardized templates for other page types.
-
+This document complements the data model in `docs/gtd-data-model.md` by specifying the user-facing layout and canonical markdown ordering for Action pages. For exact GTD rules and migration behavior, defer to `spec/`.

@@ -1,191 +1,70 @@
-# DateTime Fields Documentation
+# DateTime Fields
 
-## Overview
+Updated: March 20, 2026
 
-GTD Space now includes beautiful, interactive date and time selection components that seamlessly integrate with the BlockNote editor. These components provide an intuitive way to manage dates across projects, actions, and habits.
+This document covers the datetime marker family used in GTD Space.
 
-## Features
+Authoritative reference:
 
-### Visual Date Picker
+- The canonical datetime fields and markdown ordering live in [`../spec/02-markdown-schema.md`](../spec/02-markdown-schema.md).
+- Use this file as a focused implementation note for editor behavior and common field usage.
 
-- **Calendar Component**: Uses shadcn/ui's calendar component with a clean, modern design
-- **Time Selection**: Optional time picker for fields that need specific times
-- **Theme Support**: Automatically adapts to light/dark theme
-- **Color Coding**: Different field types have distinct colors:
-  - Due Dates: Orange/Red (red when overdue)
-  - Focus Dates: Blue
-  - Completed Dates: Green
-  - Created/Modified: Gray
-
-### Field Types
-
-The system supports multiple datetime field types:
-
-- `created_date_time` - When an item was created
-- `modified_date` - Last modification time
-- `due_date` - Deadline for completion (date only)
-- `focus_date` - When to work on the item (includes time)
-- `completed_date` - When the item was completed
-
-### Markdown Format
-
-DateTime fields are stored in markdown using a special syntax:
+## Marker Format
 
 ```markdown
-[!datetime:due_date:2025-01-17]
-[!datetime:focus_date:2025-01-17T14:30:00]
-[!datetime:created_date_time:2025-01-17T10:00:00Z]
+[!datetime:<field>:<value>]
 ```
 
-The `_time` suffix indicates fields that include time components.
-
-## Usage
-
-### Keyboard Shortcuts
-
-- **Cmd/Ctrl+Alt+D** - Insert Due Date field
-- **Cmd/Ctrl+Alt+T** - Insert Focus Date with Time
-- **Cmd/Ctrl+Alt+C** - Insert Created Date/Time (auto-fills current time)
-
-### In the Editor
-
-1. Click on any date field to open the calendar picker
-2. Select a date from the calendar
-3. For time-enabled fields, adjust the time using the time input
-4. Click "Clear date" to remove an optional date
-
-### Programmatic Usage
-
-```typescript
-// Import helpers for creating and inserting datetime blocks
-import {
-  createDateTimeBlock,
-  type DateTimeFieldType,
-} from "@/utils/datetime-block-helpers";
-import { useDateTimeInsertion } from "@/hooks/useDateTimeInsertion";
-
-// Valid DateTimeFieldType values you can use:
-//   'created_date_time'
-// | 'created_date'      // Legacy alias, normalized to created_date_time
-// | 'modified_date'
-// | 'due_date'
-// | 'focus_date'
-// | 'completed_date'
-// | 'custom'
-//
-// Note: The runtime determines time inclusion based on the field type and ISO format.
-// Fields that include time accept ISO 8601 datetime with optional timezone:
-// e.g., 2025-01-17T14:30:00 (local) or 2025-01-17T14:30:00Z / 2025-01-17T14:30:00-05:00.
-// Fields intended to be date-only (e.g., due_date, completed_date) expect YYYY-MM-DD format.
-// The 'focus_date' field is flexible and can accept either date-only (YYYY-MM-DD) or date-time (YYYY-MM-DDTHH:mm:ss) values.
-// The 'custom' field accepts user-defined formats and is parsed using the runtime's flexible parsing rules, falling back to ISO formats if parsing fails.
-
-// Create a datetime field block
-const block = createDateTimeBlock("due_date", "Due Date", "2025-01-20");
-
-// Insert using the hook (editor is your BlockNote editor instance)
-const { insertDateTime } = useDateTimeInsertion(editor);
-insertDateTime("focus_date", "2025-01-20T14:00:00");
-```
-
-## GTD Integration
-
-### Actions
-
-Actions now use datetime fields for:
-
-- **Focus Date**: When you plan to work on the action (includes time)
-- **Due Date**: The deadline for the action (date only)
-- **Created Date**: Automatically set when the action is created
-
-### Projects
-
-Projects can have:
-
-- **Due Date**: Project deadline
-- **Created Date**: When the project was started
-- **Completed Date**: When the project was finished
-
-### Habits
-
-Habits track:
-
-- **Last Completed**: When the habit was last marked complete
-- **Next Due**: Calculated based on frequency
-
-## Backend Updates
-
-The Rust backend has been updated to:
-
-- Generate datetime fields in action templates
-- Parse and validate ISO date strings
-- Support both date-only and datetime formats
-
-Example action template:
+Examples:
 
 ```markdown
-# Action Name
-
-## Status
-
-[!singleselect:status:in-progress]
-
-## Focus Date
-
-[!datetime:focus_date:]
-
-## Due Date
-
-[!datetime:due_date:]
-
-## Effort
-
-[!singleselect:effort:medium]
-
-## Notes
-
-<!-- Add any additional notes or details about this action here -->
-
----
-
-[!datetime:created_date_time:2025-01-17T10:00:00Z]
+[!datetime:due_date:2026-03-20]
+[!datetime:focus_date:2026-03-20T09:00:00]
+[!datetime:created_date_time:2026-03-20T15:30:00Z]
+[!datetime:goal-target-date:2027-01-15]
 ```
 
-## Technical Details
+## Common Fields
 
-### Dependencies
+Current commonly used datetime fields include:
 
-- `react-day-picker`: Calendar component base
-- `date-fns`: Date manipulation and formatting
-- `lucide-react`: Icons for the UI
-- `@radix-ui/react-popover`: Popover container
+- `created_date_time`
+- `due_date`
+- `focus_date`
+- `goal-target-date`
 
-### Component Structure
+The parser also accepts some legacy aliases such as `created_date` and `focus_date_time`.
 
-```
-DateTimeSelectBlock
-├── Popover (container)
-├── Button (trigger with icon and formatted date)
-├── Calendar (date selection)
-├── Time Input (optional)
-└── Clear Button (optional)
-```
+## GTD Usage
 
-### Styling
+- Actions use `focus_date`, `due_date`, and `created_date_time`
+- Projects use `due_date` and `created_date_time`
+- Goals use `goal-target-date`
+- Horizon overview READMEs use `created_date_time`
 
-The component uses CSS variables for theming:
+## Editor Behavior
 
-- Inherits all theme colors from the global theme system
-- Special field-type-specific background colors
-- Smooth transitions and hover states
+Datetime markers are rendered as interactive date/time controls inside the editor.
 
-## Future Enhancements
+Important current behavior:
 
-Potential improvements for the datetime system:
+- `due_date` is treated as date-only
+- `focus_date` may be date-only or datetime
+- UI flows that collect a focus date without a time default to `09:00:00`
+- created timestamps are generally treated as stable once written
 
-- Recurring dates for habits and repeated tasks
-- Date range selection for project timelines
-- Natural language date parsing ("next Monday", "in 2 weeks")
-- Calendar view of all dated items
-- Reminder notifications for upcoming dates
-- Time zone support for distributed teams
+## Migration Notes
+
+Current migration behavior includes:
+
+- `created_date` -> `created_date_time`
+- `focus_date_time` -> `focus_date`
+- `## Created Date` -> `## Created Date/Time`
+
+See [`data-migration.md`](./data-migration.md) for the current migration call sites.
+
+## Related Docs
+
+- [`markdown.md`](./markdown.md)
+- [`data-migration.md`](./data-migration.md)
+- [`../spec/02-markdown-schema.md`](../spec/02-markdown-schema.md)

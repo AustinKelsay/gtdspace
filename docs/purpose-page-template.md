@@ -1,6 +1,6 @@
 # Purpose & Principles Page Template - UI and Markdown Standard
 
-Updated: November 2, 2025
+Updated: March 20, 2026
 
 This document defines the standardized Purpose & Principles horizon page template for GTD Space. It mirrors the Vision, Goal, Area, Habit, and Action templates so designers, engineers, and content contributors share a single blueprint for the Horizons of Focus experience.
 
@@ -80,14 +80,14 @@ Notes:
 - Live rebuild: Editing header fields or body content regenerates canonical markdown and updates the open tab. No-op guard prevents redundant writes.
 - Stable Created: Captured on first render using existing created timestamp utilities; never regenerated once set.
 - Reference dialogs: Reuses the horizon reference dialog leveraged by Vision and Goal templates. Selections write JSON arrays into the corresponding markers.
-- Sidebar metadata: Reference badges surface in the Horizons sidebar once the corresponding TypeScript interfaces are formalized.
+- Sidebar metadata: Reference badges surface in the Horizons sidebar using the existing horizon types and metadata parsing pipeline.
 
 ## Implementation Map
 
-- Entry point: Introduce `src/components/gtd/PurposePage.tsx`, mirroring `VisionPage`, `GoalPage`, and `AreaPage` structure (header builder, markdown orchestrator, BlockNote body).
-- Routing: Extend the editor router to mount `PurposePage` for files under `/Purpose & Principles/`.
-- Metadata helpers: Add `buildPurposeMarkdown()` (or similar) to `src/utils/gtd-markdown-helpers.ts`, enforcing the ordering above while preserving both body sections.
-- Tokens: Extend `src/types/index.ts` with `GTDPurposePrinciplesDoc` helpers (see `docs/gtd-data-model.md` for baseline structure). Update the metadata extractor if new markers are introduced.
+- Entry point: `src/components/gtd/PurposePage.tsx`, mirroring the shared GTD page structure (header builder, markdown orchestrator, BlockNote body).
+- Routing: The editor mounts `PurposePage` for files under `/Purpose & Principles/`.
+- Metadata helpers: `buildPurposeMarkdown()` in `src/utils/gtd-markdown-helpers.ts` enforces the ordering above while preserving the body content.
+- Tokens: Reuse the existing `GTDPurposePrinciplesDoc` helpers in `src/types/index.ts`. Any future marker additions should still be reflected in the metadata extractor.
 - Reference dialog: Reuse existing horizon picker with props to toggle which groups appear (Projects, Goals, Vision, Areas). Group chips in the header using Tailwind utilities defined in `src/styles`.
 - Body sections: Extend the BlockNote schema with a `Description` delimiter so canonical rebuild can remount it in order while leaving content untouched.
 

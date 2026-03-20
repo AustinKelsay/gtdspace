@@ -1,7 +1,15 @@
 # Content Event System
 
+Updated: March 20, 2026
+
 ## Overview
 GTD Space uses a centralized event bus system for managing content changes and metadata updates across the application. This ensures real-time synchronization between different UI components without tight coupling.
+
+Authoritative reference:
+
+- This is a focused implementation note for the content event bus.
+- The broader runtime contract lives in [`../spec/03-runtime-behavior.md`](../spec/03-runtime-behavior.md).
+- If this guide conflicts with code/tests or the `spec/` docs, the code/tests and `spec/` docs win.
 
 ## Architecture
 

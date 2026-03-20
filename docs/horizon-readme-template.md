@@ -4,6 +4,12 @@ Updated: November 11, 2025
 
 This document defines the canonical README structure shared by all Horizons folders in GTD Space (Purpose & Principles, Vision, Goals, Areas of Focus). It aligns the folder overview page with the standardized horizon page templates so the sidebar interaction model mirrors Projects.
 
+Authoritative reference:
+
+- This is a focused horizon-overview template doc.
+- The canonical GTD/runtime rules live in [`../spec/gtd-spec.md`](../spec/gtd-spec.md) and [`../spec/02-markdown-schema.md`](../spec/02-markdown-schema.md).
+- If this guide conflicts with code/tests or the `spec/` docs, the code/tests and `spec/` docs win.
+
 - Explains the expected UI/UX behavior for horizon overview pages.
 - Documents the canonical markdown ordering enforced by the README builder.
 - Lists required metadata tokens, default values, and copy anchors.
@@ -22,7 +28,7 @@ This document defines the canonical README structure shared by all Horizons fold
 | --------------- | ------------ | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | Title           | H1           | `<Horizon Name> Overview`                                                             | Non-editable default title; users may rename but migrations reinsert if missing. |
 | Altitude        | SingleSelect | `purpose` · `vision` · `goals` · `areas`                                              | Read-only value derived from folder type; displayed as badge in header.          |
-| Review Cadence  | SingleSelect | `on-demand` (Purpose) · `annually` (Vision) · `quarterly` (Goals) · `monthly` (Areas) | Optional; omitted if cadence is `on-demand`.                                     |
+| Review Cadence  | SingleSelect | `on-demand` (Purpose) · `annually` (Vision) · `quarterly` (Goals) · `monthly` (Areas) | Stored explicitly in the current builder, including `on-demand` for Purpose.     |
 | Created         | DateTime     | `[!datetime:created_date_time:ISO]`                                                   | Set on seed; never regenerated.                                                  |
 | Reference Chips | JSON         | `[!<horizon>-references:<json-array>]`                                                | Managed by sync utility; never hand-edited.                                      |
 

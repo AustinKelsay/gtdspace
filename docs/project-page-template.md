@@ -1,6 +1,6 @@
 # Project Page Template - UI and Markdown Standard
 
-Updated: November 4, 2025
+Updated: March 20, 2026
 
 This document defines the standardized Project page template for GTD Space. It brings Projects in line with the refined Action, Habit, and Horizons templates so designers, engineers, and content authors work from a single blueprint.
 
@@ -36,7 +36,7 @@ This document defines the standardized Project page template for GTD Space. It b
   - Row 3: Goals References (left chips) • Vision References (right chips, optional).
   - Row 4: Purpose & Principles References (left chips, optional) • References (right chips, optional, supports external URLs).
 - Field controls:
-  - Project Status: singleselect with tokens `in-progress | waiting | completed`. Defaults to `in-progress` on creation. (Matches `GTDProjectStatus`.)
+  - Project Status: writer/creation tokens `in-progress | waiting | completed`. Defaults to `in-progress` on creation. Runtime loaders may still normalize legacy `cancelled` data.
   - Due Date: date picker with ISO output (`YYYY-MM-DD`). Supports clearing; blank removes the token.
   - Areas/Goals/Vision/Purpose references: chip groups that open the shared horizon reference dialog; selections stored as compact JSON arrays in the markdown markers. Chips respect display names resolved from file paths.
   - References: multi-select chip group that surfaces Cabinet, Someday Maybe, and URL entries; writes CSV by default and gracefully upgrades legacy JSON.
@@ -102,12 +102,12 @@ Notes:
 
 ## Implementation Map
 
-- Entry point: `src/components/gtd/ProjectPage.tsx` combines the shared page shell, header builder, BlockNote body, and list blocks. It lives beside `ActionPage`, `HabitPage`, and `AreaPage`.
-- Routing: Ensure the editor router mounts `ProjectPage` for `Projects/**/README.md`. Other files within the folder (actions) continue to use `ActionPage`.
-- Markdown builder: Add `buildProjectMarkdown()` to `src/utils/gtd-markdown-helpers.ts`, enforcing ordering, JSON normalization for horizon references, and CSV preservation for `[!references:]`.
-- Metadata parsing: Extend `src/utils/metadata-extractor.ts` if needed to normalize optional due dates and horizon JSON arrays. `GTDProject` already expects `dueDate`, `status`, and `createdDateTime`.
-- Reference dialog: Reuse existing component with props to toggle which groups appear (Areas, Goals, Vision, Purpose, Cabinet/Someday). Ensure the dialog exposes both local files and URL entry to cover generic references.
-- Blocks: Confirm the BlockNote schema includes stub nodes for `[!actions-list]` and `[!habits-list]`, and that migration utilities inject them when missing.
+- Entry point: `src/components/gtd/ProjectPage.tsx` combines the shared page shell, header builder, BlockNote body, and list blocks. It lives beside the other GTD page components.
+- Routing: The editor mounts `ProjectPage` for `Projects/**/README.md`. Other files within the folder (actions) continue to use `ActionPage`.
+- Markdown builder: `buildProjectMarkdown()` in `src/utils/gtd-markdown-helpers.ts` enforces ordering, JSON normalization for horizon references, and CSV preservation for `[!references:]`.
+- Metadata parsing: `src/utils/metadata-extractor.ts` and related helpers normalize due dates, references, and compatible legacy fields for the current UI.
+- Reference dialog: The page reuses the shared reference selection flows for Areas, Goals, Vision, Purpose, Cabinet, Someday Maybe, and URL entries.
+- Blocks: `[!actions-list]` and `[!habits-list]` rely on the existing editor/list-block infrastructure rather than ad hoc page-only rendering.
 
 ## Theming and Accessibility
 

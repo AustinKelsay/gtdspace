@@ -20,6 +20,28 @@ describe('horizon README utilities', () => {
     expect(referenceCount).toBe(1);
   });
 
+  it('uses the configured singular list tokens and default cadence for vision and purpose overviews', () => {
+    const vision = buildHorizonReadmeMarkdown({
+      horizon: 'vision',
+      content: '',
+      referencePaths: ['/Space/Vision/North Star.md'],
+    });
+
+    const purpose = buildHorizonReadmeMarkdown({
+      horizon: 'purpose',
+      content: '',
+      referencePaths: ['/Space/Purpose & Principles/Life Mission.md'],
+    });
+
+    expect(vision.content).toContain('[!singleselect:horizon-review-cadence:annually]');
+    expect(vision.content).toContain('[!vision-references:["/Space/Vision/North Star.md"]]');
+    expect(vision.content).toContain('[!vision-list]');
+
+    expect(purpose.content).toContain('[!singleselect:horizon-review-cadence:on-demand]');
+    expect(purpose.content).toContain('[!purpose-references:["/Space/Purpose & Principles/Life Mission.md"]]');
+    expect(purpose.content).toContain('[!purpose-list]');
+  });
+
   it('preserves existing narrative sections when rebuilding', () => {
     const legacyContent = `# Goals Overview\n\n## Why this horizon matters\nExisting copy stays here.\n\n## Reference Index\n[!goals-references:[]]\n\n## Horizon Pages\n[!goals-list]\n`;
 

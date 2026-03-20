@@ -36,10 +36,12 @@ describe('horizon README utilities', () => {
     expect(vision.content).toContain('[!singleselect:horizon-review-cadence:annually]');
     expect(vision.content).toContain('[!vision-references:["/Space/Vision/North Star.md"]]');
     expect(vision.content).toContain('[!vision-list]');
+    expect(vision.referenceCount).toBe(1);
 
     expect(purpose.content).toContain('[!singleselect:horizon-review-cadence:on-demand]');
     expect(purpose.content).toContain('[!purpose-references:["/Space/Purpose & Principles/Life Mission.md"]]');
     expect(purpose.content).toContain('[!purpose-list]');
+    expect(purpose.referenceCount).toBe(1);
   });
 
   it('preserves existing narrative sections when rebuilding', () => {

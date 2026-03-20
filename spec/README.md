@@ -7,7 +7,7 @@ This directory contains the current GTD spec for the codebase.
 ## Files
 
 - `01-workspace-and-domain-model.md`: workspace shape, top-level folders, item types, defaults, canonical file locations, and relationship rules
-- `02-markdown-schema.md`: the GTD markdown language, token set, encoding/decoding rules, migrations, canonical section ordering, and title/rename behavior
+- `02-Markdown-schema.md`: the GTD Markdown language, token set, encoding/decoding rules, migrations, canonical section ordering, and title/rename behavior
 - `03-runtime-behavior.md`: dashboard behavior, event semantics, file watching, calendar inclusion, habit reset logic, and Google Calendar sync
 
 ## Ground Rules

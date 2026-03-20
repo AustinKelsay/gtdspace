@@ -6,10 +6,12 @@ describe('gtd status normalization', () => {
     expect(normalizeStatus()).toBe('in-progress');
     expect(normalizeStatus(null)).toBe('in-progress');
     expect(normalizeStatus('')).toBe('in-progress');
+    expect(normalizeStatus('unknown_status')).toBe('in-progress');
   });
 
   it('normalizes waiting-style aliases', () => {
     expect(normalizeStatus('waiting')).toBe('waiting');
+    expect(normalizeStatus('  waiting  ')).toBe('waiting');
     expect(normalizeStatus('blocked')).toBe('waiting');
     expect(normalizeStatus('on hold')).toBe('waiting');
     expect(normalizeStatus('waiting_for')).toBe('waiting');
@@ -22,6 +24,7 @@ describe('gtd status normalization', () => {
   });
 
   it('normalizes in-progress aliases', () => {
+    expect(normalizeStatus('DOING')).toBe('in-progress');
     expect(normalizeStatus('planning')).toBe('in-progress');
     expect(normalizeStatus('not started')).toBe('in-progress');
     expect(normalizeStatus('todo')).toBe('in-progress');

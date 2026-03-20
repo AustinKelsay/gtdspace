@@ -136,11 +136,11 @@ Implementation rules:
 
 The parser is intentionally forgiving:
 
-- It accepts JSON arrays and CSV payloads.
-- It tolerates one or more layers of URL decoding.
-- It strips wrapping quotes around individual entries.
-- It normalizes backslashes to forward slashes.
-- It accepts malformed bracket payloads by repairing a missing closing `]` when possible.
+- Accepts JSON arrays and CSV payloads.
+- Tolerates one or more layers of URL decoding.
+- Strips wrapping quotes around individual entries.
+- Normalizes backslashes to forward slashes.
+- Repairs malformed bracket payloads by adding a missing closing `]` when possible.
 
 This means reference markers can survive legacy content, partial edits, and double-encoded payloads.
 

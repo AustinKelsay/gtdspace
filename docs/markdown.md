@@ -2,6 +2,12 @@
 
 GTD Space handles markdown through BlockNote's WYSIWYG editor, which provides real-time editing and automatic conversion between markdown and rich text blocks.
 
+Authoritative reference:
+
+- This doc explains the editing and conversion pipeline at a high level.
+- The canonical GTD marker set, ordering rules, and migrations live in [`../spec/02-markdown-schema.md`](../spec/02-markdown-schema.md).
+- If this doc conflicts with code/tests or the `spec/` docs, the code/tests and `spec/` docs win.
+
 ## Overview
 
 ```
@@ -92,7 +98,7 @@ The `blocksToMarkdownLossy` method means some BlockNote features may not have ex
 
 Files are saved as standard markdown text files:
 
-```markdown
+````markdown
 # Document Title
 
 This is a paragraph with **bold** and *italic* text.
@@ -106,10 +112,11 @@ This is a paragraph with **bold** and *italic* text.
 // Code block with syntax highlighting
 const example = "Hello, World!";
 ```
+````
 
 ### File Metadata
 
-Metadata is stored in the file system, not in the markdown:
+Filesystem metadata such as size, path, and modification time comes from the file system:
 
 ```typescript
 interface MarkdownFile {
@@ -121,6 +128,28 @@ interface MarkdownFile {
   extension: string;       // "md" or "markdown"
 }
 ```
+
+### GTD Metadata Markers
+
+GTD-specific metadata is stored in the markdown body itself, not in frontmatter and not only in filesystem attributes.
+
+Common marker families include:
+
+```markdown
+[!singleselect:status:in-progress]
+[!singleselect:project-status:waiting]
+[!checkbox:habit-status:false]
+[!datetime:due_date:2026-03-19]
+[!projects-references:%5B%22/Space/Projects/Alpha%22%5D]
+[!actions-list]
+```
+
+Important notes:
+
+- Project, habit, horizon, and calendar behavior depends on these markers.
+- Reference markers may be CSV or URI-encoded JSON arrays depending on the field.
+- Some overview pages also include configured horizon list tokens such as `[!vision-list]` or `[!purpose-list]`.
+- Canonical ordering and migration behavior are documented in [`spec/02-markdown-schema.md`](../spec/02-markdown-schema.md).
 
 ## Syntax Highlighting
 

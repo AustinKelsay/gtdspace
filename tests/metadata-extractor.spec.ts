@@ -25,6 +25,22 @@ describe('metadata extractor utilities', () => {
     expect(metadata.createdDateTime).toBe('2026-02-20T10:00:00Z');
   });
 
+  it('extracts horizon-specific singleselect and datetime fields into canonical metadata keys', () => {
+    const content = [
+      '[!singleselect:vision-horizon:10-years]',
+      '[!singleselect:horizon-altitude:purpose]',
+      '[!singleselect:horizon-review-cadence:on-demand]',
+      '[!datetime:goal-target-date:2027-01-15]',
+    ].join('\n');
+
+    const metadata = extractMetadata(content);
+
+    expect(metadata.visionHorizon).toBe('10-years');
+    expect(metadata.horizonAltitude).toBe('purpose');
+    expect(metadata.horizonReviewCadence).toBe('on-demand');
+    expect(metadata.goalTargetDate).toBe('2027-01-15');
+  });
+
   it('merges repeated multiselect values for the same key', () => {
     const content = [
       '[!multiselect:tags:alpha,beta]',

@@ -2,7 +2,13 @@
 
 This guide explains how GTD Space implements David Allen's Getting Things Done (GTD) methodology.
 
-**Updated**: January 2025 - GTD-First Architecture
+**Updated**: March 19, 2026
+
+Authoritative reference:
+
+- This guide is a high-level implementation overview.
+- The canonical GTD rules now live in [`spec/gtd-spec.md`](../spec/gtd-spec.md) and the supporting files in [`spec/`](../spec/README.md).
+- If this guide conflicts with code/tests or the `spec/` docs, the code/tests and `spec/` docs win.
 
 ## Overview
 
@@ -14,17 +20,18 @@ When you initialize a GTD space, the following directory structure is created:
 
 ```
 Your GTD Space/
-├── Horizons/          # Higher-level GTD perspectives
-│   ├── Areas of Focus.md        # 20,000 ft - Ongoing responsibilities
-│   ├── Goals (1-2 Years).md     # 30,000 ft - Medium-term objectives
-│   ├── Vision (3-5 Years).md    # 40,000 ft - Long-term aspirations
-│   └── Purpose & Principles.md  # 50,000 ft - Core values and mission
-├── Projects/           # Active projects with actions
-├── Habits/            # Recurring habits and routines
-├── Someday Maybe/     # Ideas for future consideration
-├── Cabinet/           # Reference materials
+├── Areas of Focus/        # 20,000 ft pages plus README overview
+├── Goals/                 # 30,000 ft pages plus README overview
+├── Vision/                # 40,000 ft pages plus README overview
+├── Purpose & Principles/  # 50,000 ft pages plus README overview
+├── Projects/              # Project folders containing README + action files
+├── Habits/                # One markdown file per habit
+├── Someday Maybe/         # Flat markdown pages for future ideas
+├── Cabinet/               # Flat markdown pages for reference material
 └── Welcome to GTD Space.md
 ```
+
+The current implementation does not use a `Horizons/` parent folder.
 
 ## Horizons of Focus
 
@@ -62,10 +69,10 @@ Each horizon file includes comprehensive templates to guide your planning and re
 
 ### Horizon Overview Pages
 
-Every Horizons folder now includes an instructive `README.md` built from the canonical template in `docs/horizon-readme-template.md`. The overview file:
+Each horizon folder now includes an instructive `README.md` built from the canonical template in `docs/horizon-readme-template.md`. The overview file:
 
 - Uses the shared header grid (Altitude, Review Cadence, Created) plus explanatory sections (`Why this horizon matters`, `How to work this horizon in GTD Space`, `Horizon Pages Overview`).
-- Embeds `[!<horizon>-references:<json-array>]` and `[!<horizon>-list]` tokens that stay synchronized with the markdown files stored in that folder.
+- Embeds `[!<horizon>-references:<json-array>]` plus the configured horizon list token for that folder. In the current implementation this includes singular tokens such as `[!vision-list]` and `[!purpose-list]` for overview pages.
 - Opens whenever you click the horizon row in the sidebar; expanding the row (chevron) reveals the actual horizon pages beneath it.
 
 Reference lists are auto-managed: creating, renaming, or deleting a horizon page triggers a sync that rewrites the README so the Reference Index matches the live filesystem. Existing workspaces are migrated in-place the next time those folders load inside GTD Space.
@@ -98,7 +105,7 @@ YYYY-MM-DD or "Not set"
 
 A project uses a SingleSelect block to track its status. The block stores a canonical token representing the status.
 
-The canonical status tokens are:
+The backend project creation path accepts these status tokens:
 - `in-progress`
 - `waiting`
 - `completed`
@@ -140,7 +147,7 @@ Actions are concrete next steps that move projects forward.
 
 ## Status
 
-Canonical tokens: `in-progress` | `waiting` | `completed`
+Canonical action tokens: `in-progress` | `waiting` | `completed` | `cancelled`
 Note: The UI should map display labels (e.g., "In Progress") to/from these canonical tokens.
 
 ## Focus Date
@@ -228,7 +235,7 @@ create_gtd_project(
 create_gtd_action(
     project_path: String,
     action_name: String,
-    // Must be one of the canonical tokens: "in-progress", "waiting", "completed".
+    // Must be one of the canonical creation tokens: "in-progress", "waiting", "completed".
     // The UI is responsible for mapping display labels (e.g., "In Progress") to these tokens.
     status: String,
     focus_date: Option<String>,
@@ -380,7 +387,7 @@ const {
 - **Deduplication** - Prevents duplicate toasts in React StrictMode
 - **Smart path handling** - Correctly handles subdirectory navigation
 
-## Recent Improvements (January 2025)
+## Selected Implementation Improvements
 
 ### UI/UX Enhancements
 

@@ -80,13 +80,13 @@ Notes:
 - Stable Created: Captured on first render using existing created timestamp utilities; never regenerated once set.
 - Reference dialogs: Reuses the horizon reference dialog leveraged by Goal and Area templates. Selections write JSON arrays into the corresponding markers.
 - Horizon tokens: Write only the constrained `vision-horizon` values to avoid conflicts with other singleselect markers.
-- Sidebar metadata: Horizon value and reference badges surface in the Horizons sidebar once the corresponding TypeScript interfaces are formalized.
+- Sidebar metadata: Horizon value and reference badges surface in the Horizons sidebar using the existing horizon types and metadata parsing pipeline.
 
 ## Implementation Map
 - Entry point: Introduce `src/components/gtd/VisionPage.tsx`, mirroring `GoalPage`, `AreaPage`, and `HabitPage` structure (header builder, markdown orchestrator, BlockNote body).
 - Routing: Extend the editor router to mount `VisionPage` for files under `/Vision/`.
 - Metadata helpers: Add `buildVisionMarkdown()` to `src/utils/gtd-markdown-helpers.ts`, enforcing the ordering above while preserving the narrative body content.
-- Tokens: Extend `src/types/index.ts` with `GTDVisionHorizon`, `GTDVisionDoc`, and related helpers (see `docs/gtd-data-model.md` for baseline structure). Update the metadata extractor to parse the singleselect marker `vision-horizon` and horizon reference tokens.
+- Tokens: Reuse the existing `GTDVisionHorizon`, `GTDVisionDoc`, and related helpers in `src/types/index.ts`, along with metadata parsing for `vision-horizon` and horizon reference tokens.
 - Reference dialog: Reuse existing horizon picker with props to toggle which groups appear (Projects, Goals, Areas, Purpose). Group chips in the header using Tailwind utilities defined in `src/styles`.
 - Body section: Extend the BlockNote schema with a `Narrative` delimiter so canonical rebuild can remount it in order while leaving content untouched.
 

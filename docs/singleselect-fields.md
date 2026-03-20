@@ -1,71 +1,72 @@
-# SingleSelect Fields in GTD Space
+# SingleSelect Fields
 
-## Overview
-GTD Space uses interactive single-select fields for standardized properties like Status, Effort, and Project Status. These fields work like Notion's select fields - they cannot be accidentally overwritten with text and provide a consistent dropdown interface.
+Updated: March 20, 2026
 
-## Automatic Creation
-All new projects and actions are automatically created with single-select fields:
+This document covers the single-select marker family used in GTD Space.
 
-### Projects
-- **Status**: Project status (in-progress, waiting, completed)
+Authoritative reference:
 
-### Actions  
-- **Status**: Action status (in-progress, waiting, completed)
-- **Effort**: Time estimate (small <30min, medium 30-90min, large >90min, extra-large >3hrs)
+- The canonical token set and markdown ordering live in [`../spec/02-markdown-schema.md`](../spec/02-markdown-schema.md).
+- Use this file as an implementation-oriented companion, not a competing source of truth.
 
-## Markdown Syntax
-Single-select fields use a special marker syntax in markdown:
-```
-[!singleselect:type:value]
+## Marker Format
+
+```markdown
+[!singleselect:<field>:<value>]
 ```
 
-Examples:
+Common examples:
+
 - `[!singleselect:status:in-progress]`
 - `[!singleselect:effort:medium]`
 - `[!singleselect:project-status:waiting]`
+- `[!singleselect:goal-status:completed]`
+- `[!singleselect:vision-horizon:3-years]`
 
-## Manual Insertion
-You can manually insert single-select fields using keyboard shortcuts:
+## Where Single-Selects Are Used
 
-- **Cmd+Alt+S** (Mac) / **Ctrl+Alt+S** (Windows/Linux): Insert Status field
-- **Cmd+Alt+E** (Mac) / **Ctrl+Alt+E** (Windows/Linux): Insert Effort field  
-- **Cmd+Alt+P** (Mac) / **Ctrl+Alt+P** (Windows/Linux): Insert Project Status field
+Current major single-select fields include:
 
-## How It Works
-1. When markdown files are loaded, the special markers are converted to interactive BlockNote single-select blocks
-2. The single-select UI renders as a dropdown with predefined options
-3. When saved, the selected value is preserved in the markdown using the marker syntax
-4. This ensures fields cannot be accidentally overwritten with plain text
+- action status
+- project status
+- effort
+- habit frequency
+- area status
+- area review cadence
+- goal status
+- vision horizon
+- horizon altitude
+- horizon review cadence
 
-## Legacy MultiSelect Support and Migration
+## Current Canonical Values
 
-The system continues to support `[!multiselect:tags:value1,value2]` for tags and categories, primarily for legacy content and specific use cases where multiple selections are genuinely needed.
+Examples of current canonical value sets:
 
-**Automatic Migration of Legacy MultiSelect Markers**
-The system automatically migrates legacy `[!multiselect]` markers for `status`, `effort`, and `project-status` to the new `[!singleselect]` format. The migration utility uses the **first value** listed in the legacy marker.
+- Action status: `in-progress`, `waiting`, `completed`, `cancelled`
+- Project creation status: `in-progress`, `waiting`, `completed`
+- Effort: `small`, `medium`, `large`, `extra-large`
+- Habit frequency: `5-minute`, `daily`, `every-other-day`, `twice-weekly`, `weekly`, `weekdays`, `biweekly`, `monthly`
 
-**Before and After Migration Example:**
-If your markdown contains a legacy marker with multiple values:
-```
-[!multiselect:status:in-progress,waiting]
-```
-It will be automatically converted to a `singleselect` marker using the first value:
-```
-[!singleselect:status:in-progress]
-```
+Some runtime loaders normalize additional legacy values into those canonical sets.
 
-**Migration Guidance:**
-Because the automatic migration only preserves the first value, it is important to **verify your data** after the migration. If a different value was intended, you can manually adjust it using the dropdown in the editor. For example, if `waiting` was the desired status in the example above, you would need to manually change it from `in-progress` to `waiting`.
+## Editor Behavior
 
-## Real-time Updates
-- Status changes are immediately reflected in the sidebar
-- The Content Event Bus ensures all UI components stay synchronized
-- Changes trigger metadata events that update the project/action lists
+Single-select markers are converted into interactive editor blocks when files are loaded. On save, the selected value is written back into the markdown marker.
 
-## Bidirectional Title Sync
-When you change the title in a document:
-1. The title is extracted from the markdown metadata
-2. On save, if the title differs from the filename/folder name, it automatically renames
-3. Projects rename their folders, actions rename their files
-4. Open tabs automatically update to the new paths
-5. The sidebar immediately reflects the new names
+This gives GTD Space a constrained, structured way to store state without frontmatter or a database.
+
+## Migration From Legacy Multi-Selects
+
+Legacy `[!multiselect:status:...]`, `[!multiselect:project-status:...]`, and `[!multiselect:effort:...]` markers are migrated to single-select form.
+
+Current migration behavior:
+
+- the first legacy value wins
+- legacy aliases are normalized to the canonical token set
+- migrated content may be rewritten back to disk in some flows
+
+## Related Docs
+
+- [`multiselect-fields.md`](./multiselect-fields.md)
+- [`datetime-fields.md`](./datetime-fields.md)
+- [`../spec/02-markdown-schema.md`](../spec/02-markdown-schema.md)

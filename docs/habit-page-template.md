@@ -1,8 +1,8 @@
 # Habit Page Template — UI and Markdown Standard
 
-Updated: October 22, 2025
+Updated: March 20, 2026
 
-This document captures the emerging Habit page template for GTD Space. It mirrors the Action template work so that readers, designers, and engineers share a single blueprint while we finish implementing the standardized experience.
+This document captures the current Habit page template for GTD Space. It mirrors the Action and Project patterns so readers, designers, and engineers share a single blueprint for the current standardized experience.
 
 - Describes the target layout and interactive behavior for habit files rendered in the desktop app.
 - Defines the canonical markdown ordering used when rebuilding or migrating habit files.
@@ -113,8 +113,8 @@ Notes:
 
 ## Implementation Map
 
-- Entry point: new `src/components/gtd/HabitPage.tsx` (mirrors `ActionPage.tsx` structure with header builder + markdown orchestrator).
-- Editor integration: extend `src/components/editor/BlockNoteEditor.tsx` detection around existing habit-specific logic to mount `HabitPage` when files live under `/Habits/` and contain `## History`.
+- Entry point: `src/components/gtd/HabitPage.tsx` (mirrors the shared GTD page structure with header builder and markdown orchestrator).
+- Editor integration: `HabitPage` is mounted for habit files, and the existing editor stack handles the underlying BlockNote rendering and save flow.
 - Header controls:
   - Checkbox: reuse `CheckboxBlock` but expose inline variant for header (share styling tokens).
   - Frequency select: adapt `SingleSelectBlock` with `type="habit-frequency"` and bare mode.
@@ -122,8 +122,8 @@ Notes:
 - Derived metadata:
   - Next Reset + Last Completion values come from `useHabitsHistory` and `useHabitTracking`.
   - Ensure derived badges never write to markdown; they are UI-only for clarity.
-- Markdown rebuild: extend `src/utils/gtd-markdown-helpers.ts` with `buildHabitMarkdown()` that enforces the canonical ordering above and preserves history rows.
-- Scheduler hooks: confirm `useHabitTracking` remains the single source for reset polling; header should subscribe but avoid duplicating timers.
+- Markdown rebuild: `buildHabitMarkdown()` in `src/utils/gtd-markdown-helpers.ts` enforces the canonical ordering above and preserves history rows.
+- Scheduler hooks: `useHabitTracking` handles manual updates, while periodic reset polling currently runs in `App.tsx`; the page should not duplicate polling timers.
 
 ## Theming & Accessibility
 

@@ -1,6 +1,6 @@
 # Vision Page Template - UI and Markdown Standard
 
-Updated: November 2, 2025
+Updated: March 20, 2026
 
 This document defines the standardized Vision horizon page template for GTD Space. It mirrors the Goal, Area, Habit, and Action templates so designers, engineers, and content contributors share a single blueprint for the Horizons of Focus experience.
 
@@ -83,9 +83,9 @@ Notes:
 - Sidebar metadata: Horizon value and reference badges surface in the Horizons sidebar using the existing horizon types and metadata parsing pipeline.
 
 ## Implementation Map
-- Entry point: Introduce `src/components/gtd/VisionPage.tsx`, mirroring `GoalPage`, `AreaPage`, and `HabitPage` structure (header builder, markdown orchestrator, BlockNote body).
-- Routing: Extend the editor router to mount `VisionPage` for files under `/Vision/`.
-- Metadata helpers: Add `buildVisionMarkdown()` to `src/utils/gtd-markdown-helpers.ts`, enforcing the ordering above while preserving the narrative body content.
+- Entry point: `src/components/gtd/VisionPage.tsx`, mirroring the shared GTD page structure (header builder, markdown orchestrator, BlockNote body).
+- Routing: The editor mounts `VisionPage` for files under `/Vision/`.
+- Metadata helpers: `buildVisionMarkdown()` in `src/utils/gtd-markdown-helpers.ts` enforces the ordering above while preserving the narrative body content.
 - Tokens: Reuse the existing `GTDVisionHorizon`, `GTDVisionDoc`, and related helpers in `src/types/index.ts`, along with metadata parsing for `vision-horizon` and horizon reference tokens.
 - Reference dialog: Reuse existing horizon picker with props to toggle which groups appear (Projects, Goals, Areas, Purpose). Group chips in the header using Tailwind utilities defined in `src/styles`.
 - Body section: Extend the BlockNote schema with a `Narrative` delimiter so canonical rebuild can remount it in order while leaving content untouched.

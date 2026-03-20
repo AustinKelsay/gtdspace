@@ -1,108 +1,15 @@
-# ✅ Release Setup Complete
+# Release Setup Notes
 
-## What Was Done
+This is a historical setup note from the original release-process bring-up. It is not the source of truth for how releases work now.
 
-Your GTD Space build and release process is now fully configured! Here's what was set up:
+Current release details live in [docs/release-process.md](docs/release-process.md), and macOS signing details live in [docs/mac-signing-setup.md](docs/mac-signing-setup.md).
 
-### 1. GitHub Actions Workflows
-- **`.github/workflows/build.yml`**: Automated multi-platform builds on version tags
-- **`.github/workflows/ci.yml`**: Continuous integration for code quality
-- **`.github/dependabot.yml`**: Automated dependency updates
+What this note captured:
 
-### 2. Version Management
-- **`scripts/bump-version.js`**: Automated version bumping across all files
-- **NPM scripts**: `version:major`, `version:minor`, `version:patch`, `release`
+- GitHub Actions build and release workflows
+- Version bump scripts and release helpers
+- Tauri bundle configuration
+- Icon generation setup
+- macOS signing and notarization wiring
 
-### 3. Tauri Configuration Fixed
-- ✅ `bundle.active` set to `true` (was false - would have prevented builds!)
-- ✅ Added platform-specific bundle configurations
-- ✅ Updated bundle identifier and metadata
-- ✅ Bundle configuration is defined at the top-level `bundle` key (correct for Tauri v2)
-
-### 4. Icon Setup
-- Created icon generation scripts (Node script)
-- Added temporary icon files to allow immediate builds
-- GitHub Actions and the Node script (`scripts/icons-generate.mjs`) will generate proper icons during builds
-
-### 5. Documentation
-- **`docs/release-process.md`**: Comprehensive release guide
-- **`docs/build-setup.md`**: Build prerequisites and troubleshooting
-- **`RELEASING.md`**: Quick reference for creating releases
-- Updated README with download section
-
-### 6. macOS Code Signing & Notarization
-- Added `src-tauri/entitlements/macos.plist` and hardened runtime config
-- Updated GitHub Actions release workflow to import the Developer ID certificate, sign, and notarize DMGs
-- New setup guide at `docs/mac-signing-setup.md`; configure required secrets before the next release
-
-## Current Status
-
-✅ **Ready to create your first release! (pipeline not yet tested)**
-
-The temporary icon files have been created, and the GitHub Actions workflow is configured to generate properly sized icons automatically. However, the end-to-end release pipeline has not yet been fully tested.
-
-## Next Steps
-
-### 1. Commit These Changes
-```bash
-git add .
-git commit -m "feat: add automated build and release process"
-git push origin feature/release-process
-```
-
-### 2. Create a Pull Request
-Merge your `feature/release-process` branch into `staging`. Target `staging` because the CI workflow is configured to run integration and release checks on this branch, ensuring stability before a final merge to `main`.
-
-### 3. Create Your First Release
-
-To create a new release (patch, minor, or major), you should **trigger the Release workflow directly from the GitHub Actions tab** on the `staging` branch.
-
-1.  **Navigate to the Actions tab** in your GitHub repository.
-2.  Select the **"Release" workflow** from the left sidebar.
-3.  Click on **"Run workflow"** dropdown on the right.
-4.  Choose the `staging` branch.
-5.  Select the desired release type (patch, minor, or major) and click "Run workflow".
-
-**Important Tip:** Do NOT run `npm run release:patch`, `npm run release:minor`, or `npm run release:major` locally. These commands are intended for manual, non-workflow-driven releases and will conflict with the automated GitHub Actions workflow, potentially causing double version bumps and inconsistencies. The GitHub Actions workflow is the single source of truth for version bumps, commits, tags, and pushes.
-
-### 4. Monitor the Build
-- Go to [GitHub Actions](https://github.com/AustinKelsay/gtdspace/actions) to watch the build progress
-- The release will appear in [Releases](https://github.com/AustinKelsay/gtdspace/releases) when complete
-
-## Important Notes
-
-### Icons
-- **Current state**: Using copied placeholders.
-- **To generate locally**: Run `npm run icons:generate`. This will generate the necessary icons from `src-tauri/icons/icon.png`.
-- **CI/CD**: Icons are automatically generated in GitHub Actions during the release process.
-
-### Version Numbers
-Currently synchronized at `{{version}}` in:
-- `package.json`
-- `src-tauri/Cargo.toml`  
-- `src-tauri/tauri.conf.json`
-
-### Platform Builds
-Each release will generate:
-- Windows: `GTDSpace_{{version}}_windows-x64.msi`
-- macOS Intel: `GTDSpace_{{version}}_macos-x64.dmg`
-- macOS ARM: `GTDSpace_{{version}}_macos-aarch64.dmg`
-- Linux: `GTDSpace_{{version}}_linux-x64.AppImage` and `GTDSpace_{{version}}_linux-x64.deb`
-
-**Note**: The `VERSION` is automatically derived from the git tag or pipeline input as configured in `build.yml`. Ensure your pipeline provides the appropriate tag or input for correct artifact naming.
-
-## Future Enhancements
-
-Consider adding:
-1. **Auto-update** functionality
-2. **Beta/nightly** release channels
-3. **Package manager** distribution (Homebrew, Chocolatey, etc.)
-
-## Support
-
-If you encounter any issues:
-1. Check `docs/build-setup.md` for troubleshooting
-2. Review GitHub Actions logs for build errors
-3. Ensure all version numbers match across files
-
-Your release pipeline is ready to go! 🚀
+Treat this as a record of the rollout, not an instruction manual.

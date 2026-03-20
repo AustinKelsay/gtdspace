@@ -519,6 +519,11 @@ Rules:
 
 Canonical list block markers:
 
+| Context | Token Style | Examples |
+| --- | --- | --- |
+| Horizon overview `README.md` files | singular, horizon-specific tokens from `horizon-config` | `purpose-list`, `vision-list`, `goals-list`, `areas-list` |
+| Generic rendered list blocks | plural canonical tokens | `projects-list`, `goals-list`, `visions-list`, `habits-list` |
+
 - `[!projects-list]`
 - `[!areas-list]`
 - `[!goals-list]`
@@ -539,8 +544,9 @@ Accepted parser aliases:
 Rules:
 
 - `actions-list` can include an optional status filter.
+- Parser aliases normalize to the canonical hyphenated plural forms such as `projects-areas-list`, `goals-areas-list`, and `visions-goals-list`.
 - The canonical writer uses the shorter hyphenated forms.
-- Horizon overview `README.md` files use horizon-specific list tokens from `horizon-config`, including `purpose-list` and `vision-list`; generic list blocks still use the plural forms such as `visions-list`.
+- Horizon overview `README.md` files use horizon-specific singular tokens from `horizon-config`, including `purpose-list` and `vision-list`; generic list blocks still use the plural forms such as `visions-list`.
 
 ## Title And Rename Rules
 
@@ -561,16 +567,16 @@ Practical rule:
 
 Primary implementation sources for this spec:
 
-- [src/utils/gtd-markdown-helpers.ts](/Users/plebdev/Desktop/code/gtdspace/src/utils/gtd-markdown-helpers.ts)
-- [src/utils/metadata-extractor.ts](/Users/plebdev/Desktop/code/gtdspace/src/utils/metadata-extractor.ts)
-- [src/utils/data-migration.ts](/Users/plebdev/Desktop/code/gtdspace/src/utils/data-migration.ts)
-- [src/utils/horizon-readme-utils.ts](/Users/plebdev/Desktop/code/gtdspace/src/utils/horizon-readme-utils.ts)
-- [src/utils/blocknote-preprocessing.ts](/Users/plebdev/Desktop/code/gtdspace/src/utils/blocknote-preprocessing.ts)
-- [src/components/gtd/CreatePageDialog.tsx](/Users/plebdev/Desktop/code/gtdspace/src/components/gtd/CreatePageDialog.tsx)
-- [src/components/gtd/CreateHabitDialog.tsx](/Users/plebdev/Desktop/code/gtdspace/src/components/gtd/CreateHabitDialog.tsx)
-- [src/components/gtd/GTDWorkspaceSidebar.tsx](/Users/plebdev/Desktop/code/gtdspace/src/components/gtd/GTDWorkspaceSidebar.tsx)
-- [src-tauri/src/commands/mod.rs](/Users/plebdev/Desktop/code/gtdspace/src-tauri/src/commands/mod.rs)
-- [tests/gtd-markdown-helpers.spec.ts](/Users/plebdev/Desktop/code/gtdspace/tests/gtd-markdown-helpers.spec.ts)
-- [tests/data-migration.spec.ts](/Users/plebdev/Desktop/code/gtdspace/tests/data-migration.spec.ts)
-- [tests/horizon-readme-utils.spec.ts](/Users/plebdev/Desktop/code/gtdspace/tests/horizon-readme-utils.spec.ts)
-- [tests/habit-history.spec.ts](/Users/plebdev/Desktop/code/gtdspace/tests/habit-history.spec.ts)
+- `src/utils/gtd-markdown-helpers.ts`
+- `src/utils/metadata-extractor.ts`
+- `src/utils/data-migration.ts`
+- `src/utils/horizon-readme-utils.ts`
+- `src/utils/blocknote-preprocessing.ts`
+- `src/components/gtd/CreatePageDialog.tsx`
+- `src/components/gtd/CreateHabitDialog.tsx`
+- `src/components/gtd/GTDWorkspaceSidebar.tsx`
+- `src-tauri/src/commands/mod.rs`
+- `tests/gtd-markdown-helpers.spec.ts`
+- `tests/data-migration.spec.ts`
+- `tests/horizon-readme-utils.spec.ts`
+- `tests/habit-history.spec.ts`

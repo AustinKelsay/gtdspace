@@ -1,6 +1,6 @@
 # GTD Data Model and Data Flows
 
-Updated: March 19, 2026
+Updated: March 20, 2026
 
 This document defines the data structures and end-to-end data flows for GTD Space items: Habits, Actions, Projects, Areas of Focus, Goals, Vision, and Purpose & Principles. It aligns with the current React + Tauri implementation and the file-based markdown storage model.
 
@@ -162,39 +162,45 @@ Horizons items are already formalized in `src/types/index.ts` and stored as mark
 
 ```ts
 // Areas of Focus item (20,000 ft)
-export interface GTDAreaOfFocus {
+export interface GTDArea {
   name: string; // H1 title
   path: string; // full file path
-  description?: string; // freeform body
+  status: "steady" | "watch" | "incubating" | "delegated";
+  reviewCadence: "weekly" | "monthly" | "quarterly" | "annually";
   createdDateTime?: string; // ISO datetime
   // cross-links
   projects?: string[]; // file paths via [!projects-references]
   goals?: string[]; // via [!goals-references]
+  vision?: string[];
+  purpose?: string[];
 }
 
 // Goal (30,000 ft)
 export interface GTDGoal {
   name: string; // H1 title
   path: string;
-  description?: string;
+  status: "in-progress" | "waiting" | "completed";
   targetDate?: string | null; // YYYY-MM-DD via [!datetime:goal-target-date:]
-  status?: "in-progress" | "waiting" | "completed"; // optional singleselect
   createdDateTime?: string;
   // cross-links
   areas?: string[]; // [!areas-references]
   projects?: string[]; // [!projects-references]
+  vision?: string[];
+  purpose?: string[];
 }
 
 // Vision document (40,000 ft)
 export interface GTDVisionDoc {
   name: string; // H1 title
   path: string;
-  narrative?: string; // freeform body
-  horizon?: "3-years" | "5-years" | "10-years" | "custom";
+  horizon: "3-years" | "5-years" | "10-years" | "custom";
   createdDateTime?: string;
   // cross-links
+  projects?: string[];
   goals?: string[]; // [!goals-references]
   areas?: string[]; // [!areas-references]
+  purpose?: string[];
+  narrative?: string; // freeform body
 }
 
 // Purpose & Principles (50,000 ft)
@@ -202,11 +208,13 @@ export interface GTDPurposePrinciplesDoc {
   name: string; // H1 title (e.g., "Purpose & Principles")
   path: string;
   purposeStatement?: string;
-  principles?: string[]; // bullet points
+  principles?: string; // rich text or markdown list
   createdDateTime?: string;
   // cross-links
   goals?: string[]; // [!goals-references]
   projects?: string[]; // [!projects-references]
+  vision?: string[];
+  areas?: string[];
 }
 ```
 
@@ -318,16 +326,19 @@ Freeform details.
 
 [!singleselect:habit-frequency:daily]
 
-## Focus Date (optional)
-
-[!datetime:focus_date:YYYY-MM-DDTHH:MM]
-
-## Horizon References
-
+## Projects References
 [!projects-references:]
+
+## Areas References
 [!areas-references:]
+
+## Goals References
 [!goals-references:]
+
+## Vision References
 [!vision-references:]
+
+## Purpose & Principles References
 [!purpose-references:]
 
 ## Created
@@ -336,7 +347,7 @@ Freeform details.
 
 ## History
 
-_When you first create a habit, the file is generated without a history table. The first status update will create this table automatically with the following headers:_
+_New habits are created with the History section and table header already present. Later updates append rows beneath it._
 | Date | Time | Status | Action | Details |
 |------|------|--------|--------|---------|
 ```
@@ -509,7 +520,7 @@ This section summarizes how data moves across layers for each item type.
 
 - Create
 
-  - UI dialog → `create_gtd_habit(spacePath, habitName, frequency, status='todo')` writes file with checkbox + frequency; a History section is present but the table is added on first status change.
+  - UI dialog → `create_gtd_habit(spacePath, habitName, frequency, status='todo')` writes file with checkbox, frequency, and a seeded History section including the standard table header.
 
 - Read
 
@@ -572,17 +583,12 @@ See `src/utils/data-migration.ts` for details.
 
 ## Implementation Pointers
 
-- Hooks: `useGTDSpace`, `useActionsData`, `useHabitsHistory`, `useHabitTracking`, `useHabitScheduler`.
+- Hooks: `useGTDSpace`, `useActionsData`, `useHabitsHistory`, `useHabitTracking`.
 - Backend commands: `initialize_gtd_space`, `list_gtd_projects`, `create_gtd_project`, `create_gtd_action`, `create_gtd_habit`, `list_project_actions`, `update_habit_status`.
 - Blocks and markers: see `src/components/editor/blocks/*` and `src/utils/blocknote-preprocessing.ts`.
 
-## Future Work
+## Open Follow-Ups
 
-- Add TypeScript interfaces and CRUD commands for Horizons items (Areas/Goals/Vision/Purpose & Principles) to enable richer dashboarding and filtering.
-- Optional status for goals, and light-weight progress metrics at the Horizons level.
-- Reference validation and jump-to-definition UX enhancements.
-
-Known inconsistencies to consider resolving in code:
-
-- Project README generator uses "## Desired Outcome" while the project lister extracts description from "## Description".
-- The generic page creator for Habits creates a History section without a table; the table is added on first update (correct behavior), but older docs/screenshots may show a pre-seeded table.
+- The dashboard quick-create flow still seeds some legacy/simple horizon markdown instead of always using the canonical builders. Goals are the clearest example: one path still writes `target_date` while the canonical schema uses `goal-target-date`.
+- Reference validation remains path-based and permissive; broken targets fail softly at render time rather than being rejected at write time.
+- Additional horizon analytics and richer relationship views are still future-facing rather than part of the current canonical model.

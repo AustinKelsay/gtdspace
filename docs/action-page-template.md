@@ -1,6 +1,6 @@
 # Action Page Template — UI and Markdown Standard
 
-Updated: October 21, 2025
+Updated: March 20, 2026
 
 This document defines the standardized Action page template in GTD Space. It serves two purposes:
 - Documentation of what is implemented today (UI and markdown composition).
@@ -152,4 +152,4 @@ The template pattern is intentionally reusable:
 
 ---
 
-This document complements the data model in `docs/gtd-data-model.md` by specifying the user‑facing layout and canonical markdown ordering for Action pages. Use it as the source of truth when creating standardized templates for other page types.
+This document complements the data model in `docs/gtd-data-model.md` by specifying the user-facing layout and canonical markdown ordering for Action pages. For exact GTD rules and migration behavior, defer to `spec/`.

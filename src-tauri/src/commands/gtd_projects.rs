@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 use super::seed_data::{generate_action_template, generate_project_readme};
 
@@ -146,6 +146,8 @@ pub fn create_gtd_action(
     if !project_dir.exists() || !project_dir.is_dir() {
         return Err("Project directory does not exist".to_string());
     }
+
+    let _projects_root = validate_projects_child_directory(project_dir)?;
 
     // Sanitize action name for filename
     let file_name = format!("{}.md", sanitize_markdown_file_stem(&action_name));
@@ -423,6 +425,8 @@ pub fn rename_gtd_project(
         return Err("Path is not a directory".to_string());
     }
 
+    let _projects_root = validate_projects_child_directory(old_path)?;
+
     // Get parent directory (Projects folder)
     let parent = old_path
         .parent()
@@ -526,6 +530,12 @@ pub fn rename_gtd_action(
     let parent = old_path
         .parent()
         .ok_or_else(|| "Cannot get parent directory".to_string())?;
+    let projects_root = validate_projects_child_directory(parent)?;
+    let canonical_action_path = fs::canonicalize(old_path)
+        .map_err(|e| format!("Failed to resolve action file path: {}", e))?;
+    if !canonical_action_path.starts_with(&projects_root) {
+        return Err("Action file must be inside the GTD Projects directory".to_string());
+    }
 
     // Create new path with the new name (add .md extension if not present)
     let sanitized_name = sanitize_markdown_file_stem(&new_action_name);
@@ -643,6 +653,30 @@ fn validate_project_name(name: &str) -> Result<String, String> {
     }
 
     Ok(trimmed.to_string())
+}
+
+fn validate_projects_child_directory(path: &Path) -> Result<PathBuf, String> {
+    let canonical_path =
+        fs::canonicalize(path).map_err(|e| format!("Failed to resolve path: {}", e))?;
+    let projects_dir = canonical_path
+        .parent()
+        .ok_or_else(|| "Cannot determine Projects directory".to_string())?;
+    let canonical_projects_dir = fs::canonicalize(projects_dir)
+        .map_err(|e| format!("Failed to resolve Projects directory: {}", e))?;
+
+    if canonical_projects_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        != Some("Projects")
+    {
+        return Err("Path must be a direct child of the GTD Projects directory".to_string());
+    }
+
+    if !canonical_path.starts_with(&canonical_projects_dir) {
+        return Err("Path must be inside the GTD Projects directory".to_string());
+    }
+
+    Ok(canonical_projects_dir)
 }
 
 /// Update the H1 title in README content

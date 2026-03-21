@@ -30,6 +30,7 @@ pub async fn git_sync_push(
     workspace_override: Option<String>,
     force: Option<bool>,
 ) -> Result<GitOperationResultPayload, String> {
+    let _guard = GIT_SYNC_METADATA_LOCK.lock().await;
     let settings_snapshot = load_settings(app.clone()).await?;
     let config = build_git_sync_config(&settings_snapshot, workspace_override)?;
     let force_push = force.unwrap_or(false);
@@ -38,14 +39,11 @@ pub async fn git_sync_push(
         .await
         .map_err(|e| format!("Git push task failed: {}", e))??;
 
-    {
-        let _guard = GIT_SYNC_METADATA_LOCK.lock().await;
-        let mut latest_settings = load_settings(app.clone()).await?;
-        latest_settings.git_sync_last_push = outcome.timestamp.clone();
-        save_settings(app, latest_settings)
-            .await
-            .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
-    }
+    let mut latest_settings = load_settings(app.clone()).await?;
+    latest_settings.git_sync_last_push = outcome.timestamp.clone();
+    save_settings(app, latest_settings)
+        .await
+        .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
 
     Ok(outcome)
 }
@@ -57,6 +55,7 @@ pub async fn git_sync_pull(
     workspace_override: Option<String>,
     force: Option<bool>,
 ) -> Result<GitOperationResultPayload, String> {
+    let _guard = GIT_SYNC_METADATA_LOCK.lock().await;
     let settings_snapshot = load_settings(app.clone()).await?;
     let config = build_git_sync_config(&settings_snapshot, workspace_override)?;
     let force_pull = force.unwrap_or(false);
@@ -65,14 +64,11 @@ pub async fn git_sync_pull(
         .await
         .map_err(|e| format!("Git pull task failed: {}", e))??;
 
-    {
-        let _guard = GIT_SYNC_METADATA_LOCK.lock().await;
-        let mut latest_settings = load_settings(app.clone()).await?;
-        latest_settings.git_sync_last_pull = outcome.timestamp.clone();
-        save_settings(app, latest_settings)
-            .await
-            .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
-    }
+    let mut latest_settings = load_settings(app.clone()).await?;
+    latest_settings.git_sync_last_pull = outcome.timestamp.clone();
+    save_settings(app, latest_settings)
+        .await
+        .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
 
     Ok(outcome)
 }

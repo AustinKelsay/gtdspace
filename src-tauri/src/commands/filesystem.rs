@@ -277,7 +277,23 @@ pub fn list_project_actions(project_path: String) -> Result<Vec<MarkdownFile>, S
                     }
                 };
                 let path = entry.path();
-                if path.is_file() {
+                let metadata = match fs::symlink_metadata(&path) {
+                    Ok(metadata) => metadata,
+                    Err(error) => {
+                        log::warn!(
+                            "Skipping entry with unreadable metadata {}: {}",
+                            path.display(),
+                            error
+                        );
+                        continue;
+                    }
+                };
+
+                if metadata.file_type().is_symlink() {
+                    continue;
+                }
+
+                if metadata.file_type().is_file() {
                     if let Some(extension) = path.extension() {
                         let ext_str = extension.to_string_lossy().to_lowercase();
                         if ext_str == "md" || ext_str == "markdown" {
@@ -292,25 +308,24 @@ pub fn list_project_actions(project_path: String) -> Result<Vec<MarkdownFile>, S
                             if is_readme {
                                 continue;
                             }
-                            if let Ok(metadata) = entry.metadata() {
-                                files.push(MarkdownFile {
-                                    id: generate_stable_file_id(&path),
-                                    name: path
-                                        .file_name()
-                                        .unwrap_or_default()
-                                        .to_string_lossy()
-                                        .to_string(),
-                                    path: path.to_string_lossy().to_string(),
-                                    size: metadata.len(),
-                                    last_modified: metadata
-                                        .modified()
-                                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-                                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                                        .unwrap_or_default()
-                                        .as_secs(),
-                                    extension: ext_str,
-                                });
-                            }
+
+                            files.push(MarkdownFile {
+                                id: generate_stable_file_id(&path),
+                                name: path
+                                    .file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy()
+                                    .to_string(),
+                                path: path.to_string_lossy().to_string(),
+                                size: metadata.len(),
+                                last_modified: metadata
+                                    .modified()
+                                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs(),
+                                extension: ext_str,
+                            });
                         }
                     }
                 }
@@ -1310,8 +1325,11 @@ pub fn create_directory(path: String) -> Result<String, String> {
     log::info!("Creating directory: {}", path);
     let dir_path = Path::new(&path);
 
-    // Validate path doesn't contain dangerous patterns
-    if path.contains("..") {
+    // Validate path doesn't contain dangerous parent traversal segments.
+    if dir_path
+        .components()
+        .any(|component| component == Component::ParentDir)
+    {
         return Err("Path cannot contain '..' for security reasons".to_string());
     }
 

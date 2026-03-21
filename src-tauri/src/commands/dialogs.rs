@@ -32,14 +32,14 @@ use tokio::task;
 /// ```
 #[tauri::command]
 pub async fn select_folder(app: AppHandle) -> Result<String, String> {
-    println!("=== select_folder command called (async with thread) ===");
+    log::debug!("select_folder command called");
     log::info!("Folder selection dialog requested");
 
     let result = task::spawn_blocking(move || {
         let dialog = app.dialog().file();
         let dialog = dialog.set_title("Select Folder with Markdown Files");
 
-        println!("Opening folder dialog in separate thread...");
+        log::debug!("Opening folder dialog on Tokio blocking thread");
 
         dialog.blocking_pick_folder()
     })
@@ -49,11 +49,11 @@ pub async fn select_folder(app: AppHandle) -> Result<String, String> {
     match result {
         Some(folder_path) => {
             let path_str = folder_path.to_string();
-            println!("Folder selected: {}", path_str);
+            log::debug!("Folder selected: {}", path_str);
             Ok(path_str)
         }
         None => {
-            println!("Folder selection cancelled");
+            log::debug!("Folder selection cancelled");
             Err("Folder selection was cancelled".to_string())
         }
     }

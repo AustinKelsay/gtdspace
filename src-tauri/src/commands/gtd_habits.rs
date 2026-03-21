@@ -566,7 +566,12 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
         let path = entry.path();
 
-        if path.extension().and_then(|s| s.to_str()) == Some("md") {
+        if path
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|ext| matches!(ext.to_ascii_lowercase().as_str(), "md" | "markdown"))
+            .unwrap_or(false)
+        {
             // Read habit file
             let content = fs::read_to_string(&path)
                 .map_err(|e| format!("Failed to read habit file: {}", e))?;

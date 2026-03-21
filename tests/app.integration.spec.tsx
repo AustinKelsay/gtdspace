@@ -2,6 +2,7 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { emitContentSaved } from '@/utils/content-event-bus';
 
 const mocks = vi.hoisted(() => {
   const sidebarFile = {
@@ -331,7 +332,6 @@ const getKeyboardHandlers = () => {
 describe('App integration workflows', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete window.onTabFileSaved;
 
     mocks.waitForTauriReady.mockResolvedValue(undefined);
     mocks.safeInvoke.mockImplementation(async (command: string) => {
@@ -454,7 +454,15 @@ describe('App integration workflows', () => {
     mocks.tabManager.tabState.openTabs = [activeProjectTab];
     mocks.tabManager.tabState.activeTabId = activeProjectTab.id;
     mocks.tabManager.activeTab = activeProjectTab;
-    mocks.tabManager.saveTab.mockResolvedValue(true);
+    mocks.tabManager.saveTab.mockImplementation(async () => {
+      emitContentSaved({
+        filePath: '/mock/workspace/Projects/Alpha/README.md',
+        fileName: 'README.md',
+        content: '# Alpha',
+        metadata: {},
+      });
+      return true;
+    });
 
     render(<App />);
 
@@ -466,7 +474,9 @@ describe('App integration workflows', () => {
     await handlers.onSaveActive?.();
 
     expect(mocks.tabManager.saveTab).toHaveBeenCalledWith('tab-project');
-    expect(mocks.gtdSpace.loadProjects).toHaveBeenCalledWith('/mock/workspace');
+    await waitFor(() => {
+      expect(mocks.gtdSpace.loadProjects).toHaveBeenCalledWith('/mock/workspace');
+    });
   });
 
   it('runs keyboard save-all workflow and reloads projects when unsaved project files exist', async () => {
@@ -498,6 +508,16 @@ describe('App integration workflows', () => {
       },
     ];
 
+    mocks.tabManager.saveAllTabs.mockImplementation(async () => {
+      emitContentSaved({
+        filePath: '/mock/workspace/Projects/Alpha/Notes.md',
+        fileName: 'Notes.md',
+        content: '# unsaved',
+        metadata: {},
+      });
+      return true;
+    });
+
     render(<App />);
 
     await waitFor(() => {
@@ -508,7 +528,9 @@ describe('App integration workflows', () => {
     await handlers.onSaveAll?.();
 
     expect(mocks.tabManager.saveAllTabs).toHaveBeenCalledTimes(1);
-    expect(mocks.gtdSpace.loadProjects).toHaveBeenCalledWith('/mock/workspace');
+    await waitFor(() => {
+      expect(mocks.gtdSpace.loadProjects).toHaveBeenCalledWith('/mock/workspace');
+    });
   });
 
   it('recovers a corrupted last_folder subfolder path and initializes the workspace from root', async () => {
@@ -691,7 +713,7 @@ describe('App integration workflows', () => {
     expect(mocks.tabManager.reloadTabFromDisk).not.toHaveBeenCalled();
   });
 
-  it('sets window.onTabFileSaved callback to reload project list for project markdown files', async () => {
+  it('reloads project data when a project markdown content-saved event fires', async () => {
     mocks.gtdSpace.gtdSpace = {
       root_path: '/mock/workspace',
       isGTDSpace: true,
@@ -700,20 +722,32 @@ describe('App integration workflows', () => {
 
     render(<App />);
 
-    await waitFor(() => {
-      expect(typeof window.onTabFileSaved).toBe('function');
+    act(() => {
+      emitContentSaved({
+        filePath: '/mock/workspace/Projects/Alpha/README.md',
+        fileName: 'README.md',
+        content: '# Alpha',
+        metadata: {},
+      });
     });
 
-    await act(async () => {
-      await window.onTabFileSaved?.('/mock/workspace/Projects/Alpha/README.md');
+    await waitFor(() => {
+      expect(mocks.gtdSpace.loadProjects).toHaveBeenCalledWith('/mock/workspace');
     });
-    expect(mocks.gtdSpace.loadProjects).toHaveBeenCalledWith('/mock/workspace');
 
     mocks.gtdSpace.loadProjects.mockClear();
-    await act(async () => {
-      await window.onTabFileSaved?.('/mock/workspace/Cabinet/Ref.md');
+    act(() => {
+      emitContentSaved({
+        filePath: '/mock/workspace/Cabinet/Ref.md',
+        fileName: 'Ref.md',
+        content: '# Ref',
+        metadata: {},
+      });
     });
-    expect(mocks.gtdSpace.loadProjects).not.toHaveBeenCalled();
+
+    await waitFor(() => {
+      expect(mocks.gtdSpace.loadProjects).not.toHaveBeenCalled();
+    });
   });
 
   it('reacts to habit status/content events by reloading active habit tab content', async () => {

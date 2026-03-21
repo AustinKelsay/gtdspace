@@ -10,7 +10,7 @@ These hooks drive the main app lifecycle:
 
 - `useSettings`: loads, saves, and broadcasts user settings
 - `useFileManager`: loads folders/files, manages editor content, and mediates save/load state
-- `useTabManager`: tracks open tabs, current tab, and tab persistence behavior
+- `useTabManager`: thin composition hook over the reducer-driven tab runtime, handling open tabs, current tab, saves, conflicts, and workspace-scoped tab restore
 - `useGTDSpace`: initializes GTD spaces, validates workspace shape, and creates GTD projects/actions/habits
 - `useGTDWorkspaceSidebar`: orchestrates sidebar preloading, content-event reactions, rename/delete flows, and sidebar-local UI state
 
@@ -72,7 +72,7 @@ The current composition pattern is:
 1. `useSettings` restores preferences and workspace hints
 2. `useGTDSpace` and `useFileManager` load the workspace
 3. `useGTDWorkspaceSidebar` derives and maintains the workspace navigation tree
-4. `useTabManager` manages opened files/pages
+4. `useTabManager` manages opened files/pages through `src/hooks/tab-runtime/` state, persistence, lifecycle, and subscription helpers
 5. Data hooks derive dashboard/calendar models from markdown content
 6. Integration hooks attach watchers, search, and sync behavior
 
@@ -87,6 +87,7 @@ If you are new to the codebase, read the hooks in this order:
 3. `useFileManager`
 4. `useGTDWorkspaceSidebar`
 5. `useTabManager`
+   The supporting `src/hooks/tab-runtime/` modules are worth reading alongside it because most of the reducer and persistence behavior now lives there.
 6. `useProjectsData`, `useActionsData`, `useCalendarData`
 7. the editor insertion hooks
 8. the integration hooks (`useFileWatcher`, `useGitSync`, `useGlobalSearch`)

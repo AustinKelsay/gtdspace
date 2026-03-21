@@ -10,7 +10,7 @@ The current settings surface covers four broad areas:
 
 - Appearance: theme, font family, font size, line height
 - Editor behavior: tab size, word wrap, editor mode, keybindings
-- Workspace behavior: `last_folder`, auto-initialize, seed example content, default workspace path
+- Workspace behavior: `last_folder`, `max_tabs`, `restore_tabs`, auto-initialize, seed example content, default workspace path
 - Optional integrations: git sync preferences and related metadata
 
 Google Calendar configuration uses its own command surface and secure storage flow rather than living entirely inside normal settings.
@@ -66,6 +66,8 @@ Important fields include:
 - `keybindings`
 - `last_folder`
 - `editor_mode`
+- `max_tabs`
+- `restore_tabs`
 - `auto_initialize`
 - `seed_example_content`
 - `default_space_path`
@@ -95,6 +97,15 @@ Settings are validated and normalized before use. The relevant logic lives in:
 - `useSettings` optimistic update flow
 
 When documenting settings, assume coercion and fallback behavior may exist even if a UI control only exposes a narrow valid range.
+
+## Tab Restore Behavior
+
+Tab restore is now workspace-scoped:
+
+- the tab runtime persists the open-tab snapshot in localStorage
+- restore only runs when `restore_tabs` is enabled
+- a saved snapshot is only restored when it matches the current workspace path
+- missing or unreadable files are skipped during restore, and restored tabs start clean
 
 ## Related Docs
 

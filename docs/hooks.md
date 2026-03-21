@@ -12,6 +12,7 @@ These hooks drive the main app lifecycle:
 - `useFileManager`: loads folders/files, manages editor content, and mediates save/load state
 - `useTabManager`: tracks open tabs, current tab, and tab persistence behavior
 - `useGTDSpace`: initializes GTD spaces, validates workspace shape, and creates GTD projects/actions/habits
+- `useGTDWorkspaceSidebar`: orchestrates sidebar preloading, content-event reactions, rename/delete flows, and sidebar-local UI state
 
 These hooks are the main coordination layer between the app shell, workspace state, and Tauri commands.
 
@@ -70,9 +71,10 @@ The current composition pattern is:
 
 1. `useSettings` restores preferences and workspace hints
 2. `useGTDSpace` and `useFileManager` load the workspace
-3. `useTabManager` manages opened files/pages
-4. Data hooks derive dashboard/calendar models from markdown content
-5. Integration hooks attach watchers, search, and sync behavior
+3. `useGTDWorkspaceSidebar` derives and maintains the workspace navigation tree
+4. `useTabManager` manages opened files/pages
+5. Data hooks derive dashboard/calendar models from markdown content
+6. Integration hooks attach watchers, search, and sync behavior
 
 This is a hooks-first architecture, but it is not a generic hook library. Most hooks are tightly coupled to GTD Space’s file-based model.
 
@@ -83,10 +85,11 @@ If you are new to the codebase, read the hooks in this order:
 1. `useSettings`
 2. `useGTDSpace`
 3. `useFileManager`
-4. `useTabManager`
-5. `useProjectsData`, `useActionsData`, `useCalendarData`
-6. the editor insertion hooks
-7. the integration hooks (`useFileWatcher`, `useGitSync`, `useGlobalSearch`)
+4. `useGTDWorkspaceSidebar`
+5. `useTabManager`
+6. `useProjectsData`, `useActionsData`, `useCalendarData`
+7. the editor insertion hooks
+8. the integration hooks (`useFileWatcher`, `useGitSync`, `useGlobalSearch`)
 
 ## Related Docs
 

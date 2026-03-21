@@ -500,7 +500,7 @@ This section summarizes how data moves across layers for each item type.
   - README metadata (status/due date/title) parsed in backend + enriched in frontend. Description is extracted from the "## Desired Outcome" section ("## Description" is still supported for backward compatibility).
 
 - Update
-  - Changing README Status/Due Date emits content/metadata events; sidebar updates `projectMetadata` live; rename on save triggers `rename_gtd_project` if H1 differs from folder.
+  - Changing README Status/Due Date emits content/metadata events; `useGTDWorkspaceSidebar` updates project overlays live; rename on save triggers `rename_gtd_project` if H1 differs from folder.
 
 ### Actions
 
@@ -515,6 +515,7 @@ This section summarizes how data moves across layers for each item type.
 
 - Update
   - `updateActionStatus(idOrPath, newStatus)` rewrites file content tokens and dispatches `content-updated` for reactive components.
+  - Sidebar action rows are hydrated from `list_project_actions(projectPath)` plus per-file metadata overlays maintained by `useGTDWorkspaceSidebar`.
 
 ### Habits
 
@@ -538,7 +539,7 @@ This section summarizes how data moves across layers for each item type.
   - Cross-linking uses reference markers; clicking a reference opens the target file (`open-reference-file` event).
 
 - Update
-  - Any save or metadata change in these folders triggers sidebar refresh for titles.
+  - Any save or metadata change in these folders triggers a targeted section reload in `useGTDWorkspaceSidebar`, which keeps titles and renamed file paths in sync without reloading the whole workspace tree.
 
 ## Cross-Linking Model
 
@@ -557,6 +558,8 @@ Key events used for UI coherence:
 - `project-renamed` / `action-renamed` / `section-file-renamed` – emitted after successful rename ops
 - `habit-status-updated` / `habit-content-changed` – keep habit editors and lists in sync
 - `file-changed` (from Tauri watcher) – backend filesystem changes to refresh views
+
+Implementation note: the workspace sidebar is now split into a thin component entrypoint, a dedicated controller hook (`useGTDWorkspaceSidebar`), and presentational section components under `src/components/gtd/sidebar/`.
 
 ## Migration Guarantees
 

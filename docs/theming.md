@@ -244,7 +244,7 @@ Use `max-h-*` instead of fixed `h-*` values to let the page scroll when needed. 
 
 ### Sidebar Completed Groups
 
-Keep the sidebar focused by tucking finished work into nested collapsibles. First partition the datasets inside `src/components/gtd/GTDWorkspaceSidebar.tsx` so that completed projects and actions are easy to render separately:
+Keep the sidebar focused by tucking finished work into nested collapsibles. First partition the datasets inside `src/hooks/useGTDWorkspaceSidebar.ts` or the sidebar section renderers in `src/components/gtd/sidebar/` so that completed projects and actions are easy to render separately:
 
 ```typescript
 const [activeProjects, completedProjects] = React.useMemo(() => {

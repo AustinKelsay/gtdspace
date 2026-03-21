@@ -41,7 +41,7 @@ pub fn ping() -> Result<String, String> {
 /// Test folder selection
 #[tauri::command]
 pub fn test_select_folder() -> Result<String, String> {
-    println!("=== test_select_folder called ===");
+    log::info!("=== test_select_folder called ===");
     Ok("Test successful - command reached!".to_string())
 }
 

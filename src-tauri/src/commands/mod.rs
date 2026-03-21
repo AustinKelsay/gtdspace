@@ -35,9 +35,12 @@ pub use google_calendar_commands::{
     google_calendar_connect, google_calendar_disconnect, google_calendar_disconnect_simple,
     google_calendar_fetch_events, google_calendar_get_cached_events, google_calendar_get_status,
     google_calendar_is_authenticated, google_calendar_start_auth, google_calendar_sync,
-    google_calendar_test, google_calendar_test_async, google_oauth_clear_config,
-    google_oauth_get_config, google_oauth_has_config, google_oauth_store_config,
+    google_oauth_clear_config, google_oauth_get_config, google_oauth_has_config,
+    google_oauth_store_config,
 };
+#[cfg(debug_assertions)]
+#[allow(unused_imports)]
+pub use google_calendar_commands::{google_calendar_test, google_calendar_test_async};
 #[allow(unused_imports)]
 pub use gtd_habits::{check_and_reset_habits, create_gtd_habit, update_habit_status};
 #[allow(unused_imports)]

@@ -9,7 +9,7 @@ use super::git_sync::{
     build_git_sync_config, compute_git_status, perform_git_pull, perform_git_push,
     GitOperationResultPayload, GitSyncStatusResponse,
 };
-use super::settings::{load_settings, save_settings};
+use super::settings::{load_settings, update_settings};
 
 static GIT_SYNC_METADATA_LOCK: Lazy<TokioMutex<()>> = Lazy::new(|| TokioMutex::new(()));
 
@@ -39,11 +39,11 @@ pub async fn git_sync_push(
         .await
         .map_err(|e| format!("Git push task failed: {}", e))??;
 
-    let mut latest_settings = load_settings(app.clone()).await?;
-    latest_settings.git_sync_last_push = outcome.timestamp.clone();
-    save_settings(app, latest_settings)
-        .await
-        .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
+    update_settings(app, |settings| {
+        settings.git_sync_last_push = outcome.timestamp.clone();
+    })
+    .await
+    .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
 
     Ok(outcome)
 }
@@ -64,11 +64,11 @@ pub async fn git_sync_pull(
         .await
         .map_err(|e| format!("Git pull task failed: {}", e))??;
 
-    let mut latest_settings = load_settings(app.clone()).await?;
-    latest_settings.git_sync_last_pull = outcome.timestamp.clone();
-    save_settings(app, latest_settings)
-        .await
-        .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
+    update_settings(app, |settings| {
+        settings.git_sync_last_pull = outcome.timestamp.clone();
+    })
+    .await
+    .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
 
     Ok(outcome)
 }

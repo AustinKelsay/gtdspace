@@ -6,6 +6,26 @@ use std::path::{Path, PathBuf};
 
 const MARKDOWN_EXTENSIONS: [&str; 2] = ["md", "markdown"];
 
+fn normalize_habit_status_value(value: &str) -> String {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "true" | "completed" | "complete" => "completed".to_string(),
+        _ => "todo".to_string(),
+    }
+}
+
+fn extract_habit_status(content: &str) -> String {
+    for marker in ["[!checkbox:habit-status:", "[!singleselect:habit-status:"] {
+        if let Some(idx) = content.find(marker) {
+            let after_start = &content[idx + marker.len()..];
+            if let Some(end) = after_start.find(']') {
+                return normalize_habit_status_value(&after_start[..end]);
+            }
+        }
+    }
+
+    "todo".to_string()
+}
+
 fn is_markdown_file(path: &Path) -> bool {
     let Some(extension) = path.extension().and_then(|segment| segment.to_str()) else {
         return false;
@@ -461,12 +481,7 @@ pub fn find_habits_referencing(
                             .unwrap_or("Unknown")
                             .to_string();
 
-                        // Extract status (checkbox value)
-                        let status = if content.contains("[!checkbox:habit-status:true]") {
-                            "completed".to_string()
-                        } else {
-                            "todo".to_string()
-                        };
+                        let status = extract_habit_status(&content);
 
                         // Extract frequency
                         let marker = "[!singleselect:habit-frequency:";

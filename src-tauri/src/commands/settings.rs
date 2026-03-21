@@ -1,12 +1,15 @@
 //! Settings persistence and secure storage commands.
 
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::AppHandle;
 use tauri_plugin_store::StoreBuilder;
+use tokio::sync::Mutex as TokioMutex;
 
 const SECURE_STORAGE_SERVICE: &str = "com.gtdspace.app";
 const GIT_SYNC_ENCRYPTION_KEY_NAME: &str = "git_sync_encryption_key";
+static SETTINGS_LOCK: Lazy<TokioMutex<()>> = Lazy::new(|| TokioMutex::new(()));
 
 #[cfg(test)]
 fn load_git_sync_encryption_key() -> Option<String> {
@@ -107,19 +110,18 @@ pub struct UserSettings {
 /// const settings = await invoke('load_settings');
 /// console.log('Current theme:', settings.theme);
 /// ```
-#[tauri::command]
-pub async fn load_settings(app: AppHandle) -> Result<UserSettings, String> {
+fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
     log::info!("Loading user settings");
 
     // Get or create store
     let store = match tauri_plugin_store::StoreExt::get_store(
-        &app,
+        app,
         std::path::PathBuf::from("settings.json"),
     ) {
         Some(store) => store,
         None => {
             // Create new store if it doesn't exist
-            match StoreBuilder::new(&app, std::path::PathBuf::from("settings.json")).build() {
+            match StoreBuilder::new(app, std::path::PathBuf::from("settings.json")).build() {
                 Ok(store) => store,
                 Err(e) => {
                     log::error!("Failed to create settings store: {}", e);
@@ -203,6 +205,12 @@ pub async fn load_settings(app: AppHandle) -> Result<UserSettings, String> {
     Ok(settings)
 }
 
+#[tauri::command]
+pub async fn load_settings(app: AppHandle) -> Result<UserSettings, String> {
+    let _guard = SETTINGS_LOCK.lock().await;
+    load_settings_unlocked(&app)
+}
+
 /// Save user settings to persistent storage
 ///
 /// Saves the provided user settings to the store for persistence across sessions.
@@ -229,19 +237,18 @@ pub async fn load_settings(app: AppHandle) -> Result<UserSettings, String> {
 ///
 /// await invoke('save_settings', { settings });
 /// ```
-#[tauri::command]
-pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<String, String> {
+fn save_settings_unlocked(app: &AppHandle, settings: &UserSettings) -> Result<String, String> {
     log::info!("Saving user settings");
 
     // Get or create store
     let store = match tauri_plugin_store::StoreExt::get_store(
-        &app,
+        app,
         std::path::PathBuf::from("settings.json"),
     ) {
         Some(store) => store,
         None => {
             // Create new store if it doesn't exist
-            match StoreBuilder::new(&app, std::path::PathBuf::from("settings.json")).build() {
+            match StoreBuilder::new(app, std::path::PathBuf::from("settings.json")).build() {
                 Ok(store) => store,
                 Err(e) => {
                     log::error!("Failed to create settings store: {}", e);
@@ -268,6 +275,23 @@ pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<Str
             Err(format!("Failed to serialize settings: {}", e))
         }
     }
+}
+
+pub(crate) async fn update_settings<F>(app: AppHandle, updater: F) -> Result<UserSettings, String>
+where
+    F: FnOnce(&mut UserSettings),
+{
+    let _guard = SETTINGS_LOCK.lock().await;
+    let mut settings = load_settings_unlocked(&app)?;
+    updater(&mut settings);
+    save_settings_unlocked(&app, &settings)?;
+    Ok(settings)
+}
+
+#[tauri::command]
+pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<String, String> {
+    let _guard = SETTINGS_LOCK.lock().await;
+    save_settings_unlocked(&app, &settings)
 }
 
 /// Store a secret value in the OS keychain/credential manager

@@ -98,25 +98,39 @@ pub fn open_folder_in_explorer(path: String) -> Result<String, String> {
 
     // Open the folder based on the operating system
     let result = if cfg!(target_os = "windows") {
-        Command::new("explorer").arg(&path).spawn()
+        Command::new("explorer").arg(&path).status()
     } else if cfg!(target_os = "macos") {
-        Command::new("open").arg(&path).spawn()
+        Command::new("open").arg(&path).status()
     } else if cfg!(target_os = "linux") {
         // Try common Linux file managers
         Command::new("xdg-open")
             .arg(&path)
-            .spawn()
-            .or_else(|_| Command::new("nautilus").arg(&path).spawn())
-            .or_else(|_| Command::new("dolphin").arg(&path).spawn())
-            .or_else(|_| Command::new("thunar").arg(&path).spawn())
+            .status()
+            .or_else(|_| Command::new("nautilus").arg(&path).status())
+            .or_else(|_| Command::new("dolphin").arg(&path).status())
+            .or_else(|_| Command::new("thunar").arg(&path).status())
     } else {
         return Err("Unsupported operating system".to_string());
     };
 
     match result {
-        Ok(_) => {
+        Ok(status) if status.success() => {
             log::info!("Successfully opened folder in explorer");
             Ok(format!("Opened folder: {}", path))
+        }
+        Ok(status) => {
+            let status_detail = status
+                .code()
+                .map(|code| format!("exit code {}", code))
+                .unwrap_or_else(|| "terminated by signal".to_string());
+            log::error!(
+                "Failed to open folder in explorer: launcher exited unsuccessfully ({})",
+                status_detail
+            );
+            Err(format!(
+                "Failed to open folder: launcher exited unsuccessfully ({})",
+                status_detail
+            ))
         }
         Err(e) => {
             log::error!("Failed to open folder in explorer: {}", e);
@@ -161,21 +175,37 @@ pub fn open_file_location(file_path: String) -> Result<String, String> {
         // On Windows, explorer can select a file with /select
         Command::new("explorer")
             .arg(format!("/select,{}", file_path))
-            .spawn()
+            .status()
     } else if cfg!(target_os = "macos") {
         // On macOS, we can use open -R to reveal the file
-        Command::new("open").arg("-R").arg(&file_path).spawn()
+        Command::new("open").arg("-R").arg(&file_path).status()
     } else {
         // On Linux, just open the parent directory
         // Different file managers have different ways to select files
         // So we'll just open the parent directory
-        Command::new("xdg-open").arg(parent_dir.as_os_str()).spawn()
+        Command::new("xdg-open")
+            .arg(parent_dir.as_os_str())
+            .status()
     };
 
     match result {
-        Ok(_) => {
+        Ok(status) if status.success() => {
             log::info!("Successfully opened file location: {}", file_path);
             Ok(format!("Opened file location: {}", file_path))
+        }
+        Ok(status) => {
+            let status_detail = status
+                .code()
+                .map(|code| format!("exit code {}", code))
+                .unwrap_or_else(|| "terminated by signal".to_string());
+            log::error!(
+                "Failed to open file location: launcher exited unsuccessfully ({})",
+                status_detail
+            );
+            Err(format!(
+                "Failed to open file location: launcher exited unsuccessfully ({})",
+                status_detail
+            ))
         }
         Err(e) => {
             log::error!("Failed to open file location: {}", e);

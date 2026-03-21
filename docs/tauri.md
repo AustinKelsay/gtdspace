@@ -27,6 +27,7 @@ The current command surface falls into these groups:
 - `settings.rs`: persisted settings and OS secure storage
 - `watcher.rs`: file watcher lifecycle and emitted payloads
 - `search.rs`: search request/response types and `search_files`
+- `seed_data.rs`: shared GTD seed content and template helpers like `generate_action_template`
 - `workspace.rs`: GTD space validation, bootstrap, and seed flows
 - `gtd_projects.rs`: project and action creation, listing, and rename flows
 - `gtd_habits.rs`: habit creation, updates, and reset logic

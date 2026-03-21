@@ -86,7 +86,15 @@ pub async fn search_files(
 ) -> Result<SearchResponse, String> {
     let start_time = std::time::Instant::now();
 
-    log::info!("Searching for '{}' in directory: {}", query, directory);
+    log::debug!(
+        "Starting search (query_len={}, use_regex={}, case_sensitive={}, whole_word={}, include_file_names={}, max_results={})",
+        query.chars().count(),
+        filters.use_regex,
+        filters.case_sensitive,
+        filters.whole_word,
+        filters.include_file_names,
+        filters.max_results
+    );
 
     let dir_path = Path::new(&directory);
     if !dir_path.exists() || !dir_path.is_dir() {

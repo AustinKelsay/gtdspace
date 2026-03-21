@@ -7,8 +7,8 @@ use tauri::AppHandle;
 use tokio::sync::Mutex as TokioMutex;
 
 lazy_static! {
-    static ref GOOGLE_CALENDAR_MANAGER: Arc<TokioMutex<Option<Arc<GoogleCalendarManager>>>> =
-        Arc::new(TokioMutex::new(None));
+    static ref GOOGLE_CALENDAR_MANAGER: TokioMutex<Option<Arc<GoogleCalendarManager>>> =
+        TokioMutex::new(None);
 }
 
 async fn get_or_init_google_calendar_manager(
@@ -128,6 +128,7 @@ fn load_google_oauth_credentials(app: AppHandle) -> Result<(String, String), Str
 }
 
 // Simple test command to verify Tauri is working
+#[cfg(debug_assertions)]
 #[tauri::command]
 pub fn google_calendar_test() -> Result<String, String> {
     println!("[GoogleCalendar] TEST COMMAND CALLED!");
@@ -145,49 +146,17 @@ pub fn google_calendar_test() -> Result<String, String> {
     Ok(message)
 }
 
-/// Start Google Calendar OAuth authentication flow.
+/// Legacy Google Calendar auth command.
 ///
-/// This is a synchronous wrapper because async Tauri commands with AppHandle parameter
-/// were experiencing issues where they would hang silently without returning. This is a
-/// known limitation when using AppHandle in async contexts with Tauri.
-///
-/// The function handles the OAuth 2.0 flow by:
-/// 1. Starting an OAuth callback server in a separate thread
-/// 2. Opening the user's browser to Google's authorization page
-/// 3. Waiting for the authorization code from the callback
-/// 4. Exchanging the code for access and refresh tokens
-/// 5. Securely storing the tokens for future use
-///
-/// # Implementation Details
-///
-/// Uses a single shared Tokio runtime to avoid resource leaks from creating multiple
-/// runtimes. The OAuth server runs in a separate OS thread but shares the same runtime
-/// instance through Arc for efficient resource usage.
-///
-/// # Security
-///
-/// - Tokens are stored with atomic writes and restrictive file permissions
-/// - Client credentials are loaded from environment variables
-/// - OAuth state parameter is used to prevent CSRF attacks
-///
-/// # Returns
-///
-/// Success message on successful authentication or error details if any step fails
-///
-/// # Errors
-///
-/// - Missing environment variables for Google OAuth credentials
-/// - Failed to create Tokio runtime
-/// - Browser failed to open
-/// - OAuth callback timeout or failure
-/// - Token exchange failure
-/// - Token storage failure
+/// This `#[tauri::command]` returns `Result<String, String>` for compatibility,
+/// but the old OAuth flow is disabled. Callers should use the newer Connect flow instead.
 #[tauri::command]
 pub async fn google_calendar_start_auth(_app: AppHandle) -> Result<String, String> {
     Err("Legacy OAuth flow disabled; use Connect to start auth".to_string())
 }
 
 // Async test command to verify async commands work
+#[cfg(debug_assertions)]
 #[tauri::command]
 pub async fn google_calendar_test_async() -> Result<String, String> {
     println!("[GoogleCalendar] ASYNC TEST COMMAND CALLED!");

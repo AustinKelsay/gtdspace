@@ -1,6 +1,6 @@
 # Habit Page Template — UI and Markdown Standard
 
-Updated: March 20, 2026
+Updated: March 21, 2026
 
 This document captures the current Habit page template for GTD Space. It mirrors the Action and Project patterns so readers, designers, and engineers share a single blueprint for the current standardized experience.
 
@@ -104,10 +104,10 @@ Notes:
 ## Behaviors & Data Flow
 
 - Status toggle fires `update_habit_status` (Tauri) with debounce guard; optimistic UI updates history table immediately (`Habits Implementation` doc behavior).
-- Frequency changes re-run the scheduler from `useHabitTracking`, prompting recalculation of next reset and upcoming history entries.
+- Frequency changes update canonical markdown, and derived reset badges are recalculated from the shared habit-domain helpers in `src/utils/gtd-habit-markdown.ts`.
 - Header derived fields:
   - Next Reset reads from `useHabitsHistory` computed schedule; updates when frequency or local time window changes.
-  - Last Completion inspects the latest `Manual` completion entry (status `Complete`); falls back to “—”.
+  - Last Completion inspects the latest completion history row; falls back to “—”.
 - History table mutations (manual add/reset) bubble events (`habit-status-updated`, `habits-reset`) so other open views stay in sync (`src/components/editor/BlockNoteEditor.tsx:212`).
 - Reference pickers reuse Horizon reference dialog, writing normalized JSON string tokens and dispatching `habit-content-changed` for live refresh.
 
@@ -122,7 +122,7 @@ Notes:
 - Derived metadata:
   - Next Reset + Last Completion values come from `useHabitsHistory` and `useHabitTracking`.
   - Ensure derived badges never write to markdown; they are UI-only for clarity.
-- Markdown rebuild: `buildHabitMarkdown()` in `src/utils/gtd-markdown-helpers.ts` enforces the canonical ordering above and preserves history rows.
+- Markdown parsing and rebuild: `parseHabitContent()` and `canonicalizeHabitMarkdown()` in `src/utils/gtd-habit-markdown.ts` own the habit-specific markdown contract, while `buildHabitMarkdown()` in `src/utils/gtd-markdown-helpers.ts` remains the low-level builder.
 - Scheduler hooks: `useHabitTracking` handles manual updates, while periodic reset polling currently runs in `App.tsx`; the page should not duplicate polling timers.
 
 ## Theming & Accessibility

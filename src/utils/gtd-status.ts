@@ -1,4 +1,4 @@
-import type { GTDActionStatus } from '@/types';
+import type { GTDActionStatus, GTDProjectStatus } from '@/types';
 
 // Normalize various free-form status strings into a canonical set
 // Returned union matches GTDActionStatus and is also suitable for projects
@@ -33,3 +33,8 @@ export const normalizeStatus = (status?: string | null): GTDActionStatus => {
   }
 };
 
+export const normalizeActionStatus = (status?: string | null): GTDActionStatus =>
+  normalizeStatus(status);
+
+export const normalizeProjectStatus = (status?: string | null): GTDProjectStatus =>
+  normalizeStatus(status) as GTDProjectStatus;

@@ -177,37 +177,6 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                 // Mark update as successfully applied
                 updateApplied = true;
 
-                // After marking as complete, backend immediately resets to "todo"
-                // Update the UI to reflect this
-                if (selectedValue === 'completed') {
-                  // Give a brief moment to show the completion, then reset UI
-                  setTimeout(() => {
-                    const target = findBlockInDocument(
-                      block.id,
-                      (b) => b.type === 'singleselect' && (b.props as { type?: string })?.type === block.props.type
-                    );
-                    if (target) {
-                      props.editor.updateBlock(target, {
-                        props: {
-                          ...target.props,
-                          value: 'todo',
-                        },
-                      });
-
-                      // Emit reset event so consumers see the persisted state
-                      const normalizedForName = currentPath.replace(/\\/g, '/');
-                      const fileName = normalizedForName.split('/').pop() || '';
-                      emitMetadataChange({
-                        filePath: currentPath,
-                        fileName,
-                        content: '',
-                        metadata: { habitStatus: 'todo' },
-                        changedFields: { habitStatus: 'todo' }
-                      });
-                    }
-                  }, 500); // Brief delay to show completion
-                }
-
                 // Emit initial status change event
                 const normalizedForName = currentPath.replace(/\\/g, '/');
                 const fileName = normalizedForName.split('/').pop() || '';

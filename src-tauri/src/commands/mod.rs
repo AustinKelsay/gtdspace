@@ -10,6 +10,7 @@ pub(crate) mod git_commands;
 pub(crate) mod git_sync;
 pub(crate) mod google_calendar_commands;
 pub(crate) mod gtd_habits;
+pub(crate) mod gtd_habits_domain;
 pub(crate) mod gtd_projects;
 pub(crate) mod gtd_relationships;
 pub(crate) mod search;

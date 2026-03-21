@@ -6,6 +6,8 @@ The frontend uses Tauri commands for native file access, settings persistence, G
 
 The Rust command layer is now split by domain under `src-tauri/src/commands/`, with `src-tauri/src/commands/mod.rs` acting as a thin facade and `src-tauri/src/lib.rs` registering handlers from their concrete module paths. That keeps the public command names stable while making the backend easier to navigate.
 
+The newest GTD refactor also introduced explicit domain helpers behind the command facade. For habits, `gtd_habits.rs` now delegates parsing, history migration, and reset-window math to `gtd_habits_domain.rs` instead of keeping those rules inline inside command handlers.
+
 ## Command Conventions
 
 The app uses these patterns consistently:
@@ -31,6 +33,7 @@ The current command surface falls into these groups:
 - `workspace.rs`: GTD space validation, bootstrap, and seed flows
 - `gtd_projects.rs`: project and action creation, listing, and rename flows
 - `gtd_habits.rs`: habit creation, updates, and reset logic
+- `gtd_habits_domain.rs`: shared habit-domain parsing, history insertion, and calendar reset calculations
 - `gtd_relationships.rs`: reverse-link and habit-reference lookup
 - `git_commands.rs`: Tauri command wrappers for git sync
 - `git_sync.rs`: core encrypted git sync implementation

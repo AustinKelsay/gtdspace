@@ -40,13 +40,21 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { EnhancedTextEditor } from '@/components/editor/EnhancedTextEditor';
-import { extractMetadata } from '@/utils/metadata-extractor';
 import {
   buildHabitMarkdown,
-  DEFAULT_HABIT_HISTORY_BODY,
   type HabitReferenceGroups,
 } from '@/utils/gtd-markdown-helpers';
-import { calculateNextReset } from '@/hooks/useHabitsHistory';
+import {
+  calculateNextHabitReset,
+  determineLastHabitResetDate,
+  findLastHabitCompletionDate,
+  normalizeForCanonicalComparison,
+  normalizeHabitHistoryStatus as normalizeHistoryStatus,
+  parseHabitContent,
+  reconstructHabitHistory as reconstructHistory,
+  splitHabitHistory as splitHistory,
+  type HabitHistoryRow,
+} from '@/utils/gtd-habit-markdown';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { formatDisplayDate } from '@/utils/format-display-date';
@@ -54,6 +62,11 @@ import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useHabitTracking } from '@/hooks/useHabitTracking';
 import { GeneralReferencesField } from '@/components/gtd/GeneralReferencesField';
 import type { GTDHabitFrequency, GTDHabitStatus, MarkdownFile } from '@/types';
+import {
+  displayNameForReference,
+  README_REFERENCE_REGEX,
+  stripReadmeReferences,
+} from '@/utils/gtd-reference-utils';
 
 const HABIT_FREQUENCY_OPTIONS: Array<{ value: GTDHabitFrequency; label: string }> = [
   { value: '5-minute', label: 'Every 5 Minutes (Testing)' },
@@ -82,57 +95,12 @@ const HORIZON_DIRS: Record<ReferenceKey, string> = {
   purpose: 'Purpose & Principles',
 };
 
-const README_REGEX = /(?:^|\/)README(?:\.(md|markdown))?$/i;
-
-interface HabitHistoryRow {
-  date: string;
-  time: string;
-  status: string;
-  action: string;
-  details: string;
-  /**
-   * Any additional columns that follow the standard
-   * Date/Time/Status/Action/Details cells. These are preserved
-   * when rewriting the history table but not edited by the UI.
-   */
-  extraCells?: string[];
-}
-
-interface ParsedHabitContent {
-  title: string;
-  status: GTDHabitStatus;
-  frequency: GTDHabitFrequency;
-  focusDateTime: string;
-  references: HabitReferenceGroups;
-  generalReferences: string[];
-  createdDateTime: string;
-  notes: string;
-  history: string;
-  historyIntro: string[];
-  historyHeader: string[];
-  historyRows: HabitHistoryRow[];
-  historyOutro: string;
-}
-
 export interface HabitPageProps {
   content: string;
   onChange: (nextContent: string) => void;
   filePath?: string;
   className?: string;
 }
-
-const METADATA_SECTION_PATTERNS: RegExp[] = [
-  /^##\s+Status\s*$/i,
-  /^##\s+Frequency\s*$/i,
-  /^##\s+Projects\s+References\s*$/i,
-  /^##\s+Areas\s+References\s*$/i,
-  /^##\s+Goals\s+References\s*$/i,
-  /^##\s+Vision\s+References\s*$/i,
-  /^##\s+Purpose\s*&\s+Principles\s+References\s*$/i,
-  /^##\s+Horizon\s+References.*$/i,
-  /^##\s+References\s*$/i,
-  /^##\s+Created\s*$/i,
-];
 
 const referenceLabels: Record<ReferenceKey, string> = {
   projects: 'Projects References',
@@ -142,371 +110,12 @@ const referenceLabels: Record<ReferenceKey, string> = {
   purpose: 'Purpose & Principles References',
 };
 
-function normalizeForCanonicalComparison(value: string): string {
-  return value.replace(/\r\n/g, '\n').trimEnd();
-}
-
-function ensureStringArray(value: unknown): string[] {
-  const results = new Set<string>();
-
-  const tryParseJson = (input: string): boolean => {
-    try {
-      const parsed = JSON.parse(input);
-      if (Array.isArray(parsed)) {
-        parsed.forEach((item) => normalizeAndAdd(item));
-        return true;
-      }
-      if (typeof parsed === 'string') {
-        normalizeAndAdd(parsed);
-        return true;
-      }
-    } catch {
-      // not JSON
-    }
-    return false;
-  };
-
-  const normalizeAndAdd = (candidate: unknown) => {
-    if (candidate === null || candidate === undefined) return;
-    const raw = String(candidate).trim();
-    if (!raw) return;
-
-    if (tryParseJson(raw)) return;
-
-    const withoutQuotes = raw.replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '');
-    const decoded = (() => {
-      try {
-        return decodeURIComponent(withoutQuotes);
-      } catch {
-        return withoutQuotes;
-      }
-    })();
-
-    if (tryParseJson(decoded)) return;
-
-    const normalized = decoded.replace(/\\/g, '/').trim();
-    if (!normalized) return;
-    results.add(normalized);
-  };
-
-  const attemptJsonArray = (input: string) => {
-    try {
-      const parsed = JSON.parse(input);
-      if (Array.isArray(parsed)) {
-        parsed.forEach(normalizeAndAdd);
-        return true;
-      }
-    } catch {
-      // ignore
-    }
-    return false;
-  };
-
-  if (Array.isArray(value)) {
-    value.forEach(normalizeAndAdd);
-    return Array.from(results);
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return [];
-
-    const candidates: string[] = [trimmed];
-    try {
-      const decoded = decodeURIComponent(trimmed);
-      if (decoded && decoded !== trimmed) {
-        candidates.unshift(decoded);
-      }
-    } catch {
-      // not encoded, ignore
-    }
-
-    for (const candidate of candidates) {
-      if (attemptJsonArray(candidate)) {
-        return Array.from(results);
-      }
-    }
-
-    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-      const inner = trimmed.slice(1, -1);
-      for (const candidate of [inner, `[${inner}]`]) {
-        if (attemptJsonArray(candidate)) {
-          return Array.from(results);
-        }
-      }
-      inner.split(',').forEach(normalizeAndAdd);
-      return Array.from(results);
-    }
-
-    if (trimmed.includes(',')) {
-      trimmed.split(',').forEach(normalizeAndAdd);
-      return Array.from(results);
-    }
-
-    normalizeAndAdd(trimmed);
-    return Array.from(results);
-  }
-
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    normalizeAndAdd(value);
-  }
-
-  return Array.from(results);
-}
-
-function stripReadmeReferences(values: string[]): string[] {
-  return values.filter((ref) => !README_REGEX.test(ref.replace(/\\/g, '/')));
-}
-
-function parseHabitStatus(content: string): GTDHabitStatus {
-  const checkboxMatch = content.match(/\[!checkbox:habit-status:(true|false)\]/i);
-  if (checkboxMatch) {
-    return checkboxMatch[1].toLowerCase() === 'true' ? 'completed' : 'todo';
-  }
-
-  const singleselectMatch = content.match(/\[!singleselect:habit-status:([^\]]+)\]/i);
-  if (singleselectMatch) {
-    const value = singleselectMatch[1].trim().toLowerCase();
-    if (value === 'completed') return 'completed';
-  }
-
-  return 'todo';
-}
-
-function normalizeFrequency(raw: unknown): GTDHabitFrequency {
-  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
-  if (
-    value === '5-minute' ||
-    value === 'daily' ||
-    value === 'every-other-day' ||
-    value === 'twice-weekly' ||
-    value === 'weekly' ||
-    value === 'weekdays' ||
-    value === 'biweekly' ||
-    value === 'monthly'
-  ) {
-    return value;
-  }
-  return 'daily';
-}
-
-function normalizeReferenceGroups(meta: ReturnType<typeof extractMetadata>): HabitReferenceGroups {
-  return {
-    projects: ensureStringArray((meta as any).projectsReferences),
-    areas: ensureStringArray((meta as any).areasReferences),
-    goals: ensureStringArray((meta as any).goalsReferences),
-    vision: ensureStringArray((meta as any).visionReferences),
-    purpose: ensureStringArray((meta as any).purposeReferences),
-  };
-}
-
-function findSectionEnd(lines: string[], headingPattern: RegExp, limit: number): number {
-  const index = lines.findIndex((line, idx) => idx < limit && headingPattern.test(line.trim()));
-  if (index === -1) return -1;
-
-  let cursor = index + 1;
-  while (cursor < limit && lines[cursor].trim() === '') cursor++;
-  while (cursor < limit && /^\[!.*\]$/i.test(lines[cursor].trim())) {
-    cursor++;
-    while (cursor < limit && lines[cursor].trim() === '') cursor++;
-  }
-  return cursor;
-}
-
-function normalizeNoteLines(lines: string[]): string {
-  const buffer = [...lines];
-  while (buffer.length > 0 && buffer[0].trim() === '') buffer.shift();
-  while (buffer.length > 0 && buffer[buffer.length - 1].trim() === '') buffer.pop();
-  if (buffer.length > 0 && /^##\s+Notes/i.test(buffer[0].trim())) {
-    buffer.shift();
-    while (buffer.length > 0 && buffer[0].trim() === '') buffer.shift();
-  }
-  return buffer.join('\n').trim();
-}
-
-function normalizeHistoryStatus(raw: string): string {
-  const value = raw.trim().toLowerCase();
-  if (value === 'complete' || value === 'completed') {
-    return 'Complete';
-  }
-  return 'To Do';
-}
-
-function reconstructHistory(intro: string[], header: string[], rows: HabitHistoryRow[], outro: string = ''): string {
-  const lines = [...intro];
-
-  // Ensure a blank line before table if the last intro line is not blank
-  if (lines.length > 0 && lines[lines.length - 1].trim() !== '') {
-    lines.push('');
-  }
-
-  // Add table header - reuse original or default if missing
-  if (header.length >= 2) {
-    lines.push(...header);
-  } else {
-    lines.push('| Date | Time | Status | Action | Details |');
-    lines.push('|------|------|--------|--------|---------|');
-  }
-
-  const encodeCell = (s: string) => {
-    // Normalize line endings, then convert newlines to <br> so that
-    // multiline content stays within a single Markdown table cell.
-    const normalized = s.replace(/\r\n/g, '\n');
-    const withBreaks = normalized.replace(/\n/g, '<br>');
-    // Escape pipes to avoid breaking table structure
-    return withBreaks.replace(/\|/g, '\\|');
-  };
-
-  for (const row of rows) {
-    const baseCells = [
-      encodeCell(row.date),
-      encodeCell(row.time),
-      encodeCell(row.status),
-      encodeCell(row.action),
-      encodeCell(row.details),
-    ];
-    const extra = row.extraCells && row.extraCells.length > 0
-      ? row.extraCells.map((cell) => encodeCell(cell))
-      : [];
-
-    const allCells = [...baseCells, ...extra];
-    lines.push(`| ${allCells.join(' | ')} |`);
-  }
-
-  if (outro.length > 0) {
-    // Ensure a blank line between the table and any following content
-    if (lines.length > 0 && lines[lines.length - 1].trim() !== '') {
-      lines.push('');
-    }
-    lines.push(outro);
-  }
-  
-  return lines.join('\n');
-}
-
-function splitHistory(raw: string | undefined): { history: string; intro: string[]; header: string[]; rows: HabitHistoryRow[]; outro: string } {
-  const hasContent = raw && raw.trim().length > 0;
-  const effective = hasContent ? (raw as string) : DEFAULT_HABIT_HISTORY_BODY;
-  const lines = effective.split(/\r?\n/);
-
-  let tableStart = lines.findIndex((line) => line.trim().startsWith('|'));
-  if (tableStart === -1) {
-    tableStart = lines.length;
-  }
-
-  // Capture intro as raw lines up to tableStart to preserve formatting
-  const intro = lines.slice(0, tableStart);
-  
-  const rows: HabitHistoryRow[] = [];
-  const header: string[] = [];
-  let lastTableLineIndex = tableStart - 1;
-
-  for (let i = tableStart; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-    
-    // If line is empty, it might be a separator within the table block or end of table
-    // For robustness, we'll treat contiguous pipe lines as table.
-    if (trimmed.startsWith('|')) {
-      lastTableLineIndex = i;
-      
-      // Capture header lines (title row + separator row)
-      if (header.length < 2) {
-        header.push(line); // Preserve original spacing/alignment
-        continue; 
-      }
-      
-      // Safety check: if for some reason we grabbed a non-separator as 2nd line
-      // (unlikely if table is valid, but ensures we don't eat data rows)
-      if (header.length === 2 && !/^\|\s*-/.test(header[1].trim())) {
-         // The previous line wasn't a separator? 
-         // Standard markdown tables require separator.
-         // We'll assume the parser logic above is sound for standard tables.
-      }
-
-      // Robust splitting: Handle escaped pipes (\|) in content and convert
-      // <br> tags back into newlines for UI display.
-      const ESCAPED_PIPE_PH = '\uE000';
-      const rawCells = trimmed
-        .replace(/\\\|/g, ESCAPED_PIPE_PH)
-        .split('|')
-        .map((cell) => {
-          const restoredPipes = cell.trim().replace(new RegExp(ESCAPED_PIPE_PH, 'g'), '|');
-          // Treat common <br> variants as actual newlines in the UI model
-          return restoredPipes.replace(/<br\s*\/?>/gi, '\n');
-        });
-
-      if (rawCells.length < 7) continue;
-      
-      // Additional check to avoid reparsing header if loop logic fails
-      if (rawCells[1].toLowerCase() === 'date' && rawCells[2].toLowerCase() === 'time') continue;
-      if (rawCells[1].startsWith('---')) continue;
-
-      const cells = rawCells.slice(1, rawCells.length - 1);
-
-      rows.push({
-        date: cells[0] ?? '',
-        time: cells[1] ?? '',
-        status: normalizeHistoryStatus(cells[2] ?? ''),
-        action: cells[3] ?? '',
-        details: cells[4] ?? '',
-        extraCells: cells.length > 5 ? cells.slice(5) : [],
-      });
-    } else if (trimmed === '') {
-      // Allow empty lines inside table block (e.g. spacers)
-      // We track the last valid table line index, so if this is truly the end of the table,
-      // the loop will eventually finish or hit a non-table line that breaks.
-      continue;
-    } else {
-      // Non-empty line that doesn't start with pipe -> End of table block
-      break;
-    }
-  }
-
-  // Capture everything after the table block as outro
-  const outroLines = lines.slice(lastTableLineIndex + 1);
-  const outro = outroLines.join('\n');
-
-  return { history: effective, intro, header, rows, outro };
-}
-
 // Expose internals for unit tests to guard against regressions
 // eslint-disable-next-line react-refresh/only-export-components
 export const __habitHistoryInternals = {
   splitHistory,
   reconstructHistory,
 };
-
-function toDateFromHistory(row: { date?: string; time?: string }): Date | null {
-  if (!row.date) return null;
-  const time = row.time?.trim() || '00:00';
-  const match12 = time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  let normalized = time;
-  if (match12) {
-    let hour = parseInt(match12[1], 10);
-    const minutes = match12[2];
-    const isPm = match12[3].toUpperCase() === 'PM';
-    if (isPm && hour < 12) hour += 12;
-    if (!isPm && hour === 12) hour = 0;
-    normalized = `${hour.toString().padStart(2, '0')}:${minutes}`;
-  } else {
-    const match24 = time.match(/^(\d{1,2}):(\d{2})$/);
-    if (match24) {
-      normalized = `${match24[1].padStart(2, '0')}:${match24[2]}`;
-    } else {
-      normalized = '00:00';
-    }
-  }
-
-  const isoCandidate = `${row.date}T${normalized}`;
-  const parsed = new Date(isoCandidate);
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed;
-  }
-
-  const fallback = new Date(`${row.date} ${row.time ?? '00:00'}`);
-  return Number.isNaN(fallback.getTime()) ? null : fallback;
-}
 
 function formatHabitDisplayDate(date: Date | null): string {
   return formatDisplayDate(date, {
@@ -517,121 +126,8 @@ function formatHabitDisplayDate(date: Date | null): string {
 }
 
 function formatLastCompletion(rows: HabitHistoryRow[]): string {
-  for (let i = rows.length - 1; i >= 0; i--) {
-    const row = rows[i];
-    if (/complete/i.test(row.status)) {
-      return formatHabitDisplayDate(toDateFromHistory(row));
-    }
-  }
-  return '—';
-}
-
-function determineLastResetDate(rows: HabitHistoryRow[], createdIso: string): Date | null {
-  for (let i = rows.length - 1; i >= 0; i--) {
-    const action = rows[i].action.toLowerCase();
-    if (action.includes('reset') || action.includes('backfill')) {
-      const parsed = toDateFromHistory(rows[i]);
-      if (parsed) return parsed;
-    }
-  }
-
-  const createdDate = new Date(createdIso);
-  if (!Number.isNaN(createdDate.getTime())) {
-    return createdDate;
-  }
-
-  return null;
-}
-
-function displayNameForReference(ref: string): string {
-  const normalized = ref.replace(/\\/g, '/');
-  const leaf = normalized.split('/').pop();
-  if (!leaf) return normalized;
-  return leaf.replace(/\.(md|markdown)$/i, '');
-}
-
-function extractNotes(
-  lines: string[],
-  historyHeadingIdx: number
-): string {
-  const limit = historyHeadingIdx === -1 ? lines.length : historyHeadingIdx;
-  const notesHeadingIdx = lines.findIndex(
-    (line, idx) => idx < limit && /^##\s+Notes/i.test(line.trim())
-  );
-  if (notesHeadingIdx !== -1) {
-    return normalizeNoteLines(lines.slice(notesHeadingIdx + 1, limit));
-  }
-
-  let maxMetaEnd = -1;
-  for (const pattern of METADATA_SECTION_PATTERNS) {
-    const endIndex = findSectionEnd(lines, pattern, limit);
-    if (endIndex > maxMetaEnd) {
-      maxMetaEnd = endIndex;
-    }
-  }
-  const start = maxMetaEnd > -1 ? maxMetaEnd : 0;
-  return normalizeNoteLines(lines.slice(start, limit));
-}
-
-function parseHabitContent(content: string): ParsedHabitContent {
-  const meta = extractMetadata(content || '');
-  const lines = content.split(/\r?\n/);
-
-  const historyHeadingIdx = lines.findIndex((line) => /^##\s+History\s*$/i.test(line.trim()));
-  const historyRaw = historyHeadingIdx >= 0 ? lines.slice(historyHeadingIdx + 1).join('\n') : '';
-  const { history, intro: historyIntro, rows: historyRows, outro: historyOutro, header: historyHeader } = splitHistory(historyRaw);
-  const notes = extractNotes(lines, historyHeadingIdx);
-
-  let created = typeof (meta as any).createdDateTime === 'string'
-    ? ((meta as any).createdDateTime as string).trim()
-    : '';
-  if (!created) {
-    const createdMatch = content.match(/\[!datetime:created_date_time:([^\]]+)\]/i);
-    created = createdMatch ? createdMatch[1] : '';
-  }
-  if (!created) {
-    created = new Date().toISOString();
-  }
-
-  const references = normalizeReferenceGroups(meta);
-  const sanitizedReferences: HabitReferenceGroups = {
-    projects: stripReadmeReferences(references.projects),
-    areas: stripReadmeReferences(references.areas),
-    goals: stripReadmeReferences(references.goals),
-    vision: stripReadmeReferences(references.vision),
-    purpose: stripReadmeReferences(references.purpose),
-  };
-  const generalReferences = stripReadmeReferences(ensureStringArray((meta as any).references));
-
-  let focusDateTime = '';
-  const metaFocus = (meta as any).focusDate;
-  if (typeof metaFocus === 'string') {
-    focusDateTime = metaFocus.trim();
-  } else if (Array.isArray(metaFocus) && metaFocus.length > 0) {
-    focusDateTime = String(metaFocus[0]).trim();
-  }
-  if (!focusDateTime) {
-    const focusMatch = content.match(/\[!datetime:focus_date:([^\]]+)\]/i);
-    if (focusMatch && focusMatch[1]) {
-      focusDateTime = focusMatch[1].trim();
-    }
-  }
-
-  return {
-    title: (typeof meta.title === 'string' && meta.title.trim()) || 'Untitled',
-    status: parseHabitStatus(content),
-    frequency: normalizeFrequency((meta as any)['habit-frequency']),
-    focusDateTime,
-    references: sanitizedReferences,
-    generalReferences,
-    createdDateTime: created,
-    notes,
-    history,
-    historyIntro,
-    historyHeader,
-    historyRows,
-    historyOutro,
-  };
+  const lastCompleted = findLastHabitCompletionDate(rows);
+  return lastCompleted ? formatHabitDisplayDate(lastCompleted) : '—';
 }
 
 export const HabitPage: React.FC<HabitPageProps> = ({
@@ -767,7 +263,7 @@ export const HabitPage: React.FC<HabitPageProps> = ({
         );
         if (!files) return [];
         return files
-          .filter((file) => !README_REGEX.test(file.name))
+          .filter((file) => !README_REFERENCE_REGEX.test(file.name))
           .map((file) => ({
             path: file.path.replace(/\\/g, '/'),
             name: file.name.replace(/\.(md|markdown)$/i, ''),
@@ -865,15 +361,14 @@ export const HabitPage: React.FC<HabitPageProps> = ({
   );
 
   const lastResetMoment = React.useMemo(
-    () => determineLastResetDate(historyRows, created),
+    () => determineLastHabitResetDate(historyRows, created),
     [historyRows, created]
   );
 
   const nextResetDate = React.useMemo(() => {
     try {
       const baseline = lastResetMoment ?? new Date();
-      const iso = calculateNextReset(frequency, baseline);
-      const candidate = new Date(iso);
+      const candidate = calculateNextHabitReset(frequency, baseline);
       if (Number.isNaN(candidate.getTime())) return null;
       return candidate;
     } catch {

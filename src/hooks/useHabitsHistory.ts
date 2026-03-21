@@ -5,11 +5,14 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
-import { extractMetadata, extractHorizonReferences } from '@/utils/metadata-extractor';
 import { readFileText } from './useFileManager';
-import { localISODate } from '@/utils/time';
+import { localISODate, toISOStringFromEpoch } from '@/utils/time';
 import type { GTDHabit, MarkdownFile } from '@/types';
 import { createScopedLogger } from '@/utils/logger';
+import {
+  calculateNextHabitReset,
+  parseHabitContent,
+} from '@/utils/gtd-habit-markdown';
 
 export interface HabitHistoryEntry {
   date: string;
@@ -69,136 +72,13 @@ interface UseHabitsHistoryReturn {
 /**
  * Parse habit history from markdown table format
  */
-const historyLog = createScopedLogger('parseHabitHistory');
 const habitsLog = createScopedLogger('useHabitsHistory');
-
-const parseHabitHistory = (content: string): HabitHistoryEntry[] => {
-  const history: HabitHistoryEntry[] = [];
-
-  // Find the history table - flexible regex to handle varying whitespace
-  const tableRegex = /\|\s*Date\s*\|\s*Time\s*\|\s*Status\s*\|\s*Action\s*\|\s*Details\s*\|[\s\S]*?\n(?:\|[^|\n]+\|[^|\n]+\|[^|\n]+\|[^|\n]+\|[^|\n]+\|\n?)+/gi;
-  const tableMatch = content.match(tableRegex);
-
-  historyLog.debug('Looking for history table');
-
-  if (tableMatch && tableMatch[0]) {
-    historyLog.debug('Found history table');
-    const lines = tableMatch[0].split('\n');
-    historyLog.debug('Processing lines', lines.length);
-
-    for (const line of lines) {
-      // Skip header and separator lines
-      if (line.includes('Date') || line.includes('---') || !line.trim()) continue;
-
-      const cells = line.split('|').map(cell => cell.trim()).filter(cell => cell);
-
-      if (cells.length >= 3) {
-        const [date, time, status, action = '', details = ''] = cells;
-
-        if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-          const entry = {
-            date,
-            time,
-            completed: status.toLowerCase().includes('complete'),
-            action,
-            note: details || action || undefined
-          };
-          history.push(entry);
-          historyLog.debug('Added entry', entry);
-        }
-      }
-    }
-  } else {
-    historyLog.debug('No history table found in content');
-  }
-
-  historyLog.debug('Parsed history entries', history.length);
-  return history;
-};
 
 /**
  * Calculate the next reset time based on frequency
  */
 export const calculateNextReset = (frequency: GTDHabit['frequency'], lastUpdate?: Date): string => {
-  const now = new Date();
-  const last = lastUpdate || now;
-  
-  switch (frequency) {
-    case 'daily': {
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
-      return tomorrow.toISOString();
-    }
-      
-    case 'every-other-day': {
-      const dayAfter = new Date(last);
-      dayAfter.setDate(dayAfter.getDate() + 2);
-      dayAfter.setHours(0, 0, 0, 0);
-      return dayAfter.toISOString();
-    }
-      
-    case 'twice-weekly': {
-      // Reset on next Tuesday or Friday
-      const nextReset = new Date(now);
-      const currentDay = now.getDay();
-      const daysToAdd = currentDay < 2 ? 2 - currentDay :
-                       currentDay < 5 ? 5 - currentDay :
-                       (7 - currentDay) + 2;
-      nextReset.setDate(nextReset.getDate() + daysToAdd);
-      nextReset.setHours(0, 0, 0, 0);
-      return nextReset.toISOString();
-    }
-      
-    case 'weekly': {
-      const nextWeek = new Date(now);
-      const daysToMonday = (8 - now.getDay()) % 7 || 7;
-      nextWeek.setDate(nextWeek.getDate() + daysToMonday);
-      nextWeek.setHours(0, 0, 0, 0);
-      return nextWeek.toISOString();
-    }
-      
-    case 'weekdays': {
-      const nextWeekday = new Date(now);
-      let daysToWeekday = 1;
-      if (now.getDay() === 5) daysToWeekday = 3; // Friday -> Monday
-      if (now.getDay() === 6) daysToWeekday = 2; // Saturday -> Monday
-      nextWeekday.setDate(nextWeekday.getDate() + daysToWeekday);
-      nextWeekday.setHours(0, 0, 0, 0);
-      return nextWeekday.toISOString();
-    }
-      
-    case 'biweekly': {
-      const twoWeeks = new Date(last);
-      twoWeeks.setDate(twoWeeks.getDate() + 14);
-      twoWeeks.setHours(0, 0, 0, 0);
-      return twoWeeks.toISOString();
-    }
-      
-    case 'monthly': {
-      const nextMonth = new Date(now);
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
-      nextMonth.setDate(1);
-      nextMonth.setHours(0, 0, 0, 0);
-      return nextMonth.toISOString();
-    }
-
-    case '5-minute': {
-      const nextFive = new Date(last);
-      const currentMinutes = nextFive.getMinutes();
-      const minutesToAdd = (5 - (currentMinutes % 5)) % 5 || 5;
-      nextFive.setMinutes(currentMinutes + minutesToAdd);
-      nextFive.setSeconds(0, 0);
-      return nextFive.toISOString();
-    }
-      
-    default: {
-      const defaultTomorrow = new Date(now);
-      defaultTomorrow.setDate(defaultTomorrow.getDate() + 1);
-      defaultTomorrow.setHours(0, 0, 0, 0);
-      return defaultTomorrow.toISOString();
-    }
-  }
+  return calculateNextHabitReset(frequency, lastUpdate).toISOString();
 };
 
 /**
@@ -378,20 +258,14 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
         habitFiles.map(async (file) => {
           try {
             const content = await readFileText(file.path);
-            const metadata = extractMetadata(content);
-            
-            // Extract frequency
-            const frequency = (metadata['habit-frequency'] || 'daily') as GTDHabit['frequency'];
-            
-            // Extract status
-            const checkboxStatus = content.match(/\[!checkbox:habit-status:(true|false)\]/);
-            const singleselectStatus = content.match(/\[!singleselect:habit-status:([^\]]+)\]/);
-            const status = checkboxStatus
-              ? (checkboxStatus[1] === 'true' ? 'completed' : 'todo')
-              : (singleselectStatus?.[1] === 'completed' ? 'completed' : 'todo');
-            
-            // Parse history
-            const history = parseHabitHistory(content);
+            const parsedHabit = parseHabitContent(content);
+            const history = parsedHabit.historyRows.map((row) => ({
+              date: row.date,
+              time: row.time,
+              completed: /^complete(?:d)?$/i.test((row.status ?? '').trim()),
+              action: row.action,
+              note: row.details || row.action || undefined,
+            }));
             habitsLog.debug(`Habit "${file.name}" history entries`, history.length);
 
             // Filter inactive if needed
@@ -415,16 +289,13 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
               .filter(h => h.completed)
               .sort((a, b) => b.date.localeCompare(a.date))[0]?.date;
             
-            // Extract horizon references
-            const horizonRefs = extractHorizonReferences(content);
-
             const habit: HabitWithHistory = {
-              name: file.name.replace('.md', ''),
-              frequency,
-              status: status as 'todo' | 'completed',
+              name: parsedHabit.title || file.name.replace('.md', ''),
+              frequency: parsedHabit.frequency,
+              status: parsedHabit.status,
               path: file.path,
-              last_updated: metadata.last_updated as string || new Date().toISOString(),
-              createdDateTime: metadata.createdDateTime as string || new Date().toISOString(),
+              last_updated: toISOStringFromEpoch(file.last_modified),
+              createdDateTime: parsedHabit.createdDateTime,
               history,
               currentStreak: patterns.currentStreak,
               bestStreak: patterns.bestStreak,
@@ -436,12 +307,11 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
               weeklyPattern: patterns.weeklyPattern,
               monthlyPattern: patterns.monthlyPattern,
               recentTrend: patterns.recentTrend,
-              // Add horizon references
-              linkedProjects: horizonRefs.projects,
-              linkedAreas: horizonRefs.areas,
-              linkedGoals: horizonRefs.goals,
-              linkedVision: horizonRefs.vision,
-              linkedPurpose: horizonRefs.purpose
+              linkedProjects: parsedHabit.references.projects,
+              linkedAreas: parsedHabit.references.areas,
+              linkedGoals: parsedHabit.references.goals,
+              linkedVision: parsedHabit.references.vision,
+              linkedPurpose: parsedHabit.references.purpose
             };
             
             return habit;

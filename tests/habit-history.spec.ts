@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { __habitHistoryInternals } from '@/components/gtd/HabitPage';
-
-const { splitHistory, reconstructHistory } = __habitHistoryInternals;
+import { splitHabitHistory, reconstructHabitHistory } from '@/utils/gtd-habit-markdown';
 
 describe('habit history parsing and reconstruction', () => {
   it('inserts a blank line before the history table when intro exists', () => {
@@ -12,8 +10,8 @@ describe('habit history parsing and reconstruction', () => {
       '| 2024-01-01 | 09:00 | Complete | Reset | Did thing |',
     ].join('\n');
 
-    const parsed = splitHistory(raw);
-    const rebuilt = reconstructHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
+    const parsed = splitHabitHistory(raw);
+    const rebuilt = reconstructHabitHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
 
     expect(rebuilt).toContain('This is the history intro paragraph.\n\n| Date | Time | Status | Action | Details |');
   });
@@ -33,9 +31,9 @@ describe('habit history parsing and reconstruction', () => {
       'After table line 2',
     ].join('\n');
 
-    const parsed = splitHistory(raw);
-    const rebuilt = reconstructHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
-    const reparsed = splitHistory(rebuilt);
+    const parsed = splitHabitHistory(raw);
+    const rebuilt = reconstructHabitHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
+    const reparsed = splitHabitHistory(rebuilt);
 
     expect(reparsed.intro).toEqual(parsed.intro);
     // We allow an extra leading blank line between the table and the outro,
@@ -52,15 +50,15 @@ describe('habit history parsing and reconstruction', () => {
       '| 2024-01-01 | 09:00 | Complete | Reset | First note | extra-1 |',
     ].join('\n');
 
-    const parsed = splitHistory(raw);
+    const parsed = splitHabitHistory(raw);
     expect(parsed.header).toHaveLength(2);
     expect(parsed.header[0]).toBe('| When | Time | State | Action | Note | Extra |');
     expect(parsed.header[1]).toBe('|:-----|:----:|------:|--------|------|-------|');
     expect(parsed.rows).toHaveLength(1);
     expect(parsed.rows[0].extraCells).toEqual(['extra-1']);
 
-    const rebuilt = reconstructHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
-    const reparsed = splitHistory(rebuilt);
+    const rebuilt = reconstructHabitHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
+    const reparsed = splitHabitHistory(rebuilt);
 
     expect(reparsed.header).toEqual(parsed.header);
     expect(reparsed.rows[0].extraCells).toEqual(['extra-1']);
@@ -75,7 +73,7 @@ describe('habit history parsing and reconstruction', () => {
       '| 2024-01-02 | 10:00 | To Do | Something | Second row |',
     ].join('\n');
 
-    const parsed = splitHistory(raw);
+    const parsed = splitHabitHistory(raw);
     expect(parsed.rows).toHaveLength(2);
   });
 
@@ -86,12 +84,12 @@ describe('habit history parsing and reconstruction', () => {
       '| 2024-01-01 | 09:00 | Complete | Note | Had tea \\| lemon |',
     ].join('\n');
 
-    const parsed = splitHistory(raw);
+    const parsed = splitHabitHistory(raw);
     expect(parsed.rows).toHaveLength(1);
     expect(parsed.rows[0].details).toBe('Had tea | lemon');
 
-    const rebuilt = reconstructHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
-    const reparsed = splitHistory(rebuilt);
+    const rebuilt = reconstructHabitHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
+    const reparsed = splitHabitHistory(rebuilt);
 
     expect(reparsed.rows).toHaveLength(1);
     expect(reparsed.rows[0].details).toBe('Had tea | lemon');
@@ -105,7 +103,7 @@ describe('habit history parsing and reconstruction', () => {
       '| 2024-01-01 | 09:00 | Complete | Note | First line<br>Second line |',
     ].join('\n');
 
-    const parsed = splitHistory(raw);
+    const parsed = splitHabitHistory(raw);
     expect(parsed.rows).toHaveLength(1);
     expect(parsed.rows[0].details).toBe('First line\nSecond line');
 
@@ -117,8 +115,8 @@ describe('habit history parsing and reconstruction', () => {
       },
     ];
 
-    const rebuilt = reconstructHistory(parsed.intro, parsed.header, editedRows, parsed.outro);
-    const reparsed = splitHistory(rebuilt);
+    const rebuilt = reconstructHabitHistory(parsed.intro, parsed.header, editedRows, parsed.outro);
+    const reparsed = splitHabitHistory(rebuilt);
 
     expect(reparsed.rows).toHaveLength(1);
     expect(reparsed.rows[0].details).toBe('First line\nSecond line\nThird line');

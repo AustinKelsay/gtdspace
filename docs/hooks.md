@@ -29,6 +29,12 @@ These hooks derive dashboard and calendar data from markdown content:
 
 They are read-heavy hooks. Most of the GTD dashboards and rollups depend on them rather than on a separate database.
 
+Several of these hooks now intentionally rely on shared markdown/domain utilities rather than custom per-hook parsing:
+
+- `useProjectsData` → `src/utils/gtd-project-content.ts` and `src/utils/gtd-action-markdown.ts`
+- `useActionsData` → `src/utils/gtd-action-markdown.ts`
+- `useHabitsHistory` → `src/utils/gtd-habit-markdown.ts`
+
 ## Editor And Marker Insertion Hooks
 
 These hooks support GTD-specific editing flows inside the BlockNote editor:

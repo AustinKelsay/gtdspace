@@ -3,6 +3,8 @@
  * Provides a scalable system for parsing various metadata fields
  */
 
+import { parseReferenceList } from '@/utils/gtd-reference-utils';
+
 export interface FileMetadata {
   title?: string;
   status?: string;
@@ -33,6 +35,8 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
         'status': 'status',
         'effort': 'effort',
         'project-status': 'projectStatus',
+        'habit-status': 'habitStatus',
+        'habit-frequency': 'habitFrequency',
         'area-status': 'areaStatus',
         'area-review-cadence': 'areaReviewCadence',
         'goal-status': 'goalStatus',
@@ -99,77 +103,7 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
     pattern: new RegExp(`\\[!${pattern}:(.*?)\\]`, 'gs'),
     extract: (match: RegExpMatchArray) => {
       if (!match[1]) return { key, value: [] };
-
-      const decodeLoose = (input: string): string => {
-        let result = input;
-        let attempts = 0;
-        while (attempts < 3 && /%[0-9A-Fa-f]{2}/.test(result)) {
-          try {
-            const decoded = decodeURIComponent(result);
-            if (decoded === result) break;
-            result = decoded;
-            attempts += 1;
-          } catch {
-            break;
-          }
-        }
-        return result;
-      };
-
-      const normalizeEntry = (input: string): string => {
-        const trimmed = decodeLoose(input.trim());
-        if (!trimmed) return '';
-        const withoutQuotes = trimmed.replace(/^['"]|['"]$/g, '');
-        return withoutQuotes.replace(/\\/g, '/').trim();
-      };
-
-      let rawValue = match[1].trim();
-      if (rawValue.startsWith('[') && !rawValue.endsWith(']')) {
-        rawValue = `${rawValue}]`;
-      }
-      const parseJsonArray = (input: string): string[] | null => {
-        try {
-          const parsed = JSON.parse(input);
-          if (!Array.isArray(parsed)) return null;
-          return parsed.map((value) => String(value));
-        } catch {
-          return null;
-        }
-      };
-
-      let parsedValues = parseJsonArray(rawValue);
-      let decodedRawValue: string | null = null;
-
-      if (!parsedValues) {
-        decodedRawValue = decodeLoose(rawValue);
-        if (decodedRawValue !== rawValue) {
-          parsedValues = parseJsonArray(decodedRawValue);
-        }
-      }
-
-      let values: string[];
-
-      if (parsedValues) {
-        values = parsedValues;
-      } else {
-        let csvSource = rawValue;
-        if (rawValue.startsWith('[') && rawValue.endsWith(']')) {
-          csvSource = rawValue.slice(1, -1);
-        } else if (
-          decodedRawValue &&
-          decodedRawValue.startsWith('[') &&
-          decodedRawValue.endsWith(']')
-        ) {
-          csvSource = decodedRawValue.slice(1, -1);
-        }
-        values = csvSource.split(',');
-      }
-
-      const decodedValues = values
-        .map((value) => normalizeEntry(value))
-        .filter(Boolean);
-
-      return { key, value: decodedValues };
+      return { key, value: parseReferenceList(match[1]) };
     }
   })),
   

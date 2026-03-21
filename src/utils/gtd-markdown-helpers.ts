@@ -8,6 +8,7 @@ import type {
   GTDProjectStatus,
   GTDVisionHorizon,
 } from '@/types';
+import { normalizeReferenceList } from '@/utils/gtd-reference-utils';
 
 /**
  * @fileoverview Helper functions for generating GTD-specific markdown with select fields
@@ -175,10 +176,7 @@ function escapeMarkdownInline(str: string): string {
 }
 
 export function encodeReferenceArray(values?: string[]): string {
-  const normalized = (values ?? [])
-    .map((ref) => ref.trim())
-    .filter(Boolean)
-    .map((ref) => ref.replace(/\\/g, '/'));
+  const normalized = normalizeReferenceList(values);
 
   if (normalized.length === 0) {
     return '';
@@ -192,9 +190,7 @@ export function encodeReferenceArray(values?: string[]): string {
 }
 
 export function encodeReferenceCsv(values?: string[]): string {
-  const normalized = (values ?? [])
-    .map((ref) => ref.replace(/\\/g, '/').trim())
-    .filter(Boolean);
+  const normalized = normalizeReferenceList(values);
   return normalized.join(',');
 }
 

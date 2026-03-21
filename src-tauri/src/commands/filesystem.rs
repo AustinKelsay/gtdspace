@@ -1,5 +1,6 @@
 //! File system commands and shared file operation payloads.
 
+use super::seed_data::generate_action_template;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Component, Path};
@@ -513,31 +514,7 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
     // Create appropriate template content based on GTD horizon
     let clean_name = strip_markdown_extension(&safe_name);
     let template_content = if is_in_projects && is_project_dir {
-        // Use GTD action template with single select and datetime fields
-        format!(
-            r#"# {}
-
-## Status
-[!singleselect:status:in-progress]
-
-## Focus Date
-[!datetime:focus_date:]
-
-## Due Date
-[!datetime:due_date:]
-
-## Effort
-[!singleselect:effort:medium]
-
-## Notes
-<!-- Add any additional notes or details about this action here -->
-
----
-[!datetime:created_date_time:{}]
-"#,
-            clean_name,
-            chrono::Local::now().to_rfc3339()
-        )
+        generate_action_template(clean_name, "in-progress", None, None, "medium", None, None)
     } else if is_in_vision {
         format!(
             r#"# {}

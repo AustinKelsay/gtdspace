@@ -2,7 +2,35 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+const MARKDOWN_EXTENSIONS: [&str; 2] = ["md", "markdown"];
+
+fn is_markdown_file(path: &Path) -> bool {
+    let Some(extension) = path.extension().and_then(|segment| segment.to_str()) else {
+        return false;
+    };
+
+    let normalized = extension.to_ascii_lowercase();
+    MARKDOWN_EXTENSIONS.contains(&normalized.as_str())
+}
+
+fn find_readme_file(dir: &Path) -> Option<PathBuf> {
+    for extension in MARKDOWN_EXTENSIONS {
+        let candidate = dir.join(format!("README.{}", extension));
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+fn strip_project_readme_suffix(path: &str) -> Option<String> {
+    ["/README.md", "/README.markdown"]
+        .into_iter()
+        .find_map(|suffix| path.strip_suffix(suffix).map(|value| value.to_string()))
+}
 
 fn extract_reference_block(content: &str, tag: &str) -> Option<String> {
     let marker = format!("[!{}:", tag);
@@ -125,24 +153,22 @@ pub fn find_reverse_relationships(
             continue;
         }
 
-        // For Projects directory, we need to look inside each project folder for README.md
+        // For Projects directory, look inside each project folder for a README markdown file.
         let mut files_to_check = Vec::new();
 
         if dir_name == "Projects" {
             log::info!("Searching in Projects directory: {}", dir_path.display());
-            // Look for README.md files inside project folders
+            // Look for README markdown files inside project folders
             if let Ok(entries) = fs::read_dir(&dir_path) {
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if path.is_dir() {
-                        // This is a project folder, look for README.md inside
-                        let readme_path = path.join("README.md");
-                        if readme_path.exists() {
+                        if let Some(readme_path) = find_readme_file(&path) {
                             log::info!("Found project README: {}", readme_path.display());
                             files_to_check.push(readme_path);
                         }
-                    } else if path.extension().and_then(|s| s.to_str()) == Some("md") {
-                        // Also check standalone .md files in Projects
+                    } else if is_markdown_file(&path) {
+                        // Also check standalone markdown files in Projects
                         log::info!("Found standalone project file: {}", path.display());
                         files_to_check.push(path);
                     }
@@ -151,11 +177,11 @@ pub fn find_reverse_relationships(
                 log::warn!("Could not read Projects directory");
             }
         } else {
-            // For other directories, just look for .md files at the root level
+            // For other directories, just look for markdown files at the root level
             if let Ok(entries) = fs::read_dir(&dir_path) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if path.extension().and_then(|s| s.to_str()) == Some("md") {
+                    if is_markdown_file(&path) {
                         files_to_check.push(path);
                     }
                 }
@@ -275,8 +301,10 @@ pub fn find_reverse_relationships(
 
                     // For projects, use the parent folder name instead of "README.md"
                     let display_name = if dir_name == "Projects"
-                        && path.file_name().and_then(|n| n.to_str()) == Some("README.md")
-                    {
+                        && matches!(
+                            path.file_name().and_then(|n| n.to_str()),
+                            Some("README.md" | "README.markdown")
+                        ) {
                         path.parent()
                             .and_then(|p| p.file_name())
                             .and_then(|n| n.to_str())
@@ -352,11 +380,7 @@ pub fn find_habits_referencing(
     log::info!("Target normalized: {}", target_normalized);
 
     // For project README files, also check against the project folder path
-    let alt_target = if target_normalized.ends_with("/README.md") {
-        Some(target_normalized.trim_end_matches("/README.md").to_string())
-    } else {
-        None
-    };
+    let alt_target = strip_project_readme_suffix(&target_normalized);
     if let Some(ref alt) = alt_target {
         log::info!("Also checking against project folder path: {}", alt);
     }
@@ -365,7 +389,7 @@ pub fn find_habits_referencing(
     if let Ok(entries) = fs::read_dir(&habits_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("md") {
+            if is_markdown_file(&path) {
                 log::info!("Checking habit file: {}", path.display());
                 // Read habit file content
                 if let Ok(content) = fs::read_to_string(&path) {

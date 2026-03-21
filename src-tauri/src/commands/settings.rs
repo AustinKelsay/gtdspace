@@ -48,6 +48,12 @@ pub struct UserSettings {
     pub window_width: Option<u32>,
     /// Window height (for future use)
     pub window_height: Option<u32>,
+    /// Maximum number of tabs to keep open
+    #[serde(default)]
+    pub max_tabs: Option<u32>,
+    /// Whether to restore tabs on startup
+    #[serde(default)]
+    pub restore_tabs: Option<bool>,
     /// Auto-initialize default GTD space on startup (optional; defaults to true)
     pub auto_initialize: Option<bool>,
     /// Seed example content on first run (optional; defaults to true)
@@ -287,7 +293,7 @@ pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<Str
 /// ```
 #[tauri::command]
 pub async fn secure_store_set(key: String, value: String) -> Result<String, String> {
-    log::info!("Storing secret in secure storage: {}", key);
+    log::debug!("Storing secret in secure storage: {}", key);
 
     let entry = match keyring::Entry::new(SECURE_STORAGE_SERVICE, &key) {
         Ok(entry) => entry,
@@ -299,7 +305,7 @@ pub async fn secure_store_set(key: String, value: String) -> Result<String, Stri
 
     match entry.set_password(&value) {
         Ok(_) => {
-            log::info!("Secret stored successfully: {}", key);
+            log::debug!("Secret stored successfully: {}", key);
             Ok("Secret stored successfully".to_string())
         }
         Err(e) => {
@@ -436,6 +442,8 @@ pub fn get_default_settings() -> UserSettings {
         editor_mode: "split".to_string(),
         window_width: Some(1200),
         window_height: Some(800),
+        max_tabs: None,
+        restore_tabs: None,
         auto_initialize: Some(true),
         seed_example_content: Some(true),
         default_space_path: None,

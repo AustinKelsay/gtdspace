@@ -102,8 +102,9 @@ pub fn get_app_version(app: AppHandle) -> Result<String, String> {
 pub fn check_permissions() -> Result<PermissionStatus, String> {
     log::info!("Permission check requested");
 
-    // For Phase 0, we'll return a basic permission check
-    // In Phase 1, this will involve actual file system testing
+    // TODO(Phase 1): replace this stubbed PermissionStatus with real filesystem
+    // read/write and dialog permission checks once the runtime permission model
+    // is finalized for desktop environments.
     let status = PermissionStatus {
         can_read_files: true,   // Assumed true for now
         can_write_files: true,  // Assumed true for now

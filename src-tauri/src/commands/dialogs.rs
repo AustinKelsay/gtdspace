@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
+use tokio::task;
 
 /// Open folder selection dialog and return selected path
 ///
@@ -34,20 +35,16 @@ pub async fn select_folder(app: AppHandle) -> Result<String, String> {
     println!("=== select_folder command called (async with thread) ===");
     log::info!("Folder selection dialog requested");
 
-    // Use std::thread::spawn instead of tokio::task::spawn_blocking
-    let handle = std::thread::spawn(move || {
+    let result = task::spawn_blocking(move || {
         let dialog = app.dialog().file();
         let dialog = dialog.set_title("Select Folder with Markdown Files");
 
         println!("Opening folder dialog in separate thread...");
 
         dialog.blocking_pick_folder()
-    });
-
-    // Wait for the thread to complete
-    let result = handle
-        .join()
-        .map_err(|_| "Failed to join thread".to_string())?;
+    })
+    .await
+    .map_err(|error| format!("Failed to join folder dialog task: {}", error))?;
 
     match result {
         Some(folder_path) => {

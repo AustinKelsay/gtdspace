@@ -863,7 +863,21 @@ fn count_project_actions(project_path: &Path) -> u32 {
                         && path.file_name() != Some(std::ffi::OsStr::new("README.md"))
                         && path.file_name() != Some(std::ffi::OsStr::new("README.markdown"))
                     {
-                        count += 1;
+                        let Ok(content) = fs::read_to_string(&path) else {
+                            continue;
+                        };
+
+                        let normalized = content.to_ascii_lowercase();
+                        let is_action = normalized.contains("[!singleselect:status:")
+                            || normalized.contains("[!singleselect:effort:")
+                            || normalized.contains("\nstatus:")
+                            || normalized.starts_with("status:")
+                            || normalized.contains("\neffort:")
+                            || normalized.starts_with("effort:");
+
+                        if is_action {
+                            count += 1;
+                        }
                     }
                 }
             }

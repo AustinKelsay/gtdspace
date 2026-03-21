@@ -1155,6 +1155,8 @@ mod tests {
             editor_mode: "edit".to_string(),
             window_width: None,
             window_height: None,
+            max_tabs: None,
+            restore_tabs: None,
             auto_initialize: Some(true),
             seed_example_content: Some(true),
             default_space_path: None,

@@ -10,7 +10,6 @@ lazy_static! {
     static ref GOOGLE_CALENDAR_MANAGER: Arc<TokioMutex<Option<Arc<GoogleCalendarManager>>>> =
         Arc::new(TokioMutex::new(None));
 }
-const LEGACY_GOOGLE_AUTH_FLOW_ENABLED: bool = false;
 
 async fn get_or_init_google_calendar_manager(
     app: AppHandle,
@@ -184,64 +183,8 @@ pub fn google_calendar_test() -> Result<String, String> {
 /// - Token exchange failure
 /// - Token storage failure
 #[tauri::command]
-pub async fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
-    if !LEGACY_GOOGLE_AUTH_FLOW_ENABLED {
-        return Err("Legacy OAuth flow disabled; use Connect to start auth".to_string());
-    }
-
-    use crate::google_calendar::simple_auth::{
-        start_oauth_flow, BrowserOpenError, SimpleAuthConfig,
-    };
-
-    println!("[GoogleCalendar] Starting OAuth flow (async command)...");
-
-    // Load credentials from secure storage first, fallback to env vars for dev
-    let (client_id, client_secret) = load_google_oauth_credentials(app.clone())?;
-
-    let config = SimpleAuthConfig {
-        client_id: client_id.clone(),
-        client_secret: client_secret.clone(),
-        redirect_uri: "http://localhost".to_string(),
-        auth_uri: "https://accounts.google.com/o/oauth2/v2/auth".to_string(),
-        token_uri: "https://oauth2.googleapis.com/token".to_string(),
-    };
-
-    // Use ambient Tokio runtime provided by Tauri for async operations
-
-    // Open browser (do not log raw state or full URL)
-    println!("[GoogleCalendar] Opening browser...");
-    let start_result = match start_oauth_flow(&config) {
-        Ok(res) => {
-            println!("[GoogleCalendar] Browser opened");
-            println!(
-                "[GoogleCalendar] Authorization URL (redacted): {}",
-                res.redacted_auth_url
-            );
-            res
-        }
-        Err(e) => {
-            // If this is a BrowserOpenError, serialize details for UI manual fallback
-            if let Some(browser_err) = e.downcast_ref::<BrowserOpenError>() {
-                // Build a JSON string containing fields needed for manual OAuth fallback.
-                // Do not log this payload; it is returned to the UI only.
-                let payload = serde_json::json!({
-                    "type": "browser_open_error",
-                    "message": e.to_string(),
-                    "redacted_auth_url": browser_err.redacted_auth_url,
-                    "auth_url": browser_err.auth_url(),
-                })
-                .to_string();
-                return Err(payload);
-            }
-
-            // Fallback: return stringified error
-            return Err(e.to_string());
-        }
-    };
-
-    let _state = start_result.state().to_string();
-    let _code_verifier = start_result.code_verifier().to_string();
-    Ok("Legacy OAuth flow started".to_string())
+pub async fn google_calendar_start_auth(_app: AppHandle) -> Result<String, String> {
+    Err("Legacy OAuth flow disabled; use Connect to start auth".to_string())
 }
 
 // Async test command to verify async commands work

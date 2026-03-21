@@ -120,6 +120,23 @@ pub async fn search_files(
     } else {
         None
     };
+    let plain_text_matcher = if filters.use_regex {
+        None
+    } else {
+        let pattern = if filters.whole_word {
+            format!(r"\b{}\b", regex::escape(&query))
+        } else {
+            regex::escape(&query)
+        };
+
+        match RegexBuilder::new(&pattern)
+            .case_insensitive(!filters.case_sensitive)
+            .build()
+        {
+            Ok(re) => Some(re),
+            Err(e) => return Err(format!("Invalid search pattern: {}", e)),
+        }
+    };
 
     // Search through all markdown files recursively
     for entry in WalkDir::new(dir_path)
@@ -150,9 +167,12 @@ pub async fn search_files(
 
                         // Search in file name if enabled
                         if filters.include_file_names {
-                            if let Some(match_result) =
-                                search_in_text(&file_name, &query, &filters, &regex_pattern)
-                            {
+                            if let Some(match_result) = search_in_text(
+                                &file_name,
+                                &filters,
+                                &regex_pattern,
+                                &plain_text_matcher,
+                            ) {
                                 if results.len() >= filters.max_results {
                                     return Ok(truncated_response(
                                         start_time,
@@ -173,6 +193,15 @@ pub async fn search_files(
                                     context_after: None,
                                 });
                                 total_matches += 1;
+
+                                if results.len() >= filters.max_results {
+                                    return Ok(truncated_response(
+                                        start_time,
+                                        results,
+                                        total_matches,
+                                        files_searched,
+                                    ));
+                                }
                             }
                         }
 
@@ -180,8 +209,17 @@ pub async fn search_files(
                         let lines: Vec<&str> = content.lines().collect();
                         for (line_number, line) in lines.iter().enumerate() {
                             if let Some(match_result) =
-                                search_in_text(line, &query, &filters, &regex_pattern)
+                                search_in_text(line, &filters, &regex_pattern, &plain_text_matcher)
                             {
+                                if results.len() >= filters.max_results {
+                                    return Ok(truncated_response(
+                                        start_time,
+                                        results,
+                                        total_matches,
+                                        files_searched,
+                                    ));
+                                }
+
                                 let context_before = if line_number > 0 {
                                     Some(
                                         lines
@@ -259,29 +297,15 @@ pub async fn search_files(
 /// Search for a pattern in text with various options
 fn search_in_text(
     text: &str,
-    query: &str,
     filters: &SearchFilters,
     regex_pattern: &Option<Regex>,
+    plain_text_matcher: &Option<Regex>,
 ) -> Option<(usize, usize)> {
-    if filters.use_regex {
-        if let Some(re) = regex_pattern {
-            if let Some(mat) = re.find(text) {
-                return Some((mat.start(), mat.end()));
-            }
-        }
-        return None;
-    }
-
-    let pattern = if filters.whole_word {
-        format!(r"\b{}\b", regex::escape(query))
+    let matcher = if filters.use_regex {
+        regex_pattern.as_ref()
     } else {
-        regex::escape(query)
+        plain_text_matcher.as_ref()
     };
 
-    let matcher = RegexBuilder::new(&pattern)
-        .case_insensitive(!filters.case_sensitive)
-        .build()
-        .ok()?;
-
-    matcher.find(text).map(|mat| (mat.start(), mat.end()))
+    matcher.and_then(|re| re.find(text).map(|mat| (mat.start(), mat.end())))
 }

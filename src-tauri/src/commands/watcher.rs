@@ -8,10 +8,12 @@ use notify_debouncer_mini::{
 };
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+use tokio::sync::Mutex;
 
 /// File change event for external file modifications
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -27,8 +29,31 @@ pub struct FileChangeEvent {
 }
 
 // Global file watcher state - stores handle to watcher task
+struct RunningWatcher {
+    handle: tokio::task::JoinHandle<()>,
+    shutdown: Arc<AtomicBool>,
+}
+
 lazy_static::lazy_static! {
-    static ref WATCHER_HANDLE: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>> = Arc::new(Mutex::new(None));
+    static ref WATCHER_HANDLE: Arc<Mutex<Option<RunningWatcher>>> = Arc::new(Mutex::new(None));
+}
+
+async fn shutdown_running_watcher(watcher_slot: &mut Option<RunningWatcher>) -> bool {
+    let Some(running_watcher) = watcher_slot.take() else {
+        return false;
+    };
+
+    running_watcher.shutdown.store(true, Ordering::SeqCst);
+
+    match running_watcher.handle.await {
+        Ok(()) => log::info!("Stopped existing file watcher"),
+        Err(error) => log::warn!(
+            "File watcher task ended with error during shutdown: {}",
+            error
+        ),
+    }
+
+    true
 }
 
 /// Start file watching service for a folder
@@ -64,15 +89,15 @@ pub async fn start_file_watcher(app: AppHandle, folder_path: String) -> Result<S
     }
 
     // Stop existing watcher if running
-    {
-        let mut handle_guard = WATCHER_HANDLE.lock().unwrap();
-        if let Some(handle) = handle_guard.take() {
-            handle.abort();
-            log::info!("Stopped existing file watcher");
-        }
+    let mut watcher_guard = WATCHER_HANDLE.lock().await;
+
+    if shutdown_running_watcher(&mut watcher_guard).await {
+        log::info!("Stopped existing file watcher before starting a new one");
     }
 
     let app_handle = app.clone();
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown_for_task = shutdown.clone();
 
     // Create debounced watcher
     let (tx, rx) = mpsc::channel();
@@ -96,7 +121,12 @@ pub async fn start_file_watcher(app: AppHandle, folder_path: String) -> Result<S
         let runtime_handle = tokio::runtime::Handle::current();
 
         loop {
-            match rx.recv() {
+            if shutdown_for_task.load(Ordering::SeqCst) {
+                log::info!("File watcher shutdown requested");
+                break;
+            }
+
+            match rx.recv_timeout(Duration::from_millis(250)) {
                 Ok(Ok(events)) => {
                     for event in events {
                         runtime_handle.block_on(handle_file_event(
@@ -109,7 +139,8 @@ pub async fn start_file_watcher(app: AppHandle, folder_path: String) -> Result<S
                 Ok(Err(e)) => {
                     log::error!("File watcher error: {:?}", e);
                 }
-                Err(_) => {
+                Err(RecvTimeoutError::Timeout) => continue,
+                Err(RecvTimeoutError::Disconnected) => {
                     log::info!("File watcher channel closed");
                     break;
                 }
@@ -120,10 +151,8 @@ pub async fn start_file_watcher(app: AppHandle, folder_path: String) -> Result<S
     });
 
     // Store task handle
-    {
-        let mut handle_guard = WATCHER_HANDLE.lock().unwrap();
-        *handle_guard = Some(handle);
-    }
+    *watcher_guard = Some(RunningWatcher { handle, shutdown });
+    drop(watcher_guard);
 
     log::info!("File watcher started successfully for: {}", folder_path);
     Ok("File watcher started successfully".to_string())
@@ -148,9 +177,8 @@ pub async fn start_file_watcher(app: AppHandle, folder_path: String) -> Result<S
 pub async fn stop_file_watcher() -> Result<String, String> {
     log::info!("Stopping file watcher");
 
-    let mut handle_guard = WATCHER_HANDLE.lock().unwrap();
-    if let Some(handle) = handle_guard.take() {
-        handle.abort();
+    let mut watcher_guard = WATCHER_HANDLE.lock().await;
+    if shutdown_running_watcher(&mut watcher_guard).await {
         log::info!("File watcher stopped successfully");
         Ok("File watcher stopped successfully".to_string())
     } else {

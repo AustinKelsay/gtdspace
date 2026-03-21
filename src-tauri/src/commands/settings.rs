@@ -259,7 +259,7 @@ fn save_settings_unlocked(app: &AppHandle, settings: &UserSettings) -> Result<St
     };
 
     // Save settings to store
-    match serde_json::to_value(&settings) {
+    match serde_json::to_value(settings) {
         Ok(value) => {
             store.set("user_settings", value);
 

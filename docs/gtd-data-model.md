@@ -585,7 +585,7 @@ See `src/utils/data-migration.ts` for details.
 
 - Hooks: `useGTDSpace`, `useActionsData`, `useHabitsHistory`, `useHabitTracking`.
 - Backend commands: `initialize_gtd_space`, `list_gtd_projects`, `create_gtd_project`, `create_gtd_action`, `create_gtd_habit`, `list_project_actions`, `update_habit_status`.
-- Blocks and markers: see `src/components/editor/blocks/*` and `src/utils/blocknote-preprocessing.ts`.
+- Blocks and markers: see `src/components/editor/blocks/*` and `src/utils/blocknote-preprocessing/`.
 
 ## Open Follow-Ups
 

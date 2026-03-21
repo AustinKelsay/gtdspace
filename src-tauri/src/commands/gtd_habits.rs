@@ -54,11 +54,24 @@ static HABIT_STATUS_FIELD_REGEX: Lazy<Regex> = Lazy::new(|| {
         .expect("Invalid habit status field regex pattern")
 });
 
+/// Regex for extracting checkbox-based habit status fields
+/// Format: [!checkbox:habit-status:true|false]
+static HABIT_CHECKBOX_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\[!checkbox:habit-status:([^\]]+)\]")
+        .expect("Invalid habit checkbox regex pattern")
+});
+
 /// Regex for extracting habit frequency field
 /// Format: [!singleselect:habit-frequency:VALUE]
 static HABIT_FREQUENCY_FIELD_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"\[!singleselect:habit-frequency:([^\]]+)\]")
         .expect("Invalid habit frequency field regex pattern")
+});
+
+/// Regex for converting legacy list-format history entries into table rows.
+static LIST_TO_TABLE_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*([^*]+)\*\*: ([^(]+) \(([^)]+) - ([^)]+)\)$")
+        .expect("Invalid list-to-table habit history regex pattern")
 });
 
 /// Helper function to parse the last action time from a habit file's history
@@ -361,31 +374,30 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<boo
         fs::read_to_string(&habit_path).map_err(|e| format!("Failed to read habit file: {}", e))?;
 
     // Check for new checkbox format first
-    let checkbox_regex = Regex::new(r"\[!checkbox:habit-status:([^\]]+)\]").unwrap();
-    let (current_status, is_checkbox_format) = if let Some(cap) = checkbox_regex.captures(&content)
-    {
-        let checkbox_value = cap.get(1).map(|m| m.as_str()).unwrap_or("false");
-        // Convert checkbox values to status values for internal processing
-        let status = if checkbox_value == "true" {
-            "completed"
+    let (current_status, is_checkbox_format) =
+        if let Some(cap) = HABIT_CHECKBOX_REGEX.captures(&content) {
+            let checkbox_value = cap.get(1).map(|m| m.as_str()).unwrap_or("false");
+            // Convert checkbox values to status values for internal processing
+            let status = if checkbox_value == "true" {
+                "completed"
+            } else {
+                "todo"
+            };
+            log::info!(
+                "Found checkbox format: value='{}', converted to status='{}'",
+                checkbox_value,
+                status
+            );
+            (status.to_string(), true)
         } else {
-            "todo"
+            // Fall back to old format
+            let status = HABIT_STATUS_FIELD_REGEX
+                .captures(&content)
+                .and_then(|cap| cap.get(1))
+                .map(|m| m.as_str())
+                .ok_or("Could not find current status in habit file")?;
+            (status.to_string(), false)
         };
-        log::info!(
-            "Found checkbox format: value='{}', converted to status='{}'",
-            checkbox_value,
-            status
-        );
-        (status.to_string(), true)
-    } else {
-        // Fall back to old format
-        let status = HABIT_STATUS_FIELD_REGEX
-            .captures(&content)
-            .and_then(|cap| cap.get(1))
-            .map(|m| m.as_str())
-            .ok_or("Could not find current status in habit file")?;
-        (status.to_string(), false)
-    };
 
     let _frequency = HABIT_FREQUENCY_FIELD_REGEX
         .captures(&content)
@@ -455,7 +467,7 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<boo
         } else {
             "false"
         };
-        checkbox_regex
+        HABIT_CHECKBOX_REGEX
             .replace(
                 &content,
                 format!("[!checkbox:habit-status:{}]", checkbox_value).as_str(),
@@ -546,8 +558,6 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
     let mut reset_habits = Vec::new();
 
     // Pre-compile regex outside the loop
-    let checkbox_regex = Regex::new(r"\[!checkbox:habit-status:([^\]]+)\]").unwrap();
-
     // Read all habit files
     let entries = fs::read_dir(&habits_path)
         .map_err(|e| format!("Failed to read Habits directory: {}", e))?;
@@ -569,7 +579,7 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
 
             // Check for new checkbox format first
             let (current_status, is_checkbox_format) =
-                if let Some(cap) = checkbox_regex.captures(&content) {
+                if let Some(cap) = HABIT_CHECKBOX_REGEX.captures(&content) {
                     let checkbox_value = cap.get(1).map(|m| m.as_str()).unwrap_or("false");
                     // Convert checkbox values to status values
                     let status = if checkbox_value == "true" {
@@ -697,7 +707,7 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                     // ALWAYS update status to 'todo' after a reset (do this AFTER inserting history)
                     let final_content = if is_checkbox_format {
                         // Use checkbox format
-                        checkbox_regex
+                        HABIT_CHECKBOX_REGEX
                             .replace(
                                 &content_with_history,
                                 "[!checkbox:habit-status:false]", // false = todo
@@ -804,11 +814,7 @@ fn insert_history_entry(content: &str, entry: &str) -> Result<String, String> {
     // Helper function to convert old list entry to table row
     fn convert_list_to_table_row(list_entry: &str) -> Option<String> {
         // Parse old format: - **YYYY-MM-DD** at **HH:MM AM/PM**: Status (Action - Details)
-        let re = regex::Regex::new(
-            r"^- \*\*(\d{4}-\d{2}-\d{2})\*\* at \*\*([^*]+)\*\*: ([^(]+) \(([^)]+) - ([^)]+)\)$",
-        )
-        .ok()?;
-        if let Some(caps) = re.captures(list_entry) {
+        if let Some(caps) = LIST_TO_TABLE_REGEX.captures(list_entry) {
             return Some(format!(
                 "| {} | {} | {} | {} | {} |",
                 &caps[1],       // Date

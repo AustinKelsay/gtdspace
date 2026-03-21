@@ -86,7 +86,7 @@ pub async fn start_file_watcher(app: AppHandle, folder_path: String) -> Result<S
     // Add path to watcher
     debouncer
         .watcher()
-        .watch(path, RecursiveMode::NonRecursive)
+        .watch(path, RecursiveMode::Recursive)
         .map_err(|e| format!("Failed to watch directory: {}", e))?;
 
     // Use a blocking task because the notify channel receiver is synchronous.

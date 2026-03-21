@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path};
 
 use super::seed_data::{generate_action_template, generate_project_readme};
 
@@ -52,11 +52,13 @@ pub fn create_gtd_project(
         return Err("Projects directory does not exist. Initialize GTD space first.".to_string());
     }
 
+    let safe_project_name = validate_project_name(&project_name)?;
+
     // Create project folder
-    let project_path = projects_path.join(&project_name);
+    let project_path = projects_path.join(&safe_project_name);
 
     if project_path.exists() {
-        return Err(format!("Project '{}' already exists", project_name));
+        return Err(format!("Project '{}' already exists", safe_project_name));
     }
 
     // Validate status if provided
@@ -79,7 +81,7 @@ pub fn create_gtd_project(
     let readme_path = project_path.join("README.md");
     let project_status = status.unwrap_or_else(|| "in-progress".to_string());
     let readme_content =
-        generate_project_readme(&project_name, &description, due_date, &project_status);
+        generate_project_readme(&safe_project_name, &description, due_date, &project_status);
 
     if let Err(e) = fs::write(&readme_path, readme_content) {
         // Clean up project directory if README creation fails
@@ -87,7 +89,7 @@ pub fn create_gtd_project(
         return Err(format!("Failed to create project README: {}", e));
     }
 
-    log::info!("Successfully created project: {}", project_name);
+    log::info!("Successfully created project: {}", safe_project_name);
     Ok(project_path.to_string_lossy().to_string())
 }
 
@@ -426,14 +428,16 @@ pub fn rename_gtd_project(
         .parent()
         .ok_or_else(|| "Cannot get parent directory".to_string())?;
 
+    let safe_project_name = validate_project_name(&new_project_name)?;
+
     // Create new path with the new name
-    let new_path = parent.join(&new_project_name);
+    let new_path = parent.join(&safe_project_name);
 
     // Check if new path already exists and is not this same project with different casing
     if new_path.exists() && !paths_refer_to_same_entry(old_path, &new_path) {
         return Err(format!(
             "A project with name '{}' already exists",
-            new_project_name
+            safe_project_name
         ));
     }
 
@@ -451,7 +455,7 @@ pub fn rename_gtd_project(
                 match fs::read_to_string(&readme_path) {
                     Ok(content) => {
                         // Update the H1 title (first line starting with #)
-                        let updated_content = update_readme_title(&content, &new_project_name);
+                        let updated_content = update_readme_title(&content, &safe_project_name);
 
                         if let Err(e) = fs::write(&readme_path, updated_content) {
                             log::error!("Failed to update README title: {}", e);
@@ -555,6 +559,21 @@ pub fn rename_gtd_action(
                     return Err(format!("Failed to update action title: {}", e));
                 }
 
+                let old_file_name = old_path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or_default();
+                let new_file_name = new_path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or_default();
+
+                if old_file_name != new_file_name {
+                    rename_path(old_path, &new_path)
+                        .map_err(|e| format!("Failed to rename action file: {}", e))?;
+                    return Ok(new_path.to_string_lossy().to_string());
+                }
+
                 log::info!("Updated action title in file: {}", old_path.display());
                 return Ok(old_path.to_string_lossy().to_string());
             }
@@ -597,6 +616,33 @@ pub fn rename_gtd_action(
             Err(format!("Failed to rename action: {}", e))
         }
     }
+}
+
+fn validate_project_name(name: &str) -> Result<String, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Project name cannot be empty".to_string());
+    }
+
+    if trimmed.starts_with('.') {
+        return Err("Project name cannot start with '.'".to_string());
+    }
+
+    if trimmed.contains('/') || trimmed.contains('\\') {
+        return Err("Project name cannot contain path separators".to_string());
+    }
+
+    let path = Path::new(trimmed);
+    if path.is_absolute() {
+        return Err("Project name cannot be an absolute path".to_string());
+    }
+
+    match path.components().next() {
+        Some(Component::Normal(_)) if path.components().count() == 1 => {}
+        _ => return Err("Project name must be a single directory name".to_string()),
+    }
+
+    Ok(trimmed.to_string())
 }
 
 /// Update the H1 title in README content

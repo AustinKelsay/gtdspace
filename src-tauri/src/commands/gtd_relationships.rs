@@ -175,7 +175,7 @@ pub fn find_reverse_relationships(
                 let content_normalized = content.replace('\\', "/");
 
                 // Log what we're checking
-                log::info!("Checking file: {}", path.display());
+                log::debug!("Checking file: {}", path.display());
 
                 // Log any horizon references found
                 for ref_type in &[
@@ -186,14 +186,14 @@ pub fn find_reverse_relationships(
                 ] {
                     let marker = format!("[!{}:", ref_type);
                     if content.contains(&marker) {
-                        log::info!("File contains {} block", ref_type);
+                        log::debug!("File contains {} block", ref_type);
                         // Extract the reference to see what it contains
                         if let Some(start) = content.find(&marker) {
                             let after_start = &content[start + marker.len()..];
                             if let Some(end) = after_start.find(']') {
                                 let refs = &after_start[..end];
-                                log::info!("  {} content: {}", ref_type, refs);
-                                log::info!("  Comparing with target: {}", target_normalized);
+                                log::debug!("  {} content: {}", ref_type, refs);
+                                log::debug!("  Comparing with target: {}", target_normalized);
                             }
                         }
                     }

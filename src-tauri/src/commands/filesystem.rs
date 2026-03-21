@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path};
 
 fn generate_stable_file_id(path: &Path) -> String {
     path.to_string_lossy()
@@ -16,6 +16,38 @@ fn strip_markdown_extension(name: &str) -> &str {
     name.strip_suffix(".markdown")
         .or_else(|| name.strip_suffix(".md"))
         .unwrap_or(name)
+}
+
+fn extract_safe_file_name(name: &str) -> Result<String, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("File name cannot be empty".to_string());
+    }
+
+    if trimmed.contains('/') || trimmed.contains('\\') {
+        return Err("File name cannot contain path separators".to_string());
+    }
+
+    let path = Path::new(trimmed);
+    if path.is_absolute() {
+        return Err("File name cannot be an absolute path".to_string());
+    }
+
+    match path.components().next() {
+        Some(Component::Normal(_)) if path.components().count() == 1 => {}
+        _ => return Err("File name must be a single path component".to_string()),
+    }
+
+    let file_name = path
+        .file_name()
+        .and_then(|segment| segment.to_str())
+        .ok_or_else(|| "File name contains unsupported characters".to_string())?;
+
+    if file_name == "." || file_name == ".." {
+        return Err("File name cannot be '.' or '..'".to_string());
+    }
+
+    Ok(file_name.to_string())
 }
 
 fn paths_refer_to_same_entry(left: &Path, right: &Path) -> bool {
@@ -117,41 +149,43 @@ fn scan_directory_recursive(dir_path: &Path, files: &mut Vec<MarkdownFile>) -> R
                 let entry = entry_result
                     .map_err(|e| format!("Failed to read entry in {:?}: {}", dir_path, e))?;
                 let path = entry.path();
+                let metadata = fs::symlink_metadata(&path)
+                    .map_err(|e| format!("Failed to read metadata for {:?}: {}", path, e))?;
 
                 // Recursively scan subdirectories
-                if path.is_dir() {
+                if metadata.file_type().is_symlink() {
+                    continue;
+                } else if metadata.file_type().is_dir() {
                     // Skip hidden directories (starting with .)
                     if let Some(dir_name) = path.file_name() {
                         if !dir_name.to_string_lossy().starts_with('.') {
                             scan_directory_recursive(&path, files)?;
                         }
                     }
-                } else if path.is_file() {
+                } else if metadata.file_type().is_file() {
                     // Process markdown files
                     if let Some(extension) = path.extension() {
                         let ext_str = extension.to_string_lossy().to_lowercase();
                         if markdown_extensions.contains(&ext_str.as_str()) {
-                            if let Ok(metadata) = entry.metadata() {
-                                let file_name = path
-                                    .file_name()
-                                    .unwrap_or_default()
-                                    .to_string_lossy()
-                                    .to_string();
+                            let file_name = path
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_string();
 
-                                files.push(MarkdownFile {
-                                    id: generate_stable_file_id(&path),
-                                    name: file_name,
-                                    path: path.to_string_lossy().to_string(),
-                                    size: metadata.len(),
-                                    last_modified: metadata
-                                        .modified()
-                                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-                                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                                        .unwrap_or_default()
-                                        .as_secs(),
-                                    extension: ext_str,
-                                });
-                            }
+                            files.push(MarkdownFile {
+                                id: generate_stable_file_id(&path),
+                                name: file_name,
+                                path: path.to_string_lossy().to_string(),
+                                size: metadata.len(),
+                                last_modified: metadata
+                                    .modified()
+                                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs(),
+                                extension: ext_str,
+                            });
                         }
                     }
                 }
@@ -432,11 +466,22 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
         });
     }
 
+    let safe_name = match extract_safe_file_name(&name) {
+        Ok(name) => name,
+        Err(message) => {
+            return Ok(FileOperationResult {
+                success: false,
+                path: None,
+                message: Some(message),
+            });
+        }
+    };
+
     // Add .md extension if not present
-    let file_name = if name.ends_with(".md") || name.ends_with(".markdown") {
-        name.clone()
+    let file_name = if safe_name.ends_with(".md") || safe_name.ends_with(".markdown") {
+        safe_name.clone()
     } else {
-        format!("{}.md", name)
+        format!("{}.md", safe_name)
     };
 
     let file_path = dir_path.join(&file_name);
@@ -466,7 +511,7 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
     let is_project_dir = dir_path.join("README.md").exists();
 
     // Create appropriate template content based on GTD horizon
-    let clean_name = strip_markdown_extension(&name);
+    let clean_name = strip_markdown_extension(&safe_name);
     let template_content = if is_in_projects && is_project_dir {
         // Use GTD action template with single select and datetime fields
         format!(
@@ -723,11 +768,22 @@ pub fn rename_file(old_path: String, new_name: String) -> Result<FileOperationRe
         }
     };
 
+    let safe_name = match extract_safe_file_name(&new_name) {
+        Ok(name) => name,
+        Err(message) => {
+            return Ok(FileOperationResult {
+                success: false,
+                path: None,
+                message: Some(message),
+            });
+        }
+    };
+
     // Add .md extension if not present
-    let file_name = if new_name.ends_with(".md") || new_name.ends_with(".markdown") {
-        new_name
+    let file_name = if safe_name.ends_with(".md") || safe_name.ends_with(".markdown") {
+        safe_name
     } else {
-        format!("{}.md", new_name)
+        format!("{}.md", safe_name)
     };
 
     let new_file_path = directory.join(&file_name);
@@ -1181,6 +1237,10 @@ pub fn replace_in_file(
         Ok(content) => content,
         Err(e) => return Err(format!("Failed to read file: {}", e)),
     };
+
+    if search_term.is_empty() {
+        return Err("search term cannot be empty".to_string());
+    }
 
     // Perform replacement
     let treat_as_regex = is_regex.unwrap_or(false);

@@ -10,6 +10,7 @@ lazy_static! {
     static ref GOOGLE_CALENDAR_MANAGER: Arc<TokioMutex<Option<Arc<GoogleCalendarManager>>>> =
         Arc::new(TokioMutex::new(None));
 }
+const LEGACY_GOOGLE_AUTH_FLOW_ENABLED: bool = false;
 
 async fn get_or_init_google_calendar_manager(
     app: AppHandle,
@@ -184,6 +185,10 @@ pub fn google_calendar_test() -> Result<String, String> {
 /// - Token storage failure
 #[tauri::command]
 pub async fn google_calendar_start_auth(app: AppHandle) -> Result<String, String> {
+    if !LEGACY_GOOGLE_AUTH_FLOW_ENABLED {
+        return Err("Legacy OAuth flow disabled; use Connect to start auth".to_string());
+    }
+
     use crate::google_calendar::simple_auth::{
         start_oauth_flow, BrowserOpenError, SimpleAuthConfig,
     };
@@ -236,8 +241,7 @@ pub async fn google_calendar_start_auth(app: AppHandle) -> Result<String, String
 
     let _state = start_result.state().to_string();
     let _code_verifier = start_result.code_verifier().to_string();
-    // This command no longer completes the flow. Direct users to use the manager-driven connect.
-    Err("Legacy OAuth flow disabled; use Connect to start auth".to_string())
+    Ok("Legacy OAuth flow started".to_string())
 }
 
 // Async test command to verify async commands work
@@ -461,6 +465,7 @@ pub async fn google_oauth_store_config(
     config_manager
         .store_config(&oauth_config)
         .map_err(|e| format!("Failed to store configuration: {}", e))?;
+    clear_google_calendar_manager().await;
 
     Ok("Google OAuth configuration saved".to_string())
 }
@@ -513,6 +518,7 @@ pub fn google_oauth_clear_config(app: AppHandle) -> Result<String, String> {
     config_manager
         .clear_config()
         .map_err(|e| format!("Failed to clear configuration: {}", e))?;
+    tauri::async_runtime::block_on(clear_google_calendar_manager());
 
     Ok("Google OAuth configuration cleared".to_string())
 }

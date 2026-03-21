@@ -16,6 +16,16 @@ use super::seed_data::{
 };
 use super::settings::{get_default_settings, load_settings};
 
+fn write_file_if_missing(path: &Path, content: &str, description: &str) -> Result<(), String> {
+    if path.exists() {
+        return Ok(());
+    }
+
+    fs::write(path, content).map_err(|e| format!("Failed to create {}: {}", description, e))?;
+    log::info!("Created {}", description);
+    Ok(())
+}
+
 /// Get the default GTD space path for the current user
 ///
 /// Returns a platform-appropriate path in the user's home directory:
@@ -43,8 +53,8 @@ pub fn get_default_gtd_space_path() -> Result<String, String> {
 /// Check whether a path looks like a GTD space.
 ///
 /// A directory is treated as a GTD space when it contains the required
-/// `Projects` folder, or when at least three recognized GTD horizon folders
-/// are present.
+/// `Projects` folder and at least three recognized GTD horizon folders
+/// are present in total.
 ///
 /// # Arguments
 ///
@@ -107,10 +117,10 @@ pub fn check_is_gtd_space(path: String) -> Result<bool, String> {
         }
     }
 
-    // Consider it a GTD space if it has all required directories (Projects),
-    // or if it has at least 3 of the GTD directories total
-    let is_gtd_space =
-        required_found == required_dirs.len() || (required_found + optional_found) >= 3;
+    // Consider it a GTD space only if Projects exists and at least three recognized
+    // GTD directories are present in total.
+    let has_projects = required_found == required_dirs.len();
+    let is_gtd_space = has_projects && (required_found + optional_found) >= 3;
 
     println!(
         "[check_is_gtd_space] Result: {} (required: {}/{}, optional: {}/{}, total: {})",
@@ -199,13 +209,11 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
             "Areas of Focus" => {
                 // Create overview page
                 let overview_file = dir_path.join("README.md");
-                if !overview_file.exists() {
-                    if let Err(e) = fs::write(&overview_file, areas_of_focus_overview_template()) {
-                        log::warn!("Failed to create Areas of Focus overview: {}", e);
-                    } else {
-                        log::info!("Created Areas of Focus overview");
-                    }
-                }
+                write_file_if_missing(
+                    &overview_file,
+                    &areas_of_focus_overview_template(),
+                    "Areas of Focus overview",
+                )?;
 
                 // Create area AFTER we know Goals will exist
                 // We'll create the actual area content later after Goals are created
@@ -214,13 +222,11 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
             "Goals" => {
                 // Create overview page
                 let overview_file = dir_path.join("README.md");
-                if !overview_file.exists() {
-                    if let Err(e) = fs::write(&overview_file, goals_overview_template()) {
-                        log::warn!("Failed to create Goals overview: {}", e);
-                    } else {
-                        log::info!("Created Goals overview");
-                    }
-                }
+                write_file_if_missing(
+                    &overview_file,
+                    &goals_overview_template(),
+                    "Goals overview",
+                )?;
 
                 // Create MINIMAL goal with MAXIMUM relationships
                 let next_year = chrono::Local::now().year() + 1;
@@ -245,21 +251,18 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                         &vision_ref,   // References Vision
                         &purpose_refs, // References BOTH Purpose documents
                     );
-                    if let Err(e) = fs::write(&file_path, content) {
-                        log::warn!("Failed to create goal '{}': {}", goal_name, e);
-                    }
+                    fs::write(&file_path, content)
+                        .map_err(|e| format!("Failed to create goal '{}': {}", goal_name, e))?;
                 }
             }
             "Vision" => {
                 // Create overview page
                 let overview_file = dir_path.join("README.md");
-                if !overview_file.exists() {
-                    if let Err(e) = fs::write(&overview_file, vision_overview_template()) {
-                        log::warn!("Failed to create Vision overview: {}", e);
-                    } else {
-                        log::info!("Created Vision overview");
-                    }
-                }
+                write_file_if_missing(
+                    &overview_file,
+                    &vision_overview_template(),
+                    "Vision overview",
+                )?;
 
                 // Create vision document with references to Purpose
                 let vision_file = dir_path.join("My 3-5 Year Vision.md");
@@ -271,65 +274,51 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                     let purpose_refs = format!("{},{}", life_mission_ref, core_values_ref);
 
                     let content = generate_vision_document_template_with_refs(&purpose_refs);
-                    if let Err(e) = fs::write(&vision_file, content) {
-                        log::warn!("Failed to create vision document: {}", e);
-                    } else {
-                        log::info!("Created vision document with Purpose references");
-                    }
+                    fs::write(&vision_file, content)
+                        .map_err(|e| format!("Failed to create vision document: {}", e))?;
+                    log::info!("Created vision document with Purpose references");
                 }
             }
             "Purpose & Principles" => {
                 // Create overview page
                 let overview_file = dir_path.join("README.md");
-                if !overview_file.exists() {
-                    if let Err(e) =
-                        fs::write(&overview_file, purpose_principles_overview_template())
-                    {
-                        log::warn!("Failed to create Purpose & Principles overview: {}", e);
-                    } else {
-                        log::info!("Created Purpose & Principles overview");
-                    }
-                }
+                write_file_if_missing(
+                    &overview_file,
+                    &purpose_principles_overview_template(),
+                    "Purpose & Principles overview",
+                )?;
 
                 // Create Life Mission document
                 let mission_file = dir_path.join("Life Mission.md");
-                if !mission_file.exists() {
-                    if let Err(e) = fs::write(&mission_file, life_mission_template()) {
-                        log::warn!("Failed to create life mission document: {}", e);
-                    } else {
-                        log::info!("Created life mission document");
-                    }
-                }
+                write_file_if_missing(
+                    &mission_file,
+                    &life_mission_template(),
+                    "life mission document",
+                )?;
 
                 // Create Core Values document
                 let values_file = dir_path.join("Core Values.md");
-                if !values_file.exists() {
-                    if let Err(e) = fs::write(&values_file, core_values_template()) {
-                        log::warn!("Failed to create core values document: {}", e);
-                    } else {
-                        log::info!("Created core values document");
-                    }
-                }
+                write_file_if_missing(
+                    &values_file,
+                    &core_values_template(),
+                    "core values document",
+                )?;
             }
             "Someday Maybe" => {
                 let example_file = dir_path.join("Learn a New Language.md");
-                if !example_file.exists() {
-                    if let Err(e) = fs::write(&example_file, SOMEDAY_LEARN_LANGUAGE_TEMPLATE) {
-                        log::warn!("Failed to create example Someday Maybe page: {}", e);
-                    } else {
-                        log::info!("Created example Someday Maybe page: Learn a New Language.md");
-                    }
-                }
+                write_file_if_missing(
+                    &example_file,
+                    SOMEDAY_LEARN_LANGUAGE_TEMPLATE,
+                    "example Someday Maybe page: Learn a New Language.md",
+                )?;
             }
             "Cabinet" => {
                 let example_file = dir_path.join("GTD Principles Reference.md");
-                if !example_file.exists() {
-                    if let Err(e) = fs::write(&example_file, CABINET_GTD_PRINCIPLES_TEMPLATE) {
-                        log::warn!("Failed to create example Cabinet page: {}", e);
-                    } else {
-                        log::info!("Created example Cabinet page: GTD Principles Reference.md");
-                    }
-                }
+                write_file_if_missing(
+                    &example_file,
+                    CABINET_GTD_PRINCIPLES_TEMPLATE,
+                    "example Cabinet page: GTD Principles Reference.md",
+                )?;
             }
             _ => {}
         }
@@ -366,23 +355,15 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                 &vision_ref,   // References Vision
                 &purpose_refs, // References BOTH Purpose docs
             );
-            if let Err(e) = fs::write(&area_file, content) {
-                log::warn!("Failed to create area '{}': {}", area_name, e);
-            } else {
-                log::info!("Created area with full references: {}", area_name);
-            }
+            fs::write(&area_file, content)
+                .map_err(|e| format!("Failed to create area '{}': {}", area_name, e))?;
+            log::info!("Created area with full references: {}", area_name);
         }
     }
 
     // Create a welcome file in the root directory
     let welcome_path = root_path.join("Welcome to GTD Space.md");
-    if !welcome_path.exists() {
-        if let Err(e) = fs::write(&welcome_path, WELCOME_TEMPLATE) {
-            log::warn!("Failed to create welcome file: {}", e);
-        } else {
-            log::info!("Created welcome file");
-        }
-    }
+    write_file_if_missing(&welcome_path, WELCOME_TEMPLATE, "welcome file")?;
 
     let message = if created_dirs.is_empty() {
         "GTD space already initialized".to_string()
@@ -429,7 +410,8 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
 
     if has_any_projects {
         // Still write a marker so we don't attempt again
-        let _ = fs::write(&seed_marker, "seeded: existing-projects");
+        fs::write(&seed_marker, "seeded: existing-projects")
+            .map_err(|e| format!("Failed to write seed marker: {}", e))?;
         return Ok("Projects already exist; skipping example seeding".to_string());
     }
 
@@ -502,10 +484,11 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         general_refs: &cabinet_ref, // References Cabinet
     };
     let readme_content = generate_project_readme_with_refs(readme_params);
-    let _ = fs::write(&readme_path, readme_content);
+    fs::write(&readme_path, readme_content)
+        .map_err(|e| format!("Failed to update seeded project README: {}", e))?;
 
     // Just 2 simple actions
-    let _ = create_gtd_action(
+    create_gtd_action(
         project1_path.clone(),
         "Define service offerings".to_string(),
         "in-progress".to_string(),
@@ -514,9 +497,9 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         "medium".to_string(),
         None, // No contexts specified
         None, // No notes for seed action
-    );
+    )?;
 
-    let _ = create_gtd_action(
+    create_gtd_action(
         project1_path.clone(),
         "Create landing page".to_string(),
         "waiting".to_string(),
@@ -525,7 +508,7 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         "large".to_string(),
         None, // No contexts specified
         None, // No notes for seed action
-    );
+    )?;
 
     // That's it - just ONE project with maximum connections!
 
@@ -535,7 +518,8 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         let weekly_review = habits_dir.join("Weekly GTD Review.md");
         if !weekly_review.exists() {
             let content = generate_weekly_review_habit();
-            let _ = fs::write(&weekly_review, content);
+            fs::write(&weekly_review, content)
+                .map_err(|e| format!("Failed to create weekly review habit: {}", e))?;
         }
     }
 
@@ -556,7 +540,8 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
 
 *Will support my Financial Freedom goal when activated*
 "#;
-            let _ = fs::write(&someday_example, content);
+            fs::write(&someday_example, content)
+                .map_err(|e| format!("Failed to create Someday Maybe example: {}", e))?;
         }
     }
 
@@ -567,9 +552,8 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
         let gtd_ref = cabinet_dir.join("GTD Quick Reference.md");
         if !gtd_ref.exists() {
             // Using the existing CABINET_GTD_PRINCIPLES_TEMPLATE
-            if let Err(e) = fs::write(&gtd_ref, CABINET_GTD_PRINCIPLES_TEMPLATE) {
-                log::warn!("Failed to create GTD Quick Reference: {}", e);
-            }
+            fs::write(&gtd_ref, CABINET_GTD_PRINCIPLES_TEMPLATE)
+                .map_err(|e| format!("Failed to create GTD Quick Reference: {}", e))?;
         }
     }
 
@@ -579,10 +563,11 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     // Habits already created above - removed duplicates
 
     // Write seed marker
-    let _ = fs::write(
+    fs::write(
         &seed_marker,
         format!("seeded: {}", chrono::Local::now().to_rfc3339()),
-    );
+    )
+    .map_err(|e| format!("Failed to write seed marker: {}", e))?;
 
     Ok("Seeded example projects, actions, horizons, habits, and reference materials".to_string())
 }
@@ -603,11 +588,11 @@ pub async fn initialize_default_gtd_space(app: AppHandle) -> Result<String, Stri
     };
 
     // Ensure GTD structure
-    let _ = initialize_gtd_space(target_path.clone()).await?;
+    initialize_gtd_space(target_path.clone()).await?;
 
     // Seed content if enabled
     if settings.seed_example_content.unwrap_or(true) {
-        let _ = seed_example_gtd_content(target_path.clone()).await;
+        seed_example_gtd_content(target_path.clone()).await?;
     }
 
     Ok(target_path)

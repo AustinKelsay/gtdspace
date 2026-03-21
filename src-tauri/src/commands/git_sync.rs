@@ -50,6 +50,7 @@ fn load_secure_encryption_key() -> Result<Option<String>, String> {
     match keyring::Entry::new(SECURE_STORAGE_SERVICE, GIT_SYNC_ENCRYPTION_KEY_NAME) {
         Ok(entry) => match entry.get_password() {
             Ok(password) => Ok(Some(password)),
+            Err(keyring::Error::NoEntry) => Ok(None),
             Err(err) => Err(err.to_string()),
         },
         Err(err) => Err(err.to_string()),

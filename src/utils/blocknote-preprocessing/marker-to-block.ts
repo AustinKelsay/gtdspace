@@ -219,7 +219,10 @@ export function buildMarkerOnlyBlock(
 
   if (kind === "checkbox") {
     const [type, checkedRaw] = splitMarkerRestLegacy(rest);
-    return createCheckboxBlock(type, checkedRaw === "true");
+    return createCheckboxBlock(
+      type,
+      checkedRaw === "true" || checkedRaw === "completed"
+    );
   }
 
   return createListBlock(kind, rest || "");

@@ -68,7 +68,7 @@ export function readCachedBlocks(
 ): unknown[] | null {
   const cached = blockProcessingCache.get(cacheKey);
   if (cached && now - cached.timestamp < CACHE_DURATION) {
-    return cached.blocks;
+    return [...cached.blocks];
   }
 
   return null;
@@ -94,7 +94,7 @@ export function writeCachedBlocks(
   blocks: unknown[],
   now: number = Date.now()
 ): void {
-  blockProcessingCache.set(cacheKey, { blocks, timestamp: now });
+  blockProcessingCache.set(cacheKey, { blocks: [...blocks], timestamp: now });
 }
 
 export function clearBlockProcessingCache(): void {

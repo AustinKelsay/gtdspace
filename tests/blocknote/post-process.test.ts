@@ -72,9 +72,11 @@ describe("postProcessBlockNoteBlocks", () => {
     const markdown = "[!references:/tmp/ref.md]";
 
     const firstResult = postProcessBlockNoteBlocks(blocks, markdown);
+    (firstResult as Array<{ type: string }>).push({ type: "mutated" });
     const secondResult = postProcessBlockNoteBlocks(blocks, markdown);
 
-    expect(secondResult).toBe(firstResult);
+    expect(secondResult).not.toBe(firstResult);
+    expect(secondResult).not.toContainEqual({ type: "mutated" });
 
     vi.advanceTimersByTime(6000);
     const thirdResult = postProcessBlockNoteBlocks(blocks, markdown);

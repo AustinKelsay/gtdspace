@@ -32,8 +32,16 @@ export const SKIPPED_LEGACY_MULTISELECT_TYPES = new Set([
   "project-status",
 ]);
 
-export const GTD_FIELD_MARKER_PATTERN =
-  /\[!(?:multiselect|singleselect|checkbox|datetime|references|projects-references|areas-references|goals-references|vision-references|purpose-references|habits-references|projects-list|areas-list|goals-list|visions-list|habits-list|actions-list|projects-areas-list|goals-areas-list|visions-goals-list|projects-and-areas-list|goals-and-areas-list|visions-and-goals-list)(?::[^\]]*)?\]/g;
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const MARKER_TYPE_PATTERN = MARKER_TYPES.map(escapeRegex).join("|");
+
+export const GTD_FIELD_MARKER_PATTERN = new RegExp(
+  `\\[!(?:${MARKER_TYPE_PATTERN})(?::[^\\]]*)?\\]`,
+  "g"
+);
 
 export const MULTISELECT_MARKER_PATTERN = /\[!multiselect:([^:]+):([^\]]*)\]/g;
 export const MULTISELECT_HTML_PATTERN =

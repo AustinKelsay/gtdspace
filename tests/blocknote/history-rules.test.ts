@@ -21,6 +21,20 @@ describe("blocknote history rules", () => {
         "---"
       )
     ).toBe(true);
+
+    expect(
+      isHorizontalRuleParagraph(
+        { type: "paragraph", content: "***" },
+        "***"
+      )
+    ).toBe(true);
+
+    expect(
+      isHorizontalRuleParagraph(
+        { type: "paragraph", content: "___" },
+        "___"
+      )
+    ).toBe(true);
   });
 
   it("skips empty, helper, and italic-only paragraphs inside history", () => {

@@ -15,8 +15,7 @@ export function replaceParagraphWithCustomBlocks(
     return null;
   }
 
-  const markerPattern = createMarkerOnlyTokenRegex();
-  const markerTokenRegex = new RegExp(markerPattern.source, markerPattern.flags);
+  const markerTokenRegex = createMarkerOnlyTokenRegex();
   const leftoverAfterRemoval = blockText.replace(markerTokenRegex, "");
   const leftoverSanitized = leftoverAfterRemoval
     .replace(/[\s\u200B-\u200D\uFEFF]/g, "")
@@ -25,8 +24,8 @@ export function replaceParagraphWithCustomBlocks(
     trimmedText.length > 0 && leftoverSanitized === "";
 
   if (onlyMarkers) {
-    const markerMatchesRegex = new RegExp(markerPattern.source, markerPattern.flags);
-    const matches = [...blockText.matchAll(markerMatchesRegex)];
+    markerTokenRegex.lastIndex = 0;
+    const matches = [...blockText.matchAll(markerTokenRegex)];
     const processedBlocks: ProcessedBlock[] = [];
     let hasFailure = false;
 

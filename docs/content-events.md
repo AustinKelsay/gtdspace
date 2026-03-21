@@ -117,9 +117,11 @@ emitMetadataChange({
 - Emits content saved events after successful save
 
 ### GTD Workspace Sidebar
-- Subscribes to metadata changes for real-time status updates
-- Subscribes to content saved events for title-based file/folder renaming
-- Updates UI immediately without reloading
+- `useGTDWorkspaceSidebar` owns the sidebar subscriptions and keeps the render components passive
+- Subscribes to metadata changes for real-time status and due-date overlays
+- Subscribes to content saved events for title-based project/action/section-file renaming
+- Forces targeted section reloads when content events affect flat sections or horizon folders
+- Continues to dispatch structural DOM events after successful renames/deletes so tabs and calendar listeners stay in sync
 
 ### Custom Rename Events
 The system also uses custom DOM events for specific rename operations:

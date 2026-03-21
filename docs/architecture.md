@@ -18,7 +18,8 @@ At a high level, the app is split into four layers:
 The current frontend is organized around these major areas:
 
 - `src/components/app/`: top-level shell, loading state, and header
-- `src/components/gtd/`: GTD pages, workspace sidebar, dialogs, and dashboard shell
+- `src/components/gtd/`: GTD pages, dialogs, dashboard shell, and the top-level sidebar entrypoint (`GTDWorkspaceSidebar.tsx`)
+- `src/components/gtd/sidebar/`: workspace sidebar presentation layer with section renderers and shared sidebar helpers, coordinated by `src/hooks/useGTDWorkspaceSidebar.ts`
 - `src/components/dashboard/`: dashboard tabs for overview, projects, actions, habits, and horizons
 - `src/components/calendar/`: calendar view and Google Calendar auto-sync bridge
 - `src/components/editor/`: `EnhancedTextEditor`, `BlockNoteEditor`, and custom editor blocks

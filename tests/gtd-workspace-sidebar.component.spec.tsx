@@ -1,16 +1,113 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { GTDWorkspaceSidebar } from '@/components/gtd/GTDWorkspaceSidebar';
+import { emitMetadataChange } from '@/utils/content-event-bus';
+import type { GTDProject, GTDSpace, MarkdownFile } from '@/types';
+
+const safeInvokeMock = vi.fn();
+const readFileTextMock = vi.fn();
+const useGTDSpaceMock = vi.fn();
 
 vi.mock('@/hooks/useGTDSpace', () => ({
-  useGTDSpace: () => ({
-    gtdSpace: null,
-    isLoading: false,
-    checkGTDSpace: vi.fn().mockResolvedValue(false),
-    loadProjects: vi.fn().mockResolvedValue([]),
-  }),
+  useGTDSpace: () => useGTDSpaceMock(),
 }));
+
+vi.mock('@/utils/safe-invoke', () => ({
+  safeInvoke: (...args: unknown[]) => safeInvokeMock(...args),
+}));
+
+vi.mock('@/hooks/useFileManager', () => ({
+  readFileText: (...args: unknown[]) => readFileTextMock(...args),
+}));
+
+vi.mock('@/components/gtd/GTDProjectDialog', () => ({
+  GTDProjectDialog: () => null,
+}));
+
+vi.mock('@/components/gtd/GTDActionDialog', () => ({
+  GTDActionDialog: () => null,
+}));
+
+vi.mock('@/components/gtd/CreatePageDialog', () => ({
+  CreatePageDialog: () => null,
+}));
+
+vi.mock('@/components/gtd/CreateHabitDialog', () => ({
+  CreateHabitDialog: () => null,
+}));
+
+const rootPath = '/tmp/gtd-space';
+
+const activeProject: GTDProject = {
+  name: 'Project Alpha',
+  description: 'Alpha delivery',
+  status: 'in-progress',
+  path: `${rootPath}/Projects/Project Alpha`,
+  dueDate: '2026-03-30',
+  createdDateTime: '2026-03-01T10:00:00Z',
+  action_count: 2,
+};
+
+const completedProject: GTDProject = {
+  name: 'Project Done',
+  description: 'Done work',
+  status: 'completed',
+  path: `${rootPath}/Projects/Project Done`,
+  dueDate: undefined,
+  createdDateTime: '2026-02-01T10:00:00Z',
+  action_count: 0,
+};
+
+const gtdSpace: GTDSpace = {
+  root_path: rootPath,
+  is_initialized: true,
+  isGTDSpace: true,
+  projects: [activeProject, completedProject],
+  total_actions: 2,
+};
+
+const projectActions: MarkdownFile[] = [
+  {
+    id: `${activeProject.path}/Write spec.md`,
+    name: 'Write spec.md',
+    path: `${activeProject.path}/Write spec.md`,
+    size: 100,
+    last_modified: 1,
+    extension: 'md',
+  },
+  {
+    id: `${activeProject.path}/Clean desk.md`,
+    name: 'Clean desk.md',
+    path: `${activeProject.path}/Clean desk.md`,
+    size: 100,
+    last_modified: 1,
+    extension: 'md',
+  },
+];
+
+const markdownFile = (path: string, name: string): MarkdownFile => ({
+  id: path,
+  name,
+  path,
+  size: 100,
+  last_modified: 1,
+  extension: 'md',
+});
+
+const renderSidebar = (overrides: Partial<React.ComponentProps<typeof GTDWorkspaceSidebar>> = {}) =>
+  render(
+    <GTDWorkspaceSidebar
+      currentFolder={rootPath}
+      gtdSpace={gtdSpace}
+      checkGTDSpace={vi.fn().mockResolvedValue(true)}
+      loadProjects={vi.fn().mockResolvedValue(gtdSpace.projects || [])}
+      onFolderSelect={vi.fn()}
+      onFileSelect={vi.fn()}
+      onRefresh={vi.fn()}
+      {...overrides}
+    />
+  );
 
 describe('GTDWorkspaceSidebar component', () => {
   const baseProps = {
@@ -18,6 +115,26 @@ describe('GTDWorkspaceSidebar component', () => {
     onFileSelect: vi.fn(),
     onRefresh: vi.fn(),
   };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    useGTDSpaceMock.mockReturnValue({
+      gtdSpace: null,
+      isLoading: false,
+      checkGTDSpace: vi.fn().mockResolvedValue(false),
+      loadProjects: vi.fn().mockResolvedValue([]),
+    });
+    readFileTextMock.mockImplementation(async (path: string) => {
+      if (path.endsWith('Write spec.md')) {
+        return '# Write spec\n\n[!singleselect:status:in-progress]\n[!datetime:due_date:2026-03-29]';
+      }
+      if (path.endsWith('Clean desk.md')) {
+        return '# Clean desk\n\n[!singleselect:status:completed]';
+      }
+      return '# File';
+    });
+  });
 
   it('renders welcome empty state when no folder is selected', () => {
     render(<GTDWorkspaceSidebar currentFolder={null} {...baseProps} />);
@@ -46,5 +163,183 @@ describe('GTDWorkspaceSidebar component', () => {
 
     expect(screen.getByText('This is not a GTD workspace')).toBeInTheDocument();
     expect(screen.getByText('Initialize from the prompt')).toBeInTheDocument();
+  });
+
+  it('renders projects, preloaded sections, and completed buckets for an initialized GTD workspace', async () => {
+    let habitsLoadCount = 0;
+
+    safeInvokeMock.mockImplementation(
+      async (command: string, args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
+        if (command === 'list_project_actions' && args?.projectPath === activeProject.path) {
+          return projectActions;
+        }
+
+        if (command === 'list_markdown_files') {
+          switch (args?.path) {
+            case `${rootPath}/Habits`:
+              habitsLoadCount += 1;
+              return [
+                markdownFile(
+                  `${rootPath}/Habits/${habitsLoadCount > 1 ? 'Habit Renamed' : 'Morning Run'}.md`,
+                  `${habitsLoadCount > 1 ? 'Habit Renamed' : 'Morning Run'}.md`
+                ),
+              ];
+            case `${rootPath}/Areas of Focus`:
+              return [
+                markdownFile(`${rootPath}/Areas of Focus/README.md`, 'README.md'),
+                markdownFile(`${rootPath}/Areas of Focus/Health.md`, 'Health.md'),
+              ];
+            case `${rootPath}/Goals`:
+              return [];
+            case `${rootPath}/Vision`:
+            case `${rootPath}/Purpose & Principles`:
+            case `${rootPath}/Someday Maybe`:
+            case `${rootPath}/Cabinet`:
+              return [];
+            default:
+              return fallback ?? [];
+          }
+        }
+
+        if (command === 'read_file') {
+          return '# README';
+        }
+
+        if (command === 'save_file') {
+          return 'ok';
+        }
+
+        return fallback ?? null;
+      }
+    );
+
+    renderSidebar();
+
+    expect(await screen.findByText('Project Alpha')).toBeInTheDocument();
+    expect(await screen.findByText('Morning Run')).toBeInTheDocument();
+    expect(screen.getByText('Completed Projects')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Expand Project Alpha'));
+
+    expect(await screen.findByText('Write spec')).toBeInTheDocument();
+    expect(screen.getByText('Completed Actions')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Completed Projects'));
+    expect(await screen.findByText('Project Done')).toBeInTheDocument();
+  });
+
+  it('shows cross-section search results for projects, actions, and section files', async () => {
+    safeInvokeMock.mockImplementation(
+      async (command: string, args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
+        if (command === 'list_project_actions' && args?.projectPath === activeProject.path) {
+          return projectActions;
+        }
+
+        if (command === 'list_markdown_files') {
+          switch (args?.path) {
+            case `${rootPath}/Habits`:
+              return [markdownFile(`${rootPath}/Habits/Morning Run.md`, 'Morning Run.md')];
+            case `${rootPath}/Areas of Focus`:
+              return [markdownFile(`${rootPath}/Areas of Focus/README.md`, 'README.md')];
+            case `${rootPath}/Goals`:
+            case `${rootPath}/Vision`:
+            case `${rootPath}/Purpose & Principles`:
+            case `${rootPath}/Someday Maybe`:
+            case `${rootPath}/Cabinet`:
+              return [];
+            default:
+              return fallback ?? [];
+          }
+        }
+
+        if (command === 'read_file') return '# README';
+        if (command === 'save_file') return 'ok';
+        return fallback ?? null;
+      }
+    );
+
+    renderSidebar();
+
+    await screen.findByText('Project Alpha');
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+
+    fireEvent.change(screen.getByPlaceholderText('Search...'), {
+      target: { value: 'clean' },
+    });
+    expect(await screen.findByText('Actions')).toBeInTheDocument();
+    expect(screen.getByText('Clean desk')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('Search...'), {
+      target: { value: 'morning' },
+    });
+    expect(await screen.findByText('Habits')).toBeInTheDocument();
+    expect(screen.getByText('Morning Run')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('Search...'), {
+      target: { value: 'alpha' },
+    });
+    expect(await screen.findByText('Projects')).toBeInTheDocument();
+    expect(screen.getByText('Project Alpha')).toBeInTheDocument();
+  });
+
+  it('reloads a section when content events report a file change inside it', async () => {
+    let habitsLoadCount = 0;
+
+    safeInvokeMock.mockImplementation(
+      async (command: string, args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
+        if (command === 'list_project_actions' && args?.projectPath === activeProject.path) {
+          return projectActions;
+        }
+
+        if (command === 'list_markdown_files') {
+          switch (args?.path) {
+            case `${rootPath}/Habits`:
+              habitsLoadCount += 1;
+              return [
+                markdownFile(
+                  `${rootPath}/Habits/${habitsLoadCount > 1 ? 'Habit Renamed' : 'Morning Run'}.md`,
+                  `${habitsLoadCount > 1 ? 'Habit Renamed' : 'Morning Run'}.md`
+                ),
+              ];
+            case `${rootPath}/Areas of Focus`:
+            case `${rootPath}/Goals`:
+            case `${rootPath}/Vision`:
+            case `${rootPath}/Purpose & Principles`:
+            case `${rootPath}/Someday Maybe`:
+            case `${rootPath}/Cabinet`:
+              return [];
+            default:
+              return fallback ?? [];
+          }
+        }
+
+        if (command === 'read_file') return '# README';
+        if (command === 'save_file') return 'ok';
+        return fallback ?? null;
+      }
+    );
+
+    renderSidebar();
+
+    expect(await screen.findByText('Morning Run')).toBeInTheDocument();
+
+    act(() => {
+      emitMetadataChange({
+        filePath: `${rootPath}/Habits/Morning Run.md`,
+        fileName: 'Morning Run.md',
+        content: '# Morning Run',
+        metadata: { title: 'Habit Renamed' } as never,
+        changedFields: { title: 'Habit Renamed' } as never,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Habit Renamed')).toBeInTheDocument();
+    });
+
+    const habitListCalls = (safeInvokeMock as Mock).mock.calls.filter(
+      ([command, args]) => command === 'list_markdown_files' && args?.path === `${rootPath}/Habits`
+    );
+    expect(habitListCalls.length).toBeGreaterThanOrEqual(2);
   });
 });

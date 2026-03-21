@@ -83,7 +83,11 @@ function enforceMaxTabs(
   };
 }
 
-function updateActiveTabAfterRemoval(state: TabManagerState, remainingTabs: FileTab[], removedTabId: string) {
+function updateActiveTabAfterRemoval(
+  state: TabManagerState,
+  remainingTabs: FileTab[],
+  removedTabId: string,
+): string | null {
   let nextActiveTabId = state.activeTabId;
 
   if (state.activeTabId === removedTabId) {
@@ -242,10 +246,11 @@ export function tabStateReducer(state: TabManagerState, action: TabStateAction):
         return state;
       }
 
-      const nextActiveTabId =
-        state.activeTabId && nextTabs.some((tab) => tab.id === state.activeTabId)
-          ? state.activeTabId
-          : nextTabs[nextTabs.length - 1]?.id ?? null;
+      const activeTabWasRemoved =
+        state.activeTabId !== null && !nextTabs.some((tab) => tab.id === state.activeTabId);
+      const nextActiveTabId = activeTabWasRemoved
+        ? updateActiveTabAfterRemoval(state, nextTabs, state.activeTabId!)
+        : state.activeTabId;
 
       return {
         ...state,

@@ -129,13 +129,14 @@ function snapshotMatchesWorkspace(
 }
 
 function createRestoredFile(filePath: string, fileName: string, content: string): MarkdownFile {
+  const lastDotIndex = fileName.lastIndexOf('.');
   return {
     id: filePath,
     name: fileName,
     path: filePath,
     size: content.length,
     last_modified: Math.floor(Date.now() / 1000),
-    extension: fileName.split('.').pop() || 'md',
+    extension: lastDotIndex >= 0 ? fileName.slice(lastDotIndex + 1) || 'md' : 'md',
   };
 }
 
@@ -155,7 +156,7 @@ export async function restoreTabStateFromStorage(
 
   for (const persistedTab of snapshot.openTabs) {
     const fileContent = await options.readFile(persistedTab.filePath);
-    if (fileContent === null || fileContent === undefined) {
+    if (fileContent == null) {
       continue;
     }
 

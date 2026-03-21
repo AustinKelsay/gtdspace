@@ -2,7 +2,10 @@ import type { FileTab, MarkdownFile } from '@/types';
 import { extractMetadata } from '@/utils/metadata-extractor';
 import { emitContentSaved, emitMetadataChange } from '@/utils/content-event-bus';
 import { migrateMarkdownContent, needsMigration } from '@/utils/data-migration';
+import { createScopedLogger } from '@/utils/logger';
 import { safeInvoke } from '@/utils/safe-invoke';
+
+const log = createScopedLogger('tabRuntimeLifecycle');
 
 export async function readTabFile(filePath: string): Promise<string | null> {
   return safeInvoke<string>('read_file', { path: filePath }, null);
@@ -19,24 +22,44 @@ export async function loadTabForOpen(file: MarkdownFile): Promise<Pick<FileTab, 
   let content = (await safeInvoke<string>('read_file', { path: file.path }, '')) || '';
 
   if (needsMigration(content)) {
-    const migratedContent = migrateMarkdownContent(content);
-    await safeInvoke<void>('save_file', { path: `${file.path}.backup`, content }, null);
-    await safeInvoke<void>('save_file', { path: file.path, content: migratedContent }, null);
-    content = migratedContent;
+    try {
+      const migratedContent = migrateMarkdownContent(content);
+      const backupResult = await safeInvoke<string>(
+        'save_file',
+        { path: `${file.path}.backup`, content },
+        null,
+      );
+      if (backupResult === null) {
+        throw new Error('Failed to save migration backup');
+      }
 
-    const metadata = extractMetadata(content);
-    emitContentSaved({
-      filePath: file.path,
-      fileName: file.name,
-      content,
-      metadata,
-    });
-    emitMetadataChange({
-      filePath: file.path,
-      fileName: file.name,
-      content,
-      metadata,
-    });
+      const migratedSaveResult = await safeInvoke<string>(
+        'save_file',
+        { path: file.path, content: migratedContent },
+        null,
+      );
+      if (migratedSaveResult === null) {
+        throw new Error('Failed to save migrated content');
+      }
+
+      content = migratedContent;
+
+      const metadata = extractMetadata(content);
+      emitContentSaved({
+        filePath: file.path,
+        fileName: file.name,
+        content,
+        metadata,
+      });
+      emitMetadataChange({
+        filePath: file.path,
+        fileName: file.name,
+        content,
+        metadata,
+      });
+    } catch (error) {
+      log.error('Failed to persist migrated tab content', error);
+    }
   }
 
   return {

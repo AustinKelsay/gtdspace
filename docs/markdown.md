@@ -262,7 +262,7 @@ if (file.size > MAX_FILE_SIZE) {
 ### Parsing Performance
 
 - BlockNote parsing is async to avoid blocking
-- explicit external refresh from events such as habit-content sync or other forced reload paths is debounced for 300ms before reparsing/replacing editor blocks
+- explicit external refresh from events such as habit-content sync or other forced reload paths is debounced for 300ms before re-parsing and replacing editor blocks
 - GTD post-processing uses a 5-second in-memory cache keyed by parsed block count plus a markdown-derived structural/content hash of recognized GTD markers and trimmed content
 - Virtual scrolling for long documents
 

@@ -72,16 +72,34 @@ describe("postProcessBlockNoteBlocks", () => {
     const markdown = "[!references:/tmp/ref.md]";
 
     const firstResult = postProcessBlockNoteBlocks(blocks, markdown);
-    (firstResult as Array<{ type: string }>).push({ type: "mutated" });
+    (firstResult as Array<{ props?: { references?: string } }>)[0].props = {
+      references: "/tmp/mutated.md",
+    };
     const secondResult = postProcessBlockNoteBlocks(blocks, markdown);
 
     expect(secondResult).not.toBe(firstResult);
-    expect(secondResult).not.toContainEqual({ type: "mutated" });
+    expect(secondResult).toMatchObject([
+      {
+        type: "references",
+        props: { references: "/tmp/ref.md" },
+      },
+    ]);
+
+    (secondResult as Array<{ props?: { references?: string } }>)[0].props = {
+      references: "/tmp/second-mutation.md",
+    };
+    const thirdResultWithinTtl = postProcessBlockNoteBlocks(blocks, markdown);
+    expect(thirdResultWithinTtl).toMatchObject([
+      {
+        type: "references",
+        props: { references: "/tmp/ref.md" },
+      },
+    ]);
 
     vi.advanceTimersByTime(6000);
     const thirdResult = postProcessBlockNoteBlocks(blocks, markdown);
 
-    expect(thirdResult).not.toBe(firstResult);
+    expect(thirdResult).not.toBe(thirdResultWithinTtl);
     expect(thirdResult).toMatchObject([
       {
         type: "references",

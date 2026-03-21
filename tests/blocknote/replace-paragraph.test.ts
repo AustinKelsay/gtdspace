@@ -145,4 +145,20 @@ describe("replaceParagraphWithCustomBlocks", () => {
 
     expect(result).toBeNull();
   });
+
+  it("preserves invisible marker-free paragraphs that sanitize to only markers", () => {
+    const block = {
+      type: "paragraph",
+      content: "\u200B",
+    };
+
+    const result = replaceParagraphWithCustomBlocks(
+      block,
+      "\u200B",
+      new Map()
+    );
+
+    expect(result).toEqual([block]);
+    expect(result?.[0]).toBe(block);
+  });
 });

@@ -144,6 +144,10 @@ describe("scanMarkdownForCustomBlocks", () => {
     expect(result.totalCustomBlocks).toBe(0);
     expect(result.hasReplacementBlocks).toBe(false);
     expect(result.replacementByText.size).toBe(0);
+    expect(console.warn).toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledWith(
+      'Legacy multiselect type "status" found in markdown. Skipping.'
+    );
   });
 
   it("marks list-only markdown as having replacement blocks", () => {

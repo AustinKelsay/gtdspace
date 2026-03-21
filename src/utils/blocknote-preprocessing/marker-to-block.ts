@@ -14,31 +14,42 @@ import type {
 } from "./types";
 
 const EMPTY_OPTIONS_JSON = "[]";
-const LIST_TYPE_BY_KIND: Record<string, NonNullable<ListBlock["props"]["listType"]>> = {
-  "projects-list": "projects",
-  "areas-list": "areas",
-  "goals-list": "goals",
-  "visions-list": "visions",
-  "habits-list": "habits",
-  "projects-areas-list": "projects-areas",
-  "projects-and-areas-list": "projects-areas",
-  "goals-areas-list": "goals-areas",
-  "goals-and-areas-list": "goals-areas",
-  "visions-goals-list": "visions-goals",
-  "visions-and-goals-list": "visions-goals",
-};
-const BLOCK_TYPE_BY_KIND: Record<string, ListBlock["type"]> = {
-  "projects-list": "projects-list",
-  "areas-list": "areas-list",
-  "goals-list": "goals-list",
-  "visions-list": "visions-list",
-  "habits-list": "habits-list",
-  "projects-areas-list": "projects-areas-list",
-  "projects-and-areas-list": "projects-areas-list",
-  "goals-areas-list": "goals-areas-list",
-  "goals-and-areas-list": "goals-areas-list",
-  "visions-goals-list": "visions-goals-list",
-  "visions-and-goals-list": "visions-goals-list",
+const LIST_KIND_META: Record<
+  string,
+  {
+    listType: NonNullable<ListBlock["props"]["listType"]>;
+    type: ListBlock["type"];
+  }
+> = {
+  "projects-list": { listType: "projects", type: "projects-list" },
+  "areas-list": { listType: "areas", type: "areas-list" },
+  "goals-list": { listType: "goals", type: "goals-list" },
+  "visions-list": { listType: "visions", type: "visions-list" },
+  "habits-list": { listType: "habits", type: "habits-list" },
+  "projects-areas-list": {
+    listType: "projects-areas",
+    type: "projects-areas-list",
+  },
+  "projects-and-areas-list": {
+    listType: "projects-areas",
+    type: "projects-areas-list",
+  },
+  "goals-areas-list": {
+    listType: "goals-areas",
+    type: "goals-areas-list",
+  },
+  "goals-and-areas-list": {
+    listType: "goals-areas",
+    type: "goals-areas-list",
+  },
+  "visions-goals-list": {
+    listType: "visions-goals",
+    type: "visions-goals-list",
+  },
+  "visions-and-goals-list": {
+    listType: "visions-goals",
+    type: "visions-goals-list",
+  },
 };
 
 export function cloneProcessedBlock<T extends ProcessedBlock>(block: T): T {
@@ -141,16 +152,15 @@ export function createListBlock(
     };
   }
 
-  const listType = LIST_TYPE_BY_KIND[kind];
-  if (!listType) {
+  const listMeta = LIST_KIND_META[kind];
+  if (!listMeta) {
     return null;
   }
 
-  const blockType = BLOCK_TYPE_BY_KIND[kind];
   return {
-    type: blockType,
+    type: listMeta.type,
     props: {
-      listType,
+      listType: listMeta.listType,
     },
   };
 }
@@ -159,9 +169,10 @@ export function createHabitStatusCheckbox(
   value: string,
   label: string = ""
 ): CheckboxBlock {
+  const normalizedValue = value.trim().toLowerCase();
   return createCheckboxBlock(
     "habit-status",
-    value === "completed" || value === "true",
+    normalizedValue === "completed" || normalizedValue === "true",
     label
   );
 }

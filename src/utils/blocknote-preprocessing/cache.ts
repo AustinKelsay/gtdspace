@@ -7,6 +7,14 @@ const blockProcessingCache = new Map<
 
 export const CACHE_DURATION = 5000;
 
+function cloneCachedBlocks(blocks: unknown[]): unknown[] {
+  if (typeof structuredClone === "function") {
+    return structuredClone(blocks);
+  }
+
+  return JSON.parse(JSON.stringify(blocks)) as unknown[];
+}
+
 function createNumericHash(value: string): string {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -68,7 +76,7 @@ export function readCachedBlocks(
 ): unknown[] | null {
   const cached = blockProcessingCache.get(cacheKey);
   if (cached && now - cached.timestamp < CACHE_DURATION) {
-    return [...cached.blocks];
+    return cloneCachedBlocks(cached.blocks);
   }
 
   return null;
@@ -94,7 +102,10 @@ export function writeCachedBlocks(
   blocks: unknown[],
   now: number = Date.now()
 ): void {
-  blockProcessingCache.set(cacheKey, { blocks: [...blocks], timestamp: now });
+  blockProcessingCache.set(cacheKey, {
+    blocks: cloneCachedBlocks(blocks),
+    timestamp: now,
+  });
 }
 
 export function clearBlockProcessingCache(): void {

@@ -84,7 +84,7 @@ export const VISIONS_AND_GOALS_LIST_PATTERN = /\[!visions-and-goals-list\]/g;
 
 export function createMarkerOnlyTokenRegex(): RegExp {
   return new RegExp(
-    `\\[!(${MARKER_TYPES.join("|")})(:[^\\]]*)?\\](?:\\])?`,
+    `\\[!(${MARKER_TYPE_PATTERN})(:[^\\]]*)?\\](?:\\])?`,
     "g"
   );
 }

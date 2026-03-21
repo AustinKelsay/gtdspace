@@ -26,6 +26,10 @@ export function replaceParagraphWithCustomBlocks(
   if (onlyMarkers) {
     markerTokenRegex.lastIndex = 0;
     const matches = [...blockText.matchAll(markerTokenRegex)];
+    if (matches.length === 0) {
+      return [block];
+    }
+
     const processedBlocks: ProcessedBlock[] = [];
     let hasFailure = false;
 

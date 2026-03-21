@@ -112,9 +112,11 @@ emitMetadataChange({
 ## Integration Points
 
 ### TabManager Hook
-- Emits content change events when tab content is updated
-- Emits metadata change events when specific fields change
-- Emits content saved events after successful save
+- `useTabManager` emits content change events when tab content is updated
+- It emits metadata change events when specific fields change
+- It emits content saved events after successful save and after disk reloads used during conflict resolution
+- The app shell listens to `content:saved` for project markdown files so project lists refresh without `window.onTabFileSaved`
+- `window.applyBacklinkChange` remains a separate window-level integration used for targeted in-editor backlink mutations
 
 ### GTD Workspace Sidebar
 - `useGTDWorkspaceSidebar` owns the sidebar subscriptions and keeps the render components passive
@@ -140,8 +142,9 @@ Event callbacks are executed synchronously but operations within can be parallel
 
 ### Debouncing
 While the event bus itself doesn't debounce, consumers typically implement debouncing:
-- Auto-save has a 2s debounce
-- File watcher has a 500ms debounce
+- Tab metadata diffing in `useTabManager` uses a 500ms debounce
+- Tab content state updates use a 150ms debounce to reduce render churn while typing
+- File watcher handling still batches at the consumer level
 
 ## Best Practices
 

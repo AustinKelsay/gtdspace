@@ -10,6 +10,7 @@ import { PropSchema } from '@blocknote/core';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { getPersistedActiveTabFilePath } from '@/hooks/tab-runtime';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { extractMetadata } from '@/utils/metadata-extractor';
 import debounce from 'lodash.debounce';
@@ -154,39 +155,7 @@ const ActionsListRenderer = React.memo(function ActionsListRenderer(props: Actio
     if (blocknotePath) {
       return blocknotePath;
     }
-
-    // Fallback: Try to get from localStorage (active tab info)
-    const tabsJson = localStorage.getItem('gtdspace-tabs');
-    if (tabsJson) {
-      try {
-        const tabsData = JSON.parse(tabsJson);
-
-        // Validate the structure before accessing nested properties
-        if (!tabsData || typeof tabsData !== 'object') {
-          return null;
-        }
-
-        // Ensure openTabs is an array before trying to use find
-        if (!Array.isArray(tabsData.openTabs)) {
-          return null;
-        }
-
-        const activeTab = tabsData.openTabs.find((t: any) =>
-          t && typeof t === 'object' && t.id === tabsData.activeTabId
-        );
-
-        // Check filePath first (preferred), fallback to path if not available
-        if (activeTab?.filePath && typeof activeTab.filePath === 'string') {
-          return activeTab.filePath;
-        } else if (activeTab?.path && typeof activeTab.path === 'string') {
-          return activeTab.path;
-        }
-      } catch (_e) {
-        // Silent fail - this is a fallback
-      }
-    }
-
-    return null;
+    return getPersistedActiveTabFilePath();
   }, []);
 
   // Get project path from current file path

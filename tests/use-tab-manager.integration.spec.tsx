@@ -2,7 +2,7 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, waitFor } from '@testing-library/react';
-import type { MarkdownFile } from '@/types';
+import type { FileTab, MarkdownFile, TabManagerConfig } from '@/types';
 import { useTabManager } from '@/hooks/useTabManager';
 
 const mocks = vi.hoisted(() => ({
@@ -67,17 +67,18 @@ function buildFile(id: string, path: string): MarkdownFile {
   };
 }
 
-function renderTabManagerHook() {
+function renderTabManagerHook(config: TabManagerConfig = {}) {
   let current: ReturnType<typeof useTabManager> | null = null;
 
   const Harness = () => {
-    current = useTabManager();
+    current = useTabManager(config);
     return null;
   };
 
-  render(<Harness />);
+  const rendered = render(<Harness />);
 
   return {
+    ...rendered,
     getCurrent: () => {
       if (!current) {
         throw new Error('Hook state not initialized yet');
@@ -91,7 +92,6 @@ describe('useTabManager integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    delete window.onTabFileSaved;
 
     mocks.needsMigration.mockReturnValue(false);
     mocks.migrateMarkdownContent.mockImplementation((content: string) => `migrated::${content}`);
@@ -139,26 +139,39 @@ describe('useTabManager integration', () => {
     expect(mocks.emitMetadataChange).toHaveBeenCalled();
   });
 
-  it('evicts the oldest inactive unsaved-false tab when max tab count is exceeded', async () => {
-    const { getCurrent } = renderTabManagerHook();
+  it('honors configured max tabs and evicts the oldest inactive clean tab when exceeded', async () => {
+    const { getCurrent } = renderTabManagerHook({ maxTabs: 2 });
 
-    for (let i = 1; i <= 11; i += 1) {
-      const file = buildFile(`f-${i}`, `/mock/workspace/notes-${i}.md`);
-      await act(async () => {
-        await getCurrent().openTab(file);
-      });
-    }
+    const firstFile = buildFile('f-1', '/mock/workspace/notes-1.md');
+    const secondFile = buildFile('f-2', '/mock/workspace/notes-2.md');
+    const thirdFile = buildFile('f-3', '/mock/workspace/notes-3.md');
+
+    await act(async () => {
+      await getCurrent().openTab(firstFile);
+      await getCurrent().openTab(secondFile);
+    });
+
+    act(() => {
+      getCurrent().activateTab(getCurrent().tabState.openTabs[0].id);
+    });
+
+    await act(async () => {
+      await getCurrent().openTab(thirdFile);
+    });
 
     await waitFor(() => {
-      expect(getCurrent().tabState.openTabs).toHaveLength(10);
+      expect(getCurrent().tabState.openTabs).toHaveLength(2);
     });
 
     const remainingPaths = getCurrent().tabState.openTabs.map((tab) => tab.file.path);
-    expect(remainingPaths).not.toContain('/mock/workspace/notes-1.md');
-    expect(getCurrent().tabState.recentlyClosed[0]?.file.path).toBe('/mock/workspace/notes-1.md');
+    expect(remainingPaths).toEqual([
+      '/mock/workspace/notes-1.md',
+      '/mock/workspace/notes-3.md',
+    ]);
+    expect(getCurrent().tabState.recentlyClosed[0]?.file.path).toBe('/mock/workspace/notes-2.md');
   });
 
-  it('saves an edited tab and calls window.onTabFileSaved callback', async () => {
+  it('saves an edited tab and emits content-saved updates', async () => {
     const { getCurrent } = renderTabManagerHook();
     const file = buildFile('f-save', '/mock/workspace/Projects/Alpha/Task.md');
 
@@ -175,9 +188,6 @@ describe('useTabManager integration', () => {
       expect(getCurrent().tabState.openTabs[0]?.hasUnsavedChanges).toBe(true);
     });
 
-    const onSaved = vi.fn();
-    window.onTabFileSaved = onSaved;
-
     let saved = false;
     await act(async () => {
       saved = await getCurrent().saveTab(tabId);
@@ -187,9 +197,14 @@ describe('useTabManager integration', () => {
     expect(mocks.safeInvoke).toHaveBeenCalledWith(
       'save_file',
       { path: '/mock/workspace/Projects/Alpha/Task.md', content: '# changed' },
-      null
+      null,
     );
-    expect(onSaved).toHaveBeenCalledWith('/mock/workspace/Projects/Alpha/Task.md');
+    expect(mocks.emitContentSaved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/mock/workspace/Projects/Alpha/Task.md',
+        content: '# changed',
+      }),
+    );
 
     await waitFor(() => {
       expect(getCurrent().tabState.openTabs[0]?.hasUnsavedChanges).toBe(false);
@@ -259,8 +274,113 @@ describe('useTabManager integration', () => {
     expect(reloaded).toBe(false);
   });
 
-  it('persists tabs to localStorage and clears storage when last tab closes', async () => {
+  it('saves keep-local conflict resolution using the dirty editor content', async () => {
     const { getCurrent } = renderTabManagerHook();
+    const file = buildFile('f-conflict', '/mock/workspace/Projects/Alpha/Conflict.md');
+
+    let tabId = '';
+    await act(async () => {
+      tabId = await getCurrent().openTab(file);
+    });
+
+    act(() => {
+      getCurrent().updateTabContent(tabId, '# keep local');
+    });
+
+    await waitFor(() => {
+      expect(getCurrent().tabState.openTabs[0]?.hasUnsavedChanges).toBe(true);
+    });
+
+    mocks.safeInvoke.mockClear();
+
+    let resolved = false;
+    await act(async () => {
+      resolved = await getCurrent().resolveConflict(tabId, { action: 'keep-local' });
+    });
+
+    expect(resolved).toBe(true);
+    expect(mocks.safeInvoke).toHaveBeenCalledWith(
+      'save_file',
+      { path: '/mock/workspace/Projects/Alpha/Conflict.md', content: '# keep local' },
+      null,
+    );
+    expect(getCurrent().tabState.openTabs[0]?.hasUnsavedChanges).toBe(false);
+  });
+
+  it('saves manual-merge conflict resolution with merged content', async () => {
+    const { getCurrent } = renderTabManagerHook();
+    const file = buildFile('f-merge', '/mock/workspace/Projects/Alpha/Merge.md');
+
+    let tabId = '';
+    await act(async () => {
+      tabId = await getCurrent().openTab(file);
+    });
+
+    mocks.safeInvoke.mockClear();
+
+    let resolved = false;
+    await act(async () => {
+      resolved = await getCurrent().resolveConflict(tabId, {
+        action: 'manual-merge',
+        content: '# merged',
+      });
+    });
+
+    expect(resolved).toBe(true);
+    expect(mocks.safeInvoke).toHaveBeenCalledWith(
+      'save_file',
+      { path: '/mock/workspace/Projects/Alpha/Merge.md', content: '# merged' },
+      null,
+    );
+    expect(getCurrent().tabState.openTabs[0]?.content).toBe('# merged');
+    expect(getCurrent().tabState.openTabs[0]?.hasUnsavedChanges).toBe(false);
+  });
+
+  it('uses external content for conflict resolution without writing back to disk', async () => {
+    const { getCurrent } = renderTabManagerHook();
+    const file = buildFile('f-external', '/mock/workspace/Projects/Alpha/External.md');
+
+    let tabId = '';
+    await act(async () => {
+      tabId = await getCurrent().openTab(file);
+    });
+
+    act(() => {
+      getCurrent().updateTabContent(tabId, '# local');
+    });
+
+    await waitFor(() => {
+      expect(getCurrent().tabState.openTabs[0]?.hasUnsavedChanges).toBe(true);
+    });
+
+    mocks.safeInvoke.mockClear();
+    mocks.safeInvoke.mockImplementation(async (command: string) => {
+      if (command === 'read_file') return '# external';
+      if (command === 'save_file') return 'ok';
+      return null;
+    });
+
+    let resolved = false;
+    await act(async () => {
+      resolved = await getCurrent().resolveConflict(tabId, { action: 'use-external' });
+    });
+
+    expect(resolved).toBe(true);
+    expect(mocks.safeInvoke).toHaveBeenCalledWith(
+      'read_file',
+      { path: '/mock/workspace/Projects/Alpha/External.md' },
+      null,
+    );
+    expect(
+      mocks.safeInvoke.mock.calls.some(([command]) => command === 'save_file'),
+    ).toBe(false);
+    expect(getCurrent().tabState.openTabs[0]?.content).toBe('# external');
+    expect(getCurrent().tabState.openTabs[0]?.hasUnsavedChanges).toBe(false);
+    expect(mocks.emitMetadataChange).toHaveBeenCalled();
+  });
+
+  it('persists tabs to localStorage and clears storage when last tab closes', async () => {
+    const { getCurrent } = renderTabManagerHook({ workspacePath: '/mock/workspace' });
     const file = buildFile('f-storage', '/mock/workspace/storage.md');
 
     let tabId = '';
@@ -271,6 +391,7 @@ describe('useTabManager integration', () => {
     await waitFor(() => {
       const persisted = localStorage.getItem('gtdspace-tabs');
       expect(persisted).toContain('/mock/workspace/storage.md');
+      expect(persisted).toContain('"workspacePath":"/mock/workspace"');
     });
 
     await act(async () => {
@@ -279,6 +400,165 @@ describe('useTabManager integration', () => {
 
     await waitFor(() => {
       expect(localStorage.getItem('gtdspace-tabs')).toBeNull();
+    });
+  });
+
+  it('restores persisted tabs only when restore is enabled for the matching workspace', async () => {
+    localStorage.setItem(
+      'gtdspace-tabs',
+      JSON.stringify({
+        version: 2,
+        workspacePath: '/mock/workspace',
+        activeTabId: 'restored-tab',
+        maxTabs: 10,
+        openTabs: [
+          {
+            id: 'restored-tab',
+            filePath: '/mock/workspace/Projects/Alpha/README.md',
+            fileName: 'README.md',
+            hasUnsavedChanges: true,
+            isActive: true,
+          },
+        ],
+      }),
+    );
+
+    mocks.safeInvoke.mockImplementation(async (command: string) => {
+      if (command === 'read_file') return '# restored';
+      if (command === 'save_file') return 'ok';
+      return null;
+    });
+
+    const { getCurrent } = renderTabManagerHook({
+      workspacePath: '/mock/workspace',
+      restoreTabs: true,
+      maxTabs: 4,
+    });
+
+    await waitFor(() => {
+      expect(getCurrent().tabState.openTabs).toHaveLength(1);
+    });
+
+    expect(getCurrent().tabState.maxTabs).toBe(4);
+    expect(getCurrent().activeTab?.file.path).toBe('/mock/workspace/Projects/Alpha/README.md');
+    expect(getCurrent().activeTab?.hasUnsavedChanges).toBe(false);
+  });
+
+  it('does not restore tabs when restore is disabled or the workspace does not match', async () => {
+    localStorage.setItem(
+      'gtdspace-tabs',
+      JSON.stringify({
+        version: 2,
+        workspacePath: '/mock/other-workspace',
+        activeTabId: 'restored-tab',
+        maxTabs: 10,
+        openTabs: [
+          {
+            id: 'restored-tab',
+            filePath: '/mock/other-workspace/Notes.md',
+            fileName: 'Notes.md',
+            hasUnsavedChanges: false,
+            isActive: true,
+          },
+        ],
+      }),
+    );
+
+    const { getCurrent: getDisabled } = renderTabManagerHook({
+      workspacePath: '/mock/workspace',
+      restoreTabs: false,
+    });
+
+    expect(getDisabled().tabState.openTabs).toHaveLength(0);
+
+    const { getCurrent: getMismatched } = renderTabManagerHook({
+      workspacePath: '/mock/workspace',
+      restoreTabs: true,
+    });
+
+    expect(getMismatched().tabState.openTabs).toHaveLength(0);
+  });
+
+  it('updates tab paths from rename events without leaving duplicate filePath state behind', async () => {
+    const { getCurrent } = renderTabManagerHook();
+
+    await act(async () => {
+      await getCurrent().openTab(buildFile('proj', '/mock/workspace/Projects/Alpha/README.md'));
+      await getCurrent().openTab(buildFile('action', '/mock/workspace/Projects/Alpha/Actions/Next.md'));
+      await getCurrent().openTab(buildFile('section', '/mock/workspace/Cabinet/Reference.md'));
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('project-renamed', {
+          detail: {
+            oldPath: '/mock/workspace/Projects/Alpha',
+            newPath: '/mock/workspace/Projects/Beta',
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent('action-renamed', {
+          detail: {
+            oldPath: '/mock/workspace/Projects/Beta/Actions/Next.md',
+            newPath: '/mock/workspace/Projects/Beta/Actions/Next Step.md',
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent('section-file-renamed', {
+          detail: {
+            oldPath: '/mock/workspace/Cabinet/Reference.md',
+            newPath: '/mock/workspace/Cabinet/Reference Updated.md',
+          },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      const paths = getCurrent().tabState.openTabs.map((tab) => tab.file.path);
+      expect(paths).toContain('/mock/workspace/Projects/Beta/README.md');
+      expect(paths).toContain('/mock/workspace/Projects/Beta/Actions/Next Step.md');
+      expect(paths).toContain('/mock/workspace/Cabinet/Reference Updated.md');
+    });
+
+    getCurrent().tabState.openTabs.forEach((tab) => {
+      expect((tab as FileTab & { filePath?: string }).filePath).toBeUndefined();
+    });
+  });
+
+  it('closes deleted tabs and opens referenced files from DOM events', async () => {
+    const { getCurrent } = renderTabManagerHook();
+
+    await act(async () => {
+      await getCurrent().openTab(buildFile('a', '/mock/workspace/Projects/Alpha/README.md'));
+      await getCurrent().openTab(buildFile('b', '/mock/workspace/Cabinet/Keep.md'));
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('file-deleted', {
+          detail: { path: '/mock/workspace/Projects/Alpha' },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(getCurrent().tabState.openTabs).toHaveLength(1);
+      expect(getCurrent().tabState.openTabs[0]?.file.path).toBe('/mock/workspace/Cabinet/Keep.md');
+    });
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('open-reference-file', {
+          detail: { path: '/mock/workspace/Cabinet/Reference.md' },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      const paths = getCurrent().tabState.openTabs.map((tab) => tab.file.path);
+      expect(paths).toContain('/mock/workspace/Cabinet/Reference.md');
     });
   });
 });

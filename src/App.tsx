@@ -55,6 +55,7 @@ import { ErrorBoundary } from "@/components/error-handling";
 import { Toaster } from "@/components/ui/toaster";
 import type { Theme, MarkdownFile, EditorMode, GTDProject } from "@/types";
 import "./styles/globals.css";
+import { onContentSaved } from "@/utils/content-event-bus";
 import {
   detectHorizonTypeFromPath,
   HORIZON_CONFIG,
@@ -118,6 +119,39 @@ export const App: React.FC = () => {
   // === FILE MANAGEMENT ===
 
   const { state: fileState, selectFolder, loadFolder } = useFileManager();
+  const {
+    settings,
+    setTheme,
+    setLastFolder,
+    isLoading: isLoadingSettings,
+  } = useSettings();
+  const {
+    gtdSpace,
+    isLoading,
+    checkGTDSpace,
+    loadProjects,
+    initializeGTDSpace,
+    initializeDefaultSpaceIfNeeded,
+    refreshSpace: refreshGTDSpace,
+  } = useGTDSpace();
+
+  const activeWorkspacePath = React.useMemo(() => {
+    const gitOverride = settings.git_sync_workspace_path?.trim();
+    if (gitOverride) return gitOverride;
+    return (
+      gtdSpace?.root_path ||
+      fileState.currentFolder ||
+      settings.default_space_path ||
+      settings.last_folder ||
+      null
+    );
+  }, [
+    settings.git_sync_workspace_path,
+    gtdSpace?.root_path,
+    fileState.currentFolder,
+    settings.default_space_path,
+    settings.last_folder,
+  ]);
 
   // === TAB MANAGEMENT ===
 
@@ -134,7 +168,11 @@ export const App: React.FC = () => {
     saveAllTabs,
     reorderTabs,
     reloadTabFromDisk,
-  } = useTabManager();
+  } = useTabManager({
+    workspacePath: activeWorkspacePath,
+    maxTabs: settings.max_tabs,
+    restoreTabs: settings.restore_tabs,
+  });
 
   // Track which horizon README tabs should show editor instead of overview
   const [horizonTabsInEditorMode, setHorizonTabsInEditorMode] = React.useState<
@@ -188,14 +226,6 @@ export const App: React.FC = () => {
 
   const { showFileModified, showFileDeleted, showFileCreated, showWarning } = useToast();
 
-  // === SETTINGS MANAGEMENT ===
-
-  const {
-    settings,
-    setTheme,
-    setLastFolder,
-    isLoading: isLoadingSettings,
-  } = useSettings();
   const [themeKey, setThemeKey] = React.useState(0); // Force re-render on theme change
 
   // === MODAL MANAGEMENT ===
@@ -387,34 +417,14 @@ export const App: React.FC = () => {
 
   // === KEYBOARD SHORTCUTS ===
 
-  // Helper function to check if a file requires project reload
-  const shouldReloadProjects = (filePath: string): boolean => {
-    if (!gtdSpace?.root_path) return false;
-    const projectsPath = `${gtdSpace.root_path}/Projects/`;
-    return isUnder(filePath, projectsPath) && norm(filePath)?.endsWith(".md");
-  };
-
   const keyboardHandlers = {
     onSaveActive: activeTab
       ? async () => {
-          const saved = await saveTab(activeTab.id);
-          // Reload projects if we saved a file in the Projects folder
-          if (saved && shouldReloadProjects(activeTab.file.path)) {
-            await loadProjects(gtdSpace.root_path!);
-          }
+          await saveTab(activeTab.id);
         }
       : undefined,
     onSaveAll: async () => {
-      const hadProjectFiles = tabState.openTabs.some(
-        (tab) => tab.hasUnsavedChanges && shouldReloadProjects(tab.file.path)
-      );
-
       await saveAllTabs();
-
-      // Reload projects if any project files were saved
-      if (hadProjectFiles && gtdSpace?.root_path) {
-        await loadProjects(gtdSpace.root_path);
-      }
     },
     onOpenFolder: selectFolder,
     onOpenGlobalSearch: () => openModal("globalSearch"),
@@ -450,15 +460,6 @@ export const App: React.FC = () => {
 
   // === GTD STATE ===
 
-  const {
-    gtdSpace,
-    isLoading,
-    checkGTDSpace,
-    loadProjects,
-    initializeGTDSpace,
-    initializeDefaultSpaceIfNeeded,
-    refreshSpace: refreshGTDSpace,
-  } = useGTDSpace();
   const [currentProject, setCurrentProject] = React.useState<GTDProject | null>(
     null
   );
@@ -467,24 +468,6 @@ export const App: React.FC = () => {
 
   // Derived state for GTD space
   const isGTDSpace = gtdSpace?.isGTDSpace || false;
-
-  const activeWorkspacePath = React.useMemo(() => {
-    const gitOverride = settings.git_sync_workspace_path?.trim();
-    if (gitOverride) return gitOverride;
-    return (
-      gtdSpace?.root_path ||
-      fileState.currentFolder ||
-      settings.default_space_path ||
-      settings.last_folder ||
-      null
-    );
-  }, [
-    settings.git_sync_workspace_path,
-    gtdSpace?.root_path,
-    fileState.currentFolder,
-    settings.default_space_path,
-    settings.last_folder,
-  ]);
 
   const gitSync = useGitSync({
     settings,
@@ -514,22 +497,32 @@ export const App: React.FC = () => {
     }
   }, [gitSyncPull, refreshFileList, currentSpaceRoot, loadProjects]);
 
-  // Set up callback for when files are saved to reload projects
-  // This is used by useTabManager to notify when files are saved
+  // Reload project data after project markdown files are saved.
   React.useEffect(() => {
     if (!gtdSpace?.root_path) return;
 
-    const projectsPath = `${gtdSpace.root_path}/Projects/`;
+    let reloadTimer: number | null = null;
+    const unsubscribe = onContentSaved((event) => {
+      if (
+        isUnder(event.filePath, `${gtdSpace.root_path}/Projects/`) &&
+        norm(event.filePath)?.endsWith(".md")
+      ) {
+        if (reloadTimer !== null) {
+          window.clearTimeout(reloadTimer);
+        }
 
-    window.onTabFileSaved = async (filePath: string) => {
-      // Only reload if the file is in the Projects directory
-      if (isUnder(filePath, projectsPath) && norm(filePath)?.endsWith(".md")) {
-        await loadProjects(gtdSpace.root_path);
+        reloadTimer = window.setTimeout(() => {
+          void loadProjects(gtdSpace.root_path);
+          reloadTimer = null;
+        }, 50);
       }
-    };
+    });
 
     return () => {
-      delete window.onTabFileSaved;
+      if (reloadTimer !== null) {
+        window.clearTimeout(reloadTimer);
+      }
+      unsubscribe();
     };
   }, [gtdSpace?.root_path, loadProjects]);
 
@@ -540,9 +533,7 @@ export const App: React.FC = () => {
     ): { handled: boolean; wasDirty: boolean } => {
       const normalizedTarget = targetPath.replace(/\\/g, "/");
       const tab = tabState.openTabs.find(
-        (t) =>
-          (t.file.path || t.filePath || "").replace(/\\/g, "/") ===
-          normalizedTarget
+        (t) => (t.file.path || "").replace(/\\/g, "/") === normalizedTarget
       );
       if (!tab) {
         return { handled: false, wasDirty: false };
@@ -858,7 +849,7 @@ export const App: React.FC = () => {
       event: CustomEvent<{ habitPath: string }>
     ) => {
       // Check if the updated habit is currently open in the editor
-      if (norm(activeTab?.filePath) === norm(event.detail.habitPath)) {
+      if (norm(activeTab?.file.path) === norm(event.detail.habitPath)) {
         // Reload the file content from disk
         safeInvoke<string>("read_file", { path: event.detail.habitPath }, null)
           .then((freshContent) => {
@@ -887,7 +878,7 @@ export const App: React.FC = () => {
       const { filePath } = event.detail;
 
       // If the changed file is the currently active tab, reload its content
-      if (norm(activeTab?.filePath) === norm(filePath)) {
+      if (norm(activeTab?.file.path) === norm(filePath)) {
         safeInvoke<string>("read_file", { path: filePath }, null)
           .then((freshContent) => {
             if (freshContent !== null && freshContent !== undefined) {
@@ -919,7 +910,7 @@ export const App: React.FC = () => {
         handleHabitContentChanged as EventListener
       );
     };
-  }, [activeTab?.filePath, activeTab?.id, updateTabContent, refreshGTDSpace]);
+  }, [activeTab?.file.path, activeTab?.id, updateTabContent, refreshGTDSpace]);
 
   // === HABIT RESET SCHEDULER ===
   // Store refs to avoid re-running effect when functions change
@@ -968,12 +959,12 @@ export const App: React.FC = () => {
 
           // Also refresh the current tab if it's a habit
           const currentTab = activeTabRef.current;
-          if (isHabitPath(currentTab?.filePath)) {
+          if (isHabitPath(currentTab?.file.path)) {
             // Reload the file content from disk
             try {
               const freshContent = await safeInvoke<string>(
                 "read_file",
-                { path: currentTab.filePath },
+                { path: currentTab.file.path },
                 null
               );
               if (freshContent !== null && freshContent !== undefined) {
@@ -1125,11 +1116,7 @@ export const App: React.FC = () => {
               gtdSpace={gtdSpace}
               checkGTDSpace={checkGTDSpace}
               loadProjects={loadProjects}
-              activeFilePath={
-                displayedTab?.file?.path ||
-                displayedTab?.filePath ||
-                null
-              }
+              activeFilePath={displayedTab?.file?.path || null}
             />
 
             {/* Resize Handle */}
@@ -1255,10 +1242,7 @@ export const App: React.FC = () => {
                     ) : (
                       (() => {
                         // Normalize the tab path once for cross-platform comparisons
-                        const candidatePath =
-                          displayedTab.file.path ??
-                          displayedTab.filePath ??
-                          "";
+                        const candidatePath = displayedTab.file.path ?? "";
                         const normalizedPath = candidatePath.replace(/\\/g, "/");
                         const workspaceRootPath = gtdSpace?.root_path
                           ? gtdSpace.root_path
@@ -1326,7 +1310,7 @@ export const App: React.FC = () => {
                                 autoFocus={true}
                                 className="flex-1"
                                 data-editor-root
-                                filePath={displayedTab.filePath}
+                                filePath={displayedTab.file.path}
                               />
                             );
                           }
@@ -1335,7 +1319,7 @@ export const App: React.FC = () => {
                             <HorizonOverviewPage
                               key={displayedTab.id}
                               content={displayedTab.content}
-                              filePath={displayedTab.filePath}
+                              filePath={displayedTab.file.path}
                               horizon={horizonReadmeType}
                               className="flex-1"
                               onEdit={() => switchHorizonTabToEditor(displayedTab.id)}
@@ -1369,7 +1353,7 @@ export const App: React.FC = () => {
                               onChange={(value) =>
                                 updateTabContent(displayedTab.id, value)
                               }
-                              filePath={displayedTab.filePath}
+                              filePath={displayedTab.file.path}
                               className="flex-1"
                             />
                           );
@@ -1402,7 +1386,7 @@ export const App: React.FC = () => {
                               onChange={(value) =>
                                 updateTabContent(displayedTab.id, value)
                               }
-                              filePath={displayedTab.filePath}
+                              filePath={displayedTab.file.path}
                               className="flex-1"
                             />
                           );
@@ -1435,7 +1419,7 @@ export const App: React.FC = () => {
                               onChange={(value) =>
                                 updateTabContent(displayedTab.id, value)
                               }
-                              filePath={displayedTab.filePath}
+                              filePath={displayedTab.file.path}
                               className="flex-1"
                             />
                           );
@@ -1465,7 +1449,7 @@ export const App: React.FC = () => {
                               onChange={(value) =>
                                 updateTabContent(displayedTab.id, value)
                               }
-                              filePath={displayedTab.filePath}
+                              filePath={displayedTab.file.path}
                               className="flex-1"
                             />
                           );
@@ -1497,7 +1481,7 @@ export const App: React.FC = () => {
                               onChange={(value) =>
                                 updateTabContent(displayedTab.id, value)
                               }
-                              filePath={displayedTab.filePath}
+                              filePath={displayedTab.file.path}
                               className="flex-1"
                             />
                           );
@@ -1533,7 +1517,7 @@ export const App: React.FC = () => {
                               onChange={(value) =>
                                 updateTabContent(displayedTab.id, value)
                               }
-                              filePath={displayedTab.filePath}
+                              filePath={displayedTab.file.path}
                               className="flex-1"
                             />
                           );
@@ -1572,7 +1556,7 @@ export const App: React.FC = () => {
                               onChange={(content) =>
                                 updateTabContent(displayedTab.id, content)
                               }
-                              filePath={displayedTab.filePath}
+                              filePath={displayedTab.file.path}
                               className="flex-1"
                             />
                           );
@@ -1592,7 +1576,7 @@ export const App: React.FC = () => {
                             autoFocus={true}
                             className="flex-1"
                             data-editor-root
-                            filePath={displayedTab.filePath}
+                            filePath={displayedTab.file.path}
                           />
                         );
                       })()

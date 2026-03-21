@@ -26,6 +26,7 @@ The current frontend is organized around these major areas:
 - `src/components/settings/`: settings manager and grouped settings panels
 - `src/components/tabs/` and `src/components/search/`: tab management and global search
 - `src/components/ui/`: shared shadcn/ui primitives and local UI wrappers
+- `src/hooks/tab-runtime/`: reducer-driven tab state, file I/O lifecycle helpers, workspace-scoped persistence, and DOM-event subscriptions used by `useTabManager`
 
 ## Backend Structure
 
@@ -75,6 +76,7 @@ The backend reads and writes files directly. The frontend derives metadata from 
 Several systems cut across the frontend and backend:
 
 - Content event bus: coordinates save, metadata, and rename-related refreshes
+- Tab runtime persistence: stores open tabs in localStorage, scopes restore to the active workspace, and keeps lightweight active-tab data available to editor blocks
 - File watcher: surfaces external file changes, though watcher event naming still has a known mismatch documented in the spec
 - Markdown migration: normalizes older marker formats during load and some save flows
 - Habit reset loop: runs on startup and on a timer while a workspace is open

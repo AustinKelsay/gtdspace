@@ -227,8 +227,6 @@ export interface FileTab {
   originalContent?: string;
   /** Whether this tab has unsaved changes */
   hasUnsavedChanges: boolean;
-  /** File path for the tab */
-  filePath: string;
   /** Whether this tab is currently active */
   isActive: boolean;
   /** Cursor position in the editor */
@@ -260,6 +258,15 @@ export interface TabManagerState {
   maxTabs: number;
   /** Recently closed tabs for reopen functionality */
   recentlyClosed: FileTab[];
+}
+
+export interface TabManagerConfig {
+  /** Active workspace path used to scope persisted tabs */
+  workspacePath?: string | null;
+  /** Maximum number of tabs the runtime should keep open */
+  maxTabs?: number | null;
+  /** Whether persisted tabs should be restored for the current workspace */
+  restoreTabs?: boolean | null;
 }
 
 

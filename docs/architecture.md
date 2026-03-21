@@ -30,10 +30,20 @@ The current frontend is organized around these major areas:
 
 The current backend lives primarily in these modules:
 
-- `src-tauri/src/commands/mod.rs`: Tauri command surface for file operations, GTD workspace management, settings, file watching, habits, git sync, and Google Calendar
+- `src-tauri/src/commands/mod.rs`: thin facade that re-exports backend commands and shared payload types
+- `src-tauri/src/commands/app.rs`: lightweight app-level commands like `ping`, version reporting, and permission checks
+- `src-tauri/src/commands/dialogs.rs`: native folder/file dialog and explorer helpers
+- `src-tauri/src/commands/filesystem.rs`: file CRUD, listing, directory creation, search-and-replace, and existence checks
+- `src-tauri/src/commands/settings.rs`: persisted settings plus secure storage helpers
+- `src-tauri/src/commands/watcher.rs`: file watcher lifecycle and emitted change payloads
+- `src-tauri/src/commands/search.rs`: markdown search payloads and full-text search command
+- `src-tauri/src/commands/workspace.rs`: GTD space detection, initialization, and example seeding
+- `src-tauri/src/commands/gtd_projects.rs`, `gtd_habits.rs`, `gtd_relationships.rs`: GTD domain commands split by concern
+- `src-tauri/src/commands/git_commands.rs`: Tauri-facing git sync command wrappers
 - `src-tauri/src/commands/git_sync.rs`: encrypted git backup and sync logic
+- `src-tauri/src/commands/google_calendar_commands.rs`: Tauri-facing Google Calendar and OAuth commands
 - `src-tauri/src/google_calendar/`: OAuth, token storage, sync, and cached event handling
-- `src-tauri/src/lib.rs`: Tauri app wiring and command registration
+- `src-tauri/src/lib.rs`: Tauri app wiring and command registration against concrete module paths
 
 ## Startup And Workspace Lifecycle
 

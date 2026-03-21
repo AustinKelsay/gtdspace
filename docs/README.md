@@ -25,7 +25,7 @@ If a doc conflicts with code or tests, the code and tests win.
 - [`content-events.md`](./content-events.md): content event bus behavior
 - [`hooks.md`](./hooks.md): hook inventory and responsibilities
 - [`settings.md`](./settings.md): settings model, persistence, and startup usage
-- [`tauri.md`](./tauri.md): Tauri command surface and frontend/backend integration
+- [`tauri.md`](./tauri.md): Tauri command surface, backend command modules, and frontend/backend integration
 - [`blocknote.md`](./blocknote.md): editor integration and custom block system
 - [`theming.md`](./theming.md): theme tokens and styling conventions
 - [`git-sync.md`](./git-sync.md): encrypted git backup and sync workflow

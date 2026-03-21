@@ -287,12 +287,14 @@ const content = await invoke<string>('read_file', {
 ```
 
 ### 2. Parse to Blocks
+
 ```typescript
 const parsedBlocks = await editor.tryParseMarkdownToBlocks(content);
 const blocks = postProcessBlockNoteBlocks(parsedBlocks, content);
 ```
 
 ### 3. Post-process GTD markers and legacy HTML
+
 `postProcessBlockNoteBlocks(...)` scans the original markdown for GTD markers and legacy HTML blocks, then replaces matching parsed paragraphs with custom BlockNote blocks.
 
 Important behavior:
@@ -318,9 +320,11 @@ Before [!references:/tmp/ref.md] after
 stays a normal paragraph because the marker is not the paragraph's entire trimmed content.
 
 ### 4. Edit in BlockNote
+
 User edits with WYSIWYG interface
 
 ### 5. Convert to Markdown
+
 ```typescript
 const markdownParts: string[] = [];
 let standardBuffer: unknown[] = [];
@@ -338,6 +342,7 @@ const markdown = markdownParts.join("");
 ```
 
 ### 6. Save
+
 ```typescript
 await invoke('save_file', { 
   path: file.path, 

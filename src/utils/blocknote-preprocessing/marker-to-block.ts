@@ -14,6 +14,32 @@ import type {
 } from "./types";
 
 const EMPTY_OPTIONS_JSON = "[]";
+const LIST_TYPE_BY_KIND: Record<string, NonNullable<ListBlock["props"]["listType"]>> = {
+  "projects-list": "projects",
+  "areas-list": "areas",
+  "goals-list": "goals",
+  "visions-list": "visions",
+  "habits-list": "habits",
+  "projects-areas-list": "projects-areas",
+  "projects-and-areas-list": "projects-areas",
+  "goals-areas-list": "goals-areas",
+  "goals-and-areas-list": "goals-areas",
+  "visions-goals-list": "visions-goals",
+  "visions-and-goals-list": "visions-goals",
+};
+const BLOCK_TYPE_BY_KIND: Record<string, ListBlock["type"]> = {
+  "projects-list": "projects-list",
+  "areas-list": "areas-list",
+  "goals-list": "goals-list",
+  "visions-list": "visions-list",
+  "habits-list": "habits-list",
+  "projects-areas-list": "projects-areas-list",
+  "projects-and-areas-list": "projects-areas-list",
+  "goals-areas-list": "goals-areas-list",
+  "goals-and-areas-list": "goals-areas-list",
+  "visions-goals-list": "visions-goals-list",
+  "visions-and-goals-list": "visions-goals-list",
+};
 
 export function cloneProcessedBlock<T extends ProcessedBlock>(block: T): T {
   if (!("props" in block) || !block.props) {
@@ -115,38 +141,12 @@ export function createListBlock(
     };
   }
 
-  const listType =
-    kind === "projects-list"
-      ? "projects"
-      : kind === "areas-list"
-        ? "areas"
-        : kind === "goals-list"
-          ? "goals"
-          : kind === "visions-list"
-            ? "visions"
-            : kind === "habits-list"
-              ? "habits"
-              : kind === "projects-areas-list" || kind === "projects-and-areas-list"
-                ? "projects-areas"
-                : kind === "goals-areas-list" || kind === "goals-and-areas-list"
-                  ? "goals-areas"
-                  : kind === "visions-goals-list" || kind === "visions-and-goals-list"
-                    ? "visions-goals"
-                    : null;
-
+  const listType = LIST_TYPE_BY_KIND[kind];
   if (!listType) {
     return null;
   }
 
-  const blockType =
-    kind === "projects-and-areas-list"
-      ? "projects-areas-list"
-      : kind === "goals-and-areas-list"
-        ? "goals-areas-list"
-        : kind === "visions-and-goals-list"
-          ? "visions-goals-list"
-          : (kind as ListBlock["type"]);
-
+  const blockType = BLOCK_TYPE_BY_KIND[kind];
   return {
     type: blockType,
     props: {

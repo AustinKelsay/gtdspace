@@ -74,6 +74,9 @@ export function readCachedBlocks(
   return null;
 }
 
+// pruneBlockProcessingCache only scans blockProcessingCache once it grows past a
+// small heuristic threshold of 50 entries: below that, CACHE_DURATION-based TTL
+// expiry is enough for the typical editor post-processing workload.
 export function pruneBlockProcessingCache(now: number = Date.now()): void {
   if (blockProcessingCache.size <= 50) {
     return;

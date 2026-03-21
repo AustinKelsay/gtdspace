@@ -133,6 +133,27 @@ describe("replaceParagraphWithCustomBlocks", () => {
     ]);
   });
 
+  it("normalizes habit-status checkbox marker values before checking them", () => {
+    const result = replaceParagraphWithCustomBlocks(
+      {
+        type: "paragraph",
+        content: "[!checkbox:habit-status: Completed ]",
+      },
+      "[!checkbox:habit-status: Completed ]",
+      new Map()
+    );
+
+    expect(result).toMatchObject([
+      {
+        type: "checkbox",
+        props: {
+          type: "habit-status",
+          checked: true,
+        },
+      },
+    ]);
+  });
+
   it("does not treat unknown markers as custom blocks", () => {
     const result = replaceParagraphWithCustomBlocks(
       {

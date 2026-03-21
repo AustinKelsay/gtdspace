@@ -230,10 +230,13 @@ export function buildMarkerOnlyBlock(
 
   if (kind === "checkbox") {
     const [type, checkedRaw] = splitMarkerRestLegacy(rest);
-    return createCheckboxBlock(
-      type,
-      checkedRaw === "true" || checkedRaw === "completed"
-    );
+    const normalizedChecked = checkedRaw.trim().toLowerCase();
+    const checked =
+      type === "habit-status"
+        ? normalizedChecked === "true" || normalizedChecked === "completed"
+        : normalizedChecked === "true";
+
+    return createCheckboxBlock(type, checked);
   }
 
   return createListBlock(kind, rest || "");

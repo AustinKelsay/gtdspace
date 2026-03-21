@@ -52,7 +52,6 @@ export function shouldDropArtifactReferencesBlock(block: UnknownBlock): boolean 
 
   return (
     references === "" ||
-    references === "---" ||
     references.includes("|") ||
     references.includes("---")
   );

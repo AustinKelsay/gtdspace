@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isHistoryHeading,
+  isLevelTwoHeading,
   isHorizontalRuleParagraph,
   shouldDropArtifactReferencesBlock,
   shouldSkipBlockInsideHistory,
@@ -35,6 +36,26 @@ describe("blocknote history rules", () => {
         "___"
       )
     ).toBe(true);
+  });
+
+  it("rejects non-level-two headings for history helpers", () => {
+    expect(
+      isLevelTwoHeading({ type: "heading", props: { level: 3 }, content: "Any" })
+    ).toBe(false);
+
+    expect(
+      isHistoryHeading(
+        { type: "heading", props: { level: 1 }, content: "History" },
+        "History"
+      )
+    ).toBe(false);
+
+    expect(
+      isHistoryHeading(
+        { type: "heading", props: { level: 2 }, content: "Not History" },
+        "Not History"
+      )
+    ).toBe(false);
   });
 
   it("skips empty, helper, and italic-only paragraphs inside history", () => {

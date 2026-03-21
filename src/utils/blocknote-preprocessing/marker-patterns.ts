@@ -59,6 +59,9 @@ export const DATETIME_MARKER_PATTERN = /\[!datetime:([^:]+):([^\]]*)\]/g;
 export const DATETIME_HTML_PATTERN =
   /<div\s+data-datetime='([^']+)'\s+class="datetime-block">([^<]+)<\/div>/g;
 
+// Some legacy reference markers store array-like payloads such as `[]` or
+// `["/path.md"]`, so we tolerate the extra trailing `]` needed to consume the
+// full marker token during preprocessing.
 export const REFERENCES_MARKER_PATTERN = /\[!references:([^\]]*)\]\]?/g;
 export const AREAS_REFERENCES_PATTERN = /\[!areas-references:([^\]]*)\]\]?/g;
 export const GOALS_REFERENCES_PATTERN = /\[!goals-references:([^\]]*)\]\]?/g;

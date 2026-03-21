@@ -4,6 +4,8 @@ This document describes the current frontend/backend boundary in GTD Space.
 
 The frontend uses Tauri commands for native file access, settings persistence, GTD workspace management, encrypted git sync, and Google Calendar integration. The backend remains file-based and does not maintain a separate application database for GTD content.
 
+The Rust command layer is now split by domain under `src-tauri/src/commands/`, with `src-tauri/src/commands/mod.rs` acting as a thin facade and `src-tauri/src/lib.rs` registering handlers from their concrete module paths. That keeps the public command names stable while making the backend easier to navigate.
+
 ## Command Conventions
 
 The app uses these patterns consistently:
@@ -16,6 +18,22 @@ The app uses these patterns consistently:
 ## Current Command Groups
 
 The current command surface falls into these groups:
+
+## Backend Module Layout
+
+- `app.rs`: app health/version/permission helpers
+- `dialogs.rs`: folder and explorer integrations
+- `filesystem.rs`: file CRUD, listing, existence checks, directory creation, and replace-in-file
+- `settings.rs`: persisted settings and OS secure storage
+- `watcher.rs`: file watcher lifecycle and emitted payloads
+- `search.rs`: search request/response types and `search_files`
+- `workspace.rs`: GTD space validation, bootstrap, and seed flows
+- `gtd_projects.rs`: project and action creation, listing, and rename flows
+- `gtd_habits.rs`: habit creation, updates, and reset logic
+- `gtd_relationships.rs`: reverse-link and habit-reference lookup
+- `git_commands.rs`: Tauri command wrappers for git sync
+- `git_sync.rs`: core encrypted git sync implementation
+- `google_calendar_commands.rs`: Tauri command wrappers for Google Calendar and OAuth config
 
 ### File And Workspace Commands
 
@@ -117,6 +135,7 @@ Use this doc when you need to answer questions like:
 - Is a feature using a Tauri command or pure frontend logic?
 - Where should a new native capability be added?
 - Which secrets belong in secure storage rather than normal settings?
+- Which backend command module should own a new Rust command?
 
 For behavior details, pair this doc with:
 

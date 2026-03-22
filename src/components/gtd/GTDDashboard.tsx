@@ -590,7 +590,6 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                           space_path: gtdSpace.root_path,
                           habit_name: habitName,
                           frequency: frequency,
-                          status: 'todo',
                           focus_time: null
                         });
 

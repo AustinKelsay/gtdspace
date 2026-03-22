@@ -650,30 +650,38 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
         format!(
             r#"# {}
 
-## Habit Tracking
-
+## Status
 [!checkbox:habit-status:false]
 
 ## Frequency
-
 [!singleselect:habit-frequency:daily]
 
-## Focus Time
+## Projects References
+[!projects-references:]
 
-[!datetime:focus_date:]
+## Areas References
+[!areas-references:]
 
-## Why This Habit?
-*What benefit does this habit provide?*
+## Goals References
+[!goals-references:]
 
-## Success Looks Like
-*How will you know you're doing it right?*
+## Vision References
+[!vision-references:]
+
+## Purpose & Principles References
+[!purpose-references:]
+
+## References
+[!references:]
+
+## Created
+[!datetime:created_date_time:{}]
 
 ## History
-| Date | Time | Status | Action | Notes |
-|------|------|--------|--------|-------|
+*Track your habit completions below:*
 
----
-[!datetime:created_date_time:{}]
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
 "#,
             clean_name,
             chrono::Local::now().to_rfc3339()

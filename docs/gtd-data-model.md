@@ -1,6 +1,6 @@
 # GTD Data Model and Data Flows
 
-Updated: March 20, 2026
+Updated: March 21, 2026
 
 This document defines the data structures and end-to-end data flows for GTD Space items: Habits, Actions, Projects, Areas of Focus, Goals, Vision, and Purpose & Principles. It aligns with the current React + Tauri implementation and the file-based markdown storage model.
 
@@ -72,6 +72,16 @@ Notes on canonical values:
 - Habit status is a checkbox (true = completed, false = todo), normalized to `todo`/`completed` in logic.
 - Effort uses: `small` | `medium` | `large` | `extra-large`.
 - Habit frequency uses: `5-minute` | `daily` | `every-other-day` | `twice-weekly` | `weekly` | `weekdays` | `biweekly` | `monthly`.
+
+Implementation note:
+
+- Shared markdown/domain helpers now own the parsing and canonical rebuild rules for the most mutation-heavy GTD item types:
+  - `src/utils/gtd-action-markdown.ts`
+  - `src/utils/gtd-project-content.ts`
+  - `src/utils/gtd-habit-markdown.ts`
+  - `src/utils/gtd-reference-utils.ts`
+- Frontend hooks and pages consume those helpers rather than reimplementing marker parsing, reference normalization, or section slicing locally.
+- Habit reset scheduling is mirrored in `src-tauri/src/commands/gtd_habits_domain.rs` so frontend and backend use the same calendar-window model.
 
 ## Data Structures
 
@@ -352,6 +362,8 @@ _New habits are created with the History section and table header already presen
 |------|------|--------|--------|---------|
 ```
 
+Habit history parsing remains backward compatible with legacy list-style rows, but new writes normalize back to the canonical table form.
+
 ### Areas of Focus (`Areas of Focus/*.md`)
 
 ```markdown
@@ -497,10 +509,11 @@ This section summarizes how data moves across layers for each item type.
 - Read
 - `list_gtd_projects(spacePath)` returns project folders plus derived `action_count`.
 
-  - README metadata (status/due date/title) parsed in backend + enriched in frontend. Description is extracted from the "## Desired Outcome" section ("## Description" is still supported for backward compatibility).
+  - README metadata is enriched in the frontend through `parseProjectMarkdown()`, which normalizes project status, due date, desired outcome, trailing references, habits-list placement, and preserved freeform content.
 
 - Update
-  - Changing README Status/Due Date emits content/metadata events; `useGTDWorkspaceSidebar` updates project overlays live; rename on save triggers `rename_gtd_project` if H1 differs from folder.
+  - `useProjectsData.updateProject()` now parses the existing README, applies targeted field changes, and rebuilds it canonically instead of patching markers ad hoc.
+  - Changing README Status/Due Date still emits content/metadata events; `useGTDWorkspaceSidebar` updates project overlays live; rename on save triggers `rename_gtd_project` if H1 differs from folder.
 
 ### Actions
 
@@ -511,25 +524,28 @@ This section summarizes how data moves across layers for each item type.
 
 - Read
 
-  - `list_project_actions(projectPath)` returns action files; frontend `useActionsData` reads each file → `extractMetadata()` → builds action list and status counts.
+  - `list_project_actions(projectPath)` returns action files; frontend `useActionsData` reads each file and parses it through `parseActionMarkdown()` to build action list entries and status counts.
 
 - Update
-  - `updateActionStatus(idOrPath, newStatus)` rewrites file content tokens and dispatches `content-updated` for reactive components.
+  - `updateActionStatus(idOrPath, newStatus)` now rebuilds canonical action markdown through `rebuildActionMarkdown()` instead of regex-replacing only the status token.
   - Sidebar action rows are hydrated from `list_project_actions(projectPath)` plus per-file metadata overlays maintained by `useGTDWorkspaceSidebar`.
 
 ### Habits
 
 - Create
 
-  - UI dialog → `create_gtd_habit(spacePath, habitName, frequency, status='todo')` writes file with checkbox, frequency, and a seeded History section including the standard table header.
+  - UI dialog → `create_gtd_habit(spacePath, habitName, frequency, focusTime?, references?)` writes file with checkbox, frequency, and a seeded History section including the standard table header.
 
 - Read
 
-  - `useHabitsHistory` lists `Habits/` files, reads content, parses history table, computes streaks/success rates, and extracts horizon references via `extractHorizonReferences()`.
+  - `useHabitsHistory` lists `Habits/` files, reads content, parses it through `parseHabitContent()`, computes streaks/success rates, and derives next reset times from shared calendar-window logic.
+  - Reset-maintenance rows such as `Auto-Reset` and `Backfill` are excluded from streak/success analytics so only actual completion attempts affect those metrics.
 
 - Update
   - `update_habit_status(habitPath, 'todo'|'completed')` toggles checkbox and appends a history row; frontend emits `habit-content-changed` to refresh open editors.
-  - Auto-reset: `check_and_reset_habits(spacePath)` runs on schedule and at startup to reset completed habits per frequency, recording “Auto-Reset” or “Catch-up Reset” in history.
+  - Auto-reset: `check_and_reset_habits(spacePath)` runs on schedule and at startup to reset completed habits per frequency, recording `Auto-Reset` or `Backfill` in history.
+  - `Auto-Reset` marks the current scheduled reset boundary. `Backfill` marks older missed reset periods that are being filled in retroactively after the app was offline or the scheduler missed runs.
+  - Reset windows are calendar-based, not rough elapsed-day approximations. For example, `twice-weekly` uses Tuesday/Friday boundaries and `monthly` resets on the first day of the next month.
 
 ### Horizons of Focus (Areas, Goals, Vision, Purpose & Principles)
 

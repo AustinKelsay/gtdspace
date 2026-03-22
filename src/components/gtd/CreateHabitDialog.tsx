@@ -322,7 +322,6 @@ export const CreateHabitDialog: React.FC<CreateHabitDialogProps> = ({
       spacePath,
       habitName: habitName.trim(),
       frequency,
-      status: 'todo' as const, // Always start habits as 'todo'
       focusTime: focusTimeValue, // Optional focus time
       references: referencesPayload,
     };

@@ -5,12 +5,16 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
-import { extractMetadata } from '@/utils/metadata-extractor';
 import { readFileText } from './useFileManager';
 import { toISOStringFromEpoch } from '@/utils/time';
 import { parseLocalDate } from '@/utils/date-formatting';
-import type { GTDProject, MarkdownFile } from '@/types';
+import type { GTDActionStatus, GTDProject, MarkdownFile } from '@/types';
 import { createScopedLogger } from '@/utils/logger';
+import {
+  parseActionMarkdown,
+  rebuildActionMarkdown,
+} from '@/utils/gtd-action-markdown';
+import { normalizeReferencePath } from '@/utils/gtd-reference-utils';
 
 export interface ActionItem {
   id: string;
@@ -54,31 +58,6 @@ interface UseActionsDataReturn {
   updateActionStatus: (actionIdOrPath: string, newStatus: string, actionPath?: string) => Promise<boolean>;
   refresh: () => Promise<void>;
 }
-
-/**
- * Normalize action status values to canonical forms
- */
-const normalizeActionStatus = (status: string): string => {
-  const normalized = status.toLowerCase().trim();
-  
-  if (['in-progress', 'active', 'planning', 'not-started'].includes(normalized)) {
-    return 'in-progress';
-  }
-  
-  if (['waiting', 'blocked', 'on-hold', 'paused'].includes(normalized)) {
-    return 'waiting';
-  }
-  
-  if (['completed', 'done', 'finished'].includes(normalized)) {
-    return 'completed';
-  }
-  
-  if (['cancelled', 'canceled', 'dropped', 'abandoned'].includes(normalized)) {
-    return 'cancelled';
-  }
-  
-  return 'in-progress';
-};
 
 /**
  * Extract first paragraph as description
@@ -178,9 +157,8 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
 
             try {
               const content = await readFileText(file.path);
-              const metadata = extractMetadata(content);
-
-              const status = normalizeActionStatus(metadata.status || 'in-progress');
+              const parsedAction = parseActionMarkdown(content);
+              const status = parsedAction.status;
 
               // Filter based on options
               if (!includeCompleted && status === 'completed') return;
@@ -194,26 +172,20 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
 
               const action: ActionItem = {
                 id: file.path,
-                name: file.name.replace('.md', ''),
+                name: parsedAction.title || file.name.replace('.md', ''),
                 path: file.path,
                 projectName: project.name,
                 projectPath: project.path,
                 status,
-                effort: metadata.effort as string | undefined,
-                dueDate: metadata.dueDate as string | undefined,
-                focusDate: metadata.focusDate as string | undefined,
-                contexts: Array.isArray(metadata.contexts) ? metadata.contexts :
-                          (metadata.contexts ? [metadata.contexts] : []),
-                references: Array.isArray(metadata.references) ? metadata.references :
-                           (metadata.references ? [metadata.references] : []),
-                createdDate: metadata.createdDateTime as string ||
-                           metadata.createdDate as string ||
-                           toISOStringFromEpoch(file.last_modified),
-                modifiedDate: metadata.modifiedDateTime as string ||
-                            metadata.modifiedDate as string ||
-                            toISOStringFromEpoch(file.last_modified),
-                description: extractDescription(content),
-                notes: metadata.notes as string | undefined
+                effort: parsedAction.effort,
+                dueDate: parsedAction.dueDate || undefined,
+                focusDate: parsedAction.focusDateTime,
+                contexts: parsedAction.contexts,
+                references: parsedAction.references,
+                createdDate: parsedAction.createdDateTime ?? toISOStringFromEpoch(file.last_modified),
+                modifiedDate: toISOStringFromEpoch(file.last_modified),
+                description: extractDescription(parsedAction.body || content),
+                notes: parsedAction.body || undefined
               };
 
               // Only push if not cancelled
@@ -260,22 +232,27 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
   
   const updateActionStatus = useCallback(async (actionIdOrPath: string, newStatus: string, actionPath?: string): Promise<boolean> => {
     try {
+      const normalizedActionIdOrPath = normalizeReferencePath(actionIdOrPath);
       // Determine the actual file path
       let filePath: string;
 
       if (actionPath) {
         // If path is explicitly provided, use it
-        filePath = actionPath;
+        filePath = normalizeReferencePath(actionPath);
         log.debug('[updateActionStatus] Using provided path', filePath);
       } else {
         // Otherwise, try to find it in current actions (using ref for latest state)
-        const action = actionsRef.current.find(a => a.id === actionIdOrPath || a.path === actionIdOrPath);
+        const action = actionsRef.current.find((a) => {
+          const normalizedId = normalizeReferencePath(a.id);
+          const normalizedPath = normalizeReferencePath(a.path);
+          return normalizedId === normalizedActionIdOrPath || normalizedPath === normalizedActionIdOrPath;
+        });
         if (!action) {
           log.error(`[updateActionStatus] Action not found in state ${actionIdOrPath}`);
           log.debug('[updateActionStatus] Available actions', actionsRef.current.map(a => ({ id: a.id, path: a.path })));
           return false;
         }
-        filePath = action.path;
+        filePath = normalizeReferencePath(action.path);
         log.debug('[updateActionStatus] Found action in state, using path', filePath);
       }
 
@@ -283,27 +260,9 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       const content = await readFileText(filePath);
       log.debug('[updateActionStatus] File content length', content?.length || 0);
 
-      const canonicalStatus = normalizeActionStatus(newStatus);
+      const finalContent = rebuildActionMarkdown(content, { status: newStatus as GTDActionStatus });
+      const canonicalStatus = parseActionMarkdown(finalContent).status;
       log.debug('[updateActionStatus] Updating status to', canonicalStatus);
-
-      // Replace existing status tag
-      let updatedContent = content.replace(
-        /\[!singleselect:status:[^\]]+\]/,
-        `[!singleselect:status:${canonicalStatus}]`
-      );
-
-      // If no status tag exists, try to inject after first H1; if not present, prepend at top
-      if (!/\[!singleselect:status:/.test(updatedContent)) {
-        if (/^#[^\n]+\n/.test(updatedContent)) {
-          updatedContent = updatedContent.replace(
-            /^(#[^\n]+\n)/,
-            `$1\n[!singleselect:status:${canonicalStatus}]\n`
-          );
-        } else {
-          updatedContent = `[!singleselect:status:${canonicalStatus}]\n\n` + updatedContent;
-        }
-      }
-      const finalContent = updatedContent;
 
       log.debug('[updateActionStatus] Writing updated content to file', filePath);
       const writeResult = await safeInvoke('save_file', {
@@ -319,9 +278,13 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       }
 
       // Update local state optimistically
-      setActions(prev => prev.map(a =>
-        (a.id === actionIdOrPath || a.path === filePath) ? { ...a, status: canonicalStatus } : a
-      ));
+      setActions(prev => prev.map((a) => {
+        const normalizedId = normalizeReferencePath(a.id);
+        const normalizedPath = normalizeReferencePath(a.path);
+        return normalizedId === normalizedActionIdOrPath || normalizedPath === filePath
+          ? { ...a, status: canonicalStatus }
+          : a;
+      }));
 
       // Dispatch content-updated event to notify other components
       window.dispatchEvent(new CustomEvent('content-updated', {

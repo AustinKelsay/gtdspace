@@ -3,6 +3,8 @@
  * Provides a scalable system for parsing various metadata fields
  */
 
+import { parseReferenceList } from '@/utils/gtd-reference-utils';
+
 export interface FileMetadata {
   title?: string;
   status?: string;
@@ -16,7 +18,53 @@ export interface FileMetadata {
 
 export interface MetadataExtractor {
   pattern: RegExp;
-  extract: (match: RegExpMatchArray) => { key: string; value: string | string[] };
+  extract: (match: RegExpMatchArray) => { key: string; value: string | string[] } | null;
+}
+
+function decodeHtmlAttribute(input: string): string {
+  return input
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, '\'')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+function mapSingleSelectField(fieldName: string): string {
+  const fieldMap: Record<string, string> = {
+    'status': 'status',
+    'effort': 'effort',
+    'project-status': 'projectStatus',
+    'habit-status': 'habitStatus',
+    'habit-frequency': 'habitFrequency',
+    'area-status': 'areaStatus',
+    'area-review-cadence': 'areaReviewCadence',
+    'goal-status': 'goalStatus',
+    'vision-horizon': 'visionHorizon',
+    'horizon-altitude': 'horizonAltitude',
+    'horizon-review-cadence': 'horizonReviewCadence',
+  };
+
+  return fieldMap[fieldName] || fieldName;
+}
+
+function mapDateTimeField(fieldName: string): string {
+  const fieldMap: Record<string, string> = {
+    'due_date': 'dueDate',
+    'focus_date': 'focusDate',
+    'due_date_time': 'dueDate',
+    'focus_date_time': 'focusDate',
+    'created_date': 'createdDateTime',
+    'created_date_time': 'createdDateTime',
+    'modified_date': 'modifiedDate',
+    'modified_date_time': 'modifiedDateTime',
+    'completed_date': 'completedDate',
+    'completed_date_time': 'completedDate',
+    'target_date': 'targetDate',
+    'goal-target-date': 'goalTargetDate',
+  };
+
+  return fieldMap[fieldName] || fieldName;
 }
 
 /**
@@ -29,19 +77,28 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
   {
     pattern: /\[!singleselect:([\w-]+):([^\]]+)\]/g,
     extract: (match) => {
-      const fieldMap: Record<string, string> = {
-        'status': 'status',
-        'effort': 'effort',
-        'project-status': 'projectStatus',
-        'area-status': 'areaStatus',
-        'area-review-cadence': 'areaReviewCadence',
-        'goal-status': 'goalStatus',
-        'vision-horizon': 'visionHorizon',
-        'horizon-altitude': 'horizonAltitude',
-        'horizon-review-cadence': 'horizonReviewCadence',
-      };
-      const field = fieldMap[match[1]] || match[1];
+      const field = mapSingleSelectField(match[1]);
       return { key: field, value: match[2] };
+    }
+  },
+  {
+    pattern: /\[!checkbox:(habit-status):(true|false)\]/g,
+    extract: (match) => ({
+      key: mapSingleSelectField(match[1]),
+      value: match[2].toLowerCase() === 'true' ? 'completed' : 'todo',
+    })
+  },
+  {
+    pattern: /<div\s+data-singleselect='([^']+)'\s+class="singleselect-block">[^<]*<\/div>/g,
+    extract: (match) => {
+      try {
+        const decoded = decodeHtmlAttribute(match[1]);
+        const parsed = JSON.parse(decoded) as { type?: string; value?: string };
+        const field = mapSingleSelectField(parsed.type ?? '');
+        return { key: field, value: parsed.value ?? '' };
+      } catch {
+        return null;
+      }
     }
   },
 
@@ -50,23 +107,21 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
   {
     pattern: /\[!datetime:([\w-]+):([^\]]*)\]/g,
     extract: (match) => {
-      const fieldMap: Record<string, string> = {
-        'due_date': 'dueDate',
-        'focus_date': 'focusDate',
-        'due_date_time': 'dueDate', // Alias for due_date to normalize !datetime:due_date_time:...
-        'focus_date_time': 'focusDate', // Maps to focusDate, intentionally dropping time component for simplicity/backward compatibility
-        // Support both old and new field names for backward compatibility
-        'created_date': 'createdDateTime', // Map old field to new camelCase name
-        'created_date_time': 'createdDateTime',
-        'modified_date': 'modifiedDate',
-        'modified_date_time': 'modifiedDateTime',
-        'completed_date': 'completedDate',
-        'completed_date_time': 'completedDate', // Maps to completedDate, intentionally dropping time component for simplicity/backward compatibility
-        'target_date': 'targetDate',
-        'goal-target-date': 'goalTargetDate',
-      };
-      const field = fieldMap[match[1]] || match[1];
+      const field = mapDateTimeField(match[1]);
       return { key: field, value: match[2] };
+    }
+  },
+  {
+    pattern: /<div\s+data-datetime='([^']+)'\s+class="datetime-block">[^<]*<\/div>/g,
+    extract: (match) => {
+      try {
+        const decoded = decodeHtmlAttribute(match[1]);
+        const parsed = JSON.parse(decoded) as { type?: string; value?: string };
+        const field = mapDateTimeField(parsed.type ?? '');
+        return { key: field, value: parsed.value ?? '' };
+      } catch {
+        return null;
+      }
     }
   },
   
@@ -99,77 +154,7 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
     pattern: new RegExp(`\\[!${pattern}:(.*?)\\]`, 'gs'),
     extract: (match: RegExpMatchArray) => {
       if (!match[1]) return { key, value: [] };
-
-      const decodeLoose = (input: string): string => {
-        let result = input;
-        let attempts = 0;
-        while (attempts < 3 && /%[0-9A-Fa-f]{2}/.test(result)) {
-          try {
-            const decoded = decodeURIComponent(result);
-            if (decoded === result) break;
-            result = decoded;
-            attempts += 1;
-          } catch {
-            break;
-          }
-        }
-        return result;
-      };
-
-      const normalizeEntry = (input: string): string => {
-        const trimmed = decodeLoose(input.trim());
-        if (!trimmed) return '';
-        const withoutQuotes = trimmed.replace(/^['"]|['"]$/g, '');
-        return withoutQuotes.replace(/\\/g, '/').trim();
-      };
-
-      let rawValue = match[1].trim();
-      if (rawValue.startsWith('[') && !rawValue.endsWith(']')) {
-        rawValue = `${rawValue}]`;
-      }
-      const parseJsonArray = (input: string): string[] | null => {
-        try {
-          const parsed = JSON.parse(input);
-          if (!Array.isArray(parsed)) return null;
-          return parsed.map((value) => String(value));
-        } catch {
-          return null;
-        }
-      };
-
-      let parsedValues = parseJsonArray(rawValue);
-      let decodedRawValue: string | null = null;
-
-      if (!parsedValues) {
-        decodedRawValue = decodeLoose(rawValue);
-        if (decodedRawValue !== rawValue) {
-          parsedValues = parseJsonArray(decodedRawValue);
-        }
-      }
-
-      let values: string[];
-
-      if (parsedValues) {
-        values = parsedValues;
-      } else {
-        let csvSource = rawValue;
-        if (rawValue.startsWith('[') && rawValue.endsWith(']')) {
-          csvSource = rawValue.slice(1, -1);
-        } else if (
-          decodedRawValue &&
-          decodedRawValue.startsWith('[') &&
-          decodedRawValue.endsWith(']')
-        ) {
-          csvSource = decodedRawValue.slice(1, -1);
-        }
-        values = csvSource.split(',');
-      }
-
-      const decodedValues = values
-        .map((value) => normalizeEntry(value))
-        .filter(Boolean);
-
-      return { key, value: decodedValues };
+      return { key, value: parseReferenceList(match[1]) };
     }
   })),
   
@@ -227,7 +212,14 @@ export function extractMetadata(
     let match;
     
     while ((match = regex.exec(content)) !== null) {
-      const { key, value } = extractor.extract(match);
+      const extracted = extractor.extract(match);
+      if (!extracted) {
+        if (!regex.global) {
+          break;
+        }
+        continue;
+      }
+      const { key, value } = extracted;
       
       // Handle multiple values for the same key
       const existingValue = metadata[key];

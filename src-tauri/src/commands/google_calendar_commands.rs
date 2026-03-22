@@ -136,8 +136,16 @@ fn load_env_oauth_credentials() -> Result<(String, String), String> {
 fn load_google_oauth_credentials(app: AppHandle) -> Result<(String, String), String> {
     use crate::google_calendar::config_manager::GoogleConfigManager;
 
-    let config_manager = GoogleConfigManager::new(app.clone())
-        .map_err(|e| format!("Failed to create config manager: {}", e))?;
+    let config_manager = match GoogleConfigManager::new(app.clone()) {
+        Ok(manager) => manager,
+        Err(error) => {
+            println!(
+                "[GoogleCalendar] Failed to create config manager ({}), falling back to environment variables",
+                error
+            );
+            return load_env_oauth_credentials();
+        }
+    };
 
     match config_manager.get_config() {
         Ok(Some(config)) => {

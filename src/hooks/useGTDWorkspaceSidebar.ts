@@ -1073,6 +1073,11 @@ export function useGTDWorkspaceSidebar({
           throw new Error(result?.message || 'Failed to delete project');
         }
 
+        setPendingProjects((prev) =>
+          prev.filter(
+            (project) => (norm(project.path) ?? project.path) !== normalizedDeletePath
+          )
+        );
         setExpandedProjects((prev) => prev.filter((path) => path !== normalizedDeletePath));
         setProjectActions((prev) => {
           const next = { ...prev };

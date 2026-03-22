@@ -285,7 +285,11 @@ fn scan_directory_recursive(dir_path: &Path, files: &mut Vec<MarkdownFile>) -> R
                                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                                     .unwrap_or_default()
                                     .as_secs(),
-                                extension: ext_str,
+                                extension: if ext_str.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!(".{}", ext_str)
+                                },
                             });
                         }
                     }
@@ -424,7 +428,11 @@ pub fn list_project_actions(project_path: String) -> Result<Vec<MarkdownFile>, S
                                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                                     .unwrap_or_default()
                                     .as_secs(),
-                                extension: ext_str,
+                                extension: if ext_str.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!(".{}", ext_str)
+                                },
                             });
                         }
                     }
@@ -1062,13 +1070,19 @@ pub fn delete_file(path: String) -> Result<FileOperationResult, String> {
                                     });
                                 }
                                 Err(e2) => {
-                                    log::error!(
+                                    log::warn!(
                                         "Failed to remove renamed temp file {:?}: {}",
                                         tmp,
                                         e2
                                     );
-                                    // Keep trying to remove the renamed target in subsequent attempts.
-                                    target = tmp;
+                                    return Ok(FileOperationResult {
+                                        success: true,
+                                        path: Some(path.clone()),
+                                        message: Some(
+                                            "File removed (renamed to temp); cleanup of temp may be pending"
+                                                .to_string(),
+                                        ),
+                                    });
                                 }
                             },
                             Err(e1) => {

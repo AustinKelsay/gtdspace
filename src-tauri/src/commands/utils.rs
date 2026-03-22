@@ -30,6 +30,7 @@ pub fn sanitize_markdown_file_stem(name: &str) -> String {
         .trim()
         .trim_matches('.')
         .to_string();
+    let sanitized = strip_markdown_suffixes(&sanitized);
 
     let reserved_check = sanitized
         .split('.')

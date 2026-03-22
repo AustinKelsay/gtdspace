@@ -662,6 +662,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
         }
 
         resetTransientTabState();
+        dispatch({ type: 'clear-and-restore', state: null });
       }
 
       try {
@@ -671,7 +672,12 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
           readFile: readTabFile,
         });
 
-        if (restoreAttemptRef.current === restoreAttempt) {
+        const currentTabsAfterRestore = tabStateRef.current.openTabs;
+        if (
+          restoreAttemptRef.current === restoreAttempt &&
+          (currentTabsAfterRestore.length === 0 ||
+            tabsBelongToWorkspace(currentTabsAfterRestore, normalizedWorkspaceKey))
+        ) {
           dispatch({ type: 'clear-and-restore', state: restoredState });
           restoringWorkspaceRef.current = null;
           restoredWorkspaceRef.current = normalizedWorkspaceKey;

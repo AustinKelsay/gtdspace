@@ -77,6 +77,11 @@ export function useFileWatcher(): FileWatcherHookResult {
         detail: event,
       })
     );
+    window.dispatchEvent(
+      new CustomEvent('content-updated', {
+        detail: event,
+      })
+    );
   }, []);
   
   // === WATCHER CONTROL FUNCTIONS ===

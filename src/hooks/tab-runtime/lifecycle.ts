@@ -8,6 +8,28 @@ import { CALENDAR_FILE_ID } from '@/utils/special-files';
 
 const log = createScopedLogger('tabRuntimeLifecycle');
 
+function safelyNotifyTabSave(file: MarkdownFile, content: string): void {
+  const metadata = extractMetadata(content);
+
+  try {
+    emitContentSaved({
+      filePath: file.path,
+      fileName: file.name,
+      content,
+      metadata,
+    });
+    emitMetadataChange({
+      filePath: file.path,
+      fileName: file.name,
+      content,
+      metadata,
+    });
+    window.onTabFileSaved?.(file.path, file.name, content, metadata);
+  } catch (error) {
+    log.error('Failed to notify tab listeners', error);
+  }
+}
+
 export async function readTabFile(filePath: string): Promise<string | null> {
   return safeInvoke<string>('read_file', { path: filePath }, null);
 }
@@ -50,20 +72,7 @@ export async function loadTabForOpen(file: MarkdownFile): Promise<Pick<FileTab, 
 
       content = migratedContent;
 
-      const metadata = extractMetadata(content);
-      emitContentSaved({
-        filePath: file.path,
-        fileName: file.name,
-        content,
-        metadata,
-      });
-      emitMetadataChange({
-        filePath: file.path,
-        fileName: file.name,
-        content,
-        metadata,
-      });
-      window.onTabFileSaved?.(file.path, file.name, content, metadata);
+      safelyNotifyTabSave(file, content);
     } catch (error) {
       log.error('Failed to persist migrated tab content', error);
     }
@@ -81,38 +90,11 @@ export async function saveTabFile(file: MarkdownFile, content: string): Promise<
     throw new Error('Failed to save file');
   }
 
-  const metadata = extractMetadata(content);
-  emitMetadataChange({
-    filePath: file.path,
-    fileName: file.name,
-    content,
-    metadata,
-  });
-  emitContentSaved({
-    filePath: file.path,
-    fileName: file.name,
-    content,
-    metadata,
-  });
-  window.onTabFileSaved?.(file.path, file.name, content, metadata);
+  safelyNotifyTabSave(file, content);
 }
 
 export async function emitReloadedTabContent(file: MarkdownFile, content: string): Promise<void> {
-  const metadata = extractMetadata(content);
-
-  emitContentSaved({
-    filePath: file.path,
-    fileName: file.name,
-    content,
-    metadata,
-  });
-
-  emitMetadataChange({
-    filePath: file.path,
-    fileName: file.name,
-    content,
-    metadata,
-  });
+  safelyNotifyTabSave(file, content);
 }
 
 export async function tabHasExternalConflict(tab: FileTab): Promise<boolean> {

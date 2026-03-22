@@ -48,6 +48,9 @@ export function readCachedBlocks(
   if (cached && now - cached.timestamp < CACHE_DURATION) {
     return cloneCachedBlocks(cached.blocks);
   }
+  if (cached) {
+    blockProcessingCache.delete(cacheKey);
+  }
 
   return null;
 }
@@ -72,6 +75,13 @@ export function writeCachedBlocks(
   blocks: unknown[],
   now: number = Date.now()
 ): void {
+  if (blockProcessingCache.size > 50) {
+    for (const [key, value] of blockProcessingCache.entries()) {
+      if (now - value.timestamp > CACHE_DURATION) {
+        blockProcessingCache.delete(key);
+      }
+    }
+  }
   blockProcessingCache.set(cacheKey, {
     blocks: cloneCachedBlocks(blocks),
     timestamp: now,

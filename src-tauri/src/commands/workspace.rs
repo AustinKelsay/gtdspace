@@ -435,18 +435,21 @@ fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, Strin
     }
 
     // Detect if any project directories already exist
-    let mut has_any_projects = false;
+    let sample_project_name = "Launch Side Business";
+    let sample_project_path = projects_root.join(sample_project_name);
+    let sample_seed_complete_marker = sample_project_path.join(".seed_complete");
+    let mut has_non_sample_projects = false;
     if let Ok(entries) = fs::read_dir(&projects_root) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir() {
-                has_any_projects = true;
+            if path.is_dir() && path != sample_project_path {
+                has_non_sample_projects = true;
                 break;
             }
         }
     }
 
-    if has_any_projects {
+    if has_non_sample_projects || sample_seed_complete_marker.exists() {
         return Ok("Projects already exist; skipping example seeding".to_string());
     }
 
@@ -610,6 +613,8 @@ fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, Strin
         format!("seeded: {}", chrono::Local::now().to_rfc3339()),
     )
     .map_err(|e| format!("Failed to write seed marker: {}", e))?;
+    fs::write(&sample_seed_complete_marker, "complete")
+        .map_err(|e| format!("Failed to write sample seed marker: {}", e))?;
 
     Ok("Seeded example projects, actions, horizons, habits, and reference materials".to_string())
 }
@@ -630,11 +635,18 @@ pub async fn initialize_default_gtd_space(app: AppHandle) -> Result<String, Stri
         .unwrap_or_else(|_| get_default_settings());
 
     // Resolve default path (settings override or platform default)
-    let target_path = if let Some(path) = settings.default_space_path.clone() {
-        path
-    } else {
-        get_default_gtd_space_path()?
-    };
+    let target_path = settings
+        .default_space_path
+        .clone()
+        .and_then(|path| {
+            let trimmed = path.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .unwrap_or(get_default_gtd_space_path()?);
 
     // Ensure GTD structure
     initialize_gtd_space(target_path.clone()).await?;

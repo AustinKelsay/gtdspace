@@ -126,8 +126,8 @@ export const App: React.FC = () => {
   } = useGTDSpace();
 
   const gitSyncWorkspacePath = React.useMemo(
-    () => settings.git_sync_workspace_path?.trim() || null,
-    [settings.git_sync_workspace_path],
+    () => settings.git_sync_workspace_path?.trim() || gtdSpace?.root_path || null,
+    [gtdSpace?.root_path, settings.git_sync_workspace_path],
   );
 
   const activeWorkspacePath = React.useMemo(

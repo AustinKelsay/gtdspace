@@ -60,7 +60,31 @@ const updateProjectDueDateInMarkdown = (content: string, dueDate: string): strin
     }
     return content.replace(PROJECT_DUE_DATE_PATTERN, `[!datetime:due_date:${dueDate}]`);
   }
-  return content;
+  if (!dueDate.trim()) {
+    return content;
+  }
+
+  const statusMatch = content.match(PROJECT_STATUS_PATTERN);
+  if (statusMatch && statusMatch.index !== undefined) {
+    const insertIndex = statusMatch.index + statusMatch[0].length;
+    return (
+      content.slice(0, insertIndex) +
+      `\n[!datetime:due_date:${dueDate}]` +
+      content.slice(insertIndex)
+    );
+  }
+
+  const titleMatch = content.match(/^#\s+.+$/m);
+  if (titleMatch && titleMatch.index !== undefined) {
+    const titleEndIndex = titleMatch.index + titleMatch[0].length;
+    return (
+      content.slice(0, titleEndIndex) +
+      `\n[!datetime:due_date:${dueDate}]` +
+      content.slice(titleEndIndex)
+    );
+  }
+
+  return `[!datetime:due_date:${dueDate}]\n\n${content.trimStart()}`;
 };
 
 export interface ProjectWithMetadata extends GTDProject {

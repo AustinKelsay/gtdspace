@@ -49,6 +49,9 @@ impl GoogleConfigManager {
         &self,
         config: &GoogleOAuthConfig,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        self.client_secret_entry()?
+            .set_password(&config.client_secret)?;
+
         let stored_config = StoredGoogleOAuthConfig {
             client_id: config.client_id.clone(),
         };
@@ -58,8 +61,6 @@ impl GoogleConfigManager {
         self.store
             .save()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-        self.client_secret_entry()?
-            .set_password(&config.client_secret)?;
 
         println!("[GoogleConfigManager] OAuth configuration stored");
         Ok(())

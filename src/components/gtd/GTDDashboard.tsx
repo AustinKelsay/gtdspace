@@ -589,6 +589,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
                     // Available frequencies: daily, weekdays, every-other-day, twice-weekly, weekly, biweekly, monthly
                     const frequencyOptions = [
+                      { value: '5-minute', label: 'Every 5 Minutes (Testing)' },
                       { value: 'daily', label: 'Daily' },
                       { value: 'weekdays', label: 'Weekdays (Mon-Fri)' },
                       { value: 'every-other-day', label: 'Every Other Day' },
@@ -604,7 +605,9 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     if (selectedLabel) {
                       const normalizedSelection = selectedLabel.trim().toLowerCase();
                       const selectedFrequency = frequencyOptions.find(
-                        (f) => f.label.trim().toLowerCase() === normalizedSelection
+                        (f) =>
+                          f.label.trim().toLowerCase() === normalizedSelection ||
+                          f.value.trim().toLowerCase() === normalizedSelection
                       );
 
                       if (!selectedFrequency) {

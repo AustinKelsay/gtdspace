@@ -137,9 +137,14 @@ fn parse_reference_paths(raw: &str) -> Vec<String> {
 }
 
 fn normalize_reference_target(path: &str) -> String {
-    path.replace('\\', "/")
-        .replace("/README.markdown", "")
-        .replace("/README.md", "")
+    let normalized = path.replace('\\', "/");
+    if let Some(stripped) = normalized.strip_suffix("/README.markdown") {
+        return stripped.to_string();
+    }
+    if let Some(stripped) = normalized.strip_suffix("/README.md") {
+        return stripped.to_string();
+    }
+    normalized
 }
 
 /// Find files that reference a target file (reverse relationships)

@@ -174,7 +174,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                 const result = await withErrorHandling(async () => {
                   const { invoke } = await import('@tauri-apps/api/core');
                   return invoke('updateHabitStatus', {
-                    habitPath: normalizedHabitPath,
+                    habitPath: currentPath,
                     newStatus: selectedValue,
                   });
                 }, 'Failed to update habit status');

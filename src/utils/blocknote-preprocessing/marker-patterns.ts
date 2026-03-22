@@ -64,13 +64,13 @@ export const DATETIME_HTML_PATTERN =
 // Some legacy reference markers store array-like payloads such as `[]` or
 // `["/path.md"]`, so we tolerate the extra trailing `]` needed to consume the
 // full marker token during preprocessing.
-export const REFERENCES_MARKER_PATTERN = /\[!references:([^\]]*)\]\]?/g;
-export const AREAS_REFERENCES_PATTERN = /\[!areas-references:([^\]]*)\]\]?/g;
-export const GOALS_REFERENCES_PATTERN = /\[!goals-references:([^\]]*)\]\]?/g;
-export const VISION_REFERENCES_PATTERN = /\[!vision-references:([^\]]*)\]\]?/g;
-export const PURPOSE_REFERENCES_PATTERN = /\[!purpose-references:([^\]]*)\]\]?/g;
-export const PROJECTS_REFERENCES_PATTERN = /\[!projects-references:([^\]]*)\]\]?/g;
-export const HABITS_REFERENCES_PATTERN = /\[!habits-references:([^\]]*)\]\]?/g;
+export const REFERENCES_MARKER_PATTERN = /\[!references:(.*?)\]\]?/g;
+export const AREAS_REFERENCES_PATTERN = /\[!areas-references:(.*?)\]\]?/g;
+export const GOALS_REFERENCES_PATTERN = /\[!goals-references:(.*?)\]\]?/g;
+export const VISION_REFERENCES_PATTERN = /\[!vision-references:(.*?)\]\]?/g;
+export const PURPOSE_REFERENCES_PATTERN = /\[!purpose-references:(.*?)\]\]?/g;
+export const PROJECTS_REFERENCES_PATTERN = /\[!projects-references:(.*?)\]\]?/g;
+export const HABITS_REFERENCES_PATTERN = /\[!habits-references:(.*?)\]\]?/g;
 export const REFERENCES_HTML_PATTERN =
   /<div\s+data-references='([^']+)'\s+class="references-block">([^<]+)<\/div>/g;
 

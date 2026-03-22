@@ -91,8 +91,8 @@ function normalizeReferenceGroups(
   meta: ReturnType<typeof extractMetadata>
 ): HabitReferenceGroups {
   return {
-    projects: stripReadmeReferences(
-      parseReferenceList((meta as { projectsReferences?: unknown }).projectsReferences)
+    projects: parseReferenceList(
+      (meta as { projectsReferences?: unknown }).projectsReferences
     ),
     areas: stripReadmeReferences(
       parseReferenceList((meta as { areasReferences?: unknown }).areasReferences)
@@ -339,21 +339,32 @@ export function determineLastHabitResetDate(
   rows: HabitHistoryRow[],
   createdIso: string
 ): Date | null {
-  for (let i = rows.length - 1; i >= 0; i -= 1) {
-    if (!isHabitResetAction(rows[i].action)) {
+  let latestReset: Date | null = null;
+  for (const row of rows) {
+    if (!isHabitResetAction(row.action)) {
       continue;
     }
-    const parsed = habitHistoryRowToDate(rows[i]);
-    if (parsed) {
-      return parsed;
+
+    const parsed = habitHistoryRowToDate(row);
+    if (parsed && (!latestReset || parsed.getTime() > latestReset.getTime())) {
+      latestReset = parsed;
     }
   }
 
-  for (let i = rows.length - 1; i >= 0; i -= 1) {
-    const parsed = habitHistoryRowToDate(rows[i]);
-    if (parsed) {
-      return parsed;
+  if (latestReset) {
+    return latestReset;
+  }
+
+  let latestCompletion: Date | null = null;
+  for (const row of rows) {
+    const parsed = habitHistoryRowToDate(row);
+    if (parsed && (!latestCompletion || parsed.getTime() > latestCompletion.getTime())) {
+      latestCompletion = parsed;
     }
+  }
+
+  if (latestCompletion) {
+    return latestCompletion;
   }
 
   const createdDate = new Date(createdIso);

@@ -16,7 +16,10 @@ import {
 } from 'lucide-react';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { useActionsData } from '@/hooks/useActionsData';
-import { useProjectsData } from '@/hooks/useProjectsData';
+import {
+  useProjectsData,
+  type PersistedProjectUpdates,
+} from '@/hooks/useProjectsData';
 import { useHabitsHistory } from '@/hooks/useHabitsHistory';
 import { useHorizonsRelationships } from '@/hooks/useHorizonsRelationships';
 import { GTDProjectDialog, GTDActionDialog } from '@/components/gtd';
@@ -373,7 +376,10 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   };
 
   // Handle project updates
-  const handleProjectUpdate = async (projectPath: string, updates: Partial<typeof projectsWithMetadata[0]>) => {
+  const handleProjectUpdate = async (
+    projectPath: string,
+    updates: PersistedProjectUpdates
+  ) => {
     await updateProject(projectPath, updates);
   };
 

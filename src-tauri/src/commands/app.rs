@@ -100,16 +100,6 @@ pub fn get_app_version(app: AppHandle) -> Result<String, String> {
 /// ```
 #[tauri::command]
 pub fn check_permissions() -> Result<PermissionStatus, String> {
-    log::info!("Permission check requested; returning conservative stub values until Phase 1 permission checks are implemented");
-
-    // TODO(Phase 1): replace this stubbed PermissionStatus with real filesystem
-    // read/write and dialog permission checks once the runtime permission model
-    // is finalized for desktop environments.
-    let status = PermissionStatus {
-        can_read_files: false,
-        can_write_files: false,
-        can_open_dialogs: false,
-    };
-
-    Ok(status)
+    log::info!("Permission check requested; desktop permission checks are not implemented yet");
+    Err("Permission checks are not implemented for desktop yet".to_string())
 }

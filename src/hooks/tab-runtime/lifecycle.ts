@@ -4,6 +4,7 @@ import { emitContentSaved, emitMetadataChange } from '@/utils/content-event-bus'
 import { migrateMarkdownContent, needsMigration } from '@/utils/data-migration';
 import { createScopedLogger } from '@/utils/logger';
 import { safeInvoke } from '@/utils/safe-invoke';
+import { CALENDAR_FILE_ID } from '@/utils/special-files';
 
 const log = createScopedLogger('tabRuntimeLifecycle');
 
@@ -12,14 +13,19 @@ export async function readTabFile(filePath: string): Promise<string | null> {
 }
 
 export async function loadTabForOpen(file: MarkdownFile): Promise<Pick<FileTab, 'content' | 'originalContent'>> {
-  if (file.path === '::calendar::') {
+  if (file.path === CALENDAR_FILE_ID) {
     return {
       content: '',
       originalContent: '',
     };
   }
 
-  let content = (await safeInvoke<string>('read_file', { path: file.path }, '')) || '';
+  const initialContent = await safeInvoke<string>('read_file', { path: file.path }, null);
+  if (initialContent == null) {
+    throw new Error(`Failed to read file: ${file.path}`);
+  }
+
+  let content = initialContent;
 
   if (needsMigration(content)) {
     try {
@@ -57,6 +63,7 @@ export async function loadTabForOpen(file: MarkdownFile): Promise<Pick<FileTab, 
         content,
         metadata,
       });
+      window.onTabFileSaved?.(file.path, file.name, content, metadata);
     } catch (error) {
       log.error('Failed to persist migrated tab content', error);
     }
@@ -81,6 +88,7 @@ export async function saveTabFile(file: MarkdownFile, content: string): Promise<
     content,
     metadata,
   });
+  window.onTabFileSaved?.(file.path, file.name, content, metadata);
 }
 
 export async function emitReloadedTabContent(file: MarkdownFile, content: string): Promise<void> {
@@ -102,7 +110,7 @@ export async function emitReloadedTabContent(file: MarkdownFile, content: string
 }
 
 export async function tabHasExternalConflict(tab: FileTab): Promise<boolean> {
-  if (!tab.hasUnsavedChanges || tab.file.path === '::calendar::') {
+  if (!tab.hasUnsavedChanges || tab.file.path === CALENDAR_FILE_ID) {
     return false;
   }
 

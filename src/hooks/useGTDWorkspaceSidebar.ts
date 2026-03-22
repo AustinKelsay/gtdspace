@@ -1,6 +1,7 @@
 import React from 'react';
 import { flushSync } from 'react-dom';
 import { safeInvoke } from '@/utils/safe-invoke';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { readFileText } from '@/hooks/useFileManager';
 import { onContentChange, onContentSaved, onMetadataChange } from '@/utils/content-event-bus';
 import { syncHorizonReadmeContent } from '@/utils/horizon-readme-utils';
@@ -108,6 +109,7 @@ export function useGTDWorkspaceSidebar({
   const checkGTDSpace = propCheckGTDSpace ?? hookCheckGTDSpace;
   const loadProjects = propLoadProjects ?? hookLoadProjects;
   const rootPath = gtdSpace?.root_path || currentFolder || null;
+  const { withErrorHandling } = useErrorHandler();
 
   const [showProjectDialog, setShowProjectDialog] = React.useState(false);
   const [showActionDialog, setShowActionDialog] = React.useState(false);
@@ -818,33 +820,43 @@ export function useGTDWorkspaceSidebar({
   );
 
   const handleSelectFolder = React.useCallback(async () => {
-    try {
-      const folderPath = await safeInvoke<string>('select_folder', undefined, null);
-      if (!folderPath) {
-        throw new Error('No folder selected');
+    const folderPath = await withErrorHandling(async () => {
+      const selectedPath = await safeInvoke<string>('select_folder', undefined, null);
+      if (!selectedPath) {
+        return null;
       }
+      return selectedPath;
+    }, 'Failed to select folder');
+
+    if (folderPath) {
       onFolderSelect(folderPath);
-    } catch {
-      // User cancellation keeps current selection unchanged.
     }
-  }, [onFolderSelect]);
+  }, [onFolderSelect, withErrorHandling]);
 
   const handleOpenFolderInExplorer = React.useCallback(async () => {
     if (!currentFolder) return;
-    try {
-      await safeInvoke('open_folder_in_explorer', { path: currentFolder }, null);
-    } catch {
-      // Keep sidebar usable even if the OS integration fails.
-    }
-  }, [currentFolder]);
+    await withErrorHandling(async () => {
+      const result = await safeInvoke(
+        'open_folder_in_explorer',
+        { path: currentFolder },
+        null
+      );
+      if (result == null) {
+        throw new Error('Failed to open folder in explorer');
+      }
+      return result;
+    }, 'Failed to open folder in explorer');
+  }, [currentFolder, withErrorHandling]);
 
   const handleOpenFileLocation = React.useCallback(async (path: string) => {
-    try {
-      await safeInvoke('open_file_location', { filePath: path }, null);
-    } catch {
-      // Failing to reveal the file should not affect sidebar navigation.
-    }
-  }, []);
+    await withErrorHandling(async () => {
+      const result = await safeInvoke('open_file_location', { filePath: path }, null);
+      if (result == null) {
+        throw new Error('Failed to open file location');
+      }
+      return result;
+    }, 'Failed to open file location');
+  }, [withErrorHandling]);
 
   const handleRefresh = React.useCallback(async () => {
     onRefresh?.();

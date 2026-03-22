@@ -162,6 +162,23 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                                             "Failed to save settings after migration: {}",
                                             e
                                         );
+                                        if let Err(delete_error) = entry.delete_password() {
+                                            log::warn!(
+                                                "Failed to roll back migrated encryption key after save failure: {}",
+                                                delete_error
+                                            );
+                                        }
+                                        legacy_encryption_key = Some(trimmed.to_string());
+                                        if let Some(settings_obj) =
+                                            value_to_deserialize.as_object_mut()
+                                        {
+                                            settings_obj.insert(
+                                                "git_sync_encryption_key".to_string(),
+                                                serde_json::Value::String(trimmed.to_string()),
+                                            );
+                                        }
+                                    } else {
+                                        legacy_encryption_key = None;
                                     }
                                 }
                             }

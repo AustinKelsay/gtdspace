@@ -40,7 +40,10 @@ describe('gtd habit markdown utilities', () => {
 
     expect(parsed.status).toBe('completed');
     expect(parsed.frequency).toBe('weekly');
-    expect(parsed.references.projects).toEqual(['/Space/Projects/Alpha']);
+    expect(parsed.references.projects).toEqual([
+      '/Space/Projects/Alpha/README.md',
+      '/Space/Projects/Alpha',
+    ]);
     expect(parsed.generalReferences).toEqual(['/Space/Cabinet/Article.md']);
     expect(parsed.notes).toBe('Review the active list.');
     expect(parsed.historyRows).toHaveLength(2);
@@ -112,6 +115,40 @@ describe('gtd habit markdown utilities', () => {
     expect(lastCompletion?.getDate()).toBe(1);
     expect(lastCompletion?.getHours()).toBe(21);
     expect(lastCompletion?.getMinutes()).toBe(30);
+  });
+
+  it('uses the latest reset date regardless of row order', () => {
+    const rows = [
+      {
+        date: '2026-03-05',
+        time: '12:00 AM',
+        status: 'To Do',
+        action: 'Auto-Reset',
+        details: 'Latest reset',
+      },
+      {
+        date: '2026-03-01',
+        time: '9:30 PM',
+        status: 'Complete',
+        action: 'Manual',
+        details: 'Completed',
+      },
+      {
+        date: '2026-03-03',
+        time: '12:00 AM',
+        status: 'To Do',
+        action: 'Auto-Reset',
+        details: 'Older reset',
+      },
+    ];
+
+    const resetAnchor = determineLastHabitResetDate(rows, '2026-02-20T10:00:00Z');
+
+    expect(resetAnchor?.getFullYear()).toBe(2026);
+    expect(resetAnchor?.getMonth()).toBe(2);
+    expect(resetAnchor?.getDate()).toBe(5);
+    expect(resetAnchor?.getHours()).toBe(0);
+    expect(resetAnchor?.getMinutes()).toBe(0);
   });
 
   it('falls back to the latest parseable history row before created when no reset rows exist', () => {

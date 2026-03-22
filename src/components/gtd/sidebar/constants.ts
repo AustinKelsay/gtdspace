@@ -7,6 +7,7 @@ import {
   Target,
 } from 'lucide-react';
 import type { HorizonType } from '@/utils/horizon-config';
+import { CALENDAR_FILE_ID } from '@/utils/special-files';
 import type { GTDSection } from './types';
 
 export const SIDEBAR_ACTIVE_ROW_CLASSES = 'bg-primary/10 ring-1 ring-primary/20';
@@ -48,7 +49,7 @@ export const GTD_SECTIONS: GTDSection[] = [
     id: 'calendar',
     name: 'Calendar',
     icon: Calendar,
-    path: '::calendar::',
+    path: CALENDAR_FILE_ID,
     description: 'View all dated items',
     color: 'text-orange-600',
   },

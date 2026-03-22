@@ -107,8 +107,11 @@ export function parseReferenceList(value: unknown): string[] {
       }
     }
 
+    const normalizedSource = decoded !== trimmed ? decoded : trimmed;
     const repairedBracketValue =
-      trimmed.startsWith('[') && !trimmed.endsWith(']') ? `${trimmed}]` : trimmed;
+      normalizedSource.startsWith('[') && !normalizedSource.endsWith(']')
+        ? `${normalizedSource}]`
+        : normalizedSource;
     const repairedParsed = tryParseJson(repairedBracketValue);
     if (Array.isArray(repairedParsed)) {
       repairedParsed.forEach((item) => appendReferenceValue(item, results));

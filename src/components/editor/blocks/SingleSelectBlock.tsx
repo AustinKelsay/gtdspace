@@ -19,6 +19,8 @@ import {
 import type { SingleSelectBlockType } from '@/utils/singleselect-block-helpers';
 import { useFilePath } from '@/components/editor/FilePathContext';
 import { emitMetadataChange } from '@/utils/content-event-bus';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { norm } from '@/utils/path';
 
 // Define status options for GTD
 const GTD_STATUS_OPTIONS = [
@@ -70,6 +72,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
   const { block } = props;
   const { type, value, label, placeholder, customOptionsJson } = block.props;
   const filePath = useFilePath();
+  const { withErrorHandling } = useErrorHandler();
 
   // Define BlockNote block type
   type BlockNoteBlock = {
@@ -168,11 +171,18 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
               const inTauriContext = await checkTauriContextAsync();
               
               if (inTauriContext) {
-                const { invoke } = await import('@tauri-apps/api/core');
-                await invoke('update_habit_status', {
-                  habitPath: currentPath,
-                  newStatus: selectedValue,
-                });
+                const normalizedHabitPath = norm(currentPath) ?? currentPath;
+                const result = await withErrorHandling(async () => {
+                  const { invoke } = await import('@tauri-apps/api/core');
+                  return invoke('update_habit_status', {
+                    habitPath: normalizedHabitPath,
+                    newStatus: selectedValue,
+                  });
+                }, 'Failed to update habit status');
+
+                if (result === null) {
+                  throw new Error('Failed to update habit status');
+                }
                 
                 // Mark update as successfully applied
                 updateApplied = true;
@@ -269,7 +279,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, block.id, block.props.value, block.props.type, block.props.label, props.editor, filePath, findBlockInDocument]);
+  }, [type, block.id, block.props.value, block.props.type, block.props.label, props.editor, filePath, findBlockInDocument, withErrorHandling]);
 
   return (
     <div className="inline-block min-w-[200px] align-middle mx-1">

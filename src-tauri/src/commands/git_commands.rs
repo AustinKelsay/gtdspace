@@ -20,7 +20,9 @@ pub async fn git_sync_status(
     workspace_override: Option<String>,
 ) -> Result<GitSyncStatusResponse, String> {
     let settings = load_settings(app).await?;
-    Ok(compute_git_status(&settings, workspace_override))
+    task::spawn_blocking(move || compute_git_status(&settings, workspace_override))
+        .await
+        .map_err(|e| format!("Git status task failed: {}", e))
 }
 
 /// Create an encrypted snapshot and push it via git
@@ -39,11 +41,13 @@ pub async fn git_sync_push(
         .await
         .map_err(|e| format!("Git push task failed: {}", e))??;
 
-    update_settings(app, |settings| {
+    if let Err(error) = update_settings(app, |settings| {
         settings.git_sync_last_push = outcome.timestamp.clone();
     })
     .await
-    .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
+    {
+        log::warn!("Failed to persist git sync push metadata: {}", error);
+    }
 
     Ok(outcome)
 }
@@ -64,11 +68,13 @@ pub async fn git_sync_pull(
         .await
         .map_err(|e| format!("Git pull task failed: {}", e))??;
 
-    update_settings(app, |settings| {
+    if let Err(error) = update_settings(app, |settings| {
         settings.git_sync_last_pull = outcome.timestamp.clone();
     })
     .await
-    .map_err(|e| format!("Failed to persist git sync metadata: {}", e))?;
+    {
+        log::warn!("Failed to persist git sync pull metadata: {}", error);
+    }
 
     Ok(outcome)
 }

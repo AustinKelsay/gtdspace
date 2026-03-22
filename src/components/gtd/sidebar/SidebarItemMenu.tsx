@@ -26,7 +26,7 @@ export function SidebarItemMenu({
         <Button
           variant="ghost"
           size="icon"
-          className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-opacity"
           onClick={(event) => event.stopPropagation()}
           aria-label="Open item menu"
         >

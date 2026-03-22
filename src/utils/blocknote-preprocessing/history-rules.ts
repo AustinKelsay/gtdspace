@@ -27,9 +27,10 @@ export function shouldSkipBlockInsideHistory(
     return false;
   }
 
-  const hasItalicContent =
+  const hasOnlyItalicContent =
     Array.isArray(block.content) &&
-    block.content.some((item: unknown) => {
+    block.content.length > 0 &&
+    block.content.every((item: unknown) => {
       const child = item as TextChild;
       return child !== null && typeof child === "object" && child.styles?.italic;
     });
@@ -37,7 +38,7 @@ export function shouldSkipBlockInsideHistory(
   return (
     blockText.includes("Track your habit") ||
     blockText.trim() === "" ||
-    hasItalicContent
+    hasOnlyItalicContent
   );
 }
 

@@ -196,7 +196,28 @@ describe('gtd action markdown utilities', () => {
     expect(parsed.effort).toBe('large');
     expect(parsed.focusDate).toBe('2025-01-17');
     expect(parsed.dueDate).toBe('2025-01-20');
+    expect(parsed.createdDateTime).toBe('2025-01-17T12:00:00Z');
     expect(parsed.body).toBe('## Notes\nCarry this body forward.');
+  });
+
+  it('preserves a legacy created footer when rebuilding canonical markdown', () => {
+    const content = [
+      '# Legacy Action',
+      '',
+      '## Status',
+      '[!singleselect:status:waiting]',
+      '',
+      'Action body.',
+      '',
+      '---',
+      'Created: 2025-01-17T12:00:00Z',
+    ].join('\n');
+
+    const rebuilt = rebuildActionMarkdown(content, {
+      status: 'done',
+    });
+
+    expect(rebuilt).toContain('[!datetime:created_date_time:2025-01-17T12:00:00Z]');
   });
 
   it('leaves createdDateTime undefined when the created marker is missing', () => {

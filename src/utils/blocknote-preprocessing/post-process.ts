@@ -35,13 +35,7 @@ export function postProcessBlockNoteBlocks(
       `Found ${scannedMarkdown.totalCustomBlocks} custom GTD blocks to process`
     );
   }
-
-  // Skip the walk entirely when the markdown does not contain any recognized
-  // GTD markers or legacy HTML that can produce replacements.
-  if (scannedMarkdown.replacementByText.size === 0) {
-    writeCachedBlocks(cacheKey, blocks, now);
-    return blocks;
-  }
+  const hasReplacementCandidates = scannedMarkdown.replacementByText.size > 0;
 
   const processedBlocks: ProcessedBlock[] = [];
   let inHistorySection = false;
@@ -83,7 +77,7 @@ export function postProcessBlockNoteBlocks(
       continue;
     }
 
-    if (isParagraphBlock(block) && block.content) {
+    if (hasReplacementCandidates && isParagraphBlock(block) && block.content) {
       const replacements = replaceParagraphWithCustomBlocks(
         block,
         blockText,

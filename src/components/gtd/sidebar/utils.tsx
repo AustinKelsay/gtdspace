@@ -5,6 +5,8 @@ import {
   XCircle,
 } from 'lucide-react';
 import { normalizeStatus } from '@/utils/gtd-status';
+import { norm } from '@/utils/path';
+import { CALENDAR_FILE_ID } from '@/utils/special-files';
 import type { GTDProject, MarkdownFile } from '@/types';
 import type {
   GTDSection,
@@ -20,8 +22,7 @@ export const getFolderName = (fullPath: string): string => {
 };
 
 export const normalizePath = (path?: string | null): string | null => {
-  if (!path) return null;
-  return path.replace(/\\/g, '/').toLowerCase();
+  return norm(path) ?? null;
 };
 
 export const isPathDescendant = (
@@ -103,9 +104,9 @@ export const buildSectionPath = (
 };
 
 export const createCalendarFile = (): MarkdownFile => ({
-  id: '::calendar::',
+  id: CALENDAR_FILE_ID,
   name: 'Calendar',
-  path: '::calendar::',
+  path: CALENDAR_FILE_ID,
   size: 0,
   last_modified: Math.floor(Date.now() / 1000),
   extension: 'calendar',

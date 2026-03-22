@@ -18,6 +18,12 @@ declare global {
 
   // Window extensions for GTD Space
   interface Window {
+    onTabFileSaved?: (
+      filePath: string,
+      fileName: string,
+      content: string,
+      metadata: Record<string, unknown>
+    ) => void;
     applyBacklinkChange?: (
       filePath: string,
       mutator: (content: string | null | undefined) => string

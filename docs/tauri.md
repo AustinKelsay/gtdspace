@@ -130,6 +130,10 @@ The most important current caveat is that the backend watcher emits `changed`, w
 - Standard settings are persisted through the Tauri store
 - Sensitive values such as git sync secrets and Google OAuth config use secure storage-oriented commands
 - Tauri capability and CSP settings live in `src-tauri/tauri.conf.json` and `src-tauri/capabilities/`
+- `save_file` now writes through a same-directory temporary file and rename so successful saves replace content atomically
+- `delete_folder` is idempotent and treats already-missing folders as a successful deletion
+- `create_gtd_habit` creates the markdown file with `create_new` semantics so duplicate habit names are rejected atomically
+- Legacy habit-history list migration preserves unmatched lines verbatim instead of silently dropping hand-written notes
 
 ## When To Read This Doc
 

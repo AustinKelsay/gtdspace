@@ -26,47 +26,17 @@ function createNumericHash(value: string): string {
   return Math.abs(hash).toString(36);
 }
 
-function toBase64(input: string): string {
-  const value = String(input);
-
-  if (typeof btoa !== "undefined") {
-    try {
-      return btoa(
-        encodeURIComponent(value).replace(
-          /%([0-9A-F]{2})/g,
-          (_match, part) => String.fromCharCode(parseInt(part, 16))
-        )
-      );
-    } catch (error) {
-      console.error("Failed to encode to base64:", error);
-      return createNumericHash(value);
-    }
-  }
-
-  if (
-    typeof globalThis !== "undefined" &&
-    typeof (globalThis as { Buffer?: typeof Buffer }).Buffer !== "undefined"
-  ) {
-    return (globalThis as { Buffer: typeof Buffer }).Buffer.from(
-      value,
-      "utf-8"
-    ).toString("base64");
-  }
-
-  return createNumericHash(value);
-}
-
 export function createContentHash(markdown: string, blockCount: number): string {
   const gtdFieldMarkers = markdown.match(GTD_FIELD_MARKER_PATTERN) || [];
   const gtdFieldCount = gtdFieldMarkers.length;
 
   if (gtdFieldCount === 0) {
-    const contentHash = toBase64(markdown.trim()).slice(0, 8);
+    const contentHash = createNumericHash(markdown.trim());
     return `empty-${blockCount}-${contentHash}`;
   }
 
-  const structuralHash = toBase64(gtdFieldMarkers.join("|")).slice(0, 12);
-  const contentHash = toBase64(markdown.trim()).slice(0, 8);
+  const structuralHash = createNumericHash(gtdFieldMarkers.join("|"));
+  const contentHash = createNumericHash(markdown.trim());
   return `${blockCount}-${gtdFieldCount}-${structuralHash}-${contentHash}`;
 }
 

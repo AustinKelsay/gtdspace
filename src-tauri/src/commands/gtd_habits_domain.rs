@@ -396,11 +396,13 @@ pub(crate) fn insert_history_entry(content: &str, entry: &str) -> Result<String,
 
     let result = if has_old_list_format && !has_table_header {
         let mut new_lines = Vec::new();
-        let mut table_rows = Vec::new();
+        let mut migrated_history_lines = Vec::new();
 
         for (_, list_entry) in &old_list_entries {
             if let Some(table_row) = convert_list_to_table_row(list_entry) {
-                table_rows.push(table_row);
+                migrated_history_lines.push(table_row);
+            } else {
+                migrated_history_lines.push((*list_entry).to_string());
             }
         }
 
@@ -411,7 +413,7 @@ pub(crate) fn insert_history_entry(content: &str, entry: &str) -> Result<String,
             new_lines.push("");
             new_lines.push("| Date | Time | Status | Action | Details |");
             new_lines.push("|------|------|--------|--------|---------|");
-            for row in &table_rows {
+            for row in &migrated_history_lines {
                 new_lines.push(row);
             }
             new_lines.push(entry);
@@ -727,6 +729,27 @@ mod tests {
 
         assert!(updated.contains("| Date | Time | Status | Action | Details |"));
         assert!(updated.contains("| 2026-03-01 | 7:30 AM | Complete | Manual | Done |"));
+        assert!(updated.contains("| 2026-03-02 | 12:00 AM | To Do | Auto-Reset | New period |"));
+    }
+
+    #[test]
+    fn insert_history_entry_preserves_unmatched_legacy_lines() {
+        let content = r#"# Habit
+
+## History
+
+- **2026-03-01** at **7:30 AM**: Complete (Manual - Done)
+- freeform note that does not match the legacy pattern
+"#;
+
+        let updated = insert_history_entry(
+            content,
+            "| 2026-03-02 | 12:00 AM | To Do | Auto-Reset | New period |",
+        )
+        .unwrap();
+
+        assert!(updated.contains("| 2026-03-01 | 7:30 AM | Complete | Manual | Done |"));
+        assert!(updated.contains("- freeform note that does not match the legacy pattern"));
         assert!(updated.contains("| 2026-03-02 | 12:00 AM | To Do | Auto-Reset | New period |"));
     }
 

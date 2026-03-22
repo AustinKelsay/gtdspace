@@ -744,6 +744,9 @@ describe('App integration workflows', () => {
         metadata: {},
       });
     });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 75));
+    });
 
     await waitFor(() => {
       expect(mocks.gtdSpace.loadProjects).not.toHaveBeenCalled();

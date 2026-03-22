@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use super::seed_data::{generate_action_template, generate_project_readme};
+use super::utils::sanitize_markdown_file_stem;
 
 /// Create a new GTD project
 ///
@@ -702,28 +703,6 @@ fn update_readme_title(content: &str, new_title: &str) -> String {
     }
 
     updated_lines.join("\n")
-}
-
-fn sanitize_markdown_file_stem(name: &str) -> String {
-    let sanitized = name
-        .trim()
-        .trim_end_matches(".md")
-        .trim_end_matches(".markdown")
-        .chars()
-        .map(|ch| match ch {
-            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '-',
-            _ => ch,
-        })
-        .collect::<String>()
-        .trim()
-        .trim_matches('.')
-        .to_string();
-
-    if sanitized.is_empty() {
-        "untitled".to_string()
-    } else {
-        sanitized
-    }
 }
 
 fn paths_refer_to_same_entry(left: &Path, right: &Path) -> bool {

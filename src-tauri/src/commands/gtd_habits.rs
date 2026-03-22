@@ -4,32 +4,12 @@ use super::gtd_habits_domain::{
     apply_status_marker, calculate_missed_periods, format_history_entry, insert_history_entry,
     parse_habit_state, should_reset_habit, HabitFrequency, HabitStatus, DEFAULT_HISTORY_TEMPLATE,
 };
+use super::utils::sanitize_markdown_file_stem;
 use chrono::Local;
 use serde::Deserialize;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::{ErrorKind, Write};
 use std::path::Path;
-
-fn sanitize_markdown_file_stem(name: &str) -> String {
-    let sanitized = name
-        .trim()
-        .trim_end_matches(".md")
-        .trim_end_matches(".markdown")
-        .chars()
-        .map(|ch| match ch {
-            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '-',
-            _ => ch,
-        })
-        .collect::<String>()
-        .trim()
-        .trim_matches('.')
-        .to_string();
-
-    if sanitized.is_empty() {
-        "untitled".to_string()
-    } else {
-        sanitized
-    }
-}
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -63,9 +43,6 @@ pub fn create_gtd_habit(
 
     let file_name = format!("{}.md", sanitize_markdown_file_stem(&habit_name));
     let habit_path = habits_path.join(&file_name);
-    if habit_path.exists() {
-        return Err(format!("Habit '{}' already exists", habit_name));
-    }
 
     let frequency_value = HabitFrequency::from_create_input(&frequency).as_marker_token();
     let now = Local::now();
@@ -143,9 +120,22 @@ pub fn create_gtd_habit(
         DEFAULT_HISTORY_TEMPLATE
     );
 
-    fs::write(&habit_path, habit_content)
-        .map(|_| habit_path.to_string_lossy().to_string())
-        .map_err(|error| format!("Failed to create habit file: {}", error))
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&habit_path)
+        .map_err(|error| {
+            if error.kind() == ErrorKind::AlreadyExists {
+                format!("Habit '{}' already exists", habit_name)
+            } else {
+                format!("Failed to create habit file: {}", error)
+            }
+        })?;
+
+    file.write_all(habit_content.as_bytes())
+        .map_err(|error| format!("Failed to create habit file: {}", error))?;
+
+    Ok(habit_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]

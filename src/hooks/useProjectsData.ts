@@ -37,7 +37,9 @@ export interface ProjectWithMetadata extends GTDProject {
   outcomes?: string[];
 }
 
-type PersistedProjectUpdates = Partial<Pick<ProjectWithMetadata, 'name' | 'status' | 'dueDate'>>;
+export type PersistedProjectUpdates = Partial<
+  Pick<ProjectWithMetadata, 'name' | 'status' | 'dueDate'>
+>;
 
 interface UseProjectsDataOptions {
   autoLoad?: boolean;

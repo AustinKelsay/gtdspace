@@ -89,6 +89,20 @@ describe("blocknote history rules", () => {
         "Keep this row"
       )
     ).toBe(false);
+
+    expect(
+      shouldSkipBlockInsideHistory(
+        {
+          type: "paragraph",
+          content: [
+            { text: "Keep ", styles: { italic: false } },
+            { text: "this", styles: { italic: true } },
+            { text: " row", styles: { italic: false } },
+          ],
+        },
+        "Keep this row"
+      )
+    ).toBe(false);
   });
 
   it("filters generic reference artifacts outside history", () => {

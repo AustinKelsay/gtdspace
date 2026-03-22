@@ -17,6 +17,7 @@ import type {
 import { extractMetadata, getMetadataChanges } from '@/utils/metadata-extractor';
 import { emitContentChange, emitMetadataChange } from '@/utils/content-event-bus';
 import { createScopedLogger } from '@/utils/logger';
+import { CALENDAR_FILE_ID } from '@/utils/special-files';
 import {
   clearPersistedTabs as clearPersistedTabStorage,
   createInitialTabState,
@@ -35,6 +36,11 @@ import {
 } from '@/hooks/tab-runtime';
 
 const log = createScopedLogger('useTabManager');
+
+type MetadataProcessingEntry = {
+  initialBaseline: string;
+  debounced: ReturnType<typeof debounce>;
+};
 
 function sanitizeMaxTabs(maxTabs?: number | null): number {
   return typeof maxTabs === 'number' && maxTabs > 0 ? maxTabs : DEFAULT_MAX_TABS;
@@ -63,7 +69,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
   );
 
   const tabStateRef = useRef<TabManagerState>(tabState);
-  const metadataProcessingRef = useRef<Map<string, ReturnType<typeof debounce>>>(new Map());
+  const metadataProcessingRef = useRef<Map<string, MetadataProcessingEntry>>(new Map());
   const debouncedStateUpdateRef = useRef<Map<string, ReturnType<typeof debounce>>>(new Map());
   const pendingContentRef = useRef<Map<string, string>>(new Map());
   const restoredWorkspaceRef = useRef<string | null>(null);
@@ -78,7 +84,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
   }, [resolvedMaxTabs]);
 
   const cleanupTabResources = useCallback((tabId: string) => {
-    metadataProcessingRef.current.get(tabId)?.cancel();
+    metadataProcessingRef.current.get(tabId)?.debounced.cancel();
     metadataProcessingRef.current.delete(tabId);
 
     debouncedStateUpdateRef.current.get(tabId)?.cancel();
@@ -101,22 +107,24 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
 
   const processMetadataDebounced = useCallback(
     (tabId: string, filePath: string, fileName: string, oldContent: string, newContent: string) => {
-      if (filePath === '::calendar::') {
+      if (filePath === CALENDAR_FILE_ID) {
         return;
       }
 
-      let debouncedFn = metadataProcessingRef.current.get(tabId);
-      if (!debouncedFn) {
-        debouncedFn = debounce((oldC: string, newC: string, currentPath: string, currentName: string) => {
-          const oldMetadata = extractMetadata(oldC);
-          const newMetadata = extractMetadata(newC);
+      let entry = metadataProcessingRef.current.get(tabId);
+      if (!entry) {
+        const debounced = debounce((finalContent: string, currentPath: string, currentName: string) => {
+          const currentEntry = metadataProcessingRef.current.get(tabId);
+          const baseline = currentEntry?.initialBaseline ?? oldContent;
+          const oldMetadata = extractMetadata(baseline);
+          const newMetadata = extractMetadata(finalContent);
           const metadataChanges = getMetadataChanges(oldMetadata, newMetadata);
 
           if (Object.keys(metadataChanges).length > 0) {
             emitMetadataChange({
               filePath: currentPath,
               fileName: currentName,
-              content: newC,
+              content: finalContent,
               metadata: newMetadata,
               changedFields: metadataChanges,
             });
@@ -124,17 +132,22 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
             emitContentChange({
               filePath: currentPath,
               fileName: currentName,
-              content: newC,
+              content: finalContent,
               metadata: newMetadata,
               changedFields: metadataChanges,
             });
           }
+          metadataProcessingRef.current.delete(tabId);
         }, 500);
 
-        metadataProcessingRef.current.set(tabId, debouncedFn);
+        entry = {
+          initialBaseline: oldContent,
+          debounced,
+        };
+        metadataProcessingRef.current.set(tabId, entry);
       }
 
-      debouncedFn(oldContent, newContent, filePath, fileName);
+      entry.debounced(newContent, filePath, fileName);
     },
     [],
   );
@@ -222,7 +235,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
 
   const saveTab = useCallback(async (tabId: string): Promise<boolean> => {
     const tab = findTabById(tabId);
-    if (!tab || tab.file.path === '::calendar::') {
+    if (!tab || tab.file.path === CALENDAR_FILE_ID) {
       return false;
     }
 
@@ -289,7 +302,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
 
   const reloadTabFromDisk = useCallback(async (tabId: string): Promise<boolean> => {
     const currentTab = findTabById(tabId);
-    if (!currentTab || currentTab.file.path === '::calendar::') {
+    if (!currentTab || currentTab.file.path === CALENDAR_FILE_ID) {
       return false;
     }
 
@@ -308,6 +321,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
         throw new Error('Failed to read file');
       }
 
+      cleanupTabResources(tabId);
       pendingContentRef.current.delete(tabId);
       dispatch({
         type: 'replace-tab-content',
@@ -322,7 +336,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
       log.error('Failed to reload tab from disk', error);
       return false;
     }
-  }, [findTabById]);
+  }, [cleanupTabResources, findTabById]);
 
   const resolveConflict = useCallback(
     async (tabId: string, resolution: { action: string; content?: string }): Promise<boolean> => {
@@ -336,6 +350,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
           case 'keep-local': {
             const contentToSave = pendingContentRef.current.get(tabId) ?? tab.content;
             await saveTabFile(tab.file, contentToSave);
+            cleanupTabResources(tabId);
             pendingContentRef.current.delete(tabId);
             dispatch({
               type: 'replace-tab-content',
@@ -350,6 +365,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
           case 'manual-merge': {
             const contentToSave = resolution.content ?? '';
             await saveTabFile(tab.file, contentToSave);
+            cleanupTabResources(tabId);
             pendingContentRef.current.delete(tabId);
             dispatch({
               type: 'replace-tab-content',
@@ -367,6 +383,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
               return false;
             }
 
+            cleanupTabResources(tabId);
             pendingContentRef.current.delete(tabId);
             dispatch({
               type: 'replace-tab-content',
@@ -387,7 +404,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
         return false;
       }
     },
-    [findTabById, getExternalContent],
+    [cleanupTabResources, findTabById, getExternalContent],
   );
 
   const closeTabIds = useCallback((tabIds: string[]) => {
@@ -452,7 +469,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
   }, [openTab]);
 
   const closeAllTabs = useCallback(async () => {
-    metadataProcessingRef.current.forEach((fn) => fn.cancel());
+    metadataProcessingRef.current.forEach(({ debounced }) => debounced.cancel());
     metadataProcessingRef.current.clear();
     debouncedStateUpdateRef.current.forEach((fn) => fn.cancel());
     debouncedStateUpdateRef.current.clear();

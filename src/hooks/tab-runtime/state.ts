@@ -66,7 +66,7 @@ function enforceMaxTabs(
 
   while (nextTabs.length > maxTabs) {
     const oldestInactiveCleanTab = nextTabs.find(
-      (tab) => !tab.isActive && !tab.hasUnsavedChanges,
+      (tab) => tab.id !== activeTabId && !tab.hasUnsavedChanges,
     );
 
     if (!oldestInactiveCleanTab) {
@@ -150,7 +150,12 @@ export function tabStateReducer(state: TabManagerState, action: TabStateAction):
     case 'restore-state':
       return {
         ...action.state,
-        openTabs: applyActiveState(action.state.openTabs, action.state.activeTabId),
+        ...enforceMaxTabs(
+          action.state.openTabs,
+          action.state.activeTabId,
+          action.state.recentlyClosed,
+          action.state.maxTabs,
+        ),
       };
 
     case 'open-tab': {

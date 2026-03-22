@@ -160,6 +160,14 @@ function parseLegacyLabeledSection(content: string, heading: string): string | u
   return value;
 }
 
+function parseLegacyCreatedFooter(content: string): string | undefined {
+  const match = content.match(
+    /(?:^|\n)---\s*\n(?:\s*\n)*Created:\s*([^\n]+)(?:\n|$)/i
+  );
+  const value = match?.[1]?.trim();
+  return value ? value : undefined;
+}
+
 export function stripActionHeader(content: string): string {
   const lines = content.split(/\r?\n/);
   let cursor = 0;
@@ -346,7 +354,7 @@ export function stripActionHeader(content: string): string {
     }
   }
 
-  return bodyLines.join('\n').replace(/^\s*\n/, '').replace(/\n{3,}/g, '\n\n');
+  return bodyLines.join('\n').replace(/^(?:\s*\n)+|(?:\n\s*)+$/g, '');
 }
 
 function captureRawHorizonPayload(
@@ -435,14 +443,16 @@ export function buildActionMarkdown(
   parts.push(`[!vision-references:${encodeHorizon('vision', document.horizonReferences.vision)}]\n`);
   parts.push(`[!purpose-references:${encodeHorizon('purpose', document.horizonReferences.purpose)}]\n`);
 
+  const createdDateTime = document.createdDateTime?.trim() || new Date().toISOString();
   parts.push('\n## Created\n');
-  parts.push(`[!datetime:created_date_time:${document.createdDateTime ?? new Date().toISOString()}]\n`);
+  parts.push(`[!datetime:created_date_time:${createdDateTime}]\n`);
 
   return `${parts.join('').trim()}\n`;
 }
 
 export function parseActionMarkdown(content: string): ParsedActionMarkdown {
   const meta = extractMetadata(content || '');
+  const legacyCreated = parseLegacyCreatedFooter(content || '');
   const focusDateTime = (
     typeof (meta as { focusDate?: unknown }).focusDate === 'string'
       ? (meta as { focusDate: string }).focusDate
@@ -457,7 +467,7 @@ export function parseActionMarkdown(content: string): ParsedActionMarkdown {
     typeof (meta as { createdDateTime?: unknown }).createdDateTime === 'string' &&
     (meta as { createdDateTime: string }).createdDateTime.trim()
       ? (meta as { createdDateTime: string }).createdDateTime.trim()
-      : undefined;
+      : legacyCreated;
 
   return {
     title:

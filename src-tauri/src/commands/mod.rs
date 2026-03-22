@@ -16,6 +16,7 @@ pub(crate) mod gtd_relationships;
 pub(crate) mod search;
 pub(crate) mod seed_data;
 pub(crate) mod settings;
+pub(crate) mod utils;
 pub(crate) mod watcher;
 pub(crate) mod workspace;
 

@@ -363,6 +363,8 @@ _New habits are created with the History section and table header already presen
 ```
 
 Habit history parsing remains backward compatible with legacy list-style rows, but new writes normalize back to the canonical table form.
+When a legacy list contains lines that do not match the standard completion pattern, migration preserves those lines verbatim in the History block instead of dropping them.
+Habit project references may use either the project folder path or a `README.md` path, and the parser keeps both forms so existing links round-trip cleanly.
 
 ### Areas of Focus (`Areas of Focus/*.md`)
 

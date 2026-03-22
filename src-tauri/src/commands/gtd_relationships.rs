@@ -138,10 +138,10 @@ pub fn find_reverse_relationships(
     space_path: String,
     filter_type: String,
 ) -> Result<Vec<ReverseRelationship>, String> {
-    log::info!("=== find_reverse_relationships START ===");
-    log::info!("Target path: {}", target_path);
-    log::info!("Space path: {}", space_path);
-    log::info!("Filter type: {}", filter_type);
+    log::debug!("=== find_reverse_relationships START ===");
+    log::debug!("Target path: {}", target_path);
+    log::debug!("Space path: {}", space_path);
+    log::debug!("Filter type: {}", filter_type);
 
     let mut relationships = Vec::new();
     let space_root = Path::new(&space_path);
@@ -149,7 +149,7 @@ pub fn find_reverse_relationships(
 
     // Normalize the target path for comparison - handle both absolute and relative paths
     let target_normalized = target_path.replace('\\', "/");
-    log::info!("Target normalized: {}", target_normalized);
+    log::debug!("Target normalized: {}", target_normalized);
 
     // Determine which directories to search based on filter type
     let search_dirs = match filter_type.as_str() {
@@ -157,6 +157,7 @@ pub fn find_reverse_relationships(
         "areas" => vec!["Areas of Focus"],
         "goals" => vec!["Goals"],
         "visions" => vec!["Vision"],
+        "purpose" => vec!["Purpose & Principles"],
         _ => vec![
             "Projects",
             "Areas of Focus",
@@ -177,19 +178,19 @@ pub fn find_reverse_relationships(
         let mut files_to_check = Vec::new();
 
         if dir_name == "Projects" {
-            log::info!("Searching in Projects directory: {}", dir_path.display());
+            log::debug!("Searching in Projects directory: {}", dir_path.display());
             // Look for README markdown files inside project folders
             if let Ok(entries) = fs::read_dir(&dir_path) {
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if path.is_dir() {
                         if let Some(readme_path) = find_readme_file(&path) {
-                            log::info!("Found project README: {}", readme_path.display());
+                            log::debug!("Found project README: {}", readme_path.display());
                             files_to_check.push(readme_path);
                         }
                     } else if is_markdown_file(&path) {
                         // Also check standalone markdown files in Projects
-                        log::info!("Found standalone project file: {}", path.display());
+                        log::debug!("Found standalone project file: {}", path.display());
                         files_to_check.push(path);
                     }
                 }
@@ -217,9 +218,6 @@ pub fn find_reverse_relationships(
 
             // Read file content
             if let Ok(content) = fs::read_to_string(&path) {
-                // Normalize content paths for comparison
-                let content_normalized = content.replace('\\', "/");
-
                 // Log what we're checking
                 log::debug!("Checking file: {}", path.display());
 
@@ -268,7 +266,7 @@ pub fn find_reverse_relationships(
 
                     let mut found_any = false;
                     for tag in tags {
-                        if extract_reference_block(&content_normalized, tag)
+                        if extract_reference_block(&content, tag)
                             .map(|block| {
                                 parse_reference_paths(&block)
                                     .into_iter()
@@ -282,13 +280,13 @@ pub fn find_reverse_relationships(
                     }
 
                     if found_any {
-                        log::info!("Found reference match for: {}", target_normalized);
+                        log::debug!("Found reference match for: {}", target_normalized);
                     }
                     found_any
                 };
 
                 if has_reference {
-                    log::info!("Found reference in file: {}", path.display());
+                    log::debug!("Found reference in file: {}", path.display());
 
                     // Extract all references from this file
                     let mut references = Vec::new();
@@ -316,6 +314,7 @@ pub fn find_reverse_relationships(
                         "Areas of Focus" => "area",
                         "Goals" => "goal",
                         "Vision" => "vision",
+                        "Purpose & Principles" => "purpose",
                         _ => "unknown",
                     };
 
@@ -348,10 +347,10 @@ pub fn find_reverse_relationships(
         }
     }
 
-    log::info!("=== find_reverse_relationships END ===");
-    log::info!("Found {} files referencing the target", relationships.len());
+    log::debug!("=== find_reverse_relationships END ===");
+    log::debug!("Found {} files referencing the target", relationships.len());
     for rel in &relationships {
-        log::info!("  - {} ({})", rel.file_name, rel.file_type);
+        log::debug!("  - {} ({})", rel.file_name, rel.file_type);
     }
     Ok(relationships)
 }
@@ -382,27 +381,27 @@ pub fn find_habits_referencing(
     target_path: String,
     space_path: String,
 ) -> Result<Vec<HabitReference>, String> {
-    log::info!("=== find_habits_referencing START ===");
-    log::info!("Target path: {}", target_path);
-    log::info!("Space path: {}", space_path);
+    log::debug!("=== find_habits_referencing START ===");
+    log::debug!("Target path: {}", target_path);
+    log::debug!("Space path: {}", space_path);
 
     let mut habit_references = Vec::new();
     let space_root = Path::new(&space_path);
     let habits_dir = space_root.join("Habits");
 
     if !habits_dir.exists() {
-        log::info!("Habits directory does not exist");
+        log::debug!("Habits directory does not exist");
         return Ok(habit_references);
     }
 
     // Normalize the target path for comparison
     let target_normalized = target_path.replace('\\', "/");
-    log::info!("Target normalized: {}", target_normalized);
+    log::debug!("Target normalized: {}", target_normalized);
 
     // For project README files, also check against the project folder path
     let alt_target = strip_project_readme_suffix(&target_normalized);
     if let Some(ref alt) = alt_target {
-        log::info!("Also checking against project folder path: {}", alt);
+        log::debug!("Also checking against project folder path: {}", alt);
     }
 
     // Search through all habit files
@@ -410,12 +409,9 @@ pub fn find_habits_referencing(
         for entry in entries.flatten() {
             let path = entry.path();
             if is_markdown_file(&path) {
-                log::info!("Checking habit file: {}", path.display());
+                log::debug!("Checking habit file: {}", path.display());
                 // Read habit file content
                 if let Ok(content) = fs::read_to_string(&path) {
-                    // Normalize content paths for comparison
-                    let content_normalized = content.replace('\\', "/");
-
                     // Check if this habit references the target file
                     let has_reference = {
                         // Check all possible reference fields
@@ -429,28 +425,28 @@ pub fn find_habits_referencing(
 
                         let mut found = false;
                         for tag in &tags {
-                            if let Some(block) = extract_reference_block(&content_normalized, tag) {
-                                log::info!("Found [!{}:] raw content: {}", tag, block);
+                            if let Some(block) = extract_reference_block(&content, tag) {
+                                log::debug!("Found [!{}:] raw content: {}", tag, block);
                                 let paths = parse_reference_paths(&block);
 
                                 // Check if any path matches the target
-                                log::info!(
+                                log::debug!(
                                     "Checking {} paths for match with target: {}",
                                     paths.len(),
                                     target_normalized
                                 );
                                 for path in &paths {
-                                    log::info!(
+                                    log::debug!(
                                         "  Comparing: '{}' == '{}'",
                                         path,
                                         target_normalized
                                     );
                                     if path == &target_normalized {
-                                        log::info!("  MATCH FOUND!");
+                                        log::debug!("  MATCH FOUND!");
                                     }
                                     if let Some(ref alt) = alt_target {
                                         if path == alt {
-                                            log::info!("  MATCH FOUND (alt target)!");
+                                            log::debug!("  MATCH FOUND (alt target)!");
                                         }
                                     }
                                 }
@@ -460,7 +456,7 @@ pub fn find_habits_referencing(
                                             && p == alt_target.as_ref().unwrap())
                                 }) {
                                     found = true;
-                                    log::info!(
+                                    log::debug!(
                                         "Reference match confirmed for habit: {}",
                                         path.display()
                                     );
@@ -472,7 +468,7 @@ pub fn find_habits_referencing(
                     };
 
                     if has_reference {
-                        log::info!("Found habit referencing target: {}", path.display());
+                        log::debug!("Found habit referencing target: {}", path.display());
 
                         // Extract habit metadata
                         let habit_name = path
@@ -508,13 +504,13 @@ pub fn find_habits_referencing(
         }
     }
 
-    log::info!("=== find_habits_referencing END ===");
-    log::info!(
+    log::debug!("=== find_habits_referencing END ===");
+    log::debug!(
         "Found {} habits referencing the target",
         habit_references.len()
     );
     for hab in &habit_references {
-        log::info!("  - {} ({})", hab.habit_name, hab.status);
+        log::debug!("  - {} ({})", hab.habit_name, hab.status);
     }
     Ok(habit_references)
 }

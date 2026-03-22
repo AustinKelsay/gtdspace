@@ -1,3 +1,4 @@
+import type React from 'react';
 import type { GTDProject, GTDSpace, MarkdownFile } from '@/types';
 
 export interface GTDWorkspaceSidebarProps {

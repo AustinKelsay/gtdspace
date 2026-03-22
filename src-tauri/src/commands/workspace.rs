@@ -66,18 +66,18 @@ pub fn get_default_gtd_space_path() -> Result<String, String> {
 #[tauri::command]
 pub fn check_is_gtd_space(path: String) -> Result<bool, String> {
     log::info!("Checking if directory is a GTD space: {}", path);
-    println!("[check_is_gtd_space] Checking path: {}", path);
+    log::debug!("[check_is_gtd_space] Checking path: {}", path);
 
     let root_path = Path::new(&path);
 
     // Check if the path exists and is a directory
     if !root_path.exists() {
-        println!("[check_is_gtd_space] Path does not exist: {}", path);
+        log::debug!("[check_is_gtd_space] Path does not exist: {}", path);
         return Ok(false);
     }
 
     if !root_path.is_dir() {
-        println!("[check_is_gtd_space] Path is not a directory: {}", path);
+        log::debug!("[check_is_gtd_space] Path is not a directory: {}", path);
         return Ok(false);
     }
 
@@ -100,10 +100,10 @@ pub fn check_is_gtd_space(path: String) -> Result<bool, String> {
         let dir_path = root_path.join(dir);
         if dir_path.exists() && dir_path.is_dir() {
             required_found += 1;
-            println!("[check_is_gtd_space] Found required directory: {}", dir);
+            log::debug!("[check_is_gtd_space] Found required directory: {}", dir);
         } else {
             missing_required.push(dir.to_string());
-            println!("[check_is_gtd_space] Missing required directory: {}", dir);
+            log::debug!("[check_is_gtd_space] Missing required directory: {}", dir);
         }
     }
 
@@ -113,7 +113,7 @@ pub fn check_is_gtd_space(path: String) -> Result<bool, String> {
         let dir_path = root_path.join(dir);
         if dir_path.exists() && dir_path.is_dir() {
             optional_found += 1;
-            println!("[check_is_gtd_space] Found optional directory: {}", dir);
+            log::debug!("[check_is_gtd_space] Found optional directory: {}", dir);
         }
     }
 
@@ -122,7 +122,7 @@ pub fn check_is_gtd_space(path: String) -> Result<bool, String> {
     let has_projects = required_found == required_dirs.len();
     let is_gtd_space = has_projects && (required_found + optional_found) >= 3;
 
-    println!(
+    log::debug!(
         "[check_is_gtd_space] Result: {} (required: {}/{}, optional: {}/{}, total: {})",
         if is_gtd_space {
             "IS GTD SPACE"
@@ -137,7 +137,7 @@ pub fn check_is_gtd_space(path: String) -> Result<bool, String> {
     );
 
     if !is_gtd_space && !missing_required.is_empty() {
-        println!(
+        log::debug!(
             "[check_is_gtd_space] Missing required directories: {:?}",
             missing_required
         );
@@ -447,13 +447,12 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     }
 
     // MINIMAL Project with MAXIMUM references (Project → Area + Goal)
-    let next_week = (chrono::Local::now() + chrono::Duration::days(7))
+    let base_next_week = chrono::Local::now() + chrono::Duration::days(7);
+    let next_week = base_next_week
         .with_hour(17)
-        .unwrap()
-        .with_minute(0)
-        .unwrap()
-        .with_second(0)
-        .unwrap();
+        .and_then(|dt| dt.with_minute(0))
+        .and_then(|dt| dt.with_second(0))
+        .unwrap_or(base_next_week);
 
     let project_name = "Launch Side Business";
     let project1_path = ensure_project(

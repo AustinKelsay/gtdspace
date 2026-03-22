@@ -2,21 +2,32 @@
 
 use super::seed_data::generate_action_template;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fs;
+use std::io::Write;
 use std::path::{Component, Path};
+use tempfile::NamedTempFile;
+
+const DELETE_FILE_RETRY_BACKOFF_MS: [u64; 3] = [50, 150, 300];
 
 fn generate_stable_file_id(path: &Path) -> String {
-    path.to_string_lossy()
-        .as_bytes()
-        .iter()
-        .map(|byte| format!("{:02x}", byte))
-        .collect()
+    let digest = Sha256::digest(path.to_string_lossy().as_bytes());
+    digest.iter().map(|byte| format!("{:02x}", byte)).collect()
 }
 
 fn strip_markdown_extension(name: &str) -> &str {
     name.strip_suffix(".markdown")
         .or_else(|| name.strip_suffix(".md"))
         .unwrap_or(name)
+}
+
+fn path_has_component_case_insensitive(path: &Path, expected: &str) -> bool {
+    path.components().any(|component| {
+        component
+            .as_os_str()
+            .to_string_lossy()
+            .eq_ignore_ascii_case(expected)
+    })
 }
 
 fn extract_safe_file_name(name: &str) -> Result<String, String> {
@@ -429,16 +440,26 @@ pub fn save_file(path: String, content: String) -> Result<String, String> {
         }
     }
 
-    match fs::write(file_path, content.as_bytes()) {
-        Ok(_) => {
-            log::info!("Successfully saved file: {}", path);
-            Ok("File saved successfully".to_string())
-        }
-        Err(e) => {
-            log::error!("Failed to save file {}: {}", path, e);
-            Err(format!("Failed to save file: {}", e))
-        }
-    }
+    let temp_dir = file_path.parent().unwrap_or_else(|| Path::new("."));
+    let mut temp_file = NamedTempFile::new_in(temp_dir)
+        .map_err(|e| format!("Failed to create temporary file for save: {}", e))?;
+
+    temp_file
+        .write_all(content.as_bytes())
+        .map_err(|e| format!("Failed to write temporary file for save: {}", e))?;
+    temp_file
+        .flush()
+        .map_err(|e| format!("Failed to flush temporary file for save: {}", e))?;
+    temp_file
+        .as_file()
+        .sync_all()
+        .map_err(|e| format!("Failed to sync temporary file for save: {}", e))?;
+    temp_file
+        .persist(file_path)
+        .map_err(|e| format!("Failed to replace file atomically: {}", e.error))?;
+
+    log::info!("Successfully saved file atomically: {}", path);
+    Ok("File saved successfully".to_string())
 }
 
 /// Create a new markdown file
@@ -492,10 +513,11 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
             });
         }
     };
+    let clean_name = strip_markdown_extension(&safe_name).to_string();
 
     // Add .md extension if not present
     let file_name = if safe_name.ends_with(".md") || safe_name.ends_with(".markdown") {
-        safe_name.clone()
+        safe_name
     } else {
         format!("{}.md", safe_name)
     };
@@ -512,24 +534,19 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
     }
 
     // Normalize horizon detection
-    let is_in_projects = dir_path.components().any(|c| c.as_os_str() == "Projects");
-    let is_in_habits = dir_path.components().any(|c| c.as_os_str() == "Habits");
-    let is_in_vision = dir_path.components().any(|c| c.as_os_str() == "Vision");
-    let is_in_goals = dir_path.components().any(|c| c.as_os_str() == "Goals");
-    let is_in_areas = dir_path
-        .components()
-        .any(|c| c.as_os_str() == "Areas of Focus");
-    let is_in_purpose = dir_path
-        .components()
-        .any(|c| c.as_os_str() == "Purpose & Principles");
+    let is_in_projects = path_has_component_case_insensitive(dir_path, "Projects");
+    let is_in_habits = path_has_component_case_insensitive(dir_path, "Habits");
+    let is_in_vision = path_has_component_case_insensitive(dir_path, "Vision");
+    let is_in_goals = path_has_component_case_insensitive(dir_path, "Goals");
+    let is_in_areas = path_has_component_case_insensitive(dir_path, "Areas of Focus");
+    let is_in_purpose = path_has_component_case_insensitive(dir_path, "Purpose & Principles");
 
     // For project actions, require README.md to distinguish from project root creation
     let is_project_dir = dir_path.join("README.md").exists();
 
     // Create appropriate template content based on GTD horizon
-    let clean_name = strip_markdown_extension(&safe_name);
     let template_content = if is_in_projects && is_project_dir {
-        generate_action_template(clean_name, "in-progress", None, None, "medium", None, None)
+        generate_action_template(&clean_name, "in-progress", None, None, "medium", None, None)
     } else if is_in_vision {
         format!(
             r#"# {}
@@ -867,7 +884,7 @@ pub fn delete_file(path: String) -> Result<FileOperationResult, String> {
     }
 
     let mut attempt: u32 = 0;
-    let attempts: [u64; 3] = [50, 150, 300]; // backoff in ms
+    let attempts = DELETE_FILE_RETRY_BACKOFF_MS;
     #[allow(unused_mut)] // target is reassigned in the rename workaround branch
     let mut target = file_path.to_path_buf();
 
@@ -920,6 +937,12 @@ pub fn delete_file(path: String) -> Result<FileOperationResult, String> {
                                 break;
                             }
                             suffix_counter += 1;
+                        }
+                        if suffix_counter > 100 {
+                            return Err(format!(
+                                "Failed to delete file: unable to allocate temporary path for {}",
+                                path
+                            ));
                         }
                         match fs::rename(&target, &tmp) {
                             Ok(_) => {
@@ -985,9 +1008,9 @@ pub fn delete_folder(path: String) -> Result<FileOperationResult, String> {
 
     if !folder_path.exists() {
         return Ok(FileOperationResult {
-            success: false,
-            path: None,
-            message: Some("Folder does not exist".to_string()),
+            success: true,
+            path: Some(path.clone()),
+            message: None,
         });
     }
 
@@ -1260,7 +1283,7 @@ pub fn replace_in_file(
     };
 
     if replacements_made == 0 {
-        return Ok(format!(
+        return Err(format!(
             "No matches found for '{}' in {}",
             search_term,
             path.file_name().unwrap_or_default().to_string_lossy()

@@ -3,6 +3,7 @@ import "@/utils/resize-observer-fix";
 // Use guarded Tauri detection and dynamic invoke to avoid web/runtime crashes
 import { waitForTauriReady } from "@/utils/tauri-ready";
 import { safeInvoke } from "@/utils/safe-invoke";
+import { norm } from "@/utils/path";
 import {
   PanelLeftClose,
   PanelLeft,
@@ -60,17 +61,6 @@ import {
   detectHorizonTypeFromPath,
   HORIZON_CONFIG,
 } from "@/utils/horizon-config";
-
-/**
- * Normalizes a file path by converting it to lowercase and replacing
- * backslashes with forward slashes. This ensures consistent path comparisons
- * across different operating systems (e.g., Windows vs. Unix-like).
- * @param p The path to normalize.
- * @returns The normalized path, or null/undefined if the input is null/undefined.
- */
-function norm(p?: string | null): string | null | undefined {
-  return p?.toLowerCase().replace(/\\/g, "/");
-}
 
 /**
  * Checks if a given path `p` is located under a directory `dir`.
@@ -531,9 +521,8 @@ export const App: React.FC = () => {
       targetPath: string,
       mutator: (content: string | null | undefined) => string
     ): { handled: boolean; wasDirty: boolean } => {
-      const normalizedTarget = targetPath.replace(/\\/g, "/");
       const tab = tabState.openTabs.find(
-        (t) => (t.file.path || "").replace(/\\/g, "/") === normalizedTarget
+        (t) => norm(t.file.path) === norm(targetPath)
       );
       if (!tab) {
         return { handled: false, wasDirty: false };
@@ -673,10 +662,6 @@ export const App: React.FC = () => {
           "Failed to check permissions"
         );
 
-        // Clear tab state if no folder is selected (fresh start)
-        if (!fileState.currentFolder) {
-          localStorage.removeItem("gtdspace-tabs");
-        }
       } catch (error) {
         console.error("Failed to initialize app:", error);
       }

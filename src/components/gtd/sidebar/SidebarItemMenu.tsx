@@ -30,7 +30,7 @@ export function SidebarItemMenu({
           onClick={(event) => event.stopPropagation()}
           aria-label="Open item menu"
         >
-          <MoreHorizontal className="h-2.5 w-2.5" />
+          <MoreHorizontal className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-40">

@@ -516,16 +516,24 @@ export const App: React.FC = () => {
       scheduleProjectReload(event.filePath);
     });
     const previousOnTabFileSaved = window.onTabFileSaved;
-    window.onTabFileSaved = (filePath, fileName, content, metadata) => {
+    const wrappedOnTabFileSaved = (
+      filePath: string,
+      fileName: string,
+      content: string,
+      metadata: Record<string, unknown>
+    ) => {
       previousOnTabFileSaved?.(filePath, fileName, content, metadata);
       scheduleProjectReload(filePath);
     };
+    window.onTabFileSaved = wrappedOnTabFileSaved;
 
     return () => {
       if (reloadTimer !== null) {
         window.clearTimeout(reloadTimer);
       }
-      window.onTabFileSaved = previousOnTabFileSaved;
+      if (window.onTabFileSaved === wrappedOnTabFileSaved) {
+        window.onTabFileSaved = previousOnTabFileSaved;
+      }
       unsubscribe();
     };
   }, [gtdSpace?.root_path, loadProjects]);

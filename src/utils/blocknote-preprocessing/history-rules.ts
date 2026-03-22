@@ -46,8 +46,11 @@ export function shouldSkipBlockInsideHistory(
 }
 
 export function shouldDropArtifactReferencesBlock(block: UnknownBlock): boolean {
-  if (block.type !== "references" || !block.props) {
+  if (block.type !== "references") {
     return false;
+  }
+  if (!block.props) {
+    return true;
   }
 
   const referencesValue = block.props.references;

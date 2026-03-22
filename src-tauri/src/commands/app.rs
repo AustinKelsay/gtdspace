@@ -39,6 +39,8 @@ pub fn ping() -> Result<String, String> {
 }
 
 /// Test folder selection
+#[cfg(debug_assertions)]
+#[allow(dead_code)]
 #[tauri::command]
 pub fn test_select_folder() -> Result<String, String> {
     log::info!("=== test_select_folder called ===");
@@ -75,29 +77,19 @@ pub fn get_app_version(app: AppHandle) -> Result<String, String> {
     Ok(version)
 }
 
-/// Check file system and dialog permissions
+/// Check file system and dialog permissions.
 ///
-/// Verifies that the application has the necessary permissions to:
-/// - Read files from the file system
-/// - Write files to the file system  
-/// - Open system dialogs
+/// Desktop permission checks are not implemented yet, so this command currently
+/// always returns `Err("Permission checks are not implemented for desktop yet")`.
 ///
-/// This is important for Phase 1 when we implement file operations.
+/// The return type remains `Result<PermissionStatus, String>` so callers can
+/// switch to handling a successful `PermissionStatus` once desktop permission
+/// probing is implemented.
 ///
 /// # Returns
 ///
-/// PermissionStatus struct with boolean flags for each permission type
-///
-/// # Examples
-///
-/// ```typescript
-/// import { invoke } from '@tauri-apps/api/tauri';
-///
-/// const permissions = await invoke('check_permissions');
-/// if (permissions.can_read_files) {
-///   console.log('File reading is available');
-/// }
-/// ```
+/// Currently always returns:
+/// `Err("Permission checks are not implemented for desktop yet")`
 #[tauri::command]
 pub fn check_permissions() -> Result<PermissionStatus, String> {
     log::info!("Permission check requested; desktop permission checks are not implemented yet");

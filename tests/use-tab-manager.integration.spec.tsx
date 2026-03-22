@@ -404,6 +404,44 @@ describe('useTabManager integration', () => {
     });
   });
 
+  it('preserves the in-memory buffer when closing and reopening an unsaved tab', async () => {
+    const { getCurrent } = renderTabManagerHook({ workspacePath: '/mock/workspace' });
+    const file = buildFile('f-unsaved', '/mock/workspace/unsaved.md');
+
+    let tabId = '';
+    await act(async () => {
+      tabId = await getCurrent().openTab(file);
+    });
+
+    act(() => {
+      getCurrent().updateTabContent(tabId, '# unsaved local edit');
+    });
+
+    await act(async () => {
+      await getCurrent().closeTab(tabId);
+    });
+
+    expect(getCurrent().tabState.recentlyClosed[0]).toMatchObject({
+      file: { path: '/mock/workspace/unsaved.md' },
+      content: '# unsaved local edit',
+      originalContent: '# file content',
+      hasUnsavedChanges: true,
+    });
+
+    let reopenedTabId: string | null = null;
+    await act(async () => {
+      reopenedTabId = await getCurrent().reopenLastClosedTab();
+    });
+
+    expect(reopenedTabId).toBe(tabId);
+    expect(getCurrent().activeTab).toMatchObject({
+      id: tabId,
+      content: '# unsaved local edit',
+      originalContent: '# file content',
+      hasUnsavedChanges: true,
+    });
+  });
+
   it('restores persisted tabs only when restore is enabled for the matching workspace', async () => {
     localStorage.setItem(
       'gtdspace-tabs',

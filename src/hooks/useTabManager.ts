@@ -23,6 +23,7 @@ import {
   createInitialTabState,
   DEFAULT_MAX_TABS,
   emitReloadedTabContent,
+  isSameOrDescendantPath,
   loadTabForOpen,
   pathsEqual,
   persistTabState,
@@ -103,6 +104,42 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
 
   const findTabByFile = useCallback((file: MarkdownFile): FileTab | null => {
     return tabStateRef.current.openTabs.find((tab) => pathsEqual(tab.file.path, file.path)) || null;
+  }, []);
+
+  const createRecentlyClosedSnapshot = useCallback((tab: FileTab): FileTab => {
+    const bufferedContent = pendingContentRef.current.get(tab.id);
+    if (bufferedContent === undefined) {
+      return tab;
+    }
+
+    const originalContent = tab.originalContent ?? tab.content;
+    return {
+      ...tab,
+      content: bufferedContent,
+      originalContent,
+      hasUnsavedChanges: bufferedContent !== originalContent,
+    };
+  }, []);
+
+  const resetTransientTabState = useCallback(() => {
+    metadataProcessingRef.current.forEach(({ debounced }) => debounced.cancel());
+    metadataProcessingRef.current.clear();
+    debouncedStateUpdateRef.current.forEach((fn) => fn.cancel());
+    debouncedStateUpdateRef.current.clear();
+    pendingContentRef.current.clear();
+  }, []);
+
+  const tabsBelongToWorkspace = useCallback((tabs: FileTab[], nextWorkspacePath?: string | null) => {
+    if (!nextWorkspacePath) {
+      return false;
+    }
+
+    return tabs.every((tab) => {
+      if (tab.file.path === CALENDAR_FILE_ID) {
+        return true;
+      }
+      return isSameOrDescendantPath(tab.file.path, nextWorkspacePath);
+    });
   }, []);
 
   const processMetadataDebounced = useCallback(
@@ -203,10 +240,11 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
       log.warn('Closing tab with unsaved changes', tab.file.name);
     }
 
+    const snapshot = createRecentlyClosedSnapshot(tab);
     cleanupTabResources(tabId);
-    dispatch({ type: 'close-tab', tabId });
+    dispatch({ type: 'close-tab', tabId, snapshot });
     return true;
-  }, [cleanupTabResources, findTabById]);
+  }, [cleanupTabResources, createRecentlyClosedSnapshot, findTabById]);
 
   const updateTabContent = useCallback((tabId: string, content: string) => {
     const currentTab = findTabById(tabId);
@@ -415,11 +453,14 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
   );
 
   const closeTabIds = useCallback((tabIds: string[]) => {
+    const currentTabs = tabStateRef.current.openTabs;
     tabIds.forEach((tabId) => {
+      const tab = currentTabs.find((candidate) => candidate.id === tabId);
+      const snapshot = tab ? createRecentlyClosedSnapshot(tab) : undefined;
       cleanupTabResources(tabId);
-      dispatch({ type: 'close-tab', tabId });
+      dispatch({ type: 'close-tab', tabId, snapshot });
     });
-  }, [cleanupTabResources]);
+  }, [cleanupTabResources, createRecentlyClosedSnapshot]);
 
   const handleTabAction = useCallback(async (tabId: string, action: TabAction) => {
     const currentState = tabStateRef.current;
@@ -466,6 +507,29 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
     }
 
     try {
+      const existingTab = findTabByFile(lastClosed.file);
+      if (existingTab) {
+        dispatch({ type: 'activate-tab', tabId: existingTab.id });
+        dispatch({ type: 'remove-recently-closed-head' });
+        return existingTab.id;
+      }
+
+      const originalContent = lastClosed.originalContent ?? lastClosed.content;
+      const shouldRestoreSnapshot =
+        lastClosed.hasUnsavedChanges || lastClosed.content !== originalContent;
+
+      if (shouldRestoreSnapshot) {
+        dispatch({
+          type: 'open-tab',
+          tab: {
+            ...lastClosed,
+            isActive: true,
+          },
+        });
+        dispatch({ type: 'remove-recently-closed-head' });
+        return lastClosed.id;
+      }
+
       const reopenedTabId = await openTab(lastClosed.file);
       dispatch({ type: 'remove-recently-closed-head' });
       return reopenedTabId;
@@ -473,16 +537,12 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
       log.error('Failed to reopen tab', error);
       return null;
     }
-  }, [openTab]);
+  }, [findTabByFile, openTab]);
 
   const closeAllTabs = useCallback(async () => {
-    metadataProcessingRef.current.forEach(({ debounced }) => debounced.cancel());
-    metadataProcessingRef.current.clear();
-    debouncedStateUpdateRef.current.forEach((fn) => fn.cancel());
-    debouncedStateUpdateRef.current.clear();
-    pendingContentRef.current.clear();
+    resetTransientTabState();
     dispatch({ type: 'clear-all' });
-  }, []);
+  }, [resetTransientTabState]);
 
   const saveAllTabs = useCallback(async (): Promise<boolean> => {
     const candidateTabIds = new Set(
@@ -512,7 +572,10 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
 
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (tabStateRef.current.openTabs.length > 0) {
+      if (
+        tabStateRef.current.openTabs.length > 0 &&
+        tabsBelongToWorkspace(tabStateRef.current.openTabs, workspacePath)
+      ) {
         persistTabState(tabStateRef.current, workspacePath);
       }
     };
@@ -521,7 +584,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [workspacePath]);
+  }, [tabsBelongToWorkspace, workspacePath]);
 
   useEffect(() => {
     if (!restoreTabs || !workspacePath) {
@@ -540,10 +603,18 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
     restoringWorkspaceRef.current = workspacePath;
 
     const restoreTabsForWorkspace = async () => {
-      if (tabStateRef.current.openTabs.length > 0) {
-        restoringWorkspaceRef.current = null;
-        restoredWorkspaceRef.current = workspacePath;
-        return;
+      const currentTabs = tabStateRef.current.openTabs;
+      let clearedForeignTabs = false;
+      if (currentTabs.length > 0) {
+        if (tabsBelongToWorkspace(currentTabs, workspacePath)) {
+          restoringWorkspaceRef.current = null;
+          restoredWorkspaceRef.current = workspacePath;
+          return;
+        }
+
+        resetTransientTabState();
+        dispatch({ type: 'clear-all' });
+        clearedForeignTabs = true;
       }
 
       try {
@@ -553,7 +624,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
           readFile: readTabFile,
         });
 
-        if (restoredState && tabStateRef.current.openTabs.length === 0) {
+        if (restoredState && (clearedForeignTabs || tabStateRef.current.openTabs.length === 0)) {
           dispatch({ type: 'restore-state', state: restoredState });
         }
       } catch (error) {
@@ -565,7 +636,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
     };
 
     void restoreTabsForWorkspace();
-  }, [resolvedMaxTabs, restoreTabs, workspacePath]);
+  }, [resolvedMaxTabs, resetTransientTabState, restoreTabs, tabsBelongToWorkspace, workspacePath]);
 
   useEffect(() => {
     if (!workspacePath) {
@@ -573,6 +644,9 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
     }
 
     if (tabState.openTabs.length > 0) {
+      if (!tabsBelongToWorkspace(tabState.openTabs, workspacePath)) {
+        return;
+      }
       persistTabState(tabState, workspacePath);
     } else if (
       restoreTabs &&
@@ -583,7 +657,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
     } else {
       clearPersistedTabStorage();
     }
-  }, [restoreTabs, tabState, workspacePath]);
+  }, [restoreTabs, tabState, tabsBelongToWorkspace, workspacePath]);
 
   useTabManagerSubscriptions({
     onRename: useCallback((detail, mode) => {

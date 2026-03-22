@@ -14,6 +14,7 @@ import {
   parseActionMarkdown,
   rebuildActionMarkdown,
 } from '@/utils/gtd-action-markdown';
+import { extractMetadata } from '@/utils/metadata-extractor';
 import { normalizeReferencePath } from '@/utils/gtd-reference-utils';
 
 export interface ActionItem {
@@ -290,6 +291,12 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       window.dispatchEvent(new CustomEvent('content-updated', {
         detail: { path: filePath, content: finalContent }
       }));
+      window.onTabFileSaved?.(
+        filePath,
+        filePath.split('/').pop() || '',
+        finalContent,
+        extractMetadata(finalContent)
+      );
 
       log.debug('[updateActionStatus] Successfully updated action status');
       return true;

@@ -164,6 +164,9 @@ pub fn open_file_location(file_path: String) -> Result<String, String> {
     if !path_buf.exists() {
         return Err(format!("File does not exist: {}", file_path));
     }
+    if !path_buf.is_file() {
+        return Err(format!("Not a file: {}", file_path));
+    }
 
     // Get the parent directory
     let parent_dir = path_buf

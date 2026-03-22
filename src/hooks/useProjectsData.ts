@@ -287,7 +287,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
             const enhanced: ProjectWithMetadata = {
               ...project,
               status: parsedProject?.status ?? normalizeProjectStatus(project.status),
-              dueDate: parsedProject?.dueDate || project.dueDate,
+              dueDate: parsedProject?.dueDate !== undefined ? parsedProject.dueDate : project.dueDate,
               linkedAreas: parsedProject?.horizonReferences.areas ?? [],
               linkedGoals: parsedProject?.horizonReferences.goals ?? [],
               linkedVision: parsedProject?.horizonReferences.vision ?? [],

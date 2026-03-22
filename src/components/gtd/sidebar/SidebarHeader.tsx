@@ -39,6 +39,7 @@ export function SidebarHeader({
               size="icon"
               className="h-7 w-7"
               title="Open in File Explorer"
+              aria-label="Open in File Explorer"
             >
               <Folder className="h-3.5 w-3.5" />
             </Button>
@@ -48,6 +49,7 @@ export function SidebarHeader({
               size="icon"
               className="h-7 w-7"
               title="Refresh"
+              aria-label="Refresh"
             >
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>

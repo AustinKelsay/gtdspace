@@ -10,7 +10,7 @@ export type TabStateAction =
   | { type: 'restore-state'; state: TabManagerState }
   | { type: 'open-tab'; tab: FileTab }
   | { type: 'activate-tab'; tabId: string }
-  | { type: 'close-tab'; tabId: string }
+  | { type: 'close-tab'; tabId: string; snapshot?: FileTab }
   | { type: 'update-tab-content'; tabId: string; content: string }
   | {
       type: 'replace-tab-content';
@@ -183,6 +183,7 @@ export function tabStateReducer(state: TabManagerState, action: TabStateAction):
       if (!closingTab) {
         return state;
       }
+      const recentlyClosedTab = action.snapshot ?? closingTab;
 
       const remainingTabs = state.openTabs.filter((tab) => tab.id !== action.tabId);
       const nextActiveTabId = updateActiveTabAfterRemoval(state, remainingTabs, action.tabId);
@@ -191,7 +192,7 @@ export function tabStateReducer(state: TabManagerState, action: TabStateAction):
         ...state,
         activeTabId: nextActiveTabId,
         openTabs: applyActiveState(remainingTabs, nextActiveTabId),
-        recentlyClosed: [closingTab, ...state.recentlyClosed].slice(0, 10),
+        recentlyClosed: [recentlyClosedTab, ...state.recentlyClosed].slice(0, 10),
       };
     }
 

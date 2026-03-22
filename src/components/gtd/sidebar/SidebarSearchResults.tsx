@@ -63,7 +63,9 @@ export function SidebarSearchResults({
             {results.projects.map((project) => {
               const display = getProjectDisplay(project, projectMetadata);
               const StatusIcon = getStatusIcon(display.status);
-              const isActive = isPathActive(`${display.path}/README.md`);
+              const isActive =
+                isPathActive(`${display.path}/README.md`) ||
+                isPathActive(`${display.path}/README.markdown`);
 
               return (
                 <div

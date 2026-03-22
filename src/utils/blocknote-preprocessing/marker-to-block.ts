@@ -172,7 +172,9 @@ export function createHabitStatusCheckbox(
   const normalizedValue = value.trim().toLowerCase();
   return createCheckboxBlock(
     "habit-status",
-    normalizedValue === "completed" || normalizedValue === "true",
+    normalizedValue === "completed" ||
+      normalizedValue === "complete" ||
+      normalizedValue === "true",
     label
   );
 }
@@ -233,7 +235,9 @@ export function buildMarkerOnlyBlock(
     const normalizedChecked = checkedRaw.trim().toLowerCase();
     const checked =
       type === "habit-status"
-        ? normalizedChecked === "true" || normalizedChecked === "completed"
+        ? normalizedChecked === "true" ||
+          normalizedChecked === "completed" ||
+          normalizedChecked === "complete"
         : normalizedChecked === "true";
 
     return createCheckboxBlock(type, checked);

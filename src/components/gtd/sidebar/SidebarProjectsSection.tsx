@@ -175,10 +175,17 @@ function ProjectRow({
   isPathActive,
 }: ProjectRowProps) {
   const display = getProjectDisplay(project, projectMetadata);
+  const currentProject: GTDProject = {
+    ...project,
+    name: display.title,
+    path: display.path,
+  };
   const normalizedStatus = normalizeStatus(display.status);
   const StatusIcon = getStatusIcon(normalizedStatus);
-  const isExpanded = expandedProjects.includes(project.path);
-  const isProjectActive = isPathActive(`${display.path}/README.md`);
+  const isExpanded = expandedProjects.includes(display.path);
+  const isProjectActive =
+    isPathActive(`${display.path}/README.md`) ||
+    isPathActive(`${display.path}/README.markdown`);
   const hasActiveDescendant = !isProjectActive && isPathDescendant(display.path, activeFilePath);
   const shouldHighlightProjectRow = isProjectActive || (hasActiveDescendant && !isExpanded);
   const dueDate = display.dueDate ? parseLocalDateString(display.dueDate) : null;
@@ -201,18 +208,18 @@ function ProjectRow({
           className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer"
           role="button"
           tabIndex={0}
-          onClick={() => void onOpenProject(project)}
+          onClick={() => void onOpenProject(currentProject)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
-              void onOpenProject(project);
+              void onOpenProject(currentProject);
             }
           }}
         >
           <Button
             onClick={(event) => {
               event.stopPropagation();
-              void onToggleProjectExpand(project);
+              void onToggleProjectExpand(currentProject);
             }}
             variant="ghost"
             size="icon"
@@ -241,7 +248,7 @@ function ProjectRow({
           <Button
             onClick={(event) => {
               event.stopPropagation();
-              onAddAction(project);
+              onAddAction(currentProject);
             }}
             variant="ghost"
             size="icon"
@@ -267,7 +274,7 @@ function ProjectRow({
               <DropdownMenuItem
                 onClick={async (event) => {
                   event.stopPropagation();
-                  await onOpenProjectFolder(project.path);
+                  await onOpenProjectFolder(display.path);
                 }}
               >
                 <Folder className="h-3 w-3 mr-2" />
@@ -279,7 +286,7 @@ function ProjectRow({
                   event.stopPropagation();
                   onQueueDelete({
                     type: 'project',
-                    path: project.path,
+                    path: display.path,
                     name: display.title,
                   });
                 }}
@@ -315,15 +322,15 @@ function ProjectRow({
               ))}
               {completedActions.length > 0 && (
                 <Collapsible
-                  open={expandedCompletedActions.has(project.path)}
-                  onOpenChange={() => onToggleCompletedActions(project.path)}
+                  open={expandedCompletedActions.has(display.path)}
+                  onOpenChange={() => onToggleCompletedActions(display.path)}
                   data-sidebar-group="completed-actions"
                 >
                   <div className="group flex items-center justify-between px-1 py-0.5 hover:bg-accent/50 rounded">
                     <CollapsibleTrigger className="flex-1 min-w-0 text-[11px] text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <ChevronRight
-                          className={`h-2.5 w-2.5 transition-transform ${expandedCompletedActions.has(project.path) ? 'rotate-90' : ''}`}
+                          className={`h-2.5 w-2.5 transition-transform ${expandedCompletedActions.has(display.path) ? 'rotate-90' : ''}`}
                         />
                         <span>Completed Actions</span>
                         <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0 h-4">
@@ -433,9 +440,13 @@ export function SidebarProjectsSection({
             <>
               {activeProjects.map((project) => (
                 <ProjectRow
-                  key={project.path}
+                  key={getProjectDisplay(project, projectMetadata).path}
                   project={project}
-                  projectActions={projectActions[project.path] || []}
+                  projectActions={
+                    projectActions[getProjectDisplay(project, projectMetadata).path] ||
+                    projectActions[project.path] ||
+                    []
+                  }
                   projectMetadata={projectMetadata}
                   actionMetadata={actionMetadata}
                   actionStatuses={actionStatuses}
@@ -462,7 +473,9 @@ export function SidebarProjectsSection({
                 >
                   <div
                     className={`group flex items-center justify-between px-1 py-0.5 mt-1 hover:bg-accent rounded-lg ${
-                      completedProjects.some((project) => isPathDescendant(project.path, activeFilePath)) &&
+                      completedProjects.some((project) =>
+                        isPathDescendant(getProjectDisplay(project, projectMetadata).path, activeFilePath)
+                      ) &&
                       !completedProjectsExpanded
                         ? SIDEBAR_ACTIVE_ROW_CLASSES
                         : ''
@@ -483,9 +496,13 @@ export function SidebarProjectsSection({
                     <div className="pl-2 pr-1 py-1 space-y-0.5">
                       {completedProjects.map((project) => (
                         <ProjectRow
-                          key={`completed-${project.path}`}
+                          key={`completed-${getProjectDisplay(project, projectMetadata).path}`}
                           project={project}
-                          projectActions={projectActions[project.path] || []}
+                          projectActions={
+                            projectActions[getProjectDisplay(project, projectMetadata).path] ||
+                            projectActions[project.path] ||
+                            []
+                          }
                           projectMetadata={projectMetadata}
                           actionMetadata={actionMetadata}
                           actionStatuses={actionStatuses}

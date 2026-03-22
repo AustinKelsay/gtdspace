@@ -58,6 +58,17 @@ pub struct SearchResponse {
     pub truncated: bool,
 }
 
+fn byte_offset_to_utf16(text: &str, byte_offset: usize) -> usize {
+    text[..byte_offset].encode_utf16().count()
+}
+
+fn match_range_to_utf16(text: &str, range: (usize, usize)) -> (usize, usize) {
+    (
+        byte_offset_to_utf16(text, range.0),
+        byte_offset_to_utf16(text, range.1),
+    )
+}
+
 fn truncated_response(
     start_time: std::time::Instant,
     results: Vec<SearchResult>,
@@ -186,6 +197,11 @@ pub async fn search_files(
                                     &regex_pattern,
                                     &plain_text_matcher,
                                 ) {
+                                    let prefix = "📁 ";
+                                    let prefix_utf16_len = prefix.encode_utf16().count();
+                                    let (match_start, match_end) =
+                                        match_range_to_utf16(&file_name, match_result);
+
                                     if results.len() >= filters.max_results {
                                         return Ok(truncated_response(
                                             start_time,
@@ -199,9 +215,9 @@ pub async fn search_files(
                                         file_path: file_path.clone(),
                                         file_name: file_name.clone(),
                                         line_number: 0,
-                                        line_content: format!("📁 {}", file_name),
-                                        match_start: match_result.0,
-                                        match_end: match_result.1,
+                                        line_content: format!("{}{}", prefix, file_name),
+                                        match_start: prefix_utf16_len + match_start,
+                                        match_end: prefix_utf16_len + match_end,
                                         context_before: None,
                                         context_after: None,
                                     });
@@ -226,6 +242,9 @@ pub async fn search_files(
                                     &regex_pattern,
                                     &plain_text_matcher,
                                 ) {
+                                    let (match_start, match_end) =
+                                        match_range_to_utf16(line, match_result);
+
                                     if results.len() >= filters.max_results {
                                         return Ok(truncated_response(
                                             start_time,
@@ -272,8 +291,8 @@ pub async fn search_files(
                                         file_name: file_name.clone(),
                                         line_number,
                                         line_content: line.to_string(),
-                                        match_start: match_result.0,
-                                        match_end: match_result.1,
+                                        match_start,
+                                        match_end,
                                         context_before,
                                         context_after,
                                     });

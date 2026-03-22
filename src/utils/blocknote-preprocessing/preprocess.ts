@@ -1,6 +1,10 @@
 // Compatibility shim retained for older callers. The live editor path no longer
 // uses this helper, so it only validates legacy multiselect HTML and replaces
-// it with placeholders without tracking restoration metadata.
+// it with placeholder tokens such as {{MULTISELECT_...}}.
+//
+// These placeholders are intentionally not reversible: this shim does not keep
+// any restoration metadata. New code should prefer `postProcessBlockNoteBlocks`,
+// which performs the full conversion flow and preserves reversible metadata.
 export function preprocessMarkdownForBlockNote(markdown: string): string {
   // This legacy export is currently kept for compatibility with older call sites.
   // The active editor path uses postProcessBlockNoteBlocks after markdown parsing.

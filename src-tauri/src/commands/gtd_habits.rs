@@ -5,7 +5,7 @@ use super::gtd_habits_domain::{
     parse_habit_state, should_reset_habit, HabitFrequency, HabitStatus, DEFAULT_HISTORY_TEMPLATE,
 };
 use super::utils::sanitize_markdown_file_stem;
-use chrono::Local;
+use chrono::{Local, NaiveTime};
 use serde::Deserialize;
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -66,15 +66,18 @@ pub fn create_gtd_habit(
     };
 
     let focus_time_section = if let Some(time) = focus_time {
-        if time.len() == 5 && time.chars().nth(2) == Some(':') {
+        let trimmed = time.trim();
+        let parsed_time = NaiveTime::parse_from_str(trimmed, "%H:%M").map_err(|_| {
             format!(
-                "\n## Focus Date\n[!datetime:focus_date:{}T{}:00]\n\n",
-                now.format("%Y-%m-%d"),
+                "Invalid focus time '{}'. Expected HH:MM in 24-hour format",
                 time
             )
-        } else {
-            "\n".to_string()
-        }
+        })?;
+        format!(
+            "\n## Focus Date\n[!datetime:focus_date:{}T{}:00]\n\n",
+            now.format("%Y-%m-%d"),
+            parsed_time.format("%H:%M")
+        )
     } else {
         "\n".to_string()
     };
@@ -196,8 +199,13 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
             continue;
         }
 
-        let content = fs::read_to_string(&path)
-            .map_err(|error| format!("Failed to read habit file: {}", error))?;
+        let content = match fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(error) => {
+                log::warn!("Skipping habit {:?}: {}", path, error);
+                continue;
+            }
+        };
         let parsed = match parse_habit_state(&content) {
             Ok(parsed) => parsed,
             Err(error) => {
@@ -229,6 +237,7 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
         };
 
         let mut content_with_history = content.clone();
+        let mut should_skip_habit = false;
         for (index, period_time) in periods_to_process.iter().enumerate() {
             let is_catchup = index < periods_to_process.len() - 1;
             let history_entry = format_history_entry(
@@ -241,8 +250,20 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
                     "New period"
                 },
             );
-            content_with_history = insert_history_entry(&content_with_history, &history_entry)
-                .map_err(|error| format!("Failed to insert history entry: {}", error))?;
+            match insert_history_entry(&content_with_history, &history_entry) {
+                Ok(next_content) => {
+                    content_with_history = next_content;
+                }
+                Err(error) => {
+                    log::warn!("Skipping habit {:?}: {}", path, error);
+                    should_skip_habit = true;
+                    break;
+                }
+            }
+        }
+
+        if should_skip_habit {
+            continue;
         }
 
         let final_content = apply_status_marker(
@@ -250,8 +271,10 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
             HabitStatus::Todo,
             parsed.status_format,
         );
-        fs::write(&path, final_content)
-            .map_err(|error| format!("Failed to write habit file: {}", error))?;
+        if let Err(error) = fs::write(&path, final_content) {
+            log::warn!("Skipping habit {:?}: {}", path, error);
+            continue;
+        }
 
         reset_habits.push(
             path.file_name()

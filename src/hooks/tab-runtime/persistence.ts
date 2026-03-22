@@ -201,7 +201,7 @@ export function getPersistedActiveTabFilePath(workspacePath?: string | null): st
   if (!snapshot || snapshot.openTabs.length === 0) {
     return null;
   }
-  if (snapshot.workspacePath && pathKey(snapshot.workspacePath) !== pathKey(workspacePath)) {
+  if (!snapshotMatchesWorkspace(snapshot, workspacePath)) {
     return null;
   }
 

@@ -107,7 +107,11 @@ export async function syncGeneralBacklink({ spacePath, sourcePath, targetPath, a
     if (rawContent === null || rawContent === undefined) return;
 
     const metadata = extractMetadata(rawContent);
-    const existing = parseReferenceList((metadata as any).references);
+    const referencesValue =
+      metadata && typeof metadata === 'object' && 'references' in metadata
+        ? (metadata as { references?: unknown }).references
+        : undefined;
+    const existing = parseReferenceList(referencesValue);
 
     const next = new Set(existing.map((v) => normalizeReferencePath(v)).filter(Boolean));
     if (action === 'add') next.add(normalizedSource);

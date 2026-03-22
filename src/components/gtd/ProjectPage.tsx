@@ -149,8 +149,12 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
 
       const actions = await Promise.all(
         (files ?? []).map(async (file) => {
-          const content = await safeInvoke<string>("read_file", { path: file.path }, "");
-          const parsedAction = parseActionMarkdown(content || "");
+          const content = await safeInvoke<string>("read_file", { path: file.path }, null);
+          if (content == null) {
+            console.warn("ProjectActionsSection: skipping unreadable action", file.path);
+            return null;
+          }
+          const parsedAction = parseActionMarkdown(content);
           const fallbackName = file.name.replace(/\.(md|markdown)$/i, "");
           return {
             name:
@@ -165,8 +169,9 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
         })
       );
 
-      actions.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-      setItems(actions);
+      const validActions = actions.filter((item): item is ProjectActionItem => item !== null);
+      validActions.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+      setItems(validActions);
     } catch (error) {
       console.error("ProjectActionsSection: failed to load actions", error);
       setItems([]);
@@ -269,14 +274,18 @@ const ProjectHabitsSection: React.FC<{ projectPath: string | null }> = ({ projec
 
       const matches: ProjectHabitItem[] = [];
       for (const file of files ?? []) {
-        const content = await safeInvoke<string>("read_file", { path: file.path }, "");
-        const parsedHabit = parseHabitContent(content || "");
+        const content = await safeInvoke<string>("read_file", { path: file.path }, null);
+        if (content == null) {
+          console.warn("ProjectHabitsSection: skipping unreadable habit", file.path);
+          continue;
+        }
+        const parsedHabit = parseHabitContent(content);
         const normalizedRefs = parsedHabit.references.projects.map((ref) =>
           normalizeProjectReferencePath(ref)
         );
         if (normalizedRefs.includes(projectNormalized)) {
           matches.push({
-            name: file.name.replace(/\.md$/i, ""),
+            name: file.name.replace(/\.(md|markdown)$/i, ""),
             path: file.path,
           });
         }
@@ -511,33 +520,30 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       const normalizedTarget = normalizeReferencePath(value);
       if (!normalizedTarget) return;
 
-      setHorizonRefs((current) => {
-        const normalizedCurrent = normalizeProjectHorizonReferences(current);
-        const group = normalizedCurrent[key] ?? [];
-        const isPresent = group.includes(normalizedTarget);
-        const action: "add" | "remove" = isPresent ? "remove" : "add";
-        const nextGroup = isPresent
-          ? group.filter((ref) => ref !== normalizedTarget)
-          : [...group, normalizedTarget];
-        const next = {
-          ...normalizedCurrent,
-          [key]: nextGroup,
-        };
+      const normalizedCurrent = normalizeProjectHorizonReferences(horizonRefs);
+      const group = normalizedCurrent[key] ?? [];
+      const isPresent = group.includes(normalizedTarget);
+      const action: "add" | "remove" = isPresent ? "remove" : "add";
+      const nextGroup = isPresent
+        ? group.filter((ref) => ref !== normalizedTarget)
+        : [...group, normalizedTarget];
+      const next = {
+        ...normalizedCurrent,
+        [key]: nextGroup,
+      };
 
-        emitRebuild({ horizonReferences: next });
-        if (normalizedFilePath) {
-          void syncHorizonBacklink({
-            sourcePath: normalizedFilePath,
-            sourceKind: "projects",
-            targetPath: normalizedTarget,
-            action,
-          });
-        }
-
-        return next;
-      });
+      setHorizonRefs(next);
+      emitRebuild({ horizonReferences: next });
+      if (normalizedFilePath) {
+        void syncHorizonBacklink({
+          sourcePath: normalizedFilePath,
+          sourceKind: "projects",
+          targetPath: normalizedTarget,
+          action,
+        });
+      }
     },
-    [emitRebuild, normalizedFilePath]
+    [emitRebuild, horizonRefs, normalizedFilePath]
   );
 
   const handleHorizonRemove = React.useCallback(
@@ -545,33 +551,30 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       const normalizedTarget = normalizeReferencePath(value);
       if (!normalizedTarget) return;
 
-      setHorizonRefs((current) => {
-        const normalizedCurrent = normalizeProjectHorizonReferences(current);
-        const group = normalizedCurrent[key] ?? [];
-        if (!group.includes(normalizedTarget)) {
-          return normalizedCurrent;
-        }
+      const normalizedCurrent = normalizeProjectHorizonReferences(horizonRefs);
+      const group = normalizedCurrent[key] ?? [];
+      if (!group.includes(normalizedTarget)) {
+        return;
+      }
 
-        const nextGroup = group.filter((ref) => ref !== normalizedTarget);
-        const next = {
-          ...normalizedCurrent,
-          [key]: nextGroup,
-        };
+      const nextGroup = group.filter((ref) => ref !== normalizedTarget);
+      const next = {
+        ...normalizedCurrent,
+        [key]: nextGroup,
+      };
 
-        emitRebuild({ horizonReferences: next });
-        if (normalizedFilePath) {
-          void syncHorizonBacklink({
-            sourcePath: normalizedFilePath,
-            sourceKind: "projects",
-            targetPath: normalizedTarget,
-            action: "remove",
-          });
-        }
-
-        return next;
-      });
+      setHorizonRefs(next);
+      emitRebuild({ horizonReferences: next });
+      if (normalizedFilePath) {
+        void syncHorizonBacklink({
+          sourcePath: normalizedFilePath,
+          sourceKind: "projects",
+          targetPath: normalizedTarget,
+          action: "remove",
+        });
+      }
     },
-    [emitRebuild, normalizedFilePath]
+    [emitRebuild, horizonRefs, normalizedFilePath]
   );
 
   const handleDesiredOutcomeChange = React.useCallback(

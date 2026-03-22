@@ -277,8 +277,15 @@ export function useGTDWorkspaceSidebar({
       });
 
       try {
-        const files = await safeInvoke<MarkdownFile[]>('list_markdown_files', { path: sectionPath }, []);
-        const sortedFiles = sortMarkdownFiles(files ?? []);
+        const files = await safeInvoke<MarkdownFile[]>(
+          'list_markdown_files',
+          { path: sectionPath },
+          undefined
+        );
+        if (files === undefined || files === null) {
+          return current || [];
+        }
+        const sortedFiles = sortMarkdownFiles(files);
 
         setSectionFiles((prev) => ({
           ...prev,
@@ -518,7 +525,9 @@ export function useGTDWorkspaceSidebar({
                 { oldProjectPath: projectPath, newProjectName: nextTitle },
                 null
               );
-              if (!newProjectPath || typeof newProjectPath !== 'string') return;
+              if (!newProjectPath || typeof newProjectPath !== 'string') {
+                throw new Error('rename_gtd_project failed');
+              }
 
               const normalizedNewProjectPath = normalizePath(newProjectPath) ?? newProjectPath;
               updateProjectOverlay(projectPath, {
@@ -595,7 +604,9 @@ export function useGTDWorkspaceSidebar({
                 { oldActionPath: normalizedFilePath, newActionName: nextTitle },
                 null
               );
-              if (!newActionPath || typeof newActionPath !== 'string') return;
+              if (!newActionPath || typeof newActionPath !== 'string') {
+                throw new Error('rename_gtd_action failed');
+              }
 
               const normalizedNewActionPath = normalizePath(newActionPath) ?? newActionPath;
               updateActionOverlay(normalizedFilePath, {
@@ -647,14 +658,20 @@ export function useGTDWorkspaceSidebar({
               .split('/')
               .pop()
               ?.replace(/\.(md|markdown)$/i, '');
-            if (currentFileName && currentFileName !== nextTitle) {
+            if (
+              currentFileName &&
+              currentFileName.toLowerCase() !== 'readme' &&
+              currentFileName !== nextTitle
+            ) {
               await withErrorHandling(async () => {
                 const newFilePath = await safeInvoke<string>(
                   'rename_gtd_action',
                   { oldActionPath: normalizedFilePath, newActionName: nextTitle },
                   null
                 );
-                if (!newFilePath || typeof newFilePath !== 'string') return;
+                if (!newFilePath || typeof newFilePath !== 'string') {
+                  throw new Error('rename_gtd_action failed');
+                }
 
                 const normalizedNewFilePath = normalizePath(newFilePath) ?? newFilePath;
                 updateSectionFileOverlay(normalizedFilePath, {
@@ -906,24 +923,26 @@ export function useGTDWorkspaceSidebar({
     if (!deleteItem) return;
 
     const deleted = await withErrorHandling(async () => {
+      const normalizedDeletePath = normalizePath(deleteItem.path) ?? deleteItem.path.replace(/\\/g, '/');
+
       if (deleteItem.type === 'project') {
         const result = await safeInvoke<{
           success: boolean;
           path?: string | null;
           message?: string | null;
-        }>('delete_folder', { path: deleteItem.path }, { success: false, message: 'Failed to delete folder' });
+        }>('delete_folder', { path: normalizedDeletePath }, { success: false, message: 'Failed to delete folder' });
 
         if (!result?.success) {
           throw new Error(result?.message || 'Failed to delete project');
         }
 
-        setExpandedProjects((prev) => prev.filter((path) => path !== deleteItem.path));
+        setExpandedProjects((prev) => prev.filter((path) => path !== normalizedDeletePath));
         setProjectActions((prev) => {
           const next = { ...prev };
-          delete next[deleteItem.path];
+          delete next[normalizedDeletePath];
           return next;
         });
-        removeProjectOverlay(deleteItem.path);
+        removeProjectOverlay(normalizedDeletePath);
 
         if (gtdSpace?.root_path) {
           await loadProjects(gtdSpace.root_path);
@@ -933,7 +952,7 @@ export function useGTDWorkspaceSidebar({
           success: boolean;
           path?: string | null;
           message?: string | null;
-        }>('delete_file', { path: deleteItem.path }, { success: false, message: 'Failed to delete file' });
+        }>('delete_file', { path: normalizedDeletePath }, { success: false, message: 'Failed to delete file' });
 
         const timeoutPromise = new Promise<never>((_, reject) => {
           window.setTimeout(() => reject(new Error('Delete operation timed out after 5 seconds')), 5000);
@@ -952,30 +971,32 @@ export function useGTDWorkspaceSidebar({
         if (deleteItem.type === 'action') {
           setActionStatuses((prev) => {
             const next = { ...prev };
-            delete next[deleteItem.path];
+            delete next[normalizedDeletePath];
             return next;
           });
-          removeActionOverlay(deleteItem.path);
+          removeActionOverlay(normalizedDeletePath);
 
-          const projectPath = deleteItem.path.substring(0, deleteItem.path.lastIndexOf('/'));
+          const projectPath = normalizedDeletePath.substring(0, normalizedDeletePath.lastIndexOf('/'));
           setProjectActions((prev) => ({
             ...prev,
-            [projectPath]: prev[projectPath]?.filter((action) => action.path !== deleteItem.path) || [],
+            [projectPath]:
+              prev[projectPath]?.filter((action) => action.path !== normalizedDeletePath) || [],
           }));
           await loadProjectActions(projectPath);
         } else {
-          removeSectionFileOverlay(deleteItem.path);
-          const sectionPath = deleteItem.path.substring(0, deleteItem.path.lastIndexOf('/'));
+          removeSectionFileOverlay(normalizedDeletePath);
+          const sectionPath = normalizedDeletePath.substring(0, normalizedDeletePath.lastIndexOf('/'));
           setSectionFiles((prev) => ({
             ...prev,
-            [sectionPath]: prev[sectionPath]?.filter((file) => file.path !== deleteItem.path) || [],
+            [sectionPath]:
+              prev[sectionPath]?.filter((file) => file.path !== normalizedDeletePath) || [],
           }));
           await loadSectionFiles(sectionPath, true);
         }
 
         window.dispatchEvent(
           new CustomEvent('file-deleted', {
-            detail: { path: deleteItem.path },
+            detail: { path: normalizedDeletePath },
           })
         );
       }

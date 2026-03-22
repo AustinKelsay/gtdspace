@@ -61,6 +61,8 @@ export function SidebarDialogs({
   onHabitCreated,
   onDelete,
 }: SidebarDialogsProps) {
+  const [isDeleting, setIsDeleting] = React.useState(false);
+
   return (
     <>
       <GTDProjectDialog
@@ -129,12 +131,26 @@ export function SidebarDialogs({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => void onDelete()}
+              disabled={isDeleting}
+              onClick={async (event) => {
+                event.preventDefault();
+                if (isDeleting) return;
+
+                setIsDeleting(true);
+                try {
+                  await onDelete();
+                  setDeleteItem(null);
+                } catch (error) {
+                  console.error('Sidebar delete failed', error);
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

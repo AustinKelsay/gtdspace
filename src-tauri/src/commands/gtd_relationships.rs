@@ -403,11 +403,12 @@ pub fn find_habits_referencing(
     }
 
     // Normalize the target path for comparison
-    let target_normalized = target_path.replace('\\', "/");
+    let target_normalized = normalize_reference_target(&target_path);
     log::debug!("Target normalized: {}", target_normalized);
 
     // For project README files, also check against the project folder path
-    let alt_target = strip_project_readme_suffix(&target_normalized);
+    let alt_target = strip_project_readme_suffix(&target_normalized)
+        .map(|path| normalize_reference_target(&path));
     if let Some(ref alt) = alt_target {
         log::debug!("Also checking against project folder path: {}", alt);
     }
@@ -444,23 +445,28 @@ pub fn find_habits_referencing(
                                     target_normalized
                                 );
                                 for candidate in &paths {
+                                    let candidate_normalized =
+                                        normalize_reference_target(candidate);
                                     log::debug!(
                                         "  Comparing: '{}' == '{}'",
-                                        candidate,
+                                        candidate_normalized,
                                         target_normalized
                                     );
-                                    if candidate == &target_normalized {
+                                    if candidate_normalized == target_normalized {
                                         log::debug!("  MATCH FOUND!");
                                     }
                                     if let Some(ref alt) = alt_target {
-                                        if candidate == alt {
+                                        if candidate_normalized == *alt {
                                             log::debug!("  MATCH FOUND (alt target)!");
                                         }
                                     }
                                 }
                                 if paths.iter().any(|p| {
-                                    p == &target_normalized
-                                        || alt_target.as_ref().is_some_and(|alt| p == alt)
+                                    let candidate_normalized = normalize_reference_target(p);
+                                    candidate_normalized == target_normalized
+                                        || alt_target
+                                            .as_ref()
+                                            .is_some_and(|alt| candidate_normalized == *alt)
                                 }) {
                                     found = true;
                                     log::debug!(

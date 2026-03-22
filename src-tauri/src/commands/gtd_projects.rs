@@ -542,13 +542,15 @@ pub fn rename_gtd_action(
         return Err("Action file must stay inside its parent directory".to_string());
     }
 
-    // Create new path with the new name (add .md extension if not present)
+    // Preserve the existing file extension when renaming.
     let sanitized_name = sanitize_markdown_file_stem(&new_action_name);
-    let new_file_name = if new_action_name.ends_with(".markdown") {
-        format!("{}.markdown", sanitized_name)
-    } else {
-        format!("{}.md", sanitized_name)
-    };
+    let extension = old_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+        .filter(|value| value == "md" || value == "markdown")
+        .unwrap_or_else(|| "md".to_string());
+    let new_file_name = format!("{}.{}", sanitized_name, extension);
 
     let new_path = parent.join(&new_file_name);
 

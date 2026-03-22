@@ -12,7 +12,7 @@ import {
   SidebarNonGtdState,
   SidebarStandardSection,
 } from '@/components/gtd/sidebar';
-import { createCalendarFile, buildSectionPath } from '@/components/gtd/sidebar/utils';
+import { createCalendarFile, buildSectionPathCandidates } from '@/components/gtd/sidebar/utils';
 import { useGTDWorkspaceSidebar } from '@/hooks/useGTDWorkspaceSidebar';
 import type { GTDWorkspaceSidebarProps } from '@/components/gtd/sidebar/types';
 import type { MarkdownFile } from '@/types';
@@ -94,7 +94,9 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
             <>
               {GTD_SECTIONS.map((section) => {
                 const isExpanded = sidebar.expandedSections.includes(section.id);
-                const sectionPath = buildSectionPath(spacePath, section.path);
+                const sectionPaths = buildSectionPathCandidates(spacePath, section);
+                const sectionPath =
+                  sectionPaths.find((candidate) => sidebar.sectionFiles[candidate]) ?? sectionPaths[0];
                 const files = sidebar.sectionFiles[sectionPath] || [];
 
                 if (section.id === 'calendar') {

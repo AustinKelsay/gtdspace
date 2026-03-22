@@ -41,7 +41,7 @@ function escapeRegex(value: string): string {
 const MARKER_TYPE_PATTERN = MARKER_TYPES.map(escapeRegex).join("|");
 
 export const GTD_FIELD_MARKER_PATTERN = new RegExp(
-  `\\[!(?:${MARKER_TYPE_PATTERN})(?::[^\\]]*)?\\]`,
+  `\\[!(?:${MARKER_TYPE_PATTERN})(?::[^\\]]*)?\\](?:\\])?`,
   "g"
 );
 

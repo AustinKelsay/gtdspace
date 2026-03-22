@@ -49,7 +49,11 @@ fn path_has_component_case_insensitive(path: &Path, expected: &str) -> bool {
     })
 }
 
-fn extract_safe_file_name(name: &str) -> Result<String, String> {
+fn validate_cross_platform_file_name(name: &str) -> Result<String, String> {
+    if name.ends_with(' ') || name.trim_end().ends_with('.') {
+        return Err("File name cannot end with a space or period".to_string());
+    }
+
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err("File name cannot be empty".to_string());
@@ -78,7 +82,53 @@ fn extract_safe_file_name(name: &str) -> Result<String, String> {
         return Err("File name cannot be '.' or '..'".to_string());
     }
 
+    if file_name.chars().any(|ch| {
+        matches!(ch, '<' | '>' | ':' | '"' | '|' | '?' | '*' | '/' | '\\') || ch.is_control()
+    }) {
+        return Err(
+            "File name cannot contain Windows-invalid characters or control characters".to_string(),
+        );
+    }
+
+    let reserved_check = file_name
+        .trim_end_matches([' ', '.'])
+        .split('.')
+        .next()
+        .unwrap_or(file_name)
+        .to_ascii_uppercase();
+    if matches!(
+        reserved_check.as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+    ) {
+        return Err("File name cannot use a reserved Windows device name".to_string());
+    }
+
     Ok(file_name.to_string())
+}
+
+fn extract_safe_file_name(name: &str) -> Result<String, String> {
+    validate_cross_platform_file_name(name)
 }
 
 fn paths_refer_to_same_entry(left: &Path, right: &Path) -> bool {
@@ -94,6 +144,9 @@ fn rename_path(old_path: &Path, new_path: &Path) -> Result<(), std::io::Error> {
     }
 
     if !paths_refer_to_same_entry(old_path, new_path) {
+        if new_path.exists() {
+            return Err(io::Error::from(io::ErrorKind::AlreadyExists));
+        }
         match fs::rename(old_path, new_path) {
             Ok(()) => return Ok(()),
             Err(error)

@@ -31,7 +31,38 @@ pub fn sanitize_markdown_file_stem(name: &str) -> String {
         .trim_matches('.')
         .to_string();
 
-    if sanitized.is_empty() {
+    let reserved_check = sanitized
+        .split('.')
+        .next()
+        .unwrap_or(&sanitized)
+        .to_ascii_uppercase();
+    let is_reserved_windows_name = matches!(
+        reserved_check.as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+    );
+
+    if sanitized.is_empty() || is_reserved_windows_name {
         "untitled".to_string()
     } else {
         sanitized
@@ -47,5 +78,27 @@ mod tests {
         assert_eq!(sanitize_markdown_file_stem("Task.MD"), "Task");
         assert_eq!(sanitize_markdown_file_stem("Task.md.markdown"), "Task");
         assert_eq!(sanitize_markdown_file_stem("Task.Md"), "Task");
+    }
+
+    #[test]
+    fn strips_forbidden_chars() {
+        assert_eq!(sanitize_markdown_file_stem("File:Name?.md"), "File-Name-");
+    }
+
+    #[test]
+    fn returns_untitled_for_empty_input() {
+        assert_eq!(sanitize_markdown_file_stem(""), "untitled");
+        assert_eq!(sanitize_markdown_file_stem("   "), "untitled");
+    }
+
+    #[test]
+    fn trims_leading_trailing_dots() {
+        assert_eq!(sanitize_markdown_file_stem("...Task..."), "Task");
+    }
+
+    #[test]
+    fn rejects_reserved_windows_device_names() {
+        assert_eq!(sanitize_markdown_file_stem("CON"), "untitled");
+        assert_eq!(sanitize_markdown_file_stem("lpt1.md"), "untitled");
     }
 }

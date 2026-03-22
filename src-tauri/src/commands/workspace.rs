@@ -26,6 +26,23 @@ fn write_file_if_missing(path: &Path, content: &str, description: &str) -> Resul
     Ok(())
 }
 
+fn existing_reference(path: PathBuf) -> String {
+    if path.exists() {
+        path.to_string_lossy().to_string()
+    } else {
+        String::new()
+    }
+}
+
+fn join_existing_references(paths: Vec<PathBuf>) -> String {
+    paths
+        .into_iter()
+        .filter(|path| path.exists())
+        .map(|path| path.to_string_lossy().to_string())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 /// Get the default GTD space path for the current user
 ///
 /// Returns a platform-appropriate path in the user's home directory:
@@ -155,8 +172,7 @@ pub fn check_is_gtd_space(path: String) -> Result<bool, String> {
     Ok(is_gtd_space)
 }
 
-#[tauri::command]
-pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> {
+fn initialize_gtd_space_blocking(space_path: String) -> Result<String, String> {
     log::info!("Initializing GTD space at: {}", space_path);
 
     let root_path = Path::new(&space_path);
@@ -230,15 +246,16 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
 
                 // Create MINIMAL goal with MAXIMUM relationships
                 let next_year = chrono::Local::now().year() + 1;
-                let space_path_str = root_path.to_string_lossy();
-                let vision_base = format!("{}/Vision", space_path_str);
-                let purpose_base = format!("{}/Purpose & Principles", space_path_str);
-
-                // Goals reference → Vision AND both Purpose docs
-                let vision_ref = format!("{}/My 3-5 Year Vision.md", vision_base);
-                let life_mission_ref = format!("{}/Life Mission.md", purpose_base);
-                let core_values_ref = format!("{}/Core Values.md", purpose_base);
-                let purpose_refs = format!("{},{}", life_mission_ref, core_values_ref);
+                let vision_ref =
+                    existing_reference(root_path.join("Vision").join("My 3-5 Year Vision.md"));
+                let purpose_refs = join_existing_references(vec![
+                    root_path
+                        .join("Purpose & Principles")
+                        .join("Life Mission.md"),
+                    root_path
+                        .join("Purpose & Principles")
+                        .join("Core Values.md"),
+                ]);
 
                 // Just ONE goal with ALL possible references
                 let goal_name = "Build Financial Freedom";
@@ -267,11 +284,14 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
                 // Create vision document with references to Purpose
                 let vision_file = dir_path.join("My 3-5 Year Vision.md");
                 if !vision_file.exists() {
-                    let space_path_str = root_path.to_string_lossy();
-                    let purpose_base = format!("{}/Purpose & Principles", space_path_str);
-                    let life_mission_ref = format!("{}/Life Mission.md", purpose_base);
-                    let core_values_ref = format!("{}/Core Values.md", purpose_base);
-                    let purpose_refs = format!("{},{}", life_mission_ref, core_values_ref);
+                    let purpose_refs = join_existing_references(vec![
+                        root_path
+                            .join("Purpose & Principles")
+                            .join("Life Mission.md"),
+                        root_path
+                            .join("Purpose & Principles")
+                            .join("Core Values.md"),
+                    ]);
 
                     let content = generate_vision_document_template_with_refs(&purpose_refs);
                     fs::write(&vision_file, content)
@@ -332,16 +352,12 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
         let purpose_base = root_path.join("Purpose & Principles");
 
         // Build all reference paths
-        let goal_ref = format!(
-            "{}/Build Financial Freedom.md",
-            goals_base.to_string_lossy()
-        );
-        let vision_ref = format!("{}/My 3-5 Year Vision.md", vision_base.to_string_lossy());
-        let life_mission_ref = format!("{}/Life Mission.md", purpose_base.to_string_lossy());
-        let core_values_ref = format!("{}/Core Values.md", purpose_base.to_string_lossy());
-
-        // Combine Purpose references
-        let purpose_refs = format!("{},{}", life_mission_ref, core_values_ref);
+        let goal_ref = existing_reference(goals_base.join("Build Financial Freedom.md"));
+        let vision_ref = existing_reference(vision_base.join("My 3-5 Year Vision.md"));
+        let purpose_refs = join_existing_references(vec![
+            purpose_base.join("Life Mission.md"),
+            purpose_base.join("Core Values.md"),
+        ]);
 
         // Create ONE area with ALL references
         let area_name = "Professional Excellence";
@@ -377,13 +393,19 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
     Ok(message)
 }
 
+#[tauri::command]
+pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || initialize_gtd_space_blocking(space_path))
+        .await
+        .map_err(|error| format!("Failed to initialize GTD space: {}", error))?
+}
+
 /// Seed the GTD space with example projects and actions
 ///
 /// This creates a small set of demo projects and actions that showcase
 /// statuses, focus dates, due dates, and effort levels. If the Projects
 /// directory already contains subdirectories, seeding is skipped.
-#[tauri::command]
-pub async fn seed_example_gtd_content(space_path: String) -> Result<String, String> {
+fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, String> {
     let projects_root = Path::new(&space_path).join("Projects");
 
     if !projects_root.exists() {
@@ -464,11 +486,20 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     )?;
 
     // Update with references to BOTH Area and Goal
-    let areas_ref = format!("{}/Areas of Focus/Professional Excellence.md", &space_path);
-    let goals_ref = format!("{}/Goals/Build Financial Freedom.md", &space_path);
-    let vision_ref = format!("{}/Vision/My 3-5 Year Vision.md", &space_path);
-    let purpose_ref = format!("{}/Purpose & Principles/Core Values.md", &space_path);
-    let cabinet_ref = format!("{}/Cabinet/GTD Quick Reference.md", &space_path);
+    let space_root = Path::new(&space_path);
+    let areas_ref = existing_reference(
+        space_root
+            .join("Areas of Focus")
+            .join("Professional Excellence.md"),
+    );
+    let goals_ref = existing_reference(space_root.join("Goals").join("Build Financial Freedom.md"));
+    let vision_ref = existing_reference(space_root.join("Vision").join("My 3-5 Year Vision.md"));
+    let purpose_ref = existing_reference(
+        space_root
+            .join("Purpose & Principles")
+            .join("Core Values.md"),
+    );
+    let cabinet_ref = existing_reference(space_root.join("Cabinet").join("GTD Quick Reference.md"));
 
     let readme_path = Path::new(&project1_path).join("README.md");
     let readme_params = ProjectReadmeParams {
@@ -569,6 +600,13 @@ pub async fn seed_example_gtd_content(space_path: String) -> Result<String, Stri
     .map_err(|e| format!("Failed to write seed marker: {}", e))?;
 
     Ok("Seeded example projects, actions, horizons, habits, and reference materials".to_string())
+}
+
+#[tauri::command]
+pub async fn seed_example_gtd_content(space_path: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || seed_example_gtd_content_blocking(space_path))
+        .await
+        .map_err(|error| format!("Failed to seed example GTD content: {}", error))?
 }
 
 /// Initialize default GTD space and optionally seed example content in one call

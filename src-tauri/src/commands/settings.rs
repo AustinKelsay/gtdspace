@@ -221,9 +221,8 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                 .get("git_sync_encryption_key")
                 .and_then(|val| val.as_str())
             {
-                let trimmed = key_str.trim();
-                if !trimmed.is_empty() {
-                    legacy_encryption_key = Some(trimmed.to_string());
+                if !key_str.trim().is_empty() {
+                    legacy_encryption_key = Some(key_str.to_string());
                     log::info!("Migrating encryption key from settings.json to secure storage");
                     match keyring::Entry::new(SECURE_STORAGE_SERVICE, GIT_SYNC_ENCRYPTION_KEY_NAME)
                     {
@@ -258,17 +257,17 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                                             e
                                         );
                                         store.set("user_settings", original_settings);
-                                        legacy_encryption_key = Some(trimmed.to_string());
+                                        legacy_encryption_key = Some(key_str.to_string());
                                         if let Some(settings_obj) =
                                             value_to_deserialize.as_object_mut()
                                         {
                                             settings_obj.insert(
                                                 "git_sync_encryption_key".to_string(),
-                                                serde_json::Value::String(trimmed.to_string()),
+                                                serde_json::Value::String(key_str.to_string()),
                                             );
                                         }
                                     } else {
-                                        match entry.set_password(trimmed) {
+                                        match entry.set_password(key_str) {
                                             Ok(_) => {
                                                 log::info!(
                                                     "Successfully migrated encryption key to secure storage"
@@ -283,18 +282,18 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                                                 store.set("user_settings", original_settings);
                                                 if let Err(save_error) = store.save() {
                                                     log::warn!(
-                                                        "Failed to restore legacy settings after secure-storage migration failure: {}",
-                                                        save_error
-                                                    );
+                                                            "Failed to restore legacy settings after secure-storage migration failure: {}",
+                                                            save_error
+                                                        );
                                                 }
-                                                legacy_encryption_key = Some(trimmed.to_string());
+                                                legacy_encryption_key = Some(key_str.to_string());
                                                 if let Some(settings_obj) =
                                                     value_to_deserialize.as_object_mut()
                                                 {
                                                     settings_obj.insert(
                                                         "git_sync_encryption_key".to_string(),
                                                         serde_json::Value::String(
-                                                            trimmed.to_string(),
+                                                            key_str.to_string(),
                                                         ),
                                                     );
                                                 }

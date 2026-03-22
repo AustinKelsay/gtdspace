@@ -57,7 +57,7 @@ interface UseActionsDataReturn {
     dueThisWeek: number;
   };
   loadActions: (projects: GTDProject[]) => Promise<void | (() => void)>;
-  updateActionStatus: (actionIdOrPath: string, newStatus: string, actionPath?: string) => Promise<boolean>;
+  updateActionStatus: (actionIdOrPath: string, newStatus: GTDActionStatus, actionPath?: string) => Promise<boolean>;
   refresh: () => Promise<void>;
 }
 
@@ -206,7 +206,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
     };
   }, [includeCompleted, includeCancelled, log]);
   
-  const updateActionStatus = useCallback(async (actionIdOrPath: string, newStatus: string, actionPath?: string): Promise<boolean> => {
+  const updateActionStatus = useCallback(async (actionIdOrPath: string, newStatus: GTDActionStatus, actionPath?: string): Promise<boolean> => {
     try {
       const normalizedActionIdOrPath = norm(actionIdOrPath);
       // Determine the actual file path
@@ -236,7 +236,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       const content = await readFileText(filePath);
       log.debug('[updateActionStatus] File content length', content?.length || 0);
 
-      const finalContent = rebuildActionMarkdown(content, { status: newStatus as GTDActionStatus });
+      const finalContent = rebuildActionMarkdown(content, { status: newStatus });
       const canonicalStatus = parseActionMarkdown(finalContent).status;
       log.debug('[updateActionStatus] Updating status to', canonicalStatus);
 

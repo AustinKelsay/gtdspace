@@ -1,5 +1,6 @@
 import React from 'react';
 import { flushSync } from 'react-dom';
+import { invoke } from '@tauri-apps/api/core';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { readFileText } from '@/hooks/useFileManager';
@@ -10,6 +11,7 @@ import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { GTD_SECTIONS, HORIZON_FOLDER_TO_TYPE } from '@/components/gtd/sidebar/constants';
 import {
   buildSectionPath,
+  buildSectionPathCandidates,
   buildSidebarSearchResults,
   getFolderName,
   normalizePath,
@@ -158,13 +160,14 @@ export function useGTDWorkspaceSidebar({
   const lastRootRef = React.useRef<string | null>(null);
   const preloadedRef = React.useRef(false);
   const loadingSectionsRef = React.useRef<Set<string>>(new Set());
+  const workspaceGenerationRef = React.useRef(0);
 
   const resolveReadmeFile = React.useCallback(async (folderPath: string): Promise<MarkdownFile> => {
     const normalizedFolderPath = normalizePath(folderPath) ?? folderPath.replace(/\\/g, '/');
     const markdownPath = `${normalizedFolderPath}/README.markdown`;
     const mdPath = `${normalizedFolderPath}/README.md`;
     const markdownExists = await withErrorHandling(async () => {
-      return safeInvoke<boolean>('check_file_exists', { filePath: markdownPath }, false);
+      return invoke<boolean>('check_file_exists', { filePath: markdownPath });
     }, 'Failed to resolve overview file', 'workspace-sidebar');
     const filePath = markdownExists ? markdownPath : mdPath;
 
@@ -288,6 +291,7 @@ export function useGTDWorkspaceSidebar({
 
   const loadSectionFiles = React.useCallback(
     async (sectionPath: string, force: boolean = false): Promise<MarkdownFile[]> => {
+      const generationAtStart = workspaceGenerationRef.current;
       const normalizedKey = normalizePath(sectionPath) ?? sectionPath.replace(/\\/g, '/');
       const current = sectionFilesRef.current[normalizedKey];
       if (!force && current) {
@@ -307,16 +311,19 @@ export function useGTDWorkspaceSidebar({
 
       try {
         const files = await withErrorHandling(async () => {
-          return safeInvoke<MarkdownFile[]>(
+          return invoke<MarkdownFile[]>(
             'list_markdown_files',
-            { path: normalizedKey },
-            undefined
+            { path: normalizedKey }
           );
         }, 'Failed to load section files', 'workspace-sidebar');
         if (files === undefined || files === null) {
           return current || [];
         }
         const sortedFiles = sortMarkdownFiles(files);
+
+        if (workspaceGenerationRef.current !== generationAtStart) {
+          return current || [];
+        }
 
         setSectionFiles((prev) => ({
           ...prev,
@@ -327,6 +334,10 @@ export function useGTDWorkspaceSidebar({
           next.add(normalizedKey);
           return next;
         });
+
+        if (workspaceGenerationRef.current !== generationAtStart) {
+          return sortedFiles;
+        }
 
         await syncHorizonReadme(normalizedKey, sortedFiles);
         return sortedFiles;
@@ -345,17 +356,22 @@ export function useGTDWorkspaceSidebar({
   );
 
   const loadProjectActions = React.useCallback(async (projectPath: string) => {
+    const generationAtStart = workspaceGenerationRef.current;
     const normalizedKey = normalizePath(projectPath) ?? projectPath.replace(/\\/g, '/');
     try {
       let files = await withErrorHandling(async () => {
-        return safeInvoke<MarkdownFile[]>('list_project_actions', { projectPath: normalizedKey }, []);
+        return invoke<MarkdownFile[]>('list_project_actions', { projectPath: normalizedKey });
       }, 'Failed to load project actions', 'workspace-sidebar');
       files = files ?? [];
-      if (!files || files.length === 0) {
+      if (files.length === 0) {
         const all = await withErrorHandling(async () => {
-          return safeInvoke<MarkdownFile[]>('list_markdown_files', { path: normalizedKey }, []);
+          return invoke<MarkdownFile[]>('list_markdown_files', { path: normalizedKey });
         }, 'Failed to load project files', 'workspace-sidebar');
         files = (all ?? []).filter((file) => !/^README\.(md|markdown)$/i.test(file.name));
+      }
+
+      if (workspaceGenerationRef.current !== generationAtStart) {
+        return;
       }
 
       setProjectActions((prev) => ({
@@ -384,6 +400,10 @@ export function useGTDWorkspaceSidebar({
         })
       );
 
+      if (workspaceGenerationRef.current !== generationAtStart) {
+        return;
+      }
+
       setActionStatuses((prev) => ({
         ...prev,
         ...Object.fromEntries(statusResults.map((result) => [result.path, result.status])),
@@ -411,7 +431,20 @@ export function useGTDWorkspaceSidebar({
 
   React.useEffect(() => {
     const pathToCheck = gtdSpace?.root_path;
-    if (!pathToCheck || !currentFolder?.startsWith(pathToCheck)) {
+    const normalizedRoot = normalizePath(pathToCheck);
+    const normalizedCurrent = normalizePath(currentFolder);
+    const normalizedRootWithSlash = normalizedRoot?.endsWith('/')
+      ? normalizedRoot
+      : `${normalizedRoot ?? ''}/`;
+
+    if (
+      !normalizedRoot ||
+      !normalizedCurrent ||
+      !(
+        normalizedCurrent === normalizedRoot ||
+        normalizedCurrent.startsWith(normalizedRootWithSlash)
+      )
+    ) {
       return;
     }
 
@@ -419,6 +452,7 @@ export function useGTDWorkspaceSidebar({
 
     const preload = async () => {
       if (lastRootRef.current !== pathToCheck) {
+        workspaceGenerationRef.current += 1;
         preloadedRef.current = false;
         lastRootRef.current = pathToCheck;
         setLoadedSections(new Set());
@@ -511,6 +545,15 @@ export function useGTDWorkspaceSidebar({
             [normalizedFilePath]: String(metadata.status),
           }));
           updateActionOverlay(normalizedFilePath, { status: String(metadata.status) });
+        }
+
+        if (changedFields?.due_date || changedFields?.dueDate || changedFields?.datetime) {
+          const nextDue =
+            (metadata as { due_date?: string; dueDate?: string }).due_date ||
+            (metadata as { due_date?: string; dueDate?: string }).dueDate;
+          updateActionOverlay(normalizedFilePath, {
+            due_date: typeof nextDue === 'string' ? nextDue : undefined,
+          });
         }
       }
 
@@ -901,8 +944,11 @@ export function useGTDWorkspaceSidebar({
       }
 
       const path = buildSectionPath(rootPath, section.path);
+      const candidatePaths = buildSectionPathCandidates(rootPath, section);
+      const resolvedPath =
+        candidatePaths.find((candidate) => sectionFilesRef.current[candidate]) ?? path;
       setPageDialogDirectory({
-        path,
+        path: resolvedPath,
         name: section.name,
         sectionId: section.id,
         spacePath: rootPath ?? '',
@@ -960,9 +1006,9 @@ export function useGTDWorkspaceSidebar({
 
     const nonProjectSectionPaths = GTD_SECTIONS.filter(
       (section) => section.id !== 'calendar' && section.id !== 'projects'
-    ).map((section) => buildSectionPath(rootPath, section.path));
+    ).flatMap((section) => buildSectionPathCandidates(rootPath, section));
 
-    await Promise.all(nonProjectSectionPaths.map((path) => loadSectionFiles(path, true)));
+    await Promise.all([...new Set(nonProjectSectionPaths)].map((path) => loadSectionFiles(path, true)));
     await Promise.all(Object.keys(projectActionsRef.current).map((path) => loadProjectActions(path)));
   }, [loadProjectActions, loadProjects, loadSectionFiles, onRefresh, rootPath]);
 

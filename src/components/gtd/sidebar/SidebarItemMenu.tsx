@@ -35,7 +35,7 @@ export function SidebarItemMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-40">
         <DropdownMenuItem
-          onClick={async (event) => {
+          onSelect={async (event) => {
             event.stopPropagation();
             await onOpenFileLocation(path);
           }}
@@ -45,7 +45,7 @@ export function SidebarItemMenu({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={(event) => {
+          onSelect={(event) => {
             event.stopPropagation();
             onDelete();
           }}

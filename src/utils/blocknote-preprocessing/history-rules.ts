@@ -1,6 +1,8 @@
 import { isParagraphBlock } from "./block-text";
 import type { TextChild, UnknownBlock } from "./types";
 
+const HISTORY_HELPER_TEXT = "*Track your habit completions below:*";
+
 export function isHorizontalRuleParagraph(
   block: UnknownBlock,
   blockText: string
@@ -43,7 +45,7 @@ export function shouldSkipBlockInsideHistory(
     });
 
   return (
-    blockText.includes("Track your habit") ||
+    blockText.trim() === HISTORY_HELPER_TEXT ||
     blockText.trim() === "" ||
     hasOnlyItalicContent
   );

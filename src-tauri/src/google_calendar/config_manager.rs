@@ -74,6 +74,17 @@ impl GoogleConfigManager {
         };
 
         if let Some(config_value) = self.store.get("oauth_config") {
+            if config_value
+                .as_object()
+                .and_then(|object| object.get("client_secret"))
+                .is_some()
+            {
+                let legacy_config: GoogleOAuthConfig =
+                    serde_json::from_value(config_value.clone())?;
+                self.store_config(&legacy_config)?;
+                return Ok(Some(legacy_config));
+            }
+
             if let Ok(config) =
                 serde_json::from_value::<StoredGoogleOAuthConfig>(config_value.clone())
             {
@@ -86,9 +97,7 @@ impl GoogleConfigManager {
                 return Ok(None);
             }
 
-            let legacy_config: GoogleOAuthConfig = serde_json::from_value(config_value.clone())?;
-            self.store_config(&legacy_config)?;
-            return Ok(Some(legacy_config));
+            return Ok(None);
         }
 
         let client_id = self.store.get("client_id");
@@ -148,7 +157,14 @@ impl GoogleConfigManager {
             Err(_) => false,
         };
 
-        if self.store.get("oauth_config").is_some() {
+        if let Some(config_value) = self.store.get("oauth_config") {
+            if config_value
+                .as_object()
+                .and_then(|object| object.get("client_secret"))
+                .is_some()
+            {
+                return true;
+            }
             return has_secure_secret;
         }
         self.store.get("client_id").is_some() && self.store.get("client_secret").is_some()

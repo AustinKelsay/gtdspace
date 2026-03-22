@@ -21,6 +21,7 @@ export const GTD_SECTIONS: GTDSection[] = [
     name: 'Purpose & Principles',
     icon: Compass,
     path: 'Purpose & Principles',
+    aliases: ['Purpose and Principles'],
     description: 'Core values and life mission (50,000 ft)',
     color: 'text-purple-600',
   },
@@ -92,6 +93,7 @@ export const GTD_SECTIONS: GTDSection[] = [
 
 export const HORIZON_FOLDER_TO_TYPE: Record<string, HorizonType> = {
   'Purpose & Principles': 'purpose',
+  'Purpose and Principles': 'purpose',
   Vision: 'vision',
   Goals: 'goals',
   'Areas of Focus': 'areas',

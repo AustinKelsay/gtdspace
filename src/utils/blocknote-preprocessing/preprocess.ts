@@ -5,7 +5,10 @@
 // These placeholders are intentionally not reversible: this shim does not keep
 // any restoration metadata. New code should prefer `postProcessBlockNoteBlocks`,
 // which performs the full conversion flow and preserves reversible metadata.
-export function preprocessMarkdownForBlockNote(markdown: string): string {
+export function preprocessMarkdownForBlockNote(
+  markdown: string,
+  placeholderMap?: Record<string, string>
+): string {
   // This legacy export is currently kept for compatibility with older call sites.
   // The active editor path uses postProcessBlockNoteBlocks after markdown parsing.
   const multiSelectHTMLPattern =
@@ -22,6 +25,9 @@ export function preprocessMarkdownForBlockNote(markdown: string): string {
       const placeholder = `{{MULTISELECT_${Date.now()}_${Math.random()
         .toString(36)
         .slice(2, 11)}}}`;
+      if (placeholderMap) {
+        placeholderMap[placeholder] = match[0];
+      }
       processedMarkdown = processedMarkdown.replace(match[0], placeholder);
     } catch (error) {
       console.error("Error parsing multiselect HTML:", error);

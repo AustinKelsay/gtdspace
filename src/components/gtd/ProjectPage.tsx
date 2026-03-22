@@ -470,9 +470,9 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
   const [horizonSearch, setHorizonSearch] = React.useState<string>("");
   const [horizonLoading, setHorizonLoading] = React.useState(false);
   const pendingHorizonChangeRef = React.useRef<{
-    next: ProjectHorizonReferences;
+    key: HorizonKey;
     targetPath: string;
-    action: "add" | "remove";
+    mode: "toggle" | "remove";
   } | null>(null);
 
   React.useEffect(() => {
@@ -625,36 +625,23 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       const normalizedTarget = normalizeReferencePath(value);
       if (!normalizedTarget) return;
 
-      let computedPending:
-        | {
-            next: ProjectHorizonReferences;
-            targetPath: string;
-            action: "add" | "remove";
-          }
-        | null = null;
-
       setHorizonRefs((prev) => {
         const normalizedCurrent = normalizeProjectHorizonReferences(prev);
         const group = normalizedCurrent[key] ?? [];
-        const isPresent = group.includes(normalizedTarget);
-        const action: "add" | "remove" = isPresent ? "remove" : "add";
-        const nextGroup = isPresent
+        const nextGroup = group.includes(normalizedTarget)
           ? group.filter((ref) => ref !== normalizedTarget)
           : [...group, normalizedTarget];
-        const next = {
+        return {
           ...normalizedCurrent,
           [key]: nextGroup,
         };
-
-        computedPending = {
-          next,
-          targetPath: normalizedTarget,
-          action,
-        };
-        return next;
       });
 
-      pendingHorizonChangeRef.current = computedPending;
+      pendingHorizonChangeRef.current = {
+        key,
+        targetPath: normalizedTarget,
+        mode: "toggle",
+      };
     },
     []
   );
@@ -665,13 +652,6 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       if (!normalizedTarget) return;
 
       let removed = false;
-      let computedPending:
-        | {
-            next: ProjectHorizonReferences;
-            targetPath: string;
-            action: "add" | "remove";
-          }
-        | null = null;
       setHorizonRefs((prev) => {
         const normalizedCurrent = normalizeProjectHorizonReferences(prev);
         const group = normalizedCurrent[key] ?? [];
@@ -681,23 +661,21 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
 
         removed = true;
         const nextGroup = group.filter((ref) => ref !== normalizedTarget);
-        const next = {
+        return {
           ...normalizedCurrent,
           [key]: nextGroup,
         };
-        computedPending = {
-          next,
-          targetPath: normalizedTarget,
-          action: "remove",
-        };
-        return next;
       });
 
       if (!removed) {
         return;
       }
 
-      pendingHorizonChangeRef.current = computedPending;
+      pendingHorizonChangeRef.current = {
+        key,
+        targetPath: normalizedTarget,
+        mode: "remove",
+      };
 
     },
     []
@@ -709,15 +687,24 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       return;
     }
 
+    const next = normalizeProjectHorizonReferences(horizonRefs);
+    const group = next[pending.key] ?? [];
+    const action: "add" | "remove" =
+      pending.mode === "remove"
+        ? "remove"
+        : group.includes(pending.targetPath)
+          ? "add"
+          : "remove";
+
     pendingHorizonChangeRef.current = null;
-    emitRebuild({ horizonReferences: pending.next });
+    emitRebuild({ horizonReferences: next });
 
     if (normalizedFilePath) {
       void syncHorizonBacklink({
         sourcePath: normalizedFilePath,
         sourceKind: "projects",
         targetPath: pending.targetPath,
-        action: pending.action,
+        action,
       });
     }
   }, [emitRebuild, horizonRefs, normalizedFilePath]);

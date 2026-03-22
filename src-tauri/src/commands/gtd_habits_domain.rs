@@ -223,7 +223,10 @@ fn parse_history_record_from_table(line: &str) -> Option<HistoryRecord> {
     let timestamp = parse_history_timestamp(parts.first()?, parts.get(1)?)?;
     Some(HistoryRecord {
         timestamp,
-        action: parts.get(3).cloned().unwrap_or_default(),
+        action: parts
+            .get(3)
+            .map(|value| unescape_history_cell(value))
+            .unwrap_or_default(),
     })
 }
 
@@ -319,14 +322,28 @@ pub(crate) fn format_history_entry(
     action: &str,
     details: &str,
 ) -> String {
+    let escaped_action = escape_history_cell(action);
+    let escaped_details = escape_history_cell(details);
     format!(
         "| {} | {} | {} | {} | {} |",
         timestamp.format("%Y-%m-%d"),
         format_history_time(timestamp),
         status.history_label(),
-        action,
-        details
+        escaped_action,
+        escaped_details
     )
+}
+
+fn escape_history_cell(value: &str) -> String {
+    value
+        .replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .replace('|', "&#124;")
+        .replace('\n', "\\n")
+}
+
+fn unescape_history_cell(value: &str) -> String {
+    value.replace("\\n", "\n").replace("&#124;", "|")
 }
 
 pub(crate) fn format_history_time(timestamp: NaiveDateTime) -> String {

@@ -180,7 +180,7 @@ pub async fn stop_file_watcher() -> Result<String, String> {
 /// Handle individual file system events
 ///
 /// Processes file change events and emits appropriate events to the frontend.
-fn handle_file_event(app: &AppHandle, path: &std::path::Path, kind: &DebouncedEventKind) {
+fn handle_file_event(app: &AppHandle, path: &std::path::Path, _kind: &DebouncedEventKind) {
     // Only process markdown files
     if let Some(extension) = path.extension() {
         let ext_str = extension.to_string_lossy().to_lowercase();
@@ -198,12 +198,7 @@ fn handle_file_event(app: &AppHandle, path: &std::path::Path, kind: &DebouncedEv
         .to_string_lossy()
         .to_string();
 
-    let event_type = match kind {
-        DebouncedEventKind::Any => "changed",
-        DebouncedEventKind::AnyContinuous => "changed-continuous",
-        _ => "other",
-    }
-    .to_string();
+    let event_type = "modified".to_string();
 
     let change_event = FileChangeEvent {
         event_type,
@@ -212,7 +207,7 @@ fn handle_file_event(app: &AppHandle, path: &std::path::Path, kind: &DebouncedEv
         timestamp: std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs(),
+            .as_millis() as u64,
     };
 
     log::info!(

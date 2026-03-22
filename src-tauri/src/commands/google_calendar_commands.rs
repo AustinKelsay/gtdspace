@@ -297,14 +297,17 @@ pub async fn google_calendar_disconnect(app: AppHandle) -> Result<String, String
         manager_guard.as_ref().cloned()
     };
 
-    if let Some(manager) = manager {
+    let disconnect_result = if let Some(manager) = manager {
         manager
             .disconnect()
             .await
-            .map_err(|e| format!("Failed to disconnect from Google Calendar: {}", e))?;
-    }
+            .map_err(|e| format!("Failed to disconnect from Google Calendar: {}", e))
+    } else {
+        Ok(())
+    };
 
     clear_google_calendar_session(app).await?;
+    disconnect_result?;
 
     Ok("Successfully disconnected from Google Calendar".to_string())
 }

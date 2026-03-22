@@ -160,7 +160,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
         const currentPath = filePath || '';
 
         if (currentPath) {
-          const normalizedHabitPath = norm(currentPath);
+          const normalizedHabitPath = norm(currentPath) ?? currentPath;
           const lower = normalizedHabitPath.toLowerCase();
           const isHabitFile = lower.includes('/habits/');
 

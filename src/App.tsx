@@ -3,7 +3,6 @@ import "@/utils/resize-observer-fix";
 // Use guarded Tauri detection and dynamic invoke to avoid web/runtime crashes
 import { waitForTauriReady } from "@/utils/tauri-ready";
 import { safeInvoke } from "@/utils/safe-invoke";
-import { norm } from "@/utils/path";
 import {
   PanelLeftClose,
   PanelLeft,
@@ -45,7 +44,7 @@ import {
 } from "@/components/lazy";
 import { useFileManager } from "@/hooks/useFileManager";
 import { useTabManager } from "@/hooks/useTabManager";
-import { pathKey } from "@/hooks/tab-runtime";
+import { pathKey, pathsEqual } from "@/hooks/tab-runtime";
 import { useFileWatcher } from "@/hooks/useFileWatcher";
 import { useSettings } from "@/hooks/useSettings";
 import { useGitSync } from "@/hooks/useGitSync";
@@ -353,7 +352,7 @@ export const App: React.FC = () => {
         // File deleted - close tab if open, refresh file list, and show toast
         showFileDeleted(latestEvent.file_name);
         const deletedTab = tabState.openTabs.find(
-          (tab) => norm(tab.file.path) === norm(latestEvent.file_path)
+          (tab) => pathsEqual(tab.file.path, latestEvent.file_path)
         );
         if (deletedTab) {
           closeTab(deletedTab.id);
@@ -368,7 +367,7 @@ export const App: React.FC = () => {
       case "modified": {
         // File modified externally - show notification if tab is open
         const modifiedTab = tabState.openTabs.find(
-          (tab) => norm(tab.file.path) === norm(latestEvent.file_path)
+          (tab) => pathsEqual(tab.file.path, latestEvent.file_path)
         );
         if (modifiedTab) {
           if (!modifiedTab.hasUnsavedChanges) {
@@ -537,7 +536,7 @@ export const App: React.FC = () => {
       mutator: (content: string | null | undefined) => string
     ): { handled: boolean; wasDirty: boolean } => {
       const tab = tabState.openTabs.find(
-        (t) => norm(t.file.path) === norm(targetPath)
+        (t) => pathsEqual(t.file.path, targetPath)
       );
       if (!tab) {
         return { handled: false, wasDirty: false };
@@ -636,7 +635,7 @@ export const App: React.FC = () => {
       ) {
         const projectPath = fileState.currentFolder;
         const project = gtdSpace.projects.find(
-          (p) => norm(p.path) === norm(projectPath)
+          (p) => pathsEqual(p.path, projectPath)
         );
         setCurrentProject(project || null);
       } else {
@@ -849,7 +848,7 @@ export const App: React.FC = () => {
       event: CustomEvent<{ habitPath: string }>
     ) => {
       // Check if the updated habit is currently open in the editor
-      if (activeTab?.id && norm(activeTab.file.path) === norm(event.detail.habitPath)) {
+      if (activeTab?.id && pathsEqual(activeTab.file.path, event.detail.habitPath)) {
         void reloadTabFromDisk(activeTab.id);
       }
 
@@ -866,7 +865,7 @@ export const App: React.FC = () => {
       const { filePath } = event.detail;
 
       // If the changed file is the currently active tab, reload its content
-      if (activeTab?.id && norm(activeTab.file.path) === norm(filePath)) {
+      if (activeTab?.id && pathsEqual(activeTab.file.path, filePath)) {
         void reloadTabFromDisk(activeTab.id);
       }
     };

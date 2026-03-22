@@ -71,7 +71,7 @@ export function SidebarSearchResults({
               return (
                 <div
                   key={project.path}
-                  className={`group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer ${isActive ? SIDEBAR_ACTIVE_ROW_CLASSES : ''}`}
+                  className={`group flex items-center gap-2 py-1 px-2 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-lg transition-colors cursor-pointer ${isActive ? SIDEBAR_ACTIVE_ROW_CLASSES : ''}`}
                   onClick={() => void onOpenProject(displayedProject)}
                   role="button"
                   tabIndex={0}
@@ -112,7 +112,7 @@ export function SidebarSearchResults({
                   return (
                     <div
                       key={action.path}
-                      className={`group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer ${isActive ? SIDEBAR_ACTIVE_ROW_CLASSES : ''}`}
+                      className={`group flex items-center gap-2 py-1 px-2 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-lg transition-colors cursor-pointer ${isActive ? SIDEBAR_ACTIVE_ROW_CLASSES : ''}`}
                       onClick={() => onOpenAction(action, display.path)}
                       role="button"
                       tabIndex={0}
@@ -151,7 +151,7 @@ export function SidebarSearchResults({
               return (
                 <div
                   key={file.path}
-                  className={`group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer ${isActive ? SIDEBAR_ACTIVE_ROW_CLASSES : ''}`}
+                  className={`group flex items-center gap-2 py-1 px-2 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-lg transition-colors cursor-pointer ${isActive ? SIDEBAR_ACTIVE_ROW_CLASSES : ''}`}
                   onClick={() => onOpenFile(file, display.path)}
                   role="button"
                   tabIndex={0}

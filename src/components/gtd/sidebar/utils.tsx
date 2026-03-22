@@ -113,6 +113,15 @@ export const buildSectionPath = (
   return norm(`${base}${separator}${sectionPath}`) ?? `${base}${separator}${sectionPath}`;
 };
 
+export const buildSectionPathCandidates = (
+  rootPath: string | null | undefined,
+  section: Pick<GTDSection, 'path' | 'aliases'>
+): string[] => {
+  const candidates = [section.path, ...(section.aliases ?? [])]
+    .map((candidate) => buildSectionPath(rootPath, candidate));
+  return [...new Set(candidates)];
+};
+
 export const createCalendarFile = (): MarkdownFile => ({
   id: CALENDAR_FILE_ID,
   name: 'Calendar',
@@ -180,7 +189,8 @@ export const buildSidebarSearchResults = ({
   sections.forEach((section) => {
     if (section.id === 'calendar' || section.id === 'projects') return;
 
-    const sectionPath = buildSectionPath(rootPath, section.path);
+    const sectionPaths = buildSectionPathCandidates(rootPath, section);
+    const sectionPath = sectionPaths.find((candidate) => sectionFiles[candidate]) ?? sectionPaths[0];
     const matches = (sectionFiles[sectionPath] || []).filter((file) => {
       const display = getSectionFileDisplay(file, sectionFileMetadata);
       return display.title.toLowerCase().includes(query);

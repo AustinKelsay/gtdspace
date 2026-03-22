@@ -18,6 +18,7 @@ export interface GTDSection {
   name: string;
   icon: React.ComponentType<{ className?: string }>;
   path: string;
+  aliases?: string[];
   description: string;
   color: string;
 }

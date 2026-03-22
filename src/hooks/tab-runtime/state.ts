@@ -118,21 +118,26 @@ function remapPath(currentPath: string, oldPath: string, newPath: string, mode: 
     return null;
   }
 
-  const normalizedCurrent = currentPath.replace(/\\/g, '/');
-  const normalizedOld = oldPath.replace(/\\/g, '/').replace(/\/+$/, '');
-  const normalizedNew = newPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const normalizedCurrent = pathKey(currentPath);
+  const normalizedOld = pathKey(oldPath);
+  const normalizedNew = pathKey(newPath);
   const relativePath = normalizedCurrent.slice(normalizedOld.length);
   return `${normalizedNew}${relativePath}`;
 }
 
 function updateTabFilePath(tab: FileTab, nextPath: string): FileTab {
+  const normalizedNextPath = pathKey(nextPath);
+  const basename = normalizedNextPath.split('/').filter(Boolean).pop() ?? '';
+  const lastDotIndex = basename.lastIndexOf('.');
+  const extension = lastDotIndex > 0 ? basename.slice(lastDotIndex + 1) : '';
   return {
     ...tab,
     file: {
       ...tab.file,
       id: nextPath,
       path: nextPath,
-      name: nextPath.split('/').pop() || tab.file.name,
+      name: basename || tab.file.name,
+      extension,
     },
   };
 }

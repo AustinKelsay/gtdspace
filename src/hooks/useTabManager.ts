@@ -164,7 +164,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
         return {
           ...tab,
           content: bufferedContent,
-          hasUnsavedChanges: true,
+          hasUnsavedChanges: bufferedContent !== (tab.originalContent ?? tab.content),
         };
       }),
     };

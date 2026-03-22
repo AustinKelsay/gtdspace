@@ -163,12 +163,13 @@ describe('useTabManager integration', () => {
       expect(getCurrent().tabState.openTabs).toHaveLength(2);
     });
 
+    expect(getCurrent().activeTab?.file.path).toBe('/mock/workspace/notes-3.md');
     const remainingPaths = getCurrent().tabState.openTabs.map((tab) => tab.file.path);
     expect(remainingPaths).toEqual([
-      '/mock/workspace/notes-1.md',
+      '/mock/workspace/notes-2.md',
       '/mock/workspace/notes-3.md',
     ]);
-    expect(getCurrent().tabState.recentlyClosed[0]?.file.path).toBe('/mock/workspace/notes-2.md');
+    expect(getCurrent().tabState.recentlyClosed[0]?.file.path).toBe('/mock/workspace/notes-1.md');
   });
 
   it('saves an edited tab and emits content-saved updates', async () => {

@@ -110,8 +110,9 @@ describe('tab-runtime state reducer', () => {
       tab: buildTab('tab-3', '/mock/workspace/Three.md', { isActive: true }),
     });
 
-    expect(state.openTabs.map((tab) => tab.id)).toEqual(['tab-1', 'tab-3']);
-    expect(takeMostRecentlyClosedFile(state)?.id).toBe('tab-2');
+    expect(state.activeTabId).toBe('tab-3');
+    expect(state.openTabs.map((tab) => tab.id)).toEqual(['tab-2', 'tab-3']);
+    expect(takeMostRecentlyClosedFile(state)?.id).toBe('tab-1');
   });
 
   it('supports the reopen-last-closed flow through recentlyClosed state', () => {

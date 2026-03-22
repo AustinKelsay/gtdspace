@@ -51,7 +51,6 @@ pub fn create_gtd_habit(
     space_path: String,
     habit_name: String,
     frequency: String,
-    _status: String,
     focus_time: Option<String>,
     references: Option<HabitReferenceInput>,
 ) -> Result<String, String> {
@@ -231,6 +230,8 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
             continue;
         }
 
+        // Apply a stricter write cap than the domain-layer scan cap so one wake-up
+        // does not flood a habit file with an extreme number of backfilled rows.
         let periods_to_process = if missed_periods.len() > 100 {
             &missed_periods[missed_periods.len() - 100..]
         } else {

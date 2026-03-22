@@ -418,6 +418,13 @@ export function calculateNextHabitReset(
   frequency: GTDHabitFrequency,
   baseline = new Date()
 ): Date {
+  // Keep this logic in sync with the backend helper:
+  // `next_reset_after` in `src-tauri/src/commands/gtd_habits_domain.rs`.
+  // Shared semantics:
+  // - twice-weekly uses Tuesday/Friday windows
+  // - weekly/biweekly anchor to Monday-based weeks
+  // - weekdays excludes weekends
+  // - monthly resets on the first day of the next month
   switch (frequency) {
     case '5-minute':
       return nextFiveMinuteBoundary(baseline);

@@ -13,6 +13,7 @@ describe('metadata extractor utilities', () => {
     const content = [
       '[!singleselect:project-status:waiting]',
       '[!singleselect:status:completed]',
+      '[!checkbox:habit-status:true]',
       '[!singleselect:habit-frequency:weekly]',
       '[!datetime:due_date_time:2026-03-01]',
       '[!datetime:created_date:2026-02-20T10:00:00Z]',
@@ -22,6 +23,7 @@ describe('metadata extractor utilities', () => {
 
     expect(metadata.projectStatus).toBe('waiting');
     expect(metadata.status).toBe('completed');
+    expect(metadata.habitStatus).toBe('completed');
     expect(metadata.habitFrequency).toBe('weekly');
     expect(metadata.dueDate).toBe('2026-03-01');
     expect(metadata.createdDateTime).toBe('2026-02-20T10:00:00Z');

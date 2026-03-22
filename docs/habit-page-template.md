@@ -105,7 +105,7 @@ Notes:
 
 - Status toggle fires `update_habit_status` (Tauri) with debounce guard; optimistic UI updates history table immediately (`Habits Implementation` doc behavior).
 - Frequency changes update canonical markdown, and derived reset badges are recalculated from the shared habit-domain helpers in `src/utils/gtd-habit-markdown.ts`.
-- Header derived fields:
+- Header-derived fields:
   - Next Reset reads from `useHabitsHistory` computed schedule; updates when frequency or local time window changes.
   - Last Completion inspects the latest completion history row; falls back to “—”.
 - History table mutations (manual add/reset) bubble events (`habit-status-updated`, `habits-reset`) so other open views stay in sync (`src/components/editor/BlockNoteEditor.tsx:212`).

@@ -21,6 +21,52 @@ export interface MetadataExtractor {
   extract: (match: RegExpMatchArray) => { key: string; value: string | string[] };
 }
 
+function decodeHtmlAttribute(input: string): string {
+  return input
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, '\'')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+function mapSingleSelectField(fieldName: string): string {
+  const fieldMap: Record<string, string> = {
+    'status': 'status',
+    'effort': 'effort',
+    'project-status': 'projectStatus',
+    'habit-status': 'habitStatus',
+    'habit-frequency': 'habitFrequency',
+    'area-status': 'areaStatus',
+    'area-review-cadence': 'areaReviewCadence',
+    'goal-status': 'goalStatus',
+    'vision-horizon': 'visionHorizon',
+    'horizon-altitude': 'horizonAltitude',
+    'horizon-review-cadence': 'horizonReviewCadence',
+  };
+
+  return fieldMap[fieldName] || fieldName;
+}
+
+function mapDateTimeField(fieldName: string): string {
+  const fieldMap: Record<string, string> = {
+    'due_date': 'dueDate',
+    'focus_date': 'focusDate',
+    'due_date_time': 'dueDate',
+    'focus_date_time': 'focusDate',
+    'created_date': 'createdDateTime',
+    'created_date_time': 'createdDateTime',
+    'modified_date': 'modifiedDate',
+    'modified_date_time': 'modifiedDateTime',
+    'completed_date': 'completedDate',
+    'completed_date_time': 'completedDate',
+    'target_date': 'targetDate',
+    'goal-target-date': 'goalTargetDate',
+  };
+
+  return fieldMap[fieldName] || fieldName;
+}
+
 /**
  * Default extractors for common metadata patterns
  * Can be extended with custom extractors for new field types
@@ -31,21 +77,24 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
   {
     pattern: /\[!singleselect:([\w-]+):([^\]]+)\]/g,
     extract: (match) => {
-      const fieldMap: Record<string, string> = {
-        'status': 'status',
-        'effort': 'effort',
-        'project-status': 'projectStatus',
-        'habit-status': 'habitStatus',
-        'habit-frequency': 'habitFrequency',
-        'area-status': 'areaStatus',
-        'area-review-cadence': 'areaReviewCadence',
-        'goal-status': 'goalStatus',
-        'vision-horizon': 'visionHorizon',
-        'horizon-altitude': 'horizonAltitude',
-        'horizon-review-cadence': 'horizonReviewCadence',
-      };
-      const field = fieldMap[match[1]] || match[1];
+      const field = mapSingleSelectField(match[1]);
       return { key: field, value: match[2] };
+    }
+  },
+  {
+    pattern: /\[!checkbox:(habit-status):(true|false)\]/g,
+    extract: (match) => ({
+      key: mapSingleSelectField(match[1]),
+      value: match[2].toLowerCase() === 'true' ? 'completed' : 'todo',
+    })
+  },
+  {
+    pattern: /<div\s+data-singleselect='([^']+)'\s+class="singleselect-block">[^<]*<\/div>/g,
+    extract: (match) => {
+      const decoded = decodeHtmlAttribute(match[1]);
+      const parsed = JSON.parse(decoded) as { type?: string; value?: string };
+      const field = mapSingleSelectField(parsed.type ?? '');
+      return { key: field, value: parsed.value ?? '' };
     }
   },
 
@@ -54,23 +103,17 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
   {
     pattern: /\[!datetime:([\w-]+):([^\]]*)\]/g,
     extract: (match) => {
-      const fieldMap: Record<string, string> = {
-        'due_date': 'dueDate',
-        'focus_date': 'focusDate',
-        'due_date_time': 'dueDate', // Alias for due_date to normalize !datetime:due_date_time:...
-        'focus_date_time': 'focusDate', // Maps to focusDate, intentionally dropping time component for simplicity/backward compatibility
-        // Support both old and new field names for backward compatibility
-        'created_date': 'createdDateTime', // Map old field to new camelCase name
-        'created_date_time': 'createdDateTime',
-        'modified_date': 'modifiedDate',
-        'modified_date_time': 'modifiedDateTime',
-        'completed_date': 'completedDate',
-        'completed_date_time': 'completedDate', // Maps to completedDate, intentionally dropping time component for simplicity/backward compatibility
-        'target_date': 'targetDate',
-        'goal-target-date': 'goalTargetDate',
-      };
-      const field = fieldMap[match[1]] || match[1];
+      const field = mapDateTimeField(match[1]);
       return { key: field, value: match[2] };
+    }
+  },
+  {
+    pattern: /<div\s+data-datetime='([^']+)'\s+class="datetime-block">[^<]*<\/div>/g,
+    extract: (match) => {
+      const decoded = decodeHtmlAttribute(match[1]);
+      const parsed = JSON.parse(decoded) as { type?: string; value?: string };
+      const field = mapDateTimeField(parsed.type ?? '');
+      return { key: field, value: parsed.value ?? '' };
     }
   },
   

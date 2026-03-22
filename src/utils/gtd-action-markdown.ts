@@ -141,6 +141,25 @@ function normalizeStringList(value: unknown): string[] {
   return [];
 }
 
+function parseLegacyLabeledSection(content: string, heading: string): string | undefined {
+  const escapedHeading = escapeHeadingText(heading);
+  const pattern = new RegExp(
+    `^##\\s+${escapedHeading}\\s*$\\n+([\\s\\S]*?)(?=\\n##\\s+|\\n<div\\s+data-singleselect=|\\n---\\s*$|$)`,
+    'im'
+  );
+  const match = content.match(pattern);
+  if (!match?.[1]) {
+    return undefined;
+  }
+
+  const value = match[1].trim();
+  if (!value || value.toLowerCase() === 'not set') {
+    return undefined;
+  }
+
+  return value;
+}
+
 export function stripActionHeader(content: string): string {
   const lines = content.split(/\r?\n/);
   let cursor = 0;
@@ -156,10 +175,41 @@ export function stripActionHeader(content: string): string {
     }
   }
 
+  const parseLegacySingleSelectType = (value: string): string | null => {
+    const match = value.match(/data-singleselect='([^']+)'/i);
+    if (!match?.[1]) {
+      return null;
+    }
+
+    try {
+      const decoded = match[1]
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, '\'')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&');
+      const parsed = JSON.parse(decoded) as { type?: string };
+      return parsed.type ?? null;
+    } catch {
+      return null;
+    }
+  };
+
   const isHeaderHeading = (value: string): boolean =>
     /^(##)\s+(Status|Focus\s+Date|Due\s+Date|Effort|Contexts|References|Horizon\s+References.*|Created)\s*$/i.test(
       value.trim()
     );
+
+  const isLegacySingleSelectBlock = (value: string): boolean => {
+    if (!/<div\s+data-singleselect='[^']+'\s+class="singleselect-block">/i.test(value.trim())) {
+      return false;
+    }
+    const type = parseLegacySingleSelectType(value);
+    return type === 'status' || type === 'effort';
+  };
+
+  const isLegacyDateHeading = (value: string): boolean =>
+    /^##\s+(Focus\s+Date|Due\s+Date)\s*$/i.test(value.trim());
 
   const isHeaderMarker = (value: string): boolean => {
     const trimmed = value.trim();
@@ -179,7 +229,32 @@ export function stripActionHeader(content: string): string {
     );
   };
 
-  while (cursor < lines.length && isHeaderHeading(lines[cursor])) {
+  while (cursor < lines.length && (isHeaderHeading(lines[cursor]) || isLegacySingleSelectBlock(lines[cursor]) || isLegacyDateHeading(lines[cursor]))) {
+    if (isLegacySingleSelectBlock(lines[cursor])) {
+      cursor += 1;
+      while (cursor < lines.length && lines[cursor].trim() === '') {
+        cursor += 1;
+      }
+      continue;
+    }
+
+    if (isLegacyDateHeading(lines[cursor])) {
+      cursor += 1;
+      while (
+        cursor < lines.length &&
+        lines[cursor].trim() !== '' &&
+        !/^##\s+/.test(lines[cursor].trim()) &&
+        !isLegacySingleSelectBlock(lines[cursor]) &&
+        lines[cursor].trim() !== '---'
+      ) {
+        cursor += 1;
+      }
+      while (cursor < lines.length && lines[cursor].trim() === '') {
+        cursor += 1;
+      }
+      continue;
+    }
+
     cursor += 1;
     while (cursor < lines.length && (lines[cursor].trim() === '' || isHeaderMarker(lines[cursor]))) {
       cursor += 1;
@@ -246,6 +321,30 @@ export function stripActionHeader(content: string): string {
     /^##\s+References\s*$/i,
     (line) => /^\[!references:[^\]]*\]$/i.test(line.trim())
   );
+
+  while (bodyLines.length > 0 && bodyLines[bodyLines.length - 1].trim() === '') {
+    bodyLines.pop();
+  }
+
+  const createdFooterIndex = bodyLines.findIndex((line, index) => {
+    if (line.trim() !== '---') {
+      return false;
+    }
+
+    let cursor = index + 1;
+    while (cursor < bodyLines.length && bodyLines[cursor].trim() === '') {
+      cursor += 1;
+    }
+
+    return cursor < bodyLines.length && /^Created:\s*/i.test(bodyLines[cursor].trim());
+  });
+
+  if (createdFooterIndex !== -1) {
+    bodyLines = bodyLines.slice(0, createdFooterIndex);
+    while (bodyLines.length > 0 && bodyLines[bodyLines.length - 1].trim() === '') {
+      bodyLines.pop();
+    }
+  }
 
   return bodyLines.join('\n').replace(/^\s*\n/, '').replace(/\n{3,}/g, '\n\n');
 }
@@ -344,10 +443,16 @@ export function buildActionMarkdown(
 
 export function parseActionMarkdown(content: string): ParsedActionMarkdown {
   const meta = extractMetadata(content || '');
-  const focusDateTime =
+  const focusDateTime = (
     typeof (meta as { focusDate?: unknown }).focusDate === 'string'
       ? (meta as { focusDate: string }).focusDate
-      : undefined;
+      : parseLegacyLabeledSection(content || '', 'Focus Date')
+  ) || undefined;
+  const dueDateValue = (
+    typeof (meta as { dueDate?: unknown }).dueDate === 'string'
+      ? (meta as { dueDate: string }).dueDate
+      : parseLegacyLabeledSection(content || '', 'Due Date')
+  ) || undefined;
   const createdDateTime =
     typeof (meta as { createdDateTime?: unknown }).createdDateTime === 'string' &&
     (meta as { createdDateTime: string }).createdDateTime.trim()
@@ -372,11 +477,7 @@ export function parseActionMarkdown(content: string): ParsedActionMarkdown {
     focusDate: actionDateToDateOnly(focusDateTime),
     focusTime: actionDateToTimeOnly(focusDateTime),
     focusDateTime,
-    dueDate: actionDateToDateOnly(
-      typeof (meta as { dueDate?: unknown }).dueDate === 'string'
-        ? (meta as { dueDate: string }).dueDate
-        : undefined
-    ),
+    dueDate: actionDateToDateOnly(dueDateValue),
     contexts: normalizeStringList((meta as { contexts?: unknown }).contexts),
     references: normalizeReferenceList(
       parseReferenceList((meta as { references?: unknown }).references)
@@ -428,6 +529,10 @@ export function rebuildActionMarkdown(
   const parsed = parseActionMarkdown(currentContent);
   const nextFocusDate = updates.focusDate ?? parsed.focusDate;
   const nextFocusTime = updates.focusTime ?? parsed.focusTime;
+  const nextHorizonReferences = updates.horizonReferences ?? parsed.horizonReferences;
+  const nextHorizonRaw = updates.horizonReferences
+    ? {}
+    : parsed.horizonRaw;
 
   return buildActionMarkdown(
     {
@@ -441,8 +546,8 @@ export function rebuildActionMarkdown(
       dueDate: updates.dueDate ?? parsed.dueDate,
       contexts: normalizeStringList(updates.contexts ?? parsed.contexts),
       references: normalizeReferenceList(updates.references ?? parsed.references),
-      horizonReferences:
-        updates.horizonReferences ?? parsed.horizonReferences,
+      horizonReferences: nextHorizonReferences,
+      horizonRaw: nextHorizonRaw,
     },
     updates.body ?? parsed.body
   );

@@ -528,6 +528,13 @@ fn next_five_minute_boundary(after: NaiveDateTime) -> NaiveDateTime {
 }
 
 pub(crate) fn next_reset_after(frequency: HabitFrequency, anchor: NaiveDateTime) -> NaiveDateTime {
+    // Keep this logic in sync with the frontend helper:
+    // `calculateNextHabitReset` in `src/utils/gtd-habit-markdown.ts`.
+    // Shared semantics:
+    // - twice-weekly uses Tuesday/Friday windows
+    // - weekly/biweekly anchor to Monday-based weeks
+    // - weekdays excludes weekends
+    // - monthly resets on the first day of the next month
     match frequency {
         HabitFrequency::FiveMinute => next_five_minute_boundary(anchor),
         HabitFrequency::Daily => add_days(start_of_day(anchor), 1),

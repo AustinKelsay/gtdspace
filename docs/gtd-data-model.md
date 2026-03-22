@@ -541,7 +541,7 @@ This section summarizes how data moves across layers for each item type.
 
 - Read
 
-  - `useHabitsHistory` lists `Habits/` files, reads content, parses it through `parseHabitContent()`, computes streaks/success rates, and derives next reset times from shared calendar-window logic.
+  - `useHabitsHistory` lists `Habits/` files, reads content, parses it through `parseHabitContent()`, computes streaks/success rates, and relies on the shared `calculateNextHabitReset()` calendar-window helper when consumers need reset timing.
   - Reset-maintenance rows such as `Auto-Reset` and `Backfill` are excluded from streak/success analytics so only actual completion attempts affect those metrics.
 
 - Update

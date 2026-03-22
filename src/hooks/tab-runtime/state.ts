@@ -133,7 +133,7 @@ function updateTabFilePath(tab: FileTab, nextPath: string): FileTab {
   const normalizedNextPath = pathKey(nextPath);
   const basename = normalizedNextPath.split('/').filter(Boolean).pop() ?? '';
   const lastDotIndex = basename.lastIndexOf('.');
-  const extension = lastDotIndex > 0 ? basename.slice(lastDotIndex + 1) : '';
+  const extension = lastDotIndex > 0 ? `.${basename.slice(lastDotIndex + 1)}` : '';
   return {
     ...tab,
     file: {

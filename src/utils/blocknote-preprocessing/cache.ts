@@ -20,7 +20,6 @@ function createNumericHash(value: string): string {
   for (let index = 0; index < value.length; index += 1) {
     const character = value.charCodeAt(index);
     hash = (hash << 5) - hash + character;
-    hash &= hash;
   }
 
   return Math.abs(hash).toString(36);
@@ -75,13 +74,7 @@ export function writeCachedBlocks(
   blocks: unknown[],
   now: number = Date.now()
 ): void {
-  if (blockProcessingCache.size > 50) {
-    for (const [key, value] of blockProcessingCache.entries()) {
-      if (now - value.timestamp > CACHE_DURATION) {
-        blockProcessingCache.delete(key);
-      }
-    }
-  }
+  pruneBlockProcessingCache(now);
   blockProcessingCache.set(cacheKey, {
     blocks: cloneCachedBlocks(blocks),
     timestamp: now,

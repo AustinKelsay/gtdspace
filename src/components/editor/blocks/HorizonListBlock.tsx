@@ -418,8 +418,8 @@ export const ProjectsListBlock = createReactBlockSpec(
       return <p>[!projects-list]</p>;
     },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      if (textContent.includes('[!projects-list]')) {
+      const textContent = element.textContent?.trim() || '';
+      if (textContent === '[!projects-list]') {
         return { listType: 'projects' };
       }
       return undefined;
@@ -449,8 +449,8 @@ export const AreasListBlock = createReactBlockSpec(
       return <p>[!areas-list]</p>;
     },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      if (textContent.includes('[!areas-list]')) {
+      const textContent = element.textContent?.trim() || '';
+      if (textContent === '[!areas-list]') {
         return { listType: 'areas' };
       }
       return undefined;
@@ -480,8 +480,8 @@ export const GoalsListBlock = createReactBlockSpec(
       return <p>[!goals-list]</p>;
     },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      if (textContent.includes('[!goals-list]')) {
+      const textContent = element.textContent?.trim() || '';
+      if (textContent === '[!goals-list]') {
         return { listType: 'goals' };
       }
       return undefined;
@@ -511,8 +511,8 @@ export const VisionsListBlock = createReactBlockSpec(
       return <p>[!visions-list]</p>;
     },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      if (textContent.includes('[!visions-list]')) {
+      const textContent = element.textContent?.trim() || '';
+      if (textContent === '[!visions-list]') {
         return { listType: 'visions' };
       }
       return undefined;

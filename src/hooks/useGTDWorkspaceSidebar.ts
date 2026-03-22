@@ -94,6 +94,32 @@ type ControllerArgs = Pick<
   'currentFolder' | 'onFolderSelect' | 'onFileSelect' | 'onRefresh' | 'gtdSpace' | 'checkGTDSpace' | 'loadProjects' | 'activeFilePath'
 >;
 
+const PRELOAD_PRIORITY_SECTION_IDS = ['habits', 'areas', 'goals'] as const;
+const PRELOAD_SECONDARY_SECTION_IDS = ['someday', 'cabinet', 'vision', 'purpose'] as const;
+const RELOAD_SECTION_IDS = ['someday', 'cabinet', 'habits', 'areas', 'goals', 'vision', 'purpose'] as const;
+
+function getSectionPathVariants(sectionId: string, rootPath?: string | null): string[] {
+  const section = GTD_SECTIONS.find((candidate) => candidate.id === sectionId);
+  if (!section) {
+    return [];
+  }
+
+  const names = Array.from(new Set([section.path, ...(section.aliases ?? [])]));
+  return names.map((name) => {
+    if (rootPath) {
+      return `${rootPath}/${name}`;
+    }
+    return `/${name}/`;
+  });
+}
+
+function getCombinedSectionPathVariants(
+  sectionIds: readonly string[],
+  rootPath?: string | null
+): string[] {
+  return sectionIds.flatMap((sectionId) => getSectionPathVariants(sectionId, rootPath));
+}
+
 export function useGTDWorkspaceSidebar({
   currentFolder,
   onFolderSelect,
@@ -513,17 +539,14 @@ export function useGTDWorkspaceSidebar({
       if (!preloadedRef.current) {
         preloadedRef.current = true;
 
-        const priorityPaths = [
-          `${pathToCheck}/Habits`,
-          `${pathToCheck}/Areas of Focus`,
-          `${pathToCheck}/Goals`,
-        ];
-        const secondaryPaths = [
-          `${pathToCheck}/Someday Maybe`,
-          `${pathToCheck}/Cabinet`,
-          `${pathToCheck}/Vision`,
-          `${pathToCheck}/Purpose & Principles`,
-        ];
+        const priorityPaths = getCombinedSectionPathVariants(
+          PRELOAD_PRIORITY_SECTION_IDS,
+          pathToCheck
+        );
+        const secondaryPaths = getCombinedSectionPathVariants(
+          PRELOAD_SECONDARY_SECTION_IDS,
+          pathToCheck
+        );
 
         await Promise.allSettled(priorityPaths.map((path) => loadSectionFiles(path)));
         if (cancelled) return;
@@ -592,15 +615,7 @@ export function useGTDWorkspaceSidebar({
         }
       }
 
-      const sectionPaths = [
-        '/Someday Maybe/',
-        '/Cabinet/',
-        '/Habits/',
-        '/Areas of Focus/',
-        '/Goals/',
-        '/Vision/',
-        '/Purpose & Principles/',
-      ];
+      const sectionPaths = getCombinedSectionPathVariants(RELOAD_SECTION_IDS);
 
       for (const sectionPath of sectionPaths) {
         if (normalizedFilePath.includes(sectionPath)) {
@@ -761,20 +776,20 @@ export function useGTDWorkspaceSidebar({
                   },
                 })
               );
+              window.dispatchEvent(
+                new CustomEvent('file-renamed', {
+                  detail: {
+                    oldPath: normalizedFilePath,
+                    newPath: normalizedNewActionPath,
+                  },
+                })
+              );
             }, 'Failed to rename action', 'workspace-sidebar');
           }
         }
       }
 
-      const sectionPaths = [
-        '/Someday Maybe/',
-        '/Cabinet/',
-        '/Habits/',
-        '/Areas of Focus/',
-        '/Goals/',
-        '/Vision/',
-        '/Purpose & Principles/',
-      ];
+      const sectionPaths = getCombinedSectionPathVariants(RELOAD_SECTION_IDS);
 
       for (const sectionPath of sectionPaths) {
         if (
@@ -824,6 +839,14 @@ export function useGTDWorkspaceSidebar({
                       oldPath: normalizedFilePath,
                       newPath: normalizedNewFilePath,
                       newName: nextTitle,
+                    },
+                  })
+                );
+                window.dispatchEvent(
+                  new CustomEvent('file-renamed', {
+                    detail: {
+                      oldPath: normalizedFilePath,
+                      newPath: normalizedNewFilePath,
                     },
                   })
                 );

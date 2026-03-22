@@ -107,15 +107,20 @@ export function parsePersistedTabSnapshot(raw: string | null): PersistedTabSnaps
 
   try {
     const parsed = JSON.parse(raw) as LegacyPersistedTabSnapshot;
+    const openTabs = normalizeOpenTabs(parsed);
+    const derivedActiveTabId =
+      parsed.activeTabId ??
+      openTabs.find((tab) => tab.isActive)?.id ??
+      null;
     return {
       version: TAB_SNAPSHOT_VERSION,
       workspacePath: normalizeWorkspacePath(parsed.workspacePath),
-      activeTabId: parsed.activeTabId ?? null,
+      activeTabId: derivedActiveTabId,
       maxTabs:
         typeof parsed.maxTabs === 'number' && parsed.maxTabs > 0
           ? parsed.maxTabs
           : DEFAULT_MAX_TABS,
-      openTabs: normalizeOpenTabs(parsed),
+      openTabs,
     };
   } catch {
     return null;

@@ -1342,13 +1342,22 @@ pub fn move_file(source_path: String, dest_path: String) -> Result<String, Strin
                         sync_error
                     )
                 })?;
-                fs::remove_file(source).map_err(|remove_error| {
-                    let _ = fs::remove_file(dest);
-                    format!(
-                        "Copied file but failed to remove original during move: {}",
-                        remove_error
-                    )
-                })?;
+                match fs::remove_file(source) {
+                    Ok(()) => {}
+                    Err(remove_error) if remove_error.kind() == io::ErrorKind::NotFound => {
+                        log::warn!(
+                            "Source already missing after cross-device move, keeping destination {}",
+                            dest_path
+                        );
+                    }
+                    Err(remove_error) => {
+                        let _ = fs::remove_file(dest);
+                        return Err(format!(
+                            "Copied file but failed to remove original during move: {}",
+                            remove_error
+                        ));
+                    }
+                }
 
                 log::info!("Successfully moved file to: {}", dest_path);
                 return Ok("File moved successfully".to_string());

@@ -683,14 +683,29 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
     emitRebuild({ horizonReferences: next });
 
     if (normalizedFilePath) {
-      queuedChanges.forEach((change) => {
-        void syncHorizonBacklink({
-          sourcePath: normalizedFilePath,
-          sourceKind: "projects",
-          targetPath: change.targetPath,
-          action: change.mode === "remove" ? "remove" : "add",
+      void (async () => {
+        const results = await Promise.allSettled(
+          queuedChanges.map((change) =>
+            syncHorizonBacklink({
+              sourcePath: normalizedFilePath,
+              sourceKind: "projects",
+              targetPath: change.targetPath,
+              action: change.mode === "remove" ? "remove" : "add",
+            })
+          )
+        );
+
+        results.forEach((result, index) => {
+          if (result.status === "rejected") {
+            const change = queuedChanges[index];
+            console.error("Failed to sync project horizon backlink", {
+              targetPath: change?.targetPath,
+              mode: change?.mode,
+              error: result.reason,
+            });
+          }
         });
-      });
+      })();
     }
   }, [emitRebuild, horizonRefs, normalizedFilePath]);
 

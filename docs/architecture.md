@@ -41,6 +41,7 @@ The current backend lives primarily in these modules:
 - `src-tauri/src/commands/search.rs`: markdown search payloads and full-text search command
 - `src-tauri/src/commands/workspace.rs`: GTD space detection, initialization, and example seeding
 - `src-tauri/src/commands/gtd_projects.rs`, `gtd_habits.rs`, `gtd_relationships.rs`: GTD domain commands split by concern
+- `src-tauri/src/commands/gtd_habits_domain.rs`: habit parsing, history migration, and reset-window logic shared by the habits command layer
 - `src-tauri/src/commands/git_commands.rs`: Tauri-facing git sync command wrappers
 - `src-tauri/src/commands/git_sync.rs`: encrypted git backup and sync logic
 - `src-tauri/src/commands/google_calendar_commands.rs`: Tauri-facing Google Calendar and OAuth commands

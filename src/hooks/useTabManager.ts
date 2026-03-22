@@ -54,13 +54,14 @@ function buildReferenceFile(path: string): MarkdownFile {
   const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
   const basename = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
   const lastDot = basename.lastIndexOf('.');
+  const extension = lastDot > 0 ? `.${basename.slice(lastDot + 1) || 'md'}` : '.md';
   return {
     id: path,
     name: basename || 'Unknown.md',
     path,
     size: 0,
     last_modified: Math.floor(Date.now() / 1000),
-    extension: lastDot > 0 ? basename.slice(lastDot + 1) || 'md' : 'md',
+    extension,
   };
 }
 
@@ -680,8 +681,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
         const currentTabsAfterRestore = tabStateRef.current.openTabs;
         if (
           restoreAttemptRef.current === restoreAttempt &&
-          (currentTabsAfterRestore.length === 0 ||
-            tabsBelongToWorkspace(currentTabsAfterRestore, normalizedWorkspaceKey))
+          currentTabsAfterRestore.length === 0
         ) {
           dispatch({ type: 'clear-and-restore', state: restoredState });
           restoringWorkspaceRef.current = null;

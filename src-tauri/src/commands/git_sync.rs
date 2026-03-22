@@ -126,25 +126,33 @@ pub fn compute_git_status(
     workspace_override: Option<String>,
 ) -> GitSyncStatusResponse {
     let enabled = settings.git_sync_enabled.unwrap_or(false);
-    // Check secure storage for encryption key; fall back to legacy settings value if needed
-    let encryption_configured = match load_secure_encryption_key() {
-        Ok(Some(value)) if !value.trim().is_empty() => true,
-        Ok(Some(_)) | Ok(None) => settings
+    let encryption_configured = if enabled {
+        // Check secure storage for encryption key; fall back to legacy settings value if needed
+        match load_secure_encryption_key() {
+            Ok(Some(value)) if !value.trim().is_empty() => true,
+            Ok(Some(_)) | Ok(None) => settings
+                .git_sync_encryption_key
+                .as_ref()
+                .map(|legacy_key| !legacy_key.trim().is_empty())
+                .unwrap_or(false),
+            Err(err) => {
+                if let Some(legacy_key) = &settings.git_sync_encryption_key {
+                    warn!(
+                        "Secure storage locked/unavailable ({}). Falling back to legacy encryption key for status",
+                        err
+                    );
+                    !legacy_key.trim().is_empty()
+                } else {
+                    false
+                }
+            }
+        }
+    } else {
+        settings
             .git_sync_encryption_key
             .as_ref()
             .map(|legacy_key| !legacy_key.trim().is_empty())
-            .unwrap_or(false),
-        Err(err) => {
-            if let Some(legacy_key) = &settings.git_sync_encryption_key {
-                warn!(
-                    "Secure storage locked/unavailable ({}). Falling back to legacy encryption key for status",
-                    err
-                );
-                !legacy_key.trim().is_empty()
-            } else {
-                false
-            }
-        }
+            .unwrap_or(false)
     };
 
     let workspace_path = workspace_override

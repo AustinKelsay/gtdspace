@@ -304,8 +304,8 @@ Important behavior:
 - marker-only paragraphs can split into multiple custom blocks
 
 ```markdown
-[!singleselect:status:active]
-[!datetime:due:2026-03-25]
+[!singleselect:status:in-progress]
+[!datetime:due_date:2026-03-25]
 ```
 
 Those two marker-only lines become two distinct custom blocks.

@@ -422,14 +422,19 @@ pub async fn initialize_gtd_space(space_path: String) -> Result<String, String> 
 /// statuses, focus dates, due dates, and effort levels. If the Projects
 /// directory already contains subdirectories, seeding is skipped.
 fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, String> {
-    let projects_root = Path::new(&space_path).join("Projects");
+    let trimmed_space_path = space_path.trim();
+    if trimmed_space_path.is_empty() {
+        return Err("space_path cannot be blank".to_string());
+    }
+
+    let projects_root = Path::new(trimmed_space_path).join("Projects");
 
     if !projects_root.exists() {
         return Err("Projects directory does not exist. Initialize GTD space first.".to_string());
     }
 
     // If a seed marker exists, skip seeding
-    let seed_marker = Path::new(&space_path).join(".gtdspace_seeded");
+    let seed_marker = Path::new(trimmed_space_path).join(".gtdspace_seeded");
     if seed_marker.exists() {
         return Ok("Example content already seeded".to_string());
     }

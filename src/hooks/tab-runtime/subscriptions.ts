@@ -51,6 +51,12 @@ export function useTabManagerSubscriptions({
       onRename(detail, 'exact');
     };
 
+    const handleFileRename = (event: Event) => {
+      const detail = getEventDetail<RenameEventDetail>(event);
+      if (!detail) return;
+      onRename(detail, 'exact');
+    };
+
     const handleFileDeleted = (event: Event) => {
       const detail = getEventDetail<DeleteEventDetail>(event);
       if (!detail) return;
@@ -66,6 +72,7 @@ export function useTabManagerSubscriptions({
     window.addEventListener('project-renamed', handleProjectRename);
     window.addEventListener('action-renamed', handleActionRename);
     window.addEventListener('section-file-renamed', handleSectionFileRename);
+    window.addEventListener('file-renamed', handleFileRename);
     window.addEventListener('file-deleted', handleFileDeleted);
     window.addEventListener('open-reference-file', handleOpenReference);
 
@@ -73,6 +80,7 @@ export function useTabManagerSubscriptions({
       window.removeEventListener('project-renamed', handleProjectRename);
       window.removeEventListener('action-renamed', handleActionRename);
       window.removeEventListener('section-file-renamed', handleSectionFileRename);
+      window.removeEventListener('file-renamed', handleFileRename);
       window.removeEventListener('file-deleted', handleFileDeleted);
       window.removeEventListener('open-reference-file', handleOpenReference);
     };

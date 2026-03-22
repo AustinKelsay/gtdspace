@@ -108,9 +108,9 @@ export const buildSectionPath = (
   sectionPath: string
 ): string => {
   const base = (rootPath ?? '').replace(/[\\/]+$/, '');
-  if (!base) return sectionPath;
+  if (!base) return norm(sectionPath) ?? sectionPath;
   const separator = base.includes('\\') ? '\\' : '/';
-  return `${base}${separator}${sectionPath}`;
+  return norm(`${base}${separator}${sectionPath}`) ?? `${base}${separator}${sectionPath}`;
 };
 
 export const createCalendarFile = (): MarkdownFile => ({
@@ -205,8 +205,9 @@ export const partitionProjectsByCompletion = ({
   const completed: GTDProject[] = [];
 
   projects.forEach((project) => {
+    const projectKey = norm(project.path) ?? project.path;
     const status = normalizeStatus(
-      projectMetadata[project.path]?.status || project.status || 'in-progress'
+      projectMetadata[projectKey]?.status || project.status || 'in-progress'
     );
     (status === 'completed' ? completed : active).push(project);
   });
@@ -218,7 +219,7 @@ export const getProjectDisplay = (
   project: GTDProject,
   metadata: Record<string, SidebarProjectMetadata>
 ) => {
-  const overlay = metadata[project.path];
+  const overlay = metadata[norm(project.path) ?? project.path];
   return {
     title: overlay?.title || project.name,
     path: overlay?.currentPath || project.path,
@@ -232,11 +233,12 @@ export const getActionDisplay = (
   metadata: Record<string, SidebarActionMetadata>,
   statuses: Record<string, string>
 ) => {
-  const overlay = metadata[action.path];
+  const key = norm(action.path) ?? action.path;
+  const overlay = metadata[key];
   return {
     title: overlay?.title || getDisplayName(action.name),
     path: overlay?.currentPath || action.path,
-    status: overlay?.status || statuses[action.path] || 'in-progress',
+    status: overlay?.status || statuses[key] || 'in-progress',
     dueDate: overlay?.due_date || '',
   };
 };
@@ -245,7 +247,7 @@ export const getSectionFileDisplay = (
   file: MarkdownFile,
   metadata: Record<string, SidebarSectionFileMetadata>
 ) => {
-  const overlay = metadata[file.path];
+  const overlay = metadata[norm(file.path) ?? file.path];
   return {
     title: overlay?.title || getDisplayName(file.name),
     path: overlay?.currentPath || file.path,

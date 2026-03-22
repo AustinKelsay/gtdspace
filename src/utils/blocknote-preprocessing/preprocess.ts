@@ -16,6 +16,8 @@ export function preprocessMarkdownForBlockNote(markdown: string): string {
 
   while ((match = multiSelectHTMLPattern.exec(markdown)) !== null) {
     try {
+      // Validation only: the parsed value is intentionally discarded, and malformed
+      // legacy payloads fall through to the catch block below.
       JSON.parse(match[1]);
       const placeholder = `{{MULTISELECT_${Date.now()}_${Math.random()
         .toString(36)

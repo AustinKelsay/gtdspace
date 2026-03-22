@@ -263,8 +263,8 @@ if (file.size > MAX_FILE_SIZE) {
 ### Parsing Performance
 
 - BlockNote parsing is async to avoid blocking
-- explicit external refresh from events such as habit-content sync or other forced reload paths is debounced for 300ms before re-parsing and replacing editor blocks
-- GTD post-processing uses a 5-second in-memory cache keyed by parsed block count plus a markdown-derived structural/content hash of recognized GTD markers and trimmed content
+- Explicit external refreshes (e.g., from habit-content sync or forced reload paths) are debounced for 300ms before re-parsing and replacing editor blocks
+- GTD post-processing uses a 5-second in-memory cache keyed by parsed block count plus `createContentHash()`, which hashes the full markdown string together with GTD-marker structural information for hit/miss decisions
 - Virtual scrolling for long documents
 
 ### Memory Management
@@ -302,6 +302,14 @@ Important behavior:
 
 - replacements are exact-match on the paragraph's trimmed text unless the paragraph is composed entirely of GTD markers
 - marker-only paragraphs can split into multiple custom blocks
+
+```markdown
+[!singleselect:status:active]
+[!datetime:due:2026-03-25]
+```
+
+Those two marker-only lines become two distinct custom blocks.
+
 - list-only paragraphs such as `[!actions-list]` are post-processed the same way as other marker-only paragraphs
 - `## History` sections are passed through so BlockNote can keep handling tables natively, except empty/helper/italic-only paragraphs are filtered inside that section
 - a 5-second in-memory cache avoids re-running the same transform during explicit reloads

@@ -13,6 +13,7 @@ import { migrateGTDObjects } from '@/utils/data-migration';
 import { parseActionMarkdown } from '@/utils/gtd-action-markdown';
 import { emitContentSaved, emitMetadataChange } from '@/utils/content-event-bus';
 import { extractMetadata } from '@/utils/metadata-extractor';
+import { norm } from '@/utils/path';
 import {
   parseProjectMarkdown,
   toDateOnly,
@@ -195,7 +196,8 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
           const readmes = files.filter(f => /\/Projects\/.+\/README\.(md|markdown)$/i.test(f.path));
           baseProjects = await Promise.all(readmes.map(async (f) => {
             const projectPath = f.path.replace(/\/README\.(md|markdown)$/i, '');
-            const name = projectPath.split('/').filter(Boolean).pop() || 'Project';
+            const normalizedProjectPath = norm(projectPath) ?? projectPath;
+            const name = normalizedProjectPath.split('/').filter(Boolean).pop() || 'Project';
             let description = '';
             let status: GTDProject['status'] = 'in-progress';
             let dueDate: string | null | undefined = undefined;
@@ -335,7 +337,8 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
       let content: string;
       if (!readmePath) {
         readmePath = `${projectPath}/README.md`;
-        const projectName = projectPath.split('/').filter(Boolean).pop() || 'Project';
+        const normalizedProjectPath = norm(projectPath) ?? projectPath;
+        const projectName = normalizedProjectPath.split('/').filter(Boolean).pop() || 'Project';
         content = buildProjectMarkdown({
           title: projectName,
           status: normalizeProjectStatus(
@@ -359,7 +362,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
           typeof updates.name === 'string' && updates.name.trim()
             ? updates.name.trim()
             : isSyntheticProjectTitle(parsedProject.title)
-              ? projectPath.split('/').filter(Boolean).pop() || 'Project'
+              ? (norm(projectPath) ?? projectPath).split('/').filter(Boolean).pop() || 'Project'
               : parsedProject.title,
         status:
           typeof updates.status === 'string'
@@ -389,7 +392,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
       }
 
       const metadata = extractMetadata(nextContent);
-      const fileName = readmePath.split('/').pop() || 'README.md';
+      const fileName = (norm(readmePath) ?? readmePath).split('/').pop() || 'README.md';
       emitMetadataChange({
         filePath: readmePath,
         fileName,

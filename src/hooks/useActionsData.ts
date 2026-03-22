@@ -263,7 +263,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       }));
 
       // Dispatch content-updated event to notify other components
-      const normalizedPath = norm(filePath);
+      const normalizedPath = norm(filePath) ?? '';
       const fileName = normalizedPath.split('/').pop() || '';
       const metadata = extractMetadata(finalContent);
 

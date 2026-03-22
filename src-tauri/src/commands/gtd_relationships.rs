@@ -26,7 +26,7 @@ fn redact_path(path: &str) -> String {
 
 fn normalize_habit_status_value(value: &str) -> String {
     match value.trim().to_ascii_lowercase().as_str() {
-        "true" | "completed" | "complete" => "completed".to_string(),
+        "true" | "completed" | "complete" | "done" => "completed".to_string(),
         _ => "todo".to_string(),
     }
 }

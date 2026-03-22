@@ -625,6 +625,14 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       const normalizedTarget = normalizeReferencePath(value);
       if (!normalizedTarget) return;
 
+      let computedPending:
+        | {
+            next: ProjectHorizonReferences;
+            targetPath: string;
+            action: "add" | "remove";
+          }
+        | null = null;
+
       setHorizonRefs((prev) => {
         const normalizedCurrent = normalizeProjectHorizonReferences(prev);
         const group = normalizedCurrent[key] ?? [];
@@ -638,7 +646,7 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
           [key]: nextGroup,
         };
 
-        pendingHorizonChangeRef.current = {
+        computedPending = {
           next,
           targetPath: normalizedTarget,
           action,
@@ -646,23 +654,9 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
         return next;
       });
 
-      const pending = pendingHorizonChangeRef.current;
-      if (!pending) {
-        return;
-      }
-      pendingHorizonChangeRef.current = null;
-
-      emitRebuild({ horizonReferences: pending.next });
-      if (normalizedFilePath) {
-        void syncHorizonBacklink({
-          sourcePath: normalizedFilePath,
-          sourceKind: "projects",
-          targetPath: pending.targetPath,
-          action: pending.action,
-        });
-      }
+      pendingHorizonChangeRef.current = computedPending;
     },
-    [emitRebuild, normalizedFilePath]
+    []
   );
 
   const handleHorizonRemove = React.useCallback(
@@ -671,11 +665,17 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       if (!normalizedTarget) return;
 
       let removed = false;
+      let computedPending:
+        | {
+            next: ProjectHorizonReferences;
+            targetPath: string;
+            action: "add" | "remove";
+          }
+        | null = null;
       setHorizonRefs((prev) => {
         const normalizedCurrent = normalizeProjectHorizonReferences(prev);
         const group = normalizedCurrent[key] ?? [];
         if (!group.includes(normalizedTarget)) {
-          pendingHorizonChangeRef.current = null;
           return prev;
         }
 
@@ -685,7 +685,7 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
           ...normalizedCurrent,
           [key]: nextGroup,
         };
-        pendingHorizonChangeRef.current = {
+        computedPending = {
           next,
           targetPath: normalizedTarget,
           action: "remove",
@@ -697,24 +697,30 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
         return;
       }
 
-      const pending = pendingHorizonChangeRef.current;
-      if (!pending) {
-        return;
-      }
-      pendingHorizonChangeRef.current = null;
+      pendingHorizonChangeRef.current = computedPending;
 
-      emitRebuild({ horizonReferences: pending.next });
-      if (normalizedFilePath) {
-        void syncHorizonBacklink({
-          sourcePath: normalizedFilePath,
-          sourceKind: "projects",
-          targetPath: pending.targetPath,
-          action: pending.action,
-        });
-      }
     },
-    [emitRebuild, normalizedFilePath]
+    []
   );
+
+  React.useEffect(() => {
+    const pending = pendingHorizonChangeRef.current;
+    if (!pending) {
+      return;
+    }
+
+    pendingHorizonChangeRef.current = null;
+    emitRebuild({ horizonReferences: pending.next });
+
+    if (normalizedFilePath) {
+      void syncHorizonBacklink({
+        sourcePath: normalizedFilePath,
+        sourceKind: "projects",
+        targetPath: pending.targetPath,
+        action: pending.action,
+      });
+    }
+  }, [emitRebuild, horizonRefs, normalizedFilePath]);
 
   const handleDesiredOutcomeChange = React.useCallback(
     (next: string) => {

@@ -47,15 +47,19 @@ async fn clear_google_calendar_manager() {
 async fn clear_google_calendar_session(app: AppHandle) -> Result<(), String> {
     use crate::google_calendar::token_manager::TokenManager;
 
-    tokio::task::spawn_blocking(move || {
+    let token_cleanup_result = tokio::task::spawn_blocking(move || {
         let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
         token_manager.delete_tokens().map_err(|e| e.to_string())
     })
-    .await
-    .map_err(|e| format!("Failed to disconnect Google Calendar: {}", e))??;
+    .await;
 
     clear_google_calendar_manager().await;
-    Ok(())
+
+    match token_cleanup_result {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(error)) => Err(format!("Failed to disconnect Google Calendar: {}", error)),
+        Err(error) => Err(format!("Failed to disconnect Google Calendar: {}", error)),
+    }
 }
 
 /// Helper function to load Google OAuth credentials from secure storage or environment variables.
@@ -347,8 +351,8 @@ pub async fn google_calendar_get_cached_events(
 
 /// Store Google OAuth configuration
 ///
-/// Persists client ID and client secret via `tauri-plugin-store` to a local JSON file.
-/// Note: not encrypted at rest; treat as user-local secrets.
+/// Persists the client ID in the local config store and the client secret in
+/// OS-backed secure storage.
 ///
 /// # Arguments
 ///

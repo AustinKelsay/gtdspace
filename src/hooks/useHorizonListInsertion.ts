@@ -48,7 +48,7 @@ export function insertHorizonList(
     const newBlock = {
       type: listType as any,
       props: {
-        listType: listType.replace('-list', ''),
+        listType: listType === 'vision-list' ? 'visions' : listType.replace('-list', ''),
       },
     } as any;
 

@@ -26,12 +26,12 @@ fn sync_git_sync_encryption_key(settings: &UserSettings) -> Result<(), String> {
     let entry = keyring::Entry::new(SECURE_STORAGE_SERVICE, GIT_SYNC_ENCRYPTION_KEY_NAME)
         .map_err(|error| format!("Failed to access secure storage: {}", error))?;
 
-    match settings
+    let value_to_store = settings
         .git_sync_encryption_key
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
+        .as_ref()
+        .filter(|value| !value.trim().is_empty());
+
+    match value_to_store {
         Some(value) => entry
             .set_password(value)
             .map_err(|error| format!("Failed to store encryption key securely: {}", error)),
@@ -67,7 +67,7 @@ fn load_git_sync_encryption_key() -> Option<String> {
 }
 
 /// User settings structure for persistence
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct UserSettings {
     /// Theme preference: 'light', 'dark', or 'system'
     pub theme: String,
@@ -117,7 +117,7 @@ pub struct UserSettings {
     /// Preferred branch name for remote backups
     pub git_sync_branch: Option<String>,
     /// Locally stored encryption key (never synced) - excluded from serialization, stored in secure storage
-    #[serde(skip)]
+    #[serde(skip_serializing)]
     pub git_sync_encryption_key: Option<String>,
     /// Number of encrypted snapshots to retain
     pub git_sync_keep_history: Option<u32>,
@@ -131,6 +131,42 @@ pub struct UserSettings {
     pub git_sync_last_pull: Option<String>,
     /// Optional automatic pull cadence
     pub git_sync_auto_pull_interval_minutes: Option<u32>,
+}
+
+impl std::fmt::Debug for UserSettings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UserSettings")
+            .field("theme", &self.theme)
+            .field("font_size", &self.font_size)
+            .field("tab_size", &self.tab_size)
+            .field("word_wrap", &self.word_wrap)
+            .field("font_family", &self.font_family)
+            .field("line_height", &self.line_height)
+            .field("keybindings", &self.keybindings)
+            .field("last_folder", &self.last_folder)
+            .field("editor_mode", &self.editor_mode)
+            .field("window_width", &self.window_width)
+            .field("window_height", &self.window_height)
+            .field("max_tabs", &self.max_tabs)
+            .field("restore_tabs", &self.restore_tabs)
+            .field("auto_initialize", &self.auto_initialize)
+            .field("seed_example_content", &self.seed_example_content)
+            .field("default_space_path", &self.default_space_path)
+            .field("git_sync_enabled", &self.git_sync_enabled)
+            .field("git_sync_repo_path", &self.git_sync_repo_path)
+            .field("git_sync_workspace_path", &self.git_sync_workspace_path)
+            .field("git_sync_remote_url", &self.git_sync_remote_url)
+            .field("git_sync_branch", &self.git_sync_branch)
+            .field(
+                "git_sync_encryption_key",
+                &self
+                    .git_sync_encryption_key
+                    .as_ref()
+                    .map(|_| "<redacted>")
+                    .unwrap_or("<none>"),
+            )
+            .finish()
+    }
 }
 
 /// Load user settings from persistent storage
@@ -365,11 +401,11 @@ fn save_settings_unlocked(app: &AppHandle, settings: &UserSettings) -> Result<St
         Ok(value) => {
             store.set("user_settings", value);
 
+            sync_git_sync_encryption_key(settings)?;
+
             if let Err(e) = store.save() {
                 return Err(format!("Failed to persist settings: {}", e));
             }
-
-            sync_git_sync_encryption_key(settings)?;
 
             log::info!("Settings saved successfully");
             Ok("Settings saved successfully".to_string())

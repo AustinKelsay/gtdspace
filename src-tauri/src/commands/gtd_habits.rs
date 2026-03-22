@@ -191,10 +191,12 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<boo
     let is_markdown_habit = canonical_habit_path
         .extension()
         .and_then(|value| value.to_str())
-        .map(|value| value.eq_ignore_ascii_case("md"))
+        .map(|value| value.eq_ignore_ascii_case("md") || value.eq_ignore_ascii_case("markdown"))
         .unwrap_or(false);
     if !is_markdown_habit {
-        return Err("Habit path must point to a .md file inside the Habits folder".to_string());
+        return Err(
+            "Habit path must point to a .md or .markdown file inside the Habits folder".to_string(),
+        );
     }
     let is_in_habits = canonical_habit_path.ancestors().any(|ancestor| {
         ancestor
@@ -296,9 +298,16 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
             continue;
         }
 
-        let missed_periods = calculate_missed_periods(anchor, parsed.frequency, now);
+        let (missed_periods, missed_periods_truncated) =
+            calculate_missed_periods(anchor, parsed.frequency, now);
         if missed_periods.is_empty() {
             continue;
+        }
+        if missed_periods_truncated {
+            log::warn!(
+                "Habit {:?} exceeded missed-period scan cap; processing only the newest periods",
+                path
+            );
         }
 
         // Apply a stricter write cap than the domain-layer scan cap so one wake-up

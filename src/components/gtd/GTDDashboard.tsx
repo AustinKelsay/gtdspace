@@ -25,7 +25,6 @@ import { useHorizonsRelationships } from '@/hooks/useHorizonsRelationships';
 import { GTDProjectDialog, GTDActionDialog } from '@/components/gtd';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { useToast } from '@/hooks/use-toast';
-import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ToastAction } from '@/components/ui/toast';
 import {
   DashboardOverview,
@@ -113,7 +112,6 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   // Track if we've loaded data for current space
   const loadedPathRef = React.useRef<string | null>(null);
   const { toast } = useToast();
-  const { withErrorHandling } = useErrorHandler();
 
   // Helper function to sanitize file names for security
   const sanitizeFileName = (input: string): string | null => {
@@ -604,17 +602,23 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                       )?.value || 'daily';
 
                       try {
-                        const habitPath = await withErrorHandling(() =>
-                          safeInvoke<string>('createGtdHabit', {
-                            spacePath: gtdSpace.root_path,
-                            habitName: sanitizedHabitName,
-                            frequency,
-                            focusTime: null
-                          }, null)
-                        );
+                        const habitPath = await safeInvoke<string>('createGtdHabit', {
+                          spacePath: gtdSpace.root_path,
+                          habitName: sanitizedHabitName,
+                          frequency,
+                          focusTime: null
+                        }, null);
+                        if (!habitPath) {
+                          toast({
+                            title: 'Failed to create habit',
+                            description: 'The habit could not be created. Please try again.',
+                            variant: 'destructive'
+                          });
+                          return;
+                        }
 
                         // Open the new habit file
-                        if (habitPath && onSelectFile) {
+                        if (onSelectFile) {
                           onSelectFile({
                             id: habitPath,
                             name: `${sanitizedHabitName}.md`,

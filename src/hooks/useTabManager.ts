@@ -17,7 +17,9 @@ import type {
 import { extractMetadata, getMetadataChanges } from '@/utils/metadata-extractor';
 import { emitContentChange, emitMetadataChange } from '@/utils/content-event-bus';
 import { createScopedLogger } from '@/utils/logger';
+import { norm } from '@/utils/path';
 import { CALENDAR_FILE_ID } from '@/utils/special-files';
+import { safeInvoke } from '@/utils/safe-invoke';
 import {
   clearPersistedTabs as clearPersistedTabStorage,
   createInitialTabState,
@@ -516,14 +518,24 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
       case 'copy-path': {
         const tab = findTabById(tabId);
         if (tab) {
-          log.info('Copy path', tab.file.path);
+          void navigator.clipboard.writeText(tab.file.path).catch((error) => {
+            log.error('Failed to copy tab path', error);
+          });
         }
         break;
       }
 
-      case 'reveal-in-folder':
-        log.debug('Reveal in folder', tabId);
+      case 'reveal-in-folder': {
+        const tab = findTabById(tabId);
+        if (tab) {
+          void safeInvoke('open_file_location', { filePath: tab.file.path }, null).then((result) => {
+            if (result == null) {
+              log.error('Failed to reveal tab in folder', tab.file.path);
+            }
+          });
+        }
         break;
+      }
     }
   }, [closeTab, closeTabIds, findTabById]);
 
@@ -621,24 +633,26 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
       return;
     }
 
+    const normalizedWorkspaceKey = norm(workspacePath) ?? workspacePath;
+
     if (
-      restoredWorkspaceRef.current === workspacePath ||
-      restoringWorkspaceRef.current === workspacePath
+      restoredWorkspaceRef.current === normalizedWorkspaceKey ||
+      restoringWorkspaceRef.current === normalizedWorkspaceKey
     ) {
       return;
     }
 
-    restoringWorkspaceRef.current = workspacePath;
+    restoringWorkspaceRef.current = normalizedWorkspaceKey;
     const restoreAttempt = restoreAttemptRef.current + 1;
     restoreAttemptRef.current = restoreAttempt;
 
     const restoreTabsForWorkspace = async () => {
       const currentTabs = tabStateRef.current.openTabs;
       if (currentTabs.length > 0) {
-        if (tabsBelongToWorkspace(currentTabs, workspacePath)) {
+        if (tabsBelongToWorkspace(currentTabs, normalizedWorkspaceKey)) {
           if (restoreAttemptRef.current === restoreAttempt) {
             restoringWorkspaceRef.current = null;
-            restoredWorkspaceRef.current = workspacePath;
+            restoredWorkspaceRef.current = normalizedWorkspaceKey;
           }
           return;
         }
@@ -649,7 +663,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
 
       try {
         const restoredState = await restoreTabStateFromStorage({
-          workspacePath,
+          workspacePath: normalizedWorkspaceKey,
           maxTabs: resolvedMaxTabs,
           readFile: readTabFile,
         });
@@ -666,7 +680,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
       } finally {
         if (restoreAttemptRef.current === restoreAttempt) {
           restoringWorkspaceRef.current = null;
-          restoredWorkspaceRef.current = workspacePath;
+          restoredWorkspaceRef.current = normalizedWorkspaceKey;
         }
       }
     };
@@ -689,7 +703,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
     } else if (
       restoreTabs &&
       workspacePath &&
-      restoringWorkspaceRef.current === workspacePath
+      restoringWorkspaceRef.current === (norm(workspacePath) ?? workspacePath)
     ) {
       return;
     } else {

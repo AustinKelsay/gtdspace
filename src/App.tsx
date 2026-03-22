@@ -45,6 +45,7 @@ import {
 } from "@/components/lazy";
 import { useFileManager } from "@/hooks/useFileManager";
 import { useTabManager } from "@/hooks/useTabManager";
+import { pathKey } from "@/hooks/tab-runtime";
 import { useFileWatcher } from "@/hooks/useFileWatcher";
 import { useSettings } from "@/hooks/useSettings";
 import { useGitSync } from "@/hooks/useGitSync";
@@ -70,8 +71,8 @@ import {
  * @returns True if `p` is under `dir`, false otherwise.
  */
 function isUnder(p?: string | null, dir?: string | null): boolean {
-  const normalizedP = norm(p);
-  const normalizedDir = norm(dir);
+  const normalizedP = pathKey(p).toLowerCase();
+  const normalizedDir = pathKey(dir).toLowerCase();
 
   if (!normalizedP || !normalizedDir) {
     return false;
@@ -485,7 +486,7 @@ export const App: React.FC = () => {
 
     let reloadTimer: number | null = null;
     const scheduleProjectReload = (filePath?: string | null) => {
-      const normalized = norm(filePath);
+      const normalized = pathKey(filePath).toLowerCase();
       if (
         !normalized ||
         !isUnder(filePath, `${gtdSpace.root_path}/Projects/`) ||

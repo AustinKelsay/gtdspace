@@ -45,18 +45,22 @@ impl HabitStatus {
         }
     }
 
-    pub(crate) fn from_checkbox_token(value: &str) -> Self {
-        if value.trim().eq_ignore_ascii_case("true") {
-            Self::Completed
-        } else {
-            Self::Todo
+    pub(crate) fn from_checkbox_token(value: &str) -> Result<Self, String> {
+        match value.trim().to_lowercase().as_str() {
+            "true" => Ok(Self::Completed),
+            "false" => Ok(Self::Todo),
+            other => Err(format!("Invalid habit status checkbox token: {}", other)),
         }
     }
 
-    pub(crate) fn from_singleselect_token(value: &str) -> Self {
+    pub(crate) fn from_singleselect_token(value: &str) -> Result<Self, String> {
         match value.trim().to_lowercase().as_str() {
-            "completed" | "complete" | "done" => Self::Completed,
-            _ => Self::Todo,
+            "completed" | "complete" | "done" => Ok(Self::Completed),
+            "todo" | "to-do" | "pending" => Ok(Self::Todo),
+            other => Err(format!(
+                "Invalid habit status singleselect token: {}",
+                other
+            )),
         }
     }
 
@@ -271,14 +275,14 @@ pub(crate) fn parse_habit_state(content: &str) -> Result<ParsedHabitState, Strin
         (
             HabitStatus::from_checkbox_token(
                 captures.get(1).map(|m| m.as_str()).unwrap_or("false"),
-            ),
+            )?,
             HabitStatusFormat::Checkbox,
         )
     } else if let Some(captures) = HABIT_STATUS_FIELD_REGEX.captures(content) {
         (
             HabitStatus::from_singleselect_token(
                 captures.get(1).map(|m| m.as_str()).unwrap_or("todo"),
-            ),
+            )?,
             HabitStatusFormat::SingleSelect,
         )
     } else {
@@ -589,18 +593,23 @@ pub(crate) fn calculate_missed_periods(
     anchor: NaiveDateTime,
     frequency: HabitFrequency,
     now: NaiveDateTime,
-) -> Vec<NaiveDateTime> {
+) -> (Vec<NaiveDateTime>, bool) {
     const MAX_PERIODS: usize = 1000;
 
-    let mut periods = Vec::new();
+    let mut periods = std::collections::VecDeque::new();
     let mut cursor = next_reset_after(frequency, anchor);
+    let mut truncated = false;
 
-    while cursor <= now && periods.len() < MAX_PERIODS {
-        periods.push(cursor);
+    while cursor <= now {
+        periods.push_back(cursor);
+        if periods.len() > MAX_PERIODS {
+            periods.pop_front();
+            truncated = true;
+        }
         cursor = next_reset_after(frequency, cursor);
     }
 
-    periods
+    (periods.into_iter().collect(), truncated)
 }
 
 pub(crate) fn should_reset_habit(
@@ -652,7 +661,7 @@ mod tests {
 
         assert_eq!(
             calculate_missed_periods(anchor, HabitFrequency::TwiceWeekly, now),
-            vec![dt(2026, 3, 3, 0, 0), dt(2026, 3, 6, 0, 0)]
+            (vec![dt(2026, 3, 3, 0, 0), dt(2026, 3, 6, 0, 0)], false)
         );
     }
 

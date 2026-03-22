@@ -113,11 +113,6 @@ pub async fn search_files(
         filters.max_results
     );
 
-    let dir_path = Path::new(&directory);
-    if !dir_path.exists() || !dir_path.is_dir() {
-        return Err("Directory does not exist or is not a directory".to_string());
-    }
-
     if query.trim().is_empty() {
         return Ok(SearchResponse {
             results: vec![],
@@ -126,6 +121,11 @@ pub async fn search_files(
             duration_ms: start_time.elapsed().as_millis() as u64,
             truncated: false,
         });
+    }
+
+    let dir_path = Path::new(&directory);
+    if !dir_path.exists() || !dir_path.is_dir() {
+        return Err("Directory does not exist or is not a directory".to_string());
     }
 
     task::spawn_blocking(move || {
@@ -331,6 +331,7 @@ fn search_in_text(
     matcher
         .map(|re| {
             re.find_iter(text)
+                .filter(|mat| mat.start() != mat.end())
                 .map(|mat| (mat.start(), mat.end()))
                 .collect()
         })

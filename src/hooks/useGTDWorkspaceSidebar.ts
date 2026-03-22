@@ -163,7 +163,9 @@ export function useGTDWorkspaceSidebar({
     const normalizedFolderPath = normalizePath(folderPath) ?? folderPath.replace(/\\/g, '/');
     const markdownPath = `${normalizedFolderPath}/README.markdown`;
     const mdPath = `${normalizedFolderPath}/README.md`;
-    const markdownExists = await safeInvoke<boolean>('check_file_exists', { filePath: markdownPath }, false);
+    const markdownExists = await withErrorHandling(async () => {
+      return safeInvoke<boolean>('check_file_exists', { filePath: markdownPath }, false);
+    }, 'Failed to resolve overview file', 'workspace-sidebar');
     const filePath = markdownExists ? markdownPath : mdPath;
 
     return {
@@ -174,7 +176,7 @@ export function useGTDWorkspaceSidebar({
       last_modified: Math.floor(Date.now() / 1000),
       extension: markdownExists ? 'markdown' : 'md',
     };
-  }, []);
+  }, [withErrorHandling]);
 
   React.useEffect(() => {
     sectionFilesRef.current = sectionFiles;
@@ -191,6 +193,7 @@ export function useGTDWorkspaceSidebar({
 
     const existingReadme = files.find((file) => /^README\.(md|markdown)$/i.test(file.name));
     const readmePath = existingReadme?.path ?? `${folderPath}/README.md`;
+    const filteredFiles = files.filter((file) => !/^README\.(md|markdown)$/i.test(file.name));
 
     const existingContent = await withErrorHandling(async () => {
       return safeInvoke<string>('read_file', { path: readmePath }, null);
@@ -204,7 +207,7 @@ export function useGTDWorkspaceSidebar({
       const { content, changed } = syncHorizonReadmeContent({
         horizon: horizonType,
         existingContent,
-        files,
+        files: filteredFiles,
       });
       if (changed) {
         await safeInvoke('save_file', { path: readmePath, content });
@@ -303,11 +306,13 @@ export function useGTDWorkspaceSidebar({
       });
 
       try {
-        const files = await safeInvoke<MarkdownFile[]>(
-          'list_markdown_files',
-          { path: normalizedKey },
-          undefined
-        );
+        const files = await withErrorHandling(async () => {
+          return safeInvoke<MarkdownFile[]>(
+            'list_markdown_files',
+            { path: normalizedKey },
+            undefined
+          );
+        }, 'Failed to load section files', 'workspace-sidebar');
         if (files === undefined || files === null) {
           return current || [];
         }
@@ -336,15 +341,20 @@ export function useGTDWorkspaceSidebar({
         });
       }
     },
-    [syncHorizonReadme]
+    [syncHorizonReadme, withErrorHandling]
   );
 
   const loadProjectActions = React.useCallback(async (projectPath: string) => {
     const normalizedKey = normalizePath(projectPath) ?? projectPath.replace(/\\/g, '/');
     try {
-      let files = await safeInvoke<MarkdownFile[]>('list_project_actions', { projectPath: normalizedKey }, []);
+      let files = await withErrorHandling(async () => {
+        return safeInvoke<MarkdownFile[]>('list_project_actions', { projectPath: normalizedKey }, []);
+      }, 'Failed to load project actions', 'workspace-sidebar');
+      files = files ?? [];
       if (!files || files.length === 0) {
-        const all = await safeInvoke<MarkdownFile[]>('list_markdown_files', { path: normalizedKey }, []);
+        const all = await withErrorHandling(async () => {
+          return safeInvoke<MarkdownFile[]>('list_markdown_files', { path: normalizedKey }, []);
+        }, 'Failed to load project files', 'workspace-sidebar');
         files = (all ?? []).filter((file) => !/^README\.(md|markdown)$/i.test(file.name));
       }
 
@@ -397,7 +407,7 @@ export function useGTDWorkspaceSidebar({
     } catch {
       // Keep existing project action state when a refresh fails.
     }
-  }, []);
+  }, [withErrorHandling]);
 
   React.useEffect(() => {
     const pathToCheck = gtdSpace?.root_path;
@@ -484,6 +494,8 @@ export function useGTDWorkspaceSidebar({
             (metadata as { due_date?: string; dueDate?: string }).dueDate;
           if (typeof nextDue === 'string') {
             updateProjectOverlay(projectPath, { due_date: nextDue });
+          } else {
+            updateProjectOverlay(projectPath, { due_date: undefined });
           }
         }
       }
@@ -536,6 +548,8 @@ export function useGTDWorkspaceSidebar({
             (metadata as { due_date?: string; dueDate?: string }).due_date;
           if (typeof nextDue === 'string') {
             updateProjectOverlay(projectPath, { due_date: nextDue });
+          } else {
+            updateProjectOverlay(projectPath, { due_date: undefined });
           }
         }
       }
@@ -583,7 +597,7 @@ export function useGTDWorkspaceSidebar({
                 prev[projectPath]
                   ? {
                       ...prev,
-                      [normalizedNewProjectPath]: prev[projectPath],
+                      [normalizedNewProjectPath]: [],
                     }
                   : prev
               );
@@ -616,6 +630,8 @@ export function useGTDWorkspaceSidebar({
           (metadata as { due_date?: string; dueDate?: string }).dueDate;
         if (typeof nextDue === 'string') {
           updateProjectOverlay(projectPath, { due_date: nextDue });
+        } else {
+          updateProjectOverlay(projectPath, { due_date: undefined });
         }
 
         if (gtdSpace?.root_path) {
@@ -823,12 +839,13 @@ export function useGTDWorkspaceSidebar({
   }, []);
 
   const toggleCompletedActions = React.useCallback((projectPath: string) => {
+    const normalizedProjectPath = normalizePath(projectPath) ?? projectPath.replace(/\\/g, '/');
     setExpandedCompletedActions((prev) => {
       const next = new Set(prev);
-      if (next.has(projectPath)) {
-        next.delete(projectPath);
+      if (next.has(normalizedProjectPath)) {
+        next.delete(normalizedProjectPath);
       } else {
-        next.add(projectPath);
+        next.add(normalizedProjectPath);
       }
       return next;
     });
@@ -850,13 +867,13 @@ export function useGTDWorkspaceSidebar({
   const toggleProjectExpand = React.useCallback(
     async (project: GTDProject) => {
       const normalizedProjectPath = normalizePath(project.path) ?? project.path.replace(/\\/g, '/');
-      const isExpanded = expandedProjects.includes(project.path);
+      const isExpanded = expandedProjects.includes(normalizedProjectPath);
       if (isExpanded) {
-        setExpandedProjects((prev) => prev.filter((path) => path !== project.path));
+        setExpandedProjects((prev) => prev.filter((path) => path !== normalizedProjectPath));
         return;
       }
 
-      setExpandedProjects((prev) => [...prev, project.path]);
+      setExpandedProjects((prev) => [...prev, normalizedProjectPath]);
       if (!projectActionsRef.current[normalizedProjectPath]) {
         await loadProjectActions(project.path);
       }

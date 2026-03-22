@@ -160,7 +160,7 @@ export const useFileManager = () => {
   const selectFolder = useCallback(async () => {
     try {
       console.log('Opening folder selection dialog...');
-      const folderPath = await safeInvoke<string | null>('select_folder', undefined, null);
+      const folderPath = await safeInvoke<string | null>('select_folder', undefined);
       if (!folderPath) {
         return;
       }

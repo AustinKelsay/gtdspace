@@ -277,11 +277,7 @@ pub fn find_reverse_relationships(
                         "purpose-references",
                         "references",
                     ];
-                    let tags: &[&str] = if filter_type == "projects" && dir_name == "Projects" {
-                        &tags_with_general
-                    } else {
-                        &tags_with_general
-                    };
+                    let tags: &[&str] = &tags_with_general;
 
                     let mut found_any = false;
                     for tag in tags {

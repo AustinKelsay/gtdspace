@@ -1,6 +1,5 @@
 import React from 'react';
 import { flushSync } from 'react-dom';
-import { invoke } from '@tauri-apps/api/core';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { readFileText } from '@/hooks/useFileManager';
@@ -167,7 +166,7 @@ export function useGTDWorkspaceSidebar({
     const markdownPath = `${normalizedFolderPath}/README.markdown`;
     const mdPath = `${normalizedFolderPath}/README.md`;
     const markdownExists = await withErrorHandling(async () => {
-      return invoke<boolean>('check_file_exists', { filePath: markdownPath });
+      return safeInvoke<boolean>('check_file_exists', { filePath: markdownPath }, false);
     }, 'Failed to resolve overview file', 'workspace-sidebar');
     const filePath = markdownExists ? markdownPath : mdPath;
 
@@ -311,9 +310,10 @@ export function useGTDWorkspaceSidebar({
 
       try {
         const files = await withErrorHandling(async () => {
-          return invoke<MarkdownFile[]>(
+          return safeInvoke<MarkdownFile[]>(
             'list_markdown_files',
-            { path: normalizedKey }
+            { path: normalizedKey },
+            undefined
           );
         }, 'Failed to load section files', 'workspace-sidebar');
         if (files === undefined || files === null) {
@@ -360,12 +360,12 @@ export function useGTDWorkspaceSidebar({
     const normalizedKey = normalizePath(projectPath) ?? projectPath.replace(/\\/g, '/');
     try {
       let files = await withErrorHandling(async () => {
-        return invoke<MarkdownFile[]>('list_project_actions', { projectPath: normalizedKey });
+        return safeInvoke<MarkdownFile[]>('list_project_actions', { projectPath: normalizedKey }, []);
       }, 'Failed to load project actions', 'workspace-sidebar');
       files = files ?? [];
       if (files.length === 0) {
         const all = await withErrorHandling(async () => {
-          return invoke<MarkdownFile[]>('list_markdown_files', { path: normalizedKey });
+          return safeInvoke<MarkdownFile[]>('list_markdown_files', { path: normalizedKey }, []);
         }, 'Failed to load project files', 'workspace-sidebar');
         files = (all ?? []).filter((file) => !/^README\.(md|markdown)$/i.test(file.name));
       }

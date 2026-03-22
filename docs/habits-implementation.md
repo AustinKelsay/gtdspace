@@ -84,8 +84,8 @@ Current reset windows are calendar-based rather than rough duration approximatio
 Reset anchoring is also more explicit now:
 
 - prefer the most recent `Auto-Reset` or `Backfill` history row
-- otherwise fall back to `Created`
 - otherwise fall back to the latest parseable history timestamp
+- otherwise fall back to `Created`
 
 ## History Semantics
 

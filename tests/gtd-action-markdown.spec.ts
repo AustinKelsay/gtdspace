@@ -198,4 +198,20 @@ describe('gtd action markdown utilities', () => {
     expect(parsed.dueDate).toBe('2025-01-20');
     expect(parsed.body).toBe('## Notes\nCarry this body forward.');
   });
+
+  it('leaves createdDateTime undefined when the created marker is missing', () => {
+    const parsed = parseActionMarkdown([
+      '# Action Without Created Marker',
+      '',
+      '## Status',
+      '[!singleselect:status:in-progress]',
+      '',
+      '## Focus Date',
+      '[!datetime:focus_date:2026-03-01]',
+      '',
+      'Action body.',
+    ].join('\n'));
+
+    expect(parsed.createdDateTime).toBeUndefined();
+  });
 });

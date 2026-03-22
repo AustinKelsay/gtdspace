@@ -10,17 +10,6 @@ import {
   parseReferenceList,
 } from '@/utils/gtd-reference-utils';
 
-const CANONICAL_HEADINGS: RegExp[] = [
-  /^##\s+Status\b/i,
-  /^##\s+Due\s+Date/i,
-  /^##\s+Desired\s+Outcome\b/i,
-  /^##\s+Horizon\s+References\b/i,
-  /^##\s+References\b/i,
-  /^##\s+Created\b/i,
-  /^##\s+Actions\b/i,
-  /^##\s+Related\s+Habits\b/i,
-];
-
 const CANONICAL_TRAILING_HEADINGS: RegExp[] = [
   /^##\s+References\s*(?:\(optional\))?\s*$/i,
   /^##\s+Horizon\s+References\s*(?:\(optional\))?\s*$/i,
@@ -45,6 +34,44 @@ export interface ParsedProjectMarkdown {
   includeHabitsList: boolean;
   additionalContent: string;
   createdDateTime: string;
+}
+
+function parseLegacyLabeledSection(content: string, heading: string): string {
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^##\\s+${escapedHeading}\\s*$\\n+([\\s\\S]*?)(?=\\n##\\s+|\\n---\\s*$|$)`, 'im');
+  const match = content.match(pattern);
+  return match?.[1]?.trim() ?? '';
+}
+
+function extractLegacyProjectAdditionalContent(content: string): string {
+  const trimmed = content
+    .replace(/(?:^|\n)---\s*\n\s*Created:\s*[^\n]+\s*$/i, '')
+    .replace(/\s+$/g, '');
+  if (!trimmed) {
+    return '';
+  }
+
+  const structuralHeadings = [
+    /^##\s+Status\b/i,
+    /^##\s+Due\s+Date\b/i,
+    /^##\s+Desired\s+Outcome\b/i,
+    /^##\s+Description\b/i,
+    /^##\s+Created\b/i,
+    /^##\s+Actions\b/i,
+    /^##\s+Related\s+Habits\b/i,
+  ];
+
+  const lines = trimmed.split(/\r?\n/);
+  const startIndex = lines.findIndex((line) => {
+    const normalized = line.trim();
+    return /^##\s+/.test(normalized) && !structuralHeadings.some((regex) => regex.test(normalized));
+  });
+
+  if (startIndex === -1) {
+    return '';
+  }
+
+  return lines.slice(startIndex).join('\n').replace(/^\s*\n/, '');
 }
 
 export function toDateOnly(value?: string | null): string {
@@ -131,14 +158,14 @@ function parseProjectSections(content: string): {
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
-    if (/^##\s+Desired\s+Outcome\b/i.test(line)) {
+    if (/^##\s+(Desired\s+Outcome|Description)\b/i.test(line)) {
       collectingDesired = true;
       desiredBuffer.length = 0;
       continue;
     }
 
     if (collectingDesired) {
-      if (CANONICAL_HEADINGS.some((regex) => regex.test(line))) {
+      if (/^##\s+/.test(line)) {
         break;
       }
       desiredBuffer.push(rawLine);
@@ -161,6 +188,8 @@ function parseProjectSections(content: string): {
       additionalContent = content
         .slice(actionsMatch.index + actionsMatch[0].length)
         .replace(/^\s*\n/, '');
+    } else {
+      additionalContent = extractLegacyProjectAdditionalContent(content);
     }
   }
 
@@ -185,6 +214,11 @@ function extractCreatedDateTime(
   const match = content.match(/\[!datetime:created_date_time:([^\]]+)\]/i);
   if (match?.[1]) {
     return match[1].trim();
+  }
+
+  const footerMatch = content.match(/(?:^|\n)---\s*\n\s*Created:\s*([^\n]+)\s*$/i);
+  if (footerMatch?.[1]) {
+    return footerMatch[1].trim();
   }
 
   return new Date().toISOString();
@@ -217,7 +251,7 @@ export function parseProjectMarkdown(content: string): ParsedProjectMarkdown {
     dueDate: toDateOnly(
       typeof (meta as { dueDate?: unknown }).dueDate === 'string'
         ? (meta as { dueDate: string }).dueDate
-        : ''
+        : parseLegacyLabeledSection(content || '', 'Due Date')
     ),
     desiredOutcome,
     horizonReferences,

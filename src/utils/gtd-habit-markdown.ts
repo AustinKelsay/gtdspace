@@ -349,13 +349,20 @@ export function determineLastHabitResetDate(
     }
   }
 
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    const parsed = habitHistoryRowToDate(rows[i]);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
   const createdDate = new Date(createdIso);
   return Number.isNaN(createdDate.getTime()) ? null : createdDate;
 }
 
 export function findLastHabitCompletionDate(rows: HabitHistoryRow[]): Date | null {
   for (let i = rows.length - 1; i >= 0; i -= 1) {
-    if (!/complete/i.test(rows[i].status)) {
+    if (!/^complete(?:d)?$/i.test((rows[i].status ?? '').trim())) {
       continue;
     }
 

@@ -113,4 +113,58 @@ describe('gtd habit markdown utilities', () => {
     expect(lastCompletion?.getHours()).toBe(21);
     expect(lastCompletion?.getMinutes()).toBe(30);
   });
+
+  it('falls back to the latest parseable history row before created when no reset rows exist', () => {
+    const rows = [
+      {
+        date: '2026-03-01',
+        time: '9:30 PM',
+        status: 'Complete',
+        action: 'Manual',
+        details: 'Completed',
+      },
+      {
+        date: '2026-03-04',
+        time: '7:15 AM',
+        status: 'To Do',
+        action: 'Manual',
+        details: 'Missed',
+      },
+    ];
+
+    const resetAnchor = determineLastHabitResetDate(rows, '2026-02-20T10:00:00Z');
+
+    expect(resetAnchor?.getFullYear()).toBe(2026);
+    expect(resetAnchor?.getMonth()).toBe(2);
+    expect(resetAnchor?.getDate()).toBe(4);
+    expect(resetAnchor?.getHours()).toBe(7);
+    expect(resetAnchor?.getMinutes()).toBe(15);
+  });
+
+  it('ignores incomplete rows when finding the last completion date', () => {
+    const rows = [
+      {
+        date: '2026-03-01',
+        time: '9:30 PM',
+        status: 'Complete',
+        action: 'Manual',
+        details: 'Completed',
+      },
+      {
+        date: '2026-03-03',
+        time: '8:00 AM',
+        status: 'Incomplete',
+        action: 'Manual',
+        details: 'Skipped',
+      },
+    ];
+
+    const lastCompletion = findLastHabitCompletionDate(rows);
+
+    expect(lastCompletion?.getFullYear()).toBe(2026);
+    expect(lastCompletion?.getMonth()).toBe(2);
+    expect(lastCompletion?.getDate()).toBe(1);
+    expect(lastCompletion?.getHours()).toBe(21);
+    expect(lastCompletion?.getMinutes()).toBe(30);
+  });
 });

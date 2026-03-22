@@ -14,6 +14,7 @@ import {
   parseActionMarkdown,
   rebuildActionMarkdown,
 } from '@/utils/gtd-action-markdown';
+import { normalizeReferencePath } from '@/utils/gtd-reference-utils';
 
 export interface ActionItem {
   id: string;
@@ -181,7 +182,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
                 focusDate: parsedAction.focusDateTime,
                 contexts: parsedAction.contexts,
                 references: parsedAction.references,
-                createdDate: parsedAction.createdDateTime || toISOStringFromEpoch(file.last_modified),
+                createdDate: parsedAction.createdDateTime ?? toISOStringFromEpoch(file.last_modified),
                 modifiedDate: toISOStringFromEpoch(file.last_modified),
                 description: extractDescription(parsedAction.body || content),
                 notes: parsedAction.body || undefined
@@ -231,22 +232,27 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
   
   const updateActionStatus = useCallback(async (actionIdOrPath: string, newStatus: string, actionPath?: string): Promise<boolean> => {
     try {
+      const normalizedActionIdOrPath = normalizeReferencePath(actionIdOrPath);
       // Determine the actual file path
       let filePath: string;
 
       if (actionPath) {
         // If path is explicitly provided, use it
-        filePath = actionPath;
+        filePath = normalizeReferencePath(actionPath);
         log.debug('[updateActionStatus] Using provided path', filePath);
       } else {
         // Otherwise, try to find it in current actions (using ref for latest state)
-        const action = actionsRef.current.find(a => a.id === actionIdOrPath || a.path === actionIdOrPath);
+        const action = actionsRef.current.find((a) => {
+          const normalizedId = normalizeReferencePath(a.id);
+          const normalizedPath = normalizeReferencePath(a.path);
+          return normalizedId === normalizedActionIdOrPath || normalizedPath === normalizedActionIdOrPath;
+        });
         if (!action) {
           log.error(`[updateActionStatus] Action not found in state ${actionIdOrPath}`);
           log.debug('[updateActionStatus] Available actions', actionsRef.current.map(a => ({ id: a.id, path: a.path })));
           return false;
         }
-        filePath = action.path;
+        filePath = normalizeReferencePath(action.path);
         log.debug('[updateActionStatus] Found action in state, using path', filePath);
       }
 
@@ -272,9 +278,13 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       }
 
       // Update local state optimistically
-      setActions(prev => prev.map(a =>
-        (a.id === actionIdOrPath || a.path === filePath) ? { ...a, status: canonicalStatus } : a
-      ));
+      setActions(prev => prev.map((a) => {
+        const normalizedId = normalizeReferencePath(a.id);
+        const normalizedPath = normalizeReferencePath(a.path);
+        return normalizedId === normalizedActionIdOrPath || normalizedPath === filePath
+          ? { ...a, status: canonicalStatus }
+          : a;
+      }));
 
       // Dispatch content-updated event to notify other components
       window.dispatchEvent(new CustomEvent('content-updated', {

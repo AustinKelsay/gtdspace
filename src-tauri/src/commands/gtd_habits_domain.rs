@@ -279,8 +279,8 @@ pub(crate) fn parse_habit_state(content: &str) -> Result<ParsedHabitState, Strin
         .rev()
         .find(|record| is_reset_action(&record.action))
         .map(|record| record.timestamp)
-        .or_else(|| parse_created_at(content))
-        .or_else(|| history_records.iter().map(|record| record.timestamp).max());
+        .or_else(|| history_records.iter().map(|record| record.timestamp).max())
+        .or_else(|| parse_created_at(content));
 
     Ok(ParsedHabitState {
         status,
@@ -684,6 +684,30 @@ mod tests {
         assert_eq!(parsed.status, HabitStatus::Completed);
         assert_eq!(parsed.frequency, HabitFrequency::Weekly);
         assert_eq!(parsed.reset_anchor, Some(dt(2026, 3, 1, 9, 30)));
+    }
+
+    #[test]
+    fn parse_habit_state_uses_latest_manual_history_before_created() {
+        let content = r#"# Habit
+
+## Status
+[!checkbox:habit-status:false]
+
+## Frequency
+[!singleselect:habit-frequency:weekly]
+
+## Created
+[!datetime:created_date_time:2026-03-01T09:30]
+
+## History
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2026-03-02 | 7:45 AM | Complete | Manual | Done |
+| 2026-03-04 | 8:15 PM | To Do | Manual | Missed |
+"#;
+
+        let parsed = parse_habit_state(content).unwrap();
+        assert_eq!(parsed.reset_anchor, Some(dt(2026, 3, 4, 20, 15)));
     }
 
     #[test]

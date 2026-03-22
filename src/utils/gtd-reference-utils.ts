@@ -187,10 +187,15 @@ export function normalizeProjectPathFromReadme(filePath?: string): string | null
   }
 
   const normalized = normalizeReferencePath(filePath);
-  const match = normalized.match(/(.+\/Projects\/.+)\/README\.(md|markdown)$/i);
-  if (!match) {
+  const readmeMatch = normalized.match(/\/README(?:\.(md|markdown))?$/i);
+  if (!readmeMatch || readmeMatch.index === undefined) {
     return null;
   }
 
-  return normalizeProjectReferencePath(match[1]);
+  const projectPath = normalized.slice(0, readmeMatch.index);
+  if (!/(^|\/)Projects\/.+$/i.test(projectPath)) {
+    return null;
+  }
+
+  return normalizeProjectReferencePath(projectPath);
 }

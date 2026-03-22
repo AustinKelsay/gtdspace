@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildProjectMarkdown } from '@/utils/gtd-markdown-helpers';
+import {
+  buildProjectMarkdown,
+  generateProjectReadmeWithSingleSelect,
+} from '@/utils/gtd-markdown-helpers';
 import {
   parseProjectMarkdown,
   sanitizeProjectAdditionalContent,
@@ -50,5 +53,44 @@ describe('gtd project content utilities', () => {
     );
 
     expect(sanitized).toBe('## Notes\nKeep the freeform notes.');
+  });
+
+  it('parses legacy project readmes without losing description, due date, or created footer', () => {
+    const content = generateProjectReadmeWithSingleSelect(
+      'Legacy Project',
+      'Ship the legacy migration safely.',
+      '2026-03-22',
+      '2026-02-20T10:00:00Z'
+    );
+
+    const parsed = parseProjectMarkdown(content);
+
+    expect(parsed.title).toBe('Legacy Project');
+    expect(parsed.status).toBe('in-progress');
+    expect(parsed.dueDate).toBe('2026-03-22');
+    expect(parsed.desiredOutcome).toBe('Ship the legacy migration safely.');
+    expect(parsed.createdDateTime).toBe('2026-02-20T10:00:00Z');
+    expect(parsed.additionalContent).toBe('');
+  });
+
+  it('preserves custom trailing sections from legacy projects as additional content', () => {
+    const content = [
+      generateProjectReadmeWithSingleSelect(
+        'Legacy Project',
+        'Ship the legacy migration safely.',
+        '2026-03-22',
+        '2026-02-20T10:00:00Z'
+      ).replace(/\n---\nCreated:[\s\S]*$/i, ''),
+      '',
+      '## Notes',
+      'Keep the stakeholder context.',
+      '',
+      '---',
+      'Created: 2026-02-20T10:00:00Z',
+    ].join('\n');
+
+    const parsed = parseProjectMarkdown(content);
+
+    expect(parsed.additionalContent).toBe('## Notes\nKeep the stakeholder context.');
   });
 });

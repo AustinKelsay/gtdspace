@@ -33,7 +33,7 @@ export interface ParsedActionMarkdown {
   references: string[];
   horizonReferences: ActionHorizonReferences;
   horizonRaw: ActionHorizonRaw;
-  createdDateTime: string;
+  createdDateTime?: string;
   body: string;
 }
 
@@ -436,7 +436,7 @@ export function buildActionMarkdown(
   parts.push(`[!purpose-references:${encodeHorizon('purpose', document.horizonReferences.purpose)}]\n`);
 
   parts.push('\n## Created\n');
-  parts.push(`[!datetime:created_date_time:${document.createdDateTime}]\n`);
+  parts.push(`[!datetime:created_date_time:${document.createdDateTime ?? new Date().toISOString()}]\n`);
 
   return `${parts.join('').trim()}\n`;
 }
@@ -457,7 +457,7 @@ export function parseActionMarkdown(content: string): ParsedActionMarkdown {
     typeof (meta as { createdDateTime?: unknown }).createdDateTime === 'string' &&
     (meta as { createdDateTime: string }).createdDateTime.trim()
       ? (meta as { createdDateTime: string }).createdDateTime.trim()
-      : new Date().toISOString();
+      : undefined;
 
   return {
     title:

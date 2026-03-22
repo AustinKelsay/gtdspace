@@ -203,9 +203,10 @@ fn parse_history_record_from_table(line: &str) -> Option<HistoryRecord> {
     }
 
     let parts: Vec<String> = line
+        .trim()
+        .trim_matches('|')
         .split('|')
         .map(|part| part.trim().to_string())
-        .filter(|part| !part.is_empty())
         .collect();
 
     if parts.len() < 5 || parts.first()?.eq_ignore_ascii_case("Date") {
@@ -370,14 +371,14 @@ pub(crate) fn insert_history_entry(content: &str, entry: &str) -> Result<String,
                 continue;
             } else if line.starts_with('|') && line.contains(" | ") {
                 last_history_line_idx = Some(i);
-            } else if line.starts_with("- ") {
+            } else if line.starts_with("##") {
+                break;
+            } else if !line.trim().is_empty() {
                 has_old_list_format = true;
                 old_list_entries.push((i, line));
                 if last_history_line_idx.is_none() || i > last_history_line_idx.unwrap() {
                     last_history_line_idx = Some(i);
                 }
-            } else if line.starts_with("##") {
-                break;
             }
         }
     }
@@ -713,6 +714,29 @@ mod tests {
     }
 
     #[test]
+    fn parse_habit_state_preserves_empty_table_cells() {
+        let content = r#"# Habit
+
+## Status
+[!checkbox:habit-status:false]
+
+## Frequency
+[!singleselect:habit-frequency:weekly]
+
+## Created
+[!datetime:created_date_time:2026-03-01T09:30]
+
+## History
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2026-03-04 | 8:15 PM | To Do | Manual | |
+"#;
+
+        let parsed = parse_habit_state(content).unwrap();
+        assert_eq!(parsed.reset_anchor, Some(dt(2026, 3, 4, 20, 15)));
+    }
+
+    #[test]
     fn insert_history_entry_migrates_legacy_lists() {
         let content = r#"# Habit
 
@@ -751,6 +775,30 @@ mod tests {
         assert!(updated.contains("| 2026-03-01 | 7:30 AM | Complete | Manual | Done |"));
         assert!(updated.contains("- freeform note that does not match the legacy pattern"));
         assert!(updated.contains("| 2026-03-02 | 12:00 AM | To Do | Auto-Reset | New period |"));
+    }
+
+    #[test]
+    fn insert_history_entry_preserves_plain_legacy_history_lines() {
+        let content = r#"# Habit
+
+## History
+
+Reminder: keep this note with the migrated history.
+- **2026-03-01** at **7:30 AM**: Complete (Manual - Done)
+
+## Notes
+Still here
+"#;
+
+        let updated = insert_history_entry(
+            content,
+            "| 2026-03-02 | 12:00 AM | To Do | Auto-Reset | New period |",
+        )
+        .unwrap();
+
+        assert!(updated.contains("Reminder: keep this note with the migrated history."));
+        assert!(updated.contains("| 2026-03-01 | 7:30 AM | Complete | Manual | Done |"));
+        assert!(updated.contains("## Notes\nStill here"));
     }
 
     #[test]

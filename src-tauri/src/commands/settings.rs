@@ -377,7 +377,7 @@ pub async fn secure_store_set(key: String, value: String) -> Result<String, Stri
 /// ```
 #[tauri::command]
 pub async fn secure_store_get(key: String) -> Result<String, String> {
-    log::info!("Retrieving secret from secure storage: {}", key);
+    log::debug!("Retrieving secret from secure storage: {}", key);
 
     let entry = match keyring::Entry::new(SECURE_STORAGE_SERVICE, &key) {
         Ok(entry) => entry,
@@ -389,11 +389,11 @@ pub async fn secure_store_get(key: String) -> Result<String, String> {
 
     match entry.get_password() {
         Ok(value) => {
-            log::info!("Secret retrieved successfully: {}", key);
+            log::debug!("Secret retrieved successfully: {}", key);
             Ok(value)
         }
         Err(keyring::Error::NoEntry) => {
-            log::info!("Secret not found: {}", key);
+            log::debug!("Secret not found: {}", key);
             Err("Secret not found".to_string())
         }
         Err(e) => {
@@ -424,7 +424,7 @@ pub async fn secure_store_get(key: String) -> Result<String, String> {
 /// ```
 #[tauri::command]
 pub async fn secure_store_remove(key: String) -> Result<String, String> {
-    log::info!("Removing secret from secure storage: {}", key);
+    log::debug!("Removing secret from secure storage: {}", key);
 
     let entry = match keyring::Entry::new(SECURE_STORAGE_SERVICE, &key) {
         Ok(entry) => entry,
@@ -436,11 +436,11 @@ pub async fn secure_store_remove(key: String) -> Result<String, String> {
 
     match entry.delete_password() {
         Ok(_) => {
-            log::info!("Secret removed successfully: {}", key);
+            log::debug!("Secret removed successfully: {}", key);
             Ok("Secret removed successfully".to_string())
         }
         Err(keyring::Error::NoEntry) => {
-            log::info!("Secret not found (already removed): {}", key);
+            log::debug!("Secret not found (already removed): {}", key);
             Ok("Secret not found (already removed)".to_string())
         }
         Err(e) => {

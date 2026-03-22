@@ -834,20 +834,8 @@ export const App: React.FC = () => {
       event: CustomEvent<{ habitPath: string }>
     ) => {
       // Check if the updated habit is currently open in the editor
-      if (norm(activeTab?.file.path) === norm(event.detail.habitPath)) {
-        // Reload the file content from disk
-        safeInvoke<string>("read_file", { path: event.detail.habitPath }, null)
-          .then((freshContent) => {
-            if (freshContent !== null && freshContent !== undefined) {
-              updateTabContent(activeTab.id, freshContent);
-            }
-          })
-          .catch((error) => {
-            console.error(
-              "Failed to refresh habit after status update:",
-              error
-            );
-          });
+      if (activeTab?.id && norm(activeTab.file.path) === norm(event.detail.habitPath)) {
+        void reloadTabFromDisk(activeTab.id);
       }
 
       // Also refresh the sidebar to show updated status
@@ -863,16 +851,8 @@ export const App: React.FC = () => {
       const { filePath } = event.detail;
 
       // If the changed file is the currently active tab, reload its content
-      if (norm(activeTab?.file.path) === norm(filePath)) {
-        safeInvoke<string>("read_file", { path: filePath }, null)
-          .then((freshContent) => {
-            if (freshContent !== null && freshContent !== undefined) {
-              updateTabContent(activeTab.id, freshContent);
-            }
-          })
-          .catch((error) => {
-            console.error("Failed to reload habit content:", error);
-          });
+      if (activeTab?.id && norm(activeTab.file.path) === norm(filePath)) {
+        void reloadTabFromDisk(activeTab.id);
       }
     };
 
@@ -895,21 +875,21 @@ export const App: React.FC = () => {
         handleHabitContentChanged as EventListener
       );
     };
-  }, [activeTab?.file.path, activeTab?.id, updateTabContent, refreshGTDSpace]);
+  }, [activeTab?.file.path, activeTab?.id, reloadTabFromDisk, refreshGTDSpace]);
 
   // === HABIT RESET SCHEDULER ===
   // Store refs to avoid re-running effect when functions change
   const checkGTDSpaceRef = React.useRef(checkGTDSpace);
   const loadProjectsRef = React.useRef(loadProjects);
-  const updateTabContentRef = React.useRef(updateTabContent);
+  const reloadTabFromDiskRef = React.useRef(reloadTabFromDisk);
   const activeTabRef = React.useRef(activeTab);
 
   React.useEffect(() => {
     checkGTDSpaceRef.current = checkGTDSpace;
     loadProjectsRef.current = loadProjects;
-    updateTabContentRef.current = updateTabContent;
+    reloadTabFromDiskRef.current = reloadTabFromDisk;
     activeTabRef.current = activeTab;
-  }, [checkGTDSpace, loadProjects, updateTabContent, activeTab]);
+  }, [checkGTDSpace, loadProjects, reloadTabFromDisk, activeTab]);
 
   React.useEffect(() => {
     const currentSpacePath = gtdSpace?.root_path;
@@ -944,20 +924,8 @@ export const App: React.FC = () => {
 
           // Also refresh the current tab if it's a habit
           const currentTab = activeTabRef.current;
-          if (isHabitPath(currentTab?.file.path)) {
-            // Reload the file content from disk
-            try {
-              const freshContent = await safeInvoke<string>(
-                "read_file",
-                { path: currentTab.file.path },
-                null
-              );
-              if (freshContent !== null && freshContent !== undefined) {
-                updateTabContentRef.current(currentTab.id, freshContent);
-              }
-            } catch (error) {
-              console.error("Failed to refresh habit tab:", error);
-            }
+          if (isHabitPath(currentTab?.file.path) && currentTab?.id) {
+            await reloadTabFromDiskRef.current(currentTab.id);
           }
         }
       } catch (error) {

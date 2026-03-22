@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  normalizeActionEffort,
   parseActionMarkdown,
   rebuildActionMarkdown,
   stripActionHeader,
@@ -234,5 +235,29 @@ describe('gtd action markdown utilities', () => {
     ].join('\n'));
 
     expect(parsed.createdDateTime).toBeUndefined();
+  });
+
+  it('keeps timezone-aware focus timestamps in UTC when deriving date-only fields', () => {
+    const parsed = parseActionMarkdown([
+      '# UTC Action',
+      '',
+      '## Status',
+      '[!singleselect:status:in-progress]',
+      '',
+      '## Focus Date',
+      '[!datetime:focus_date:2026-03-01T00:30:00Z]',
+      '',
+      '## Effort',
+      '[!singleselect:effort:medium]',
+    ].join('\n'));
+
+    expect(parsed.focusDate).toBe('2026-03-01');
+    expect(parsed.focusTime).toBe('00:30');
+  });
+
+  it('normalizes legacy extra large effort spellings', () => {
+    expect(normalizeActionEffort('Extra Large')).toBe('extra-large');
+    expect(normalizeActionEffort('extra_large')).toBe('extra-large');
+    expect(normalizeActionEffort('ExtraLarge')).toBe('extra-large');
   });
 });

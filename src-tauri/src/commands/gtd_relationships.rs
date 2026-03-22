@@ -435,25 +435,24 @@ pub fn find_habits_referencing(
                                     paths.len(),
                                     target_normalized
                                 );
-                                for path in &paths {
+                                for candidate in &paths {
                                     log::debug!(
                                         "  Comparing: '{}' == '{}'",
-                                        path,
+                                        candidate,
                                         target_normalized
                                     );
-                                    if path == &target_normalized {
+                                    if candidate == &target_normalized {
                                         log::debug!("  MATCH FOUND!");
                                     }
                                     if let Some(ref alt) = alt_target {
-                                        if path == alt {
+                                        if candidate == alt {
                                             log::debug!("  MATCH FOUND (alt target)!");
                                         }
                                     }
                                 }
                                 if paths.iter().any(|p| {
                                     p == &target_normalized
-                                        || (alt_target.is_some()
-                                            && p == alt_target.as_ref().unwrap())
+                                        || alt_target.as_ref().is_some_and(|alt| p == alt)
                                 }) {
                                     found = true;
                                     log::debug!(

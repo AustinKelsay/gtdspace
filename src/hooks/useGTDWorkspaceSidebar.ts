@@ -876,7 +876,7 @@ export function useGTDWorkspaceSidebar({
   const handleDelete = React.useCallback(async () => {
     if (!deleteItem) return;
 
-    try {
+    const deleted = await withErrorHandling(async () => {
       if (deleteItem.type === 'project') {
         const result = await safeInvoke<{
           success: boolean;
@@ -885,8 +885,7 @@ export function useGTDWorkspaceSidebar({
         }>('delete_folder', { path: deleteItem.path }, { success: false, message: 'Failed to delete folder' });
 
         if (!result?.success) {
-          window.alert(`Failed to delete project: ${result?.message || 'Unknown error'}`);
-          return;
+          throw new Error(result?.message || 'Failed to delete project');
         }
 
         setExpandedProjects((prev) => prev.filter((path) => path !== deleteItem.path));
@@ -918,8 +917,7 @@ export function useGTDWorkspaceSidebar({
         };
 
         if (!result?.success) {
-          window.alert(`Failed to delete file: ${result?.message || 'Unknown error'}`);
-          return;
+          throw new Error(result?.message || 'Failed to delete file');
         }
 
         if (deleteItem.type === 'action') {
@@ -953,9 +951,11 @@ export function useGTDWorkspaceSidebar({
         );
       }
 
+      return true;
+    }, deleteItem.type === 'project' ? 'Failed to delete project' : 'Failed to delete file', 'workspace-sidebar');
+
+    if (deleted) {
       setDeleteItem(null);
-    } catch (error) {
-      window.alert(`Error deleting file: ${error}`);
     }
   }, [
     deleteItem,
@@ -966,6 +966,7 @@ export function useGTDWorkspaceSidebar({
     removeActionOverlay,
     removeProjectOverlay,
     removeSectionFileOverlay,
+    withErrorHandling,
   ]);
 
   const handlePageCreated = React.useCallback(

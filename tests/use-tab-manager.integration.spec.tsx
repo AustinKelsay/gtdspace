@@ -480,6 +480,35 @@ describe('useTabManager integration', () => {
     expect(getMismatched().tabState.openTabs).toHaveLength(0);
   });
 
+  it('does not clear persisted tabs while the workspace path is still unknown', async () => {
+    localStorage.setItem(
+      'gtdspace-tabs',
+      JSON.stringify({
+        version: 2,
+        workspacePath: '/mock/workspace',
+        activeTabId: 'restored-tab',
+        maxTabs: 10,
+        openTabs: [
+          {
+            id: 'restored-tab',
+            filePath: '/mock/workspace/Notes.md',
+            fileName: 'Notes.md',
+            hasUnsavedChanges: false,
+            isActive: true,
+          },
+        ],
+      }),
+    );
+
+    renderTabManagerHook({
+      restoreTabs: true,
+    });
+
+    await waitFor(() => {
+      expect(localStorage.getItem('gtdspace-tabs')).not.toBeNull();
+    });
+  });
+
   it('updates tab paths from rename events without leaving duplicate filePath state behind', async () => {
     const { getCurrent } = renderTabManagerHook();
 

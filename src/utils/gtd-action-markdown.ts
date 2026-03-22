@@ -41,6 +41,19 @@ function pad(value: number): string {
   return String(value).padStart(2, '0');
 }
 
+function formatParsedDate(parsed: Date, useUtc = false): string {
+  const year = useUtc ? parsed.getUTCFullYear() : parsed.getFullYear();
+  const month = useUtc ? parsed.getUTCMonth() + 1 : parsed.getMonth() + 1;
+  const day = useUtc ? parsed.getUTCDate() : parsed.getDate();
+  return `${year}-${pad(month)}-${pad(day)}`;
+}
+
+function formatParsedTime(parsed: Date, useUtc = false): string {
+  const hours = useUtc ? parsed.getUTCHours() : parsed.getHours();
+  const minutes = useUtc ? parsed.getUTCMinutes() : parsed.getMinutes();
+  return `${pad(hours)}:${pad(minutes)}`;
+}
+
 function isDateOnlyString(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
 }
@@ -57,12 +70,12 @@ export function actionDateToDateOnly(value?: string | null): string {
   if (isDateOnlyString(trimmed)) {
     return trimmed;
   }
+  const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(trimmed);
   if (trimmed.includes('T')) {
-    const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(trimmed);
     if (hasTimezone) {
       const parsed = new Date(trimmed);
       if (!Number.isNaN(parsed.getTime())) {
-        return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`;
+        return formatParsedDate(parsed, true);
       }
     } else {
       const [date] = trimmed.split('T');
@@ -77,7 +90,7 @@ export function actionDateToDateOnly(value?: string | null): string {
     return trimmed.split('T')[0] || '';
   }
 
-  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`;
+  return formatParsedDate(parsed, hasTimezone);
 }
 
 export function actionDateToTimeOnly(value?: string | null): string {
@@ -94,7 +107,7 @@ export function actionDateToTimeOnly(value?: string | null): string {
   if (hasTimezone) {
     const parsed = new Date(trimmed);
     if (!Number.isNaN(parsed.getTime())) {
-      return `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
+      return formatParsedTime(parsed, true);
     }
   } else if (trimmed.includes('T')) {
     const match = trimmed.match(/T(\d{2}:\d{2})/);
@@ -108,17 +121,25 @@ export function actionDateToTimeOnly(value?: string | null): string {
     return '';
   }
 
-  return `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
+  return formatParsedTime(parsed, hasTimezone);
 }
 
 export function normalizeActionEffort(raw?: string | null): GTDActionEffort {
   const normalized = raw?.trim().toLowerCase();
+  const canonical = normalized?.replace(/[\s_]+/g, '-');
   switch (normalized) {
     case 'small':
     case 'medium':
     case 'large':
-    case 'extra-large':
       return normalized;
+    default:
+      break;
+  }
+
+  switch (canonical) {
+    case 'extra-large':
+    case 'extralarge':
+      return 'extra-large';
     default:
       return 'medium';
   }

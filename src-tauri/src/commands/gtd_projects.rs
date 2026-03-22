@@ -653,6 +653,49 @@ fn validate_project_name(name: &str) -> Result<String, String> {
         _ => return Err("Project name must be a single directory name".to_string()),
     }
 
+    if trimmed.chars().any(|ch| {
+        matches!(ch, '<' | '>' | ':' | '"' | '|' | '?' | '*' | '/' | '\\') || ch.is_control()
+    }) {
+        return Err(
+            "Project name cannot contain Windows-invalid characters or control characters"
+                .to_string(),
+        );
+    }
+
+    let reserved_check = trimmed
+        .trim_end_matches([' ', '.'])
+        .split('.')
+        .next()
+        .unwrap_or(trimmed)
+        .to_ascii_uppercase();
+    if matches!(
+        reserved_check.as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+    ) {
+        return Err("Project name cannot use a reserved Windows device name".to_string());
+    }
+
     Ok(trimmed.to_string())
 }
 
@@ -898,4 +941,31 @@ fn count_project_actions(project_path: &Path) -> u32 {
     }
 
     count
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_project_name;
+
+    #[test]
+    fn validate_project_name_rejects_windows_invalid_characters() {
+        assert!(validate_project_name("Alpha<Project>").is_err());
+        assert!(validate_project_name("Alpha:Beta").is_err());
+        assert!(validate_project_name("Alpha\u{001f}Beta").is_err());
+    }
+
+    #[test]
+    fn validate_project_name_rejects_reserved_windows_names() {
+        assert!(validate_project_name("CON").is_err());
+        assert!(validate_project_name("nul.md").is_err());
+        assert!(validate_project_name("Lpt1.backup").is_err());
+    }
+
+    #[test]
+    fn validate_project_name_accepts_normal_directory_names() {
+        assert_eq!(
+            validate_project_name("Quarterly Planning").unwrap(),
+            "Quarterly Planning"
+        );
+    }
 }

@@ -561,6 +561,10 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
   }, [resolvedMaxTabs, restoreTabs, workspacePath]);
 
   useEffect(() => {
+    if (!workspacePath) {
+      return;
+    }
+
     if (tabState.openTabs.length > 0) {
       persistTabState(tabState, workspacePath);
     } else if (

@@ -1,4 +1,5 @@
 import type { FileTab, TabManagerState } from '@/types';
+import { norm } from '@/utils/path';
 
 export const DEFAULT_MAX_TABS = 10;
 
@@ -34,7 +35,7 @@ export function createInitialTabState(maxTabs = DEFAULT_MAX_TABS): TabManagerSta
 }
 
 export function pathKey(path?: string | null): string {
-  return (path ?? '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  return norm(path)?.replace(/\/+$/, '') ?? '';
 }
 
 export function pathsEqual(a?: string | null, b?: string | null): boolean {
@@ -246,8 +247,14 @@ export function tabStateReducer(state: TabManagerState, action: TabStateAction):
       const nextTabs = state.openTabs.filter(
         (tab) => !isSameOrDescendantPath(tab.file.path, action.path),
       );
+      const nextRecentlyClosed = state.recentlyClosed.filter(
+        (tab) => !isSameOrDescendantPath(tab.file.path, action.path),
+      );
 
-      if (nextTabs.length === state.openTabs.length) {
+      if (
+        nextTabs.length === state.openTabs.length &&
+        nextRecentlyClosed.length === state.recentlyClosed.length
+      ) {
         return state;
       }
 
@@ -261,6 +268,7 @@ export function tabStateReducer(state: TabManagerState, action: TabStateAction):
         ...state,
         activeTabId: nextActiveTabId,
         openTabs: applyActiveState(nextTabs, nextActiveTabId),
+        recentlyClosed: nextRecentlyClosed,
       };
     }
 

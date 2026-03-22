@@ -133,4 +133,35 @@ describe('tab-runtime state reducer', () => {
     state = tabStateReducer(state, { type: 'remove-recently-closed-head' });
     expect(state.recentlyClosed).toHaveLength(0);
   });
+
+  it('removes deleted paths from recently closed history as well as open tabs', () => {
+    let state = createInitialTabState(3);
+
+    state = tabStateReducer(state, {
+      type: 'open-tab',
+      tab: buildTab('tab-1', '/mock/workspace/Projects/Alpha/README.md', { isActive: true }),
+    });
+    state = tabStateReducer(state, {
+      type: 'open-tab',
+      tab: buildTab('tab-2', '/mock/workspace/Cabinet/Reference.md', { isActive: true }),
+    });
+    state = tabStateReducer(state, {
+      type: 'close-tab',
+      tabId: 'tab-1',
+    });
+
+    expect(takeMostRecentlyClosedFile(state)?.file.path).toBe(
+      '/mock/workspace/Projects/Alpha/README.md',
+    );
+
+    state = tabStateReducer(state, {
+      type: 'remove-deleted-path',
+      path: '/mock/workspace/Projects/Alpha',
+    });
+
+    expect(state.openTabs.map((tab) => tab.file.path)).toEqual([
+      '/mock/workspace/Cabinet/Reference.md',
+    ]);
+    expect(state.recentlyClosed).toHaveLength(0);
+  });
 });

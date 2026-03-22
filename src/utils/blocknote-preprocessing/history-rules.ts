@@ -54,7 +54,7 @@ export function shouldSkipBlockInsideHistory(
   return (
     trimmedText === "" ||
     isExactHelperText ||
-    (hasOnlyItalicContent && isExactHelperText)
+    hasOnlyItalicContent
   );
 }
 

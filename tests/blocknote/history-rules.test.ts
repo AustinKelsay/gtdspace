@@ -88,7 +88,7 @@ describe("blocknote history rules", () => {
         },
         "helper"
       )
-    ).toBe(false);
+    ).toBe(true);
 
     expect(
       shouldSkipBlockInsideHistory(

@@ -41,10 +41,7 @@ export const GTDInitDialog: React.FC<GTDInitDialogProps> = ({
   const handleSelectFolder = async () => {
     const result = await withErrorHandling(
       async () => {
-        const folder = await safeInvoke<string>('select_folder', undefined, null);
-        if (!folder) {
-          throw new Error('No folder selected');
-        }
+        const folder = await safeInvoke<string | null>('select_folder', undefined, null);
         return folder;
       },
       'Failed to select folder'

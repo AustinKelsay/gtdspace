@@ -159,6 +159,23 @@ export function useGTDWorkspaceSidebar({
   const preloadedRef = React.useRef(false);
   const loadingSectionsRef = React.useRef<Set<string>>(new Set());
 
+  const resolveReadmeFile = React.useCallback(async (folderPath: string): Promise<MarkdownFile> => {
+    const normalizedFolderPath = normalizePath(folderPath) ?? folderPath.replace(/\\/g, '/');
+    const markdownPath = `${normalizedFolderPath}/README.markdown`;
+    const mdPath = `${normalizedFolderPath}/README.md`;
+    const markdownExists = await safeInvoke<boolean>('check_file_exists', { filePath: markdownPath }, false);
+    const filePath = markdownExists ? markdownPath : mdPath;
+
+    return {
+      id: filePath,
+      name: markdownExists ? 'README.markdown' : 'README.md',
+      path: filePath,
+      size: 0,
+      last_modified: Math.floor(Date.now() / 1000),
+      extension: markdownExists ? 'markdown' : 'md',
+    };
+  }, []);
+
   React.useEffect(() => {
     sectionFilesRef.current = sectionFiles;
   }, [sectionFiles]);
@@ -395,6 +412,15 @@ export function useGTDWorkspaceSidebar({
         preloadedRef.current = false;
         lastRootRef.current = pathToCheck;
         setLoadedSections(new Set());
+        setSectionFiles({});
+        sectionFilesRef.current = {};
+        setProjectActions({});
+        projectActionsRef.current = {};
+        setProjectMetadata({});
+        setActionMetadata({});
+        setActionStatuses({});
+        setSectionFileMetadata({});
+        setPendingProjects([]);
       }
 
       const isGTD = await checkGTDSpace(pathToCheck);
@@ -816,16 +842,9 @@ export function useGTDWorkspaceSidebar({
         await loadProjectActions(project.path);
       }
 
-      onFileSelect({
-        id: `${project.path}/README.md`,
-        name: 'README.md',
-        path: `${project.path}/README.md`,
-        size: 0,
-        last_modified: Math.floor(Date.now() / 1000),
-        extension: 'md',
-      });
+      onFileSelect(await resolveReadmeFile(project.path));
     },
-    [loadProjectActions, onFileSelect]
+    [loadProjectActions, onFileSelect, resolveReadmeFile]
   );
 
   const toggleProjectExpand = React.useCallback(
@@ -847,16 +866,11 @@ export function useGTDWorkspaceSidebar({
 
   const openHorizonReadme = React.useCallback(
     (folderPath: string) => {
-      onFileSelect({
-        id: `${folderPath}/README.md`,
-        name: 'README.md',
-        path: `${folderPath}/README.md`,
-        size: 0,
-        last_modified: Math.floor(Date.now() / 1000),
-        extension: 'md',
+      void resolveReadmeFile(folderPath).then((file) => {
+        onFileSelect(file);
       });
     },
-    [onFileSelect]
+    [onFileSelect, resolveReadmeFile]
   );
 
   const handleCreatePage = React.useCallback(
@@ -959,6 +973,11 @@ export function useGTDWorkspaceSidebar({
           return next;
         });
         removeProjectOverlay(normalizedDeletePath);
+        window.dispatchEvent(
+          new CustomEvent('file-deleted', {
+            detail: { path: normalizedDeletePath },
+          })
+        );
 
         if (gtdSpace?.root_path) {
           await loadProjects(gtdSpace.root_path);
@@ -1028,6 +1047,8 @@ export function useGTDWorkspaceSidebar({
   const handlePageCreated = React.useCallback(
     (filePath: string) => {
       if (!pageDialogDirectory) return;
+      const normalizedDirectoryPath =
+        normalizePath(pageDialogDirectory.path) ?? pageDialogDirectory.path.replace(/\\/g, '/');
 
       const newFile: MarkdownFile = {
         id: filePath,
@@ -1040,10 +1061,10 @@ export function useGTDWorkspaceSidebar({
 
       flushSync(() => {
         setSectionFiles((prev) => {
-          const currentFiles = prev[pageDialogDirectory.path] || [];
+          const currentFiles = prev[normalizedDirectoryPath] || [];
           return {
             ...prev,
-            [pageDialogDirectory.path]: sortMarkdownFiles([...currentFiles, newFile]),
+            [normalizedDirectoryPath]: sortMarkdownFiles([...currentFiles, newFile]),
           };
         });
       });
@@ -1066,6 +1087,7 @@ export function useGTDWorkspaceSidebar({
       if (!habitsSection || !rootPath) return;
 
       const habitsPath = buildSectionPath(rootPath, habitsSection.path);
+      const normalizedHabitsPath = normalizePath(habitsPath) ?? habitsPath.replace(/\\/g, '/');
       const newFile: MarkdownFile = {
         id: habitPath,
         name: getFolderName(normalizePath(habitPath) ?? habitPath),
@@ -1076,10 +1098,10 @@ export function useGTDWorkspaceSidebar({
       };
 
       setSectionFiles((prev) => {
-        const currentHabits = prev[habitsPath] || [];
+        const currentHabits = prev[normalizedHabitsPath] || [];
         return {
           ...prev,
-          [habitsPath]: sortMarkdownFiles([...currentHabits, newFile]),
+          [normalizedHabitsPath]: sortMarkdownFiles([...currentHabits, newFile]),
         };
       });
 

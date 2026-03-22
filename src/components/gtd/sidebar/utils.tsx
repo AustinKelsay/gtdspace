@@ -169,7 +169,10 @@ export const buildSidebarSearchResults = ({
     });
 
     if (matches.length > 0) {
-      const projectName = getFolderName(projectPath) || projectPath;
+      const project = projects.find((candidate) => normalizePath(candidate.path) === normalizePath(projectPath));
+      const projectName = project
+        ? getProjectDisplay(project, projectMetadata).title
+        : getFolderName(projectPath) || projectPath;
       results.actions.push({ project: projectName, actions: matches });
     }
   });

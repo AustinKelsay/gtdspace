@@ -25,6 +25,7 @@ import { useHorizonsRelationships } from '@/hooks/useHorizonsRelationships';
 import { GTDProjectDialog, GTDActionDialog } from '@/components/gtd';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { useToast } from '@/hooks/use-toast';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ToastAction } from '@/components/ui/toast';
 import {
   DashboardOverview,
@@ -112,6 +113,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   // Track if we've loaded data for current space
   const loadedPathRef = React.useRef<string | null>(null);
   const { toast } = useToast();
+  const { withErrorHandling } = useErrorHandler();
 
   // Helper function to sanitize file names for security
   const sanitizeFileName = (input: string): string | null => {
@@ -572,6 +574,16 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                 if (gtdSpace?.root_path) {
                   const habitName = prompt('Enter habit name:');
                   if (habitName) {
+                    const sanitizedHabitName = sanitizeFileName(habitName);
+                    if (!sanitizedHabitName) {
+                      toast({
+                        title: 'Invalid habit name',
+                        description: 'Please enter a valid habit name without special characters',
+                        variant: 'destructive'
+                      });
+                      return;
+                    }
+
                     // Available frequencies: daily, weekdays, every-other-day, twice-weekly, weekly, biweekly, monthly
                     const frequencyOptions = [
                       { value: 'daily', label: 'Daily' },
@@ -592,18 +604,20 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                       )?.value || 'daily';
 
                       try {
-                        const habitPath = await safeInvoke<string>('create_gtd_habit', {
-                          space_path: gtdSpace.root_path,
-                          habit_name: habitName,
-                          frequency: frequency,
-                          focus_time: null
-                        });
+                        const habitPath = await withErrorHandling(() =>
+                          safeInvoke<string>('createGtdHabit', {
+                            spacePath: gtdSpace.root_path,
+                            habitName: sanitizedHabitName,
+                            frequency,
+                            focusTime: null
+                          }, null)
+                        );
 
                         // Open the new habit file
                         if (habitPath && onSelectFile) {
                           onSelectFile({
                             id: habitPath,
-                            name: `${habitName}.md`,
+                            name: `${sanitizedHabitName}.md`,
                             path: habitPath,
                             size: 0,
                             last_modified: Math.floor(Date.now() / 1000),

@@ -11,6 +11,8 @@ import { toISOStringFromEpoch } from '@/utils/time';
 import { parseLocalDate } from '@/utils/date-formatting';
 import { migrateGTDObjects } from '@/utils/data-migration';
 import { parseActionMarkdown } from '@/utils/gtd-action-markdown';
+import { emitContentSaved, emitMetadataChange } from '@/utils/content-event-bus';
+import { extractMetadata } from '@/utils/metadata-extractor';
 import {
   parseProjectMarkdown,
   toDateOnly,
@@ -40,6 +42,9 @@ export interface ProjectWithMetadata extends GTDProject {
 export type PersistedProjectUpdates = Partial<
   Pick<ProjectWithMetadata, 'name' | 'status' | 'dueDate'>
 >;
+
+const isSyntheticProjectTitle = (title?: string | null): boolean =>
+  !title || /^Untitled(?: Project)?$/i.test(title.trim());
 
 interface UseProjectsDataOptions {
   autoLoad?: boolean;
@@ -287,7 +292,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
             const enhanced: ProjectWithMetadata = {
               ...project,
               name:
-                parsedProject?.title && parsedProject.title !== 'Untitled'
+                parsedProject?.title && !isSyntheticProjectTitle(parsedProject.title)
                   ? parsedProject.title
                   : project.name,
               status: parsedProject?.status ?? normalizeProjectStatus(project.status),
@@ -353,7 +358,9 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
         title:
           typeof updates.name === 'string' && updates.name.trim()
             ? updates.name.trim()
-            : parsedProject.title,
+            : isSyntheticProjectTitle(parsedProject.title)
+              ? projectPath.split('/').filter(Boolean).pop() || 'Project'
+              : parsedProject.title,
         status:
           typeof updates.status === 'string'
             ? normalizeProjectStatus(updates.status)
@@ -380,6 +387,22 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
         console.error('[updateProjectStatus] Failed to write file');
         throw new Error('Failed to save project changes');
       }
+
+      const metadata = extractMetadata(nextContent);
+      const fileName = readmePath.split('/').pop() || 'README.md';
+      emitMetadataChange({
+        filePath: readmePath,
+        fileName,
+        content: nextContent,
+        metadata,
+      });
+      emitContentSaved({
+        filePath: readmePath,
+        fileName,
+        content: nextContent,
+        metadata,
+      });
+      window.onTabFileSaved?.(readmePath, fileName, nextContent, metadata);
 
       // Update local state
       setProjects(prev => prev.map(p =>

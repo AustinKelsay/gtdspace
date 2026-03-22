@@ -47,22 +47,22 @@ fn open_in_linux_file_manager(path: &std::ffi::OsStr) -> Result<(), std::io::Err
 ///
 /// # Returns
 ///
-/// Selected folder path as string, or error if cancelled or failed
+/// Selected folder path as string, or `None` if cancelled
 ///
 /// # Examples
 ///
 /// ```typescript
 /// import { invoke } from '@tauri-apps/api/core';
 ///
-/// try {
-///   const folderPath = await invoke('select_folder');
+/// const folderPath = await invoke<string | null>('select_folder');
+/// if (folderPath) {
 ///   console.log('Selected folder:', folderPath);
-/// } catch (error) {
-///   console.log('User cancelled or error occurred');
+/// } else {
+///   console.log('User cancelled folder selection');
 /// }
 /// ```
 #[tauri::command]
-pub async fn select_folder(app: AppHandle) -> Result<String, String> {
+pub async fn select_folder(app: AppHandle) -> Result<Option<String>, String> {
     log::debug!("select_folder command called");
     log::info!("Folder selection dialog requested");
 
@@ -81,11 +81,11 @@ pub async fn select_folder(app: AppHandle) -> Result<String, String> {
         Some(folder_path) => {
             let path_str = folder_path.to_string();
             log::debug!("Folder selected: {}", path_str);
-            Ok(path_str)
+            Ok(Some(path_str))
         }
         None => {
             log::debug!("Folder selection cancelled");
-            Err("Folder selection was cancelled".to_string())
+            Ok(None)
         }
     }
 }

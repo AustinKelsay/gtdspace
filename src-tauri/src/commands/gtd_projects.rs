@@ -99,6 +99,7 @@ pub fn create_gtd_project(
 
     if let Err(e) = fs::write(&readme_path, readme_content) {
         // Clean up project directory if README creation fails
+        let _ = fs::remove_file(&readme_path);
         let _ = fs::remove_dir(&project_path);
         return Err(format!("Failed to create project README: {}", e));
     }

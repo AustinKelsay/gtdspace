@@ -94,15 +94,12 @@ fn rename_path(old_path: &Path, new_path: &Path) -> Result<(), std::io::Error> {
     }
 
     if !paths_refer_to_same_entry(old_path, new_path) {
-        match fs::hard_link(old_path, new_path) {
-            Ok(()) => {
-                if let Err(error) = fs::remove_file(old_path) {
-                    let _ = fs::remove_file(new_path);
-                    return Err(error);
-                }
-                return Ok(());
-            }
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+        match fs::rename(old_path, new_path) {
+            Ok(()) => return Ok(()),
+            Err(error)
+                if error.kind() == io::ErrorKind::AlreadyExists
+                    || is_cross_device_rename_error(&error) =>
+            {
                 return Err(error);
             }
             Err(error) => return Err(error),
@@ -836,11 +833,17 @@ pub fn rename_file(old_path: String, new_name: String) -> Result<FileOperationRe
         }
     };
 
-    // Add .md extension if not present
+    // Preserve the original file extension when the new name omits one.
     let file_name = if has_markdown_extension(&safe_name) {
         safe_name
     } else {
-        format!("{}.md", safe_name)
+        let extension = old_file_path
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase())
+            .filter(|value| value == "md" || value == "markdown")
+            .unwrap_or_else(|| "md".to_string());
+        format!("{}.{}", safe_name, extension)
     };
 
     let new_file_path = directory.join(&file_name);

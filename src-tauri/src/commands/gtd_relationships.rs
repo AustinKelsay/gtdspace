@@ -6,6 +6,24 @@ use std::path::{Path, PathBuf};
 
 const MARKDOWN_EXTENSIONS: [&str; 2] = ["md", "markdown"];
 
+fn redact_path(path: &str) -> String {
+    let normalized = path.replace('\\', "/");
+    let segments: Vec<&str> = normalized
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect();
+
+    match segments.as_slice() {
+        [] => normalized,
+        [last] => (*last).to_string(),
+        _ => format!(
+            ".../{}/{}",
+            segments[segments.len() - 2],
+            segments[segments.len() - 1]
+        ),
+    }
+}
+
 fn normalize_habit_status_value(value: &str) -> String {
     match value.trim().to_ascii_lowercase().as_str() {
         "true" | "completed" | "complete" => "completed".to_string(),
@@ -145,8 +163,8 @@ pub fn find_reverse_relationships(
     filter_type: String,
 ) -> Result<Vec<ReverseRelationship>, String> {
     log::debug!("=== find_reverse_relationships START ===");
-    log::debug!("Target path: {}", target_path);
-    log::debug!("Space path: {}", space_path);
+    log::debug!("Target path: {}", redact_path(&target_path));
+    log::debug!("Space path: {}", redact_path(&space_path));
     log::debug!("Filter type: {}", filter_type);
 
     let mut relationships = Vec::new();
@@ -251,14 +269,8 @@ pub fn find_reverse_relationships(
 
                 let has_reference = {
                     // Determine which tags to check
-                    let tags_projects = [
-                        "areas-references",
-                        "goals-references",
-                        "vision-references",
-                        "purpose-references",
-                        "references",
-                    ];
-                    let tags_all = [
+                    let tags_with_general = [
+                        "projects-references",
                         "areas-references",
                         "goals-references",
                         "vision-references",
@@ -266,9 +278,9 @@ pub fn find_reverse_relationships(
                         "references",
                     ];
                     let tags: &[&str] = if filter_type == "projects" && dir_name == "Projects" {
-                        &tags_projects
+                        &tags_with_general
                     } else {
-                        &tags_all
+                        &tags_with_general
                     };
 
                     let mut found_any = false;
@@ -300,6 +312,7 @@ pub fn find_reverse_relationships(
                     let mut references = Vec::new();
 
                     let reference_tags = [
+                        "projects-references",
                         "areas-references",
                         "goals-references",
                         "vision-references",
@@ -391,8 +404,8 @@ pub fn find_habits_referencing(
     space_path: String,
 ) -> Result<Vec<HabitReference>, String> {
     log::debug!("=== find_habits_referencing START ===");
-    log::debug!("Target path: {}", target_path);
-    log::debug!("Space path: {}", space_path);
+    log::debug!("Target path: {}", redact_path(&target_path));
+    log::debug!("Space path: {}", redact_path(&space_path));
 
     let mut habit_references = Vec::new();
     let space_root = Path::new(&space_path);
@@ -408,8 +421,8 @@ pub fn find_habits_referencing(
     log::debug!("Target normalized: {}", target_normalized);
 
     // For project README files, also check against the project folder path
-    let alt_target = strip_project_readme_suffix(&target_normalized)
-        .map(|path| normalize_reference_target(&path));
+    let alt_target =
+        strip_project_readme_suffix(&target_path).map(|path| normalize_reference_target(&path));
     if let Some(ref alt) = alt_target {
         log::debug!("Also checking against project folder path: {}", alt);
     }
@@ -432,6 +445,7 @@ pub fn find_habits_referencing(
                             "goals-references",
                             "vision-references",
                             "purpose-references",
+                            "references",
                         ];
 
                         let mut found = false;
@@ -446,25 +460,14 @@ pub fn find_habits_referencing(
                                     paths.len(),
                                     target_normalized
                                 );
-                                for candidate in &paths {
-                                    let candidate_normalized =
-                                        normalize_reference_target(candidate);
-                                    log::debug!(
-                                        "  Comparing: '{}' == '{}'",
-                                        candidate_normalized,
-                                        target_normalized
-                                    );
-                                    if candidate_normalized == target_normalized {
-                                        log::debug!("  MATCH FOUND!");
-                                    }
-                                    if let Some(ref alt) = alt_target {
-                                        if candidate_normalized == *alt {
-                                            log::debug!("  MATCH FOUND (alt target)!");
-                                        }
-                                    }
-                                }
                                 if paths.iter().any(|p| {
                                     let candidate_normalized = normalize_reference_target(p);
+                                    log::debug!(
+                                        "  Comparing: '{}' against target='{}' alt='{}'",
+                                        candidate_normalized,
+                                        target_normalized,
+                                        alt_target.as_deref().unwrap_or("")
+                                    );
                                     candidate_normalized == target_normalized
                                         || alt_target
                                             .as_ref()

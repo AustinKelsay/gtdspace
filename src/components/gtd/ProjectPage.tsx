@@ -127,7 +127,12 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
   const [items, setItems] = React.useState<ProjectActionItem[]>([]);
   const [loading, setLoading] = React.useState(false);
   const requestIdRef = React.useRef(0);
+  const latestProjectPathRef = React.useRef(projectPath);
   const { withErrorHandling } = useErrorHandler();
+
+  React.useEffect(() => {
+    latestProjectPathRef.current = projectPath;
+  }, [projectPath]);
 
   const load = React.useCallback(async () => {
     const requestId = requestIdRef.current + 1;
@@ -162,7 +167,10 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
 
       const actions = await Promise.all(
         (files ?? []).map(async (file) => {
-          if (requestId !== requestIdRef.current || requestedProjectPath !== projectPath) {
+          if (
+            requestId !== requestIdRef.current ||
+            requestedProjectPath !== latestProjectPathRef.current
+          ) {
             return null;
           }
 
@@ -191,7 +199,10 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
         })
       );
 
-      if (requestId !== requestIdRef.current || requestedProjectPath !== projectPath) {
+      if (
+        requestId !== requestIdRef.current ||
+        requestedProjectPath !== latestProjectPathRef.current
+      ) {
         return;
       }
 
@@ -199,12 +210,18 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
       validActions.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
       setItems(validActions);
     } catch (error) {
-      if (requestId === requestIdRef.current && requestedProjectPath === projectPath) {
+      if (
+        requestId === requestIdRef.current &&
+        requestedProjectPath === latestProjectPathRef.current
+      ) {
         console.error("ProjectActionsSection: failed to load actions", error);
         setItems([]);
       }
     } finally {
-      if (requestId === requestIdRef.current && requestedProjectPath === projectPath) {
+      if (
+        requestId === requestIdRef.current &&
+        requestedProjectPath === latestProjectPathRef.current
+      ) {
         setLoading(false);
       }
     }
@@ -273,7 +290,12 @@ const ProjectHabitsSection: React.FC<{ projectPath: string | null }> = ({ projec
   const [habits, setHabits] = React.useState<ProjectHabitItem[]>([]);
   const [loading, setLoading] = React.useState(false);
   const requestIdRef = React.useRef(0);
+  const latestProjectPathRef = React.useRef(projectPath);
   const { withErrorHandling } = useErrorHandler();
+
+  React.useEffect(() => {
+    latestProjectPathRef.current = projectPath;
+  }, [projectPath]);
 
   const load = React.useCallback(async () => {
     const requestId = requestIdRef.current + 1;
@@ -317,7 +339,10 @@ const ProjectHabitsSection: React.FC<{ projectPath: string | null }> = ({ projec
 
       const matches: ProjectHabitItem[] = [];
       for (const file of files ?? []) {
-        if (requestId !== requestIdRef.current || requestedProjectPath !== projectPath) {
+        if (
+          requestId !== requestIdRef.current ||
+          requestedProjectPath !== latestProjectPathRef.current
+        ) {
           return;
         }
 
@@ -343,19 +368,28 @@ const ProjectHabitsSection: React.FC<{ projectPath: string | null }> = ({ projec
         }
       }
 
-      if (requestId !== requestIdRef.current || requestedProjectPath !== projectPath) {
+      if (
+        requestId !== requestIdRef.current ||
+        requestedProjectPath !== latestProjectPathRef.current
+      ) {
         return;
       }
 
       matches.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
       setHabits(matches);
     } catch (error) {
-      if (requestId === requestIdRef.current && requestedProjectPath === projectPath) {
+      if (
+        requestId === requestIdRef.current &&
+        requestedProjectPath === latestProjectPathRef.current
+      ) {
         console.error("ProjectHabitsSection: failed to load habits", error);
         setHabits([]);
       }
     } finally {
-      if (requestId === requestIdRef.current && requestedProjectPath === projectPath) {
+      if (
+        requestId === requestIdRef.current &&
+        requestedProjectPath === latestProjectPathRef.current
+      ) {
         setLoading(false);
       }
     }
@@ -435,6 +469,11 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
   const [horizonOptions, setHorizonOptions] = React.useState<HorizonOption[]>([]);
   const [horizonSearch, setHorizonSearch] = React.useState<string>("");
   const [horizonLoading, setHorizonLoading] = React.useState(false);
+  const pendingHorizonChangeRef = React.useRef<{
+    next: ProjectHorizonReferences;
+    targetPath: string;
+    action: "add" | "remove";
+  } | null>(null);
 
   React.useEffect(() => {
     setTitle(parsed.title);
@@ -586,30 +625,44 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       const normalizedTarget = normalizeReferencePath(value);
       if (!normalizedTarget) return;
 
-      const normalizedCurrent = normalizeProjectHorizonReferences(horizonRefs);
-      const group = normalizedCurrent[key] ?? [];
-      const isPresent = group.includes(normalizedTarget);
-      const action: "add" | "remove" = isPresent ? "remove" : "add";
-      const nextGroup = isPresent
-        ? group.filter((ref) => ref !== normalizedTarget)
-        : [...group, normalizedTarget];
-      const next = {
-        ...normalizedCurrent,
-        [key]: nextGroup,
-      };
+      setHorizonRefs((prev) => {
+        const normalizedCurrent = normalizeProjectHorizonReferences(prev);
+        const group = normalizedCurrent[key] ?? [];
+        const isPresent = group.includes(normalizedTarget);
+        const action: "add" | "remove" = isPresent ? "remove" : "add";
+        const nextGroup = isPresent
+          ? group.filter((ref) => ref !== normalizedTarget)
+          : [...group, normalizedTarget];
+        const next = {
+          ...normalizedCurrent,
+          [key]: nextGroup,
+        };
 
-      setHorizonRefs(next);
-      emitRebuild({ horizonReferences: next });
+        pendingHorizonChangeRef.current = {
+          next,
+          targetPath: normalizedTarget,
+          action,
+        };
+        return next;
+      });
+
+      const pending = pendingHorizonChangeRef.current;
+      if (!pending) {
+        return;
+      }
+      pendingHorizonChangeRef.current = null;
+
+      emitRebuild({ horizonReferences: pending.next });
       if (normalizedFilePath) {
         void syncHorizonBacklink({
           sourcePath: normalizedFilePath,
           sourceKind: "projects",
-          targetPath: normalizedTarget,
-          action,
+          targetPath: pending.targetPath,
+          action: pending.action,
         });
       }
     },
-    [emitRebuild, horizonRefs, normalizedFilePath]
+    [emitRebuild, normalizedFilePath]
   );
 
   const handleHorizonRemove = React.useCallback(
@@ -617,30 +670,50 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       const normalizedTarget = normalizeReferencePath(value);
       if (!normalizedTarget) return;
 
-      const normalizedCurrent = normalizeProjectHorizonReferences(horizonRefs);
-      const group = normalizedCurrent[key] ?? [];
-      if (!group.includes(normalizedTarget)) {
+      let removed = false;
+      setHorizonRefs((prev) => {
+        const normalizedCurrent = normalizeProjectHorizonReferences(prev);
+        const group = normalizedCurrent[key] ?? [];
+        if (!group.includes(normalizedTarget)) {
+          pendingHorizonChangeRef.current = null;
+          return prev;
+        }
+
+        removed = true;
+        const nextGroup = group.filter((ref) => ref !== normalizedTarget);
+        const next = {
+          ...normalizedCurrent,
+          [key]: nextGroup,
+        };
+        pendingHorizonChangeRef.current = {
+          next,
+          targetPath: normalizedTarget,
+          action: "remove",
+        };
+        return next;
+      });
+
+      if (!removed) {
         return;
       }
 
-      const nextGroup = group.filter((ref) => ref !== normalizedTarget);
-      const next = {
-        ...normalizedCurrent,
-        [key]: nextGroup,
-      };
+      const pending = pendingHorizonChangeRef.current;
+      if (!pending) {
+        return;
+      }
+      pendingHorizonChangeRef.current = null;
 
-      setHorizonRefs(next);
-      emitRebuild({ horizonReferences: next });
+      emitRebuild({ horizonReferences: pending.next });
       if (normalizedFilePath) {
         void syncHorizonBacklink({
           sourcePath: normalizedFilePath,
           sourceKind: "projects",
-          targetPath: normalizedTarget,
-          action: "remove",
+          targetPath: pending.targetPath,
+          action: pending.action,
         });
       }
     },
-    [emitRebuild, horizonRefs, normalizedFilePath]
+    [emitRebuild, normalizedFilePath]
   );
 
   const handleDesiredOutcomeChange = React.useCallback(

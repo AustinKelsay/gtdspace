@@ -22,11 +22,48 @@ fn default_settings_with_secure_key() -> UserSettings {
     settings
 }
 
+fn sync_git_sync_encryption_key(settings: &UserSettings) -> Result<(), String> {
+    let entry = keyring::Entry::new(SECURE_STORAGE_SERVICE, GIT_SYNC_ENCRYPTION_KEY_NAME)
+        .map_err(|error| format!("Failed to access secure storage: {}", error))?;
+
+    match settings
+        .git_sync_encryption_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(value) => entry
+            .set_password(value)
+            .map_err(|error| format!("Failed to store encryption key securely: {}", error)),
+        None => match entry.delete_password() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(error) => Err(format!(
+                "Failed to remove encryption key from secure storage: {}",
+                error
+            )),
+        },
+    }
+}
+
 #[cfg(not(test))]
 fn load_git_sync_encryption_key() -> Option<String> {
-    keyring::Entry::new(SECURE_STORAGE_SERVICE, GIT_SYNC_ENCRYPTION_KEY_NAME)
-        .ok()
-        .and_then(|entry| entry.get_password().ok())
+    match keyring::Entry::new(SECURE_STORAGE_SERVICE, GIT_SYNC_ENCRYPTION_KEY_NAME) {
+        Ok(entry) => match entry.get_password() {
+            Ok(password) => Some(password),
+            Err(keyring::Error::NoEntry) => None,
+            Err(error) => {
+                log::error!(
+                    "Failed to load git sync encryption key from secure storage: {}",
+                    error
+                );
+                None
+            }
+        },
+        Err(error) => {
+            log::error!("Failed to access git sync secure storage entry: {}", error);
+            None
+        }
+    }
 }
 
 /// User settings structure for persistence
@@ -159,6 +196,16 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                                 log::info!(
                                     "Secure storage already has an encryption key; skipping legacy migration overwrite"
                                 );
+                                if let Some(settings_obj) = value_to_deserialize.as_object_mut() {
+                                    settings_obj.remove("git_sync_encryption_key");
+                                    store.set("user_settings", value_to_deserialize.clone());
+                                    if let Err(error) = store.save() {
+                                        log::warn!(
+                                            "Failed to remove legacy encryption key from settings.json after secure-store migration: {}",
+                                            error
+                                        );
+                                    }
+                                }
                                 legacy_encryption_key = None;
                             }
                             Ok(_) | Err(keyring::Error::NoEntry) => {
@@ -321,6 +368,8 @@ fn save_settings_unlocked(app: &AppHandle, settings: &UserSettings) -> Result<St
             if let Err(e) = store.save() {
                 return Err(format!("Failed to persist settings: {}", e));
             }
+
+            sync_git_sync_encryption_key(settings)?;
 
             log::info!("Settings saved successfully");
             Ok("Settings saved successfully".to_string())

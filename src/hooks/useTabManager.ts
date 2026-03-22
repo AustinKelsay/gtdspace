@@ -48,13 +48,16 @@ function sanitizeMaxTabs(maxTabs?: number | null): number {
 }
 
 function buildReferenceFile(path: string): MarkdownFile {
+  const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  const basename = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+  const lastDot = basename.lastIndexOf('.');
   return {
     id: path,
-    name: path.split('/').pop() || 'Unknown.md',
+    name: basename || 'Unknown.md',
     path,
     size: 0,
     last_modified: Math.floor(Date.now() / 1000),
-    extension: 'md',
+    extension: lastDot > 0 ? basename.slice(lastDot + 1) || 'md' : 'md',
   };
 }
 
@@ -75,6 +78,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
   const pendingContentRef = useRef<Map<string, string>>(new Map());
   const restoredWorkspaceRef = useRef<string | null>(null);
   const restoringWorkspaceRef = useRef<string | null>(null);
+  const restoreAttemptRef = useRef(0);
 
   useEffect(() => {
     tabStateRef.current = tabState;
@@ -625,20 +629,22 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
     }
 
     restoringWorkspaceRef.current = workspacePath;
+    const restoreAttempt = restoreAttemptRef.current + 1;
+    restoreAttemptRef.current = restoreAttempt;
 
     const restoreTabsForWorkspace = async () => {
       const currentTabs = tabStateRef.current.openTabs;
-      let clearedForeignTabs = false;
       if (currentTabs.length > 0) {
         if (tabsBelongToWorkspace(currentTabs, workspacePath)) {
-          restoringWorkspaceRef.current = null;
-          restoredWorkspaceRef.current = workspacePath;
+          if (restoreAttemptRef.current === restoreAttempt) {
+            restoringWorkspaceRef.current = null;
+            restoredWorkspaceRef.current = workspacePath;
+          }
           return;
         }
 
         resetTransientTabState();
         dispatch({ type: 'clear-all' });
-        clearedForeignTabs = true;
       }
 
       try {
@@ -648,14 +654,20 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
           readFile: readTabFile,
         });
 
-        if (restoredState && (clearedForeignTabs || tabStateRef.current.openTabs.length === 0)) {
+        if (
+          restoredState &&
+          restoreAttemptRef.current === restoreAttempt &&
+          tabStateRef.current.openTabs.length === 0
+        ) {
           dispatch({ type: 'restore-state', state: restoredState });
         }
       } catch (error) {
         log.warn('Failed to initialize tabs from storage', error);
       } finally {
-        restoringWorkspaceRef.current = null;
-        restoredWorkspaceRef.current = workspacePath;
+        if (restoreAttemptRef.current === restoreAttempt) {
+          restoringWorkspaceRef.current = null;
+          restoredWorkspaceRef.current = workspacePath;
+        }
       }
     };
 

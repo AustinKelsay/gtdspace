@@ -233,6 +233,11 @@ fn parse_history_record_from_legacy_list(line: &str) -> Option<HistoryRecord> {
     Some(HistoryRecord { timestamp, action })
 }
 
+fn is_history_table_row_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed.starts_with('|') && trimmed.matches('|').count() >= 2
+}
+
 fn is_history_heading_line(line: &str) -> bool {
     line.trim().eq_ignore_ascii_case("## history")
 }
@@ -290,8 +295,8 @@ pub(crate) fn parse_habit_state(content: &str) -> Result<ParsedHabitState, Strin
     let history_records = parse_history_records(content);
     let reset_anchor = history_records
         .iter()
-        .rev()
-        .find(|record| is_reset_action(&record.action))
+        .filter(|record| is_reset_action(&record.action))
+        .max_by_key(|record| record.timestamp)
         .map(|record| record.timestamp)
         .or_else(|| history_records.iter().map(|record| record.timestamp).max())
         .or_else(|| parse_created_at(content));
@@ -382,7 +387,7 @@ pub(crate) fn insert_history_entry(content: &str, entry: &str) -> Result<String,
             } else if line.contains("|---") || line.contains("| ---") {
                 table_separator_idx = Some(i);
                 continue;
-            } else if line.starts_with('|') && line.contains(" | ") {
+            } else if is_history_table_row_line(line) {
                 last_history_line_idx = Some(i);
             } else if line.trim_start().starts_with("##") {
                 break;

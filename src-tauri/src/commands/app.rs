@@ -28,8 +28,9 @@ pub struct PermissionStatus {
 ///
 /// ```typescript
 /// import { invoke } from '@tauri-apps/api/core';
+/// import { withErrorHandling } from '@/hooks/useErrorHandler';
 ///
-/// const response = await invoke('ping');
+/// const response = await withErrorHandling(() => invoke<string>('ping'));
 /// console.log(response); // "pong"
 /// ```
 #[tauri::command]

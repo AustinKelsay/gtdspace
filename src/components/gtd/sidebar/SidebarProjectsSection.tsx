@@ -227,9 +227,6 @@ function ProjectRow({
               void onToggleProjectExpand(currentProject);
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-              }
               event.stopPropagation();
             }}
             variant="ghost"

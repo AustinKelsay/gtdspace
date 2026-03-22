@@ -41,6 +41,19 @@ fn atomic_write_habit_file(path: &Path, content: &str) -> io::Result<()> {
         .map_err(|error| error.error)
 }
 
+fn normalize_habit_title(habit_name: &str) -> Result<String, String> {
+    let trimmed = habit_name.trim();
+    if trimmed.is_empty() {
+        return Err("Habit name cannot be empty".to_string());
+    }
+
+    if trimmed.chars().any(char::is_control) {
+        return Err("Habit name cannot contain control characters".to_string());
+    }
+
+    Ok(trimmed.to_string())
+}
+
 #[tauri::command]
 pub fn create_gtd_habit(
     space_path: String,
@@ -49,14 +62,15 @@ pub fn create_gtd_habit(
     focus_time: Option<String>,
     references: Option<HabitReferenceInput>,
 ) -> Result<String, String> {
-    log::info!("Creating GTD habit: {}", habit_name);
+    let normalized_habit_name = normalize_habit_title(&habit_name)?;
+    log::info!("Creating GTD habit: {}", normalized_habit_name);
 
     let habits_path = Path::new(&space_path).join("Habits");
     if !habits_path.exists() {
         return Err("Habits directory does not exist. Initialize GTD space first.".to_string());
     }
 
-    let file_name = format!("{}.md", sanitize_markdown_file_stem(&habit_name));
+    let file_name = format!("{}.md", sanitize_markdown_file_stem(&normalized_habit_name));
     let habit_path = habits_path.join(&file_name);
 
     let frequency_value = HabitFrequency::from_create_input(&frequency)?.as_marker_token();
@@ -126,7 +140,7 @@ pub fn create_gtd_habit(
 ## History
 {}
 "#,
-        habit_name,
+        normalized_habit_name,
         frequency_value,
         focus_time_section,
         render_reference_token(&reference_values.projects),
@@ -144,7 +158,7 @@ pub fn create_gtd_habit(
         .open(&habit_path)
         .map_err(|error| {
             if error.kind() == ErrorKind::AlreadyExists {
-                format!("Habit '{}' already exists", habit_name)
+                format!("Habit '{}' already exists", normalized_habit_name)
             } else {
                 format!("Failed to create habit file: {}", error)
             }

@@ -81,6 +81,7 @@ const handleUpdate = async () => {
 
 ### Lossy Conversion
 
+
 The `blocksToMarkdownLossy` method means some BlockNote features may not have exact markdown equivalents:
 
 - Complex formatting combinations

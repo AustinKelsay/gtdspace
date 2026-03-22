@@ -50,7 +50,8 @@ export function isSameOrDescendantPath(candidate?: string | null, root?: string 
   const candidateKey = pathKey(candidate);
   const rootKey = pathKey(root);
   if (!candidateKey || !rootKey) return false;
-  return candidateKey === rootKey || candidateKey.startsWith(`${rootKey}/`);
+  const prefix = rootKey === '/' ? '/' : `${rootKey}/`;
+  return candidateKey === rootKey || candidateKey.startsWith(prefix);
 }
 
 function applyActiveState(openTabs: FileTab[], activeTabId: string | null): FileTab[] {

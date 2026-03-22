@@ -44,6 +44,20 @@ async fn clear_google_calendar_manager() {
     *manager_guard = None;
 }
 
+async fn clear_google_calendar_session(app: AppHandle) -> Result<(), String> {
+    use crate::google_calendar::token_manager::TokenManager;
+
+    tokio::task::spawn_blocking(move || {
+        let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
+        token_manager.delete_tokens().map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Failed to disconnect Google Calendar: {}", e))??;
+
+    clear_google_calendar_manager().await;
+    Ok(())
+}
+
 /// Helper function to load Google OAuth credentials from secure storage or environment variables.
 ///
 /// This function consolidates the credential loading logic used across multiple commands.
@@ -265,17 +279,8 @@ pub async fn google_calendar_connect(app: AppHandle) -> Result<String, String> {
 /// Success message or error if token deletion fails
 #[tauri::command]
 pub async fn google_calendar_disconnect_simple(app: AppHandle) -> Result<String, String> {
-    use crate::google_calendar::token_manager::TokenManager;
-
     println!("[GoogleCalendar] Disconnecting...");
-
-    tokio::task::spawn_blocking(move || {
-        let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
-        token_manager.delete_tokens().map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| format!("Failed to disconnect Google Calendar: {}", e))??;
-    clear_google_calendar_manager().await;
+    clear_google_calendar_session(app).await?;
 
     println!("[GoogleCalendar] Tokens deleted, disconnected successfully");
     Ok("Successfully disconnected from Google Calendar".to_string())
@@ -283,8 +288,6 @@ pub async fn google_calendar_disconnect_simple(app: AppHandle) -> Result<String,
 
 #[tauri::command]
 pub async fn google_calendar_disconnect(app: AppHandle) -> Result<String, String> {
-    use crate::google_calendar::token_manager::TokenManager;
-
     let manager = {
         let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
         manager_guard.as_ref().cloned()
@@ -297,14 +300,7 @@ pub async fn google_calendar_disconnect(app: AppHandle) -> Result<String, String
             .map_err(|e| format!("Failed to disconnect from Google Calendar: {}", e))?;
     }
 
-    tokio::task::spawn_blocking(move || {
-        let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
-        token_manager.delete_tokens().map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| format!("Failed to disconnect Google Calendar: {}", e))??;
-
-    clear_google_calendar_manager().await;
+    clear_google_calendar_session(app).await?;
 
     Ok("Successfully disconnected from Google Calendar".to_string())
 }
@@ -370,7 +366,7 @@ pub async fn google_oauth_store_config(
 ) -> Result<String, String> {
     use crate::google_calendar::config_manager::{GoogleConfigManager, GoogleOAuthConfig};
 
-    let config_manager = GoogleConfigManager::new(app)
+    let config_manager = GoogleConfigManager::new(app.clone())
         .map_err(|e| format!("Failed to create config manager: {}", e))?;
 
     let oauth_config = GoogleOAuthConfig {
@@ -386,7 +382,7 @@ pub async fn google_oauth_store_config(
     config_manager
         .store_config(&oauth_config)
         .map_err(|e| format!("Failed to store configuration: {}", e))?;
-    clear_google_calendar_manager().await;
+    clear_google_calendar_session(app).await?;
 
     Ok("Google OAuth configuration saved".to_string())
 }
@@ -403,7 +399,7 @@ pub async fn google_oauth_store_config(
 pub async fn google_oauth_get_config(app: AppHandle) -> Result<Option<serde_json::Value>, String> {
     use crate::google_calendar::config_manager::GoogleConfigManager;
 
-    let config_manager = GoogleConfigManager::new(app)
+    let config_manager = GoogleConfigManager::new(app.clone())
         .map_err(|e| format!("Failed to create config manager: {}", e))?;
 
     match config_manager.get_config() {
@@ -433,13 +429,13 @@ pub async fn google_oauth_get_config(app: AppHandle) -> Result<Option<serde_json
 pub async fn google_oauth_clear_config(app: AppHandle) -> Result<String, String> {
     use crate::google_calendar::config_manager::GoogleConfigManager;
 
-    let config_manager = GoogleConfigManager::new(app)
+    let config_manager = GoogleConfigManager::new(app.clone())
         .map_err(|e| format!("Failed to create config manager: {}", e))?;
 
     config_manager
         .clear_config()
         .map_err(|e| format!("Failed to clear configuration: {}", e))?;
-    clear_google_calendar_manager().await;
+    clear_google_calendar_session(app).await?;
 
     Ok("Google OAuth configuration cleared".to_string())
 }

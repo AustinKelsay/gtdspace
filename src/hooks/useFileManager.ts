@@ -160,9 +160,9 @@ export const useFileManager = () => {
   const selectFolder = useCallback(async () => {
     try {
       console.log('Opening folder selection dialog...');
-      const folderPath = await safeInvoke<string>('select_folder', undefined, null);
+      const folderPath = await safeInvoke<string | null>('select_folder', undefined, null);
       if (!folderPath) {
-        throw new Error('No folder selected');
+        return;
       }
       console.log('Folder selected:', folderPath);
       
@@ -172,7 +172,7 @@ export const useFileManager = () => {
       console.log('Folder selection cancelled or failed:', error);
       setState(prev => ({
         ...prev,
-        error: typeof error === 'string' ? error : 'Folder selection cancelled',
+        error: typeof error === 'string' ? error : 'Failed to select folder',
       }));
     }
   }, [loadFolder]);

@@ -90,8 +90,12 @@ export function serializeTabState(
 }
 
 export function persistTabState(state: TabManagerState, workspacePath?: string | null): void {
-  const snapshot = serializeTabState(state, workspacePath);
-  localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(snapshot));
+  try {
+    const snapshot = serializeTabState(state, workspacePath);
+    localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch (error) {
+    console.warn('Failed to persist tab state', error);
+  }
 }
 
 export function clearPersistedTabs(): void {
@@ -124,7 +128,7 @@ function snapshotMatchesWorkspace(
 ): boolean {
   const normalizedWorkspacePath = normalizeWorkspacePath(workspacePath);
   if (!normalizedWorkspacePath) {
-    return false;
+    return true;
   }
 
   if (snapshot.workspacePath) {

@@ -1,8 +1,7 @@
 import React from 'react';
-import { FolderOpen, Target } from 'lucide-react';
+import { Folder, FolderOpen, Target } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Folder } from 'lucide-react';
 
 export function SidebarEmptyFolderState({
   className = '',

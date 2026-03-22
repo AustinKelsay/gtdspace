@@ -59,9 +59,12 @@ export function SidebarStandardSection({
     section.id === 'cabinet' ||
     section.id === 'habits' ||
     horizonSection;
-  const sectionReadmePath = `${sectionPath}/README.md`;
+  const sectionReadmePathMd = `${sectionPath}/README.md`;
+  const sectionReadmePathMarkdown = `${sectionPath}/README.markdown`;
   const hasActiveChild = isPathDescendant(sectionPath, activeFilePath);
-  const isSectionHeaderActive = horizonSection ? isPathActive(sectionReadmePath) : false;
+  const isSectionHeaderActive = horizonSection
+    ? isPathActive(sectionReadmePathMd) || isPathActive(sectionReadmePathMarkdown)
+    : false;
   const shouldHighlightHeader = isSectionHeaderActive || (!isExpanded && hasActiveChild);
 
   const createButton = canCreatePage ? (
@@ -72,8 +75,9 @@ export function SidebarStandardSection({
       }}
       variant="ghost"
       size="icon"
-      className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+      className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary/40 transition-opacity"
       title={`Add ${section.name} Page`}
+      aria-label={`Add ${section.name} Page`}
     >
       <Plus className="h-3 w-3" />
     </Button>

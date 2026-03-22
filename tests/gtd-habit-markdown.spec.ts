@@ -4,6 +4,7 @@ import {
   determineLastHabitResetDate,
   findLastHabitCompletionDate,
   parseHabitContent,
+  parseHabitStatus,
 } from '@/utils/gtd-habit-markdown';
 
 describe('gtd habit markdown utilities', () => {
@@ -64,6 +65,10 @@ describe('gtd habit markdown utilities', () => {
     ].join('\n'));
 
     expect(parsed.status).toBe('completed');
+  });
+
+  it('treats completed checkbox markers as completed', () => {
+    expect(parseHabitStatus('[!checkbox:habit-status:completed]')).toBe('completed');
   });
 
   it('calculates calendar-based reset boundaries for twice-weekly and monthly habits', () => {
@@ -203,5 +208,32 @@ describe('gtd habit markdown utilities', () => {
     expect(lastCompletion?.getDate()).toBe(1);
     expect(lastCompletion?.getHours()).toBe(21);
     expect(lastCompletion?.getMinutes()).toBe(30);
+  });
+
+  it('uses the latest completion date regardless of row order', () => {
+    const rows = [
+      {
+        date: '2026-03-05',
+        time: '6:15 AM',
+        status: 'Complete',
+        action: 'Manual',
+        details: 'Latest',
+      },
+      {
+        date: '2026-03-01',
+        time: '9:30 PM',
+        status: 'Complete',
+        action: 'Manual',
+        details: 'Older',
+      },
+    ];
+
+    const lastCompletion = findLastHabitCompletionDate(rows);
+
+    expect(lastCompletion?.getFullYear()).toBe(2026);
+    expect(lastCompletion?.getMonth()).toBe(2);
+    expect(lastCompletion?.getDate()).toBe(5);
+    expect(lastCompletion?.getHours()).toBe(6);
+    expect(lastCompletion?.getMinutes()).toBe(15);
   });
 });

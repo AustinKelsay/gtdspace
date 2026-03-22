@@ -31,8 +31,11 @@ export function shouldSkipBlockInsideHistory(
     Array.isArray(block.content) &&
     block.content.length > 0 &&
     block.content.every((item: unknown) => {
-      const child = item as TextChild;
-      return child !== null && typeof child === "object" && child.styles?.italic;
+      if (typeof item !== "object" || item === null) {
+        return false;
+      }
+      const child = item as Exclude<TextChild, string>;
+      return child.styles?.italic === true;
     });
 
   return (

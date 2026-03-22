@@ -44,7 +44,7 @@ pub fn create_gtd_habit(
     let file_name = format!("{}.md", sanitize_markdown_file_stem(&habit_name));
     let habit_path = habits_path.join(&file_name);
 
-    let frequency_value = HabitFrequency::from_create_input(&frequency).as_marker_token();
+    let frequency_value = HabitFrequency::from_create_input(&frequency)?.as_marker_token();
     let now = Local::now();
     let reference_values = references.unwrap_or_default();
 

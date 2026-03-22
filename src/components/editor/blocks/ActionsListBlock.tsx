@@ -155,7 +155,7 @@ const ActionsListRenderer = React.memo(function ActionsListRenderer(props: Actio
     if (blocknotePath) {
       return blocknotePath;
     }
-    return getPersistedActiveTabFilePath();
+    return getPersistedActiveTabFilePath(localStorage.getItem('gtdspace-current-path'));
   }, []);
 
   // Get project path from current file path

@@ -82,6 +82,12 @@ export async function saveTabFile(file: MarkdownFile, content: string): Promise<
   }
 
   const metadata = extractMetadata(content);
+  emitMetadataChange({
+    filePath: file.path,
+    fileName: file.name,
+    content,
+    metadata,
+  });
   emitContentSaved({
     filePath: file.path,
     fileName: file.name,

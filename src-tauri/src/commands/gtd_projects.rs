@@ -228,12 +228,14 @@ pub struct GTDProject {
     /// Project description
     pub description: String,
     /// Due date (optional)
+    #[serde(rename = "dueDate")]
     pub due_date: Option<String>,
     /// Project status
     pub status: String,
     /// Full path to project directory
     pub path: String,
     /// Created date
+    #[serde(rename = "createdDateTime")]
     pub created_date_time: String,
     /// Number of actions in the project
     pub action_count: u32,
@@ -531,11 +533,13 @@ pub fn rename_gtd_action(
     let parent = old_path
         .parent()
         .ok_or_else(|| "Cannot get parent directory".to_string())?;
-    let projects_root = validate_projects_child_directory(parent)?;
+    validate_action_parent_directory(parent)?;
     let canonical_action_path = fs::canonicalize(old_path)
         .map_err(|e| format!("Failed to resolve action file path: {}", e))?;
-    if !canonical_action_path.starts_with(&projects_root) {
-        return Err("Action file must be inside the GTD Projects directory".to_string());
+    let canonical_parent = fs::canonicalize(parent)
+        .map_err(|e| format!("Failed to resolve action parent path: {}", e))?;
+    if !canonical_action_path.starts_with(&canonical_parent) {
+        return Err("Action file must stay inside its parent directory".to_string());
     }
 
     // Create new path with the new name (add .md extension if not present)
@@ -630,6 +634,10 @@ pub fn rename_gtd_action(
 }
 
 fn validate_project_name(name: &str) -> Result<String, String> {
+    if name.ends_with(' ') || name.trim_end().ends_with('.') {
+        return Err("Project name cannot end with a space or period".to_string());
+    }
+
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err("Project name cannot be empty".to_string());
@@ -721,6 +729,40 @@ fn validate_projects_child_directory(path: &Path) -> Result<PathBuf, String> {
     }
 
     Ok(canonical_projects_dir)
+}
+
+fn validate_action_parent_directory(path: &Path) -> Result<(), String> {
+    let canonical_path =
+        fs::canonicalize(path).map_err(|e| format!("Failed to resolve path: {}", e))?;
+    let allowed_top_level_sections = [
+        "Projects",
+        "Habits",
+        "Goals",
+        "Vision",
+        "Cabinet",
+        "Someday Maybe",
+        "Areas of Focus",
+        "Purpose & Principles",
+    ];
+
+    if canonical_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| allowed_top_level_sections.contains(&name))
+    {
+        return Ok(());
+    }
+
+    if canonical_path
+        .parent()
+        .and_then(|parent| parent.file_name())
+        .and_then(|name| name.to_str())
+        == Some("Projects")
+    {
+        return Ok(());
+    }
+
+    Err("Action file must be inside a direct GTD root section or project folder".to_string())
 }
 
 /// Update the H1 title in README content
@@ -967,5 +1009,11 @@ mod tests {
             validate_project_name("Quarterly Planning").unwrap(),
             "Quarterly Planning"
         );
+    }
+
+    #[test]
+    fn validate_project_name_rejects_trailing_spaces_and_dots() {
+        assert!(validate_project_name("Alpha ").is_err());
+        assert!(validate_project_name("Alpha.").is_err());
     }
 }

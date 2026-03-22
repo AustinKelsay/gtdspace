@@ -64,9 +64,10 @@ export function normalizeForCanonicalComparison(value: string): string {
 }
 
 export function parseHabitStatus(content: string): GTDHabitStatus {
-  const checkboxMatch = content.match(/\[!checkbox:habit-status:(true|false)\]/i);
+  const checkboxMatch = content.match(/\[!checkbox:habit-status:(true|false|completed)\]/i);
   if (checkboxMatch) {
-    return checkboxMatch[1].toLowerCase() === 'true' ? 'completed' : 'todo';
+    const normalized = checkboxMatch[1].toLowerCase();
+    return normalized === 'true' || normalized === 'completed' ? 'completed' : 'todo';
   }
 
   const singleselectMatch = content.match(/\[!singleselect:habit-status:([^\]]+)\]/i);
@@ -283,6 +284,27 @@ export function splitHabitHistory(raw?: string): {
     }
   }
 
+  if (rows.length === 0) {
+    const legacyBulletPattern =
+      /^\s*[-*+]\s+\*{0,2}(\d{4}-\d{2}-\d{2})\*{0,2}(?:\s+at\s+\*{0,2}([^*]+)\*{0,2})?:\s*([^()]+?)\s*\(([^-]+?)\s*-\s*(.+)\)\s*$/i;
+
+    for (const line of lines) {
+      const match = line.trim().match(legacyBulletPattern);
+      if (!match) {
+        continue;
+      }
+
+      rows.push({
+        date: match[1] ?? '',
+        time: (match[2] ?? '00:00').trim(),
+        status: normalizeHabitHistoryStatus(match[3] ?? ''),
+        action: (match[4] ?? '').trim(),
+        details: (match[5] ?? '').trim(),
+        extraCells: [],
+      });
+    }
+  }
+
   return {
     history: effective,
     intro,
@@ -372,18 +394,20 @@ export function determineLastHabitResetDate(
 }
 
 export function findLastHabitCompletionDate(rows: HabitHistoryRow[]): Date | null {
-  for (let i = rows.length - 1; i >= 0; i -= 1) {
-    if (!/^complete(?:d)?$/i.test((rows[i].status ?? '').trim())) {
+  let latestCompletion: Date | null = null;
+
+  for (const row of rows) {
+    if (!/^complete(?:d)?$/i.test((row.status ?? '').trim())) {
       continue;
     }
 
-    const parsed = habitHistoryRowToDate(rows[i]);
-    if (parsed) {
-      return parsed;
+    const parsed = habitHistoryRowToDate(row);
+    if (parsed && (!latestCompletion || parsed.getTime() > latestCompletion.getTime())) {
+      latestCompletion = parsed;
     }
   }
 
-  return null;
+  return latestCompletion;
 }
 
 function startOfDay(date: Date): Date {

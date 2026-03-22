@@ -115,17 +115,17 @@ impl HabitFrequency {
         }
     }
 
-    pub(crate) fn from_create_input(value: &str) -> Self {
+    pub(crate) fn from_create_input(value: &str) -> Result<Self, String> {
         match value.trim() {
-            "Every 5 Minutes (Testing)" | "5-minute" => Self::FiveMinute,
-            "Every Day" | "daily" => Self::Daily,
-            "Weekdays (Mon-Fri)" | "weekdays" => Self::Weekdays,
-            "Every Other Day" | "every-other-day" => Self::EveryOtherDay,
-            "Twice a Week" | "twice-weekly" => Self::TwiceWeekly,
-            "Once Every Week" | "weekly" => Self::Weekly,
-            "Once Every Other Week" | "biweekly" => Self::Biweekly,
-            "Once a Month" | "monthly" => Self::Monthly,
-            _ => Self::Daily,
+            "Every 5 Minutes (Testing)" | "5-minute" => Ok(Self::FiveMinute),
+            "Every Day" | "daily" => Ok(Self::Daily),
+            "Weekdays (Mon-Fri)" | "weekdays" => Ok(Self::Weekdays),
+            "Every Other Day" | "every-other-day" => Ok(Self::EveryOtherDay),
+            "Twice a Week" | "twice-weekly" => Ok(Self::TwiceWeekly),
+            "Once Every Week" | "weekly" => Ok(Self::Weekly),
+            "Once Every Other Week" | "biweekly" => Ok(Self::Biweekly),
+            "Once a Month" | "monthly" => Ok(Self::Monthly),
+            other => Err(format!("Unrecognized habit frequency token '{}'", other)),
         }
     }
 

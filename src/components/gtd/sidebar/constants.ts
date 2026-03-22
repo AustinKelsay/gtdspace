@@ -2,9 +2,12 @@ import {
   Archive,
   Briefcase,
   Calendar,
+  Compass,
+  Eye,
+  Flag,
+  Layers,
   Lightbulb,
   RefreshCw,
-  Target,
 } from 'lucide-react';
 import type { HorizonType } from '@/utils/horizon-config';
 import { CALENDAR_FILE_ID } from '@/utils/special-files';
@@ -16,7 +19,7 @@ export const GTD_SECTIONS: GTDSection[] = [
   {
     id: 'purpose',
     name: 'Purpose & Principles',
-    icon: Target,
+    icon: Compass,
     path: 'Purpose & Principles',
     description: 'Core values and life mission (50,000 ft)',
     color: 'text-purple-600',
@@ -24,7 +27,7 @@ export const GTD_SECTIONS: GTDSection[] = [
   {
     id: 'vision',
     name: 'Vision',
-    icon: Target,
+    icon: Eye,
     path: 'Vision',
     description: '3-5 year aspirations (40,000 ft)',
     color: 'text-indigo-600',
@@ -32,7 +35,7 @@ export const GTD_SECTIONS: GTDSection[] = [
   {
     id: 'goals',
     name: 'Goals',
-    icon: Target,
+    icon: Flag,
     path: 'Goals',
     description: '1-2 year objectives (30,000 ft)',
     color: 'text-violet-600',
@@ -40,7 +43,7 @@ export const GTD_SECTIONS: GTDSection[] = [
   {
     id: 'areas',
     name: 'Areas of Focus',
-    icon: Target,
+    icon: Layers,
     path: 'Areas of Focus',
     description: 'Ongoing responsibilities (20,000 ft)',
     color: 'text-blue-700',

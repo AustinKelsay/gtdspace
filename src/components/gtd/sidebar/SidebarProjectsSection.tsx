@@ -245,8 +245,9 @@ function ProjectRow({
             }}
             variant="ghost"
             size="icon"
-            className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="h-5 w-5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
             title="Add Action"
+            aria-label="Add action"
           >
             <Plus className="h-3 w-3" />
           </Button>
@@ -255,8 +256,9 @@ function ProjectRow({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="h-5 w-5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                 onClick={(event) => event.stopPropagation()}
+                aria-label="Project menu"
               >
                 <MoreHorizontal className="h-3 w-3" />
               </Button>
@@ -406,8 +408,9 @@ export function SidebarProjectsSection({
           }}
           variant="ghost"
           size="icon"
-          className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
           title="Add Project"
+          aria-label="Add project"
         >
           <Plus className="h-3 w-3" />
         </Button>

@@ -12,7 +12,12 @@ const DELETE_FILE_RETRY_BACKOFF_MS: [u64; 3] = [50, 150, 300];
 
 fn generate_stable_file_id(path: &Path) -> String {
     let digest = Sha256::digest(path.to_string_lossy().as_bytes());
-    digest.iter().map(|byte| format!("{:02x}", byte)).collect()
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        let _ = write!(&mut hex, "{:02x}", byte);
+    }
+    hex
 }
 
 fn strip_markdown_extension(name: &str) -> &str {
@@ -1290,24 +1295,35 @@ pub fn replace_in_file(
         ));
     }
 
-    // Write the updated content back to the file
-    match fs::write(path, new_content) {
-        Ok(_) => {
-            log::info!(
-                "Successfully replaced {} occurrence(s) in {}",
-                replacements_made,
-                file_path
-            );
-            Ok(format!(
-                "Replaced {} occurrence(s) of '{}' with '{}' in {}",
-                replacements_made,
-                search_term,
-                replace_term,
-                path.file_name().unwrap_or_default().to_string_lossy()
-            ))
-        }
-        Err(e) => Err(format!("Failed to write file: {}", e)),
-    }
+    let temp_dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut temp_file = NamedTempFile::new_in(temp_dir)
+        .map_err(|e| format!("Failed to create temporary file for replace: {}", e))?;
+    temp_file
+        .write_all(new_content.as_bytes())
+        .map_err(|e| format!("Failed to write temporary replacement file: {}", e))?;
+    temp_file
+        .flush()
+        .map_err(|e| format!("Failed to flush temporary replacement file: {}", e))?;
+    temp_file
+        .as_file()
+        .sync_all()
+        .map_err(|e| format!("Failed to sync temporary replacement file: {}", e))?;
+    temp_file
+        .persist(path)
+        .map_err(|e| format!("Failed to replace file atomically: {}", e.error))?;
+
+    log::info!(
+        "Successfully replaced {} occurrence(s) in {}",
+        replacements_made,
+        file_path
+    );
+    Ok(format!(
+        "Replaced {} occurrence(s) of '{}' with '{}' in {}",
+        replacements_made,
+        search_term,
+        replace_term,
+        path.file_name().unwrap_or_default().to_string_lossy()
+    ))
 }
 
 /// Check if a directory exists

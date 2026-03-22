@@ -154,26 +154,36 @@ function parseProjectSections(content: string): {
 } {
   const lines = content.split(/\r?\n/);
   const desiredBuffer: string[] = [];
+  const descriptionBuffer: string[] = [];
   let collectingDesired = false;
+  let collectingDescription = false;
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
-    if (/^##\s+(Desired\s+Outcome|Description)\b/i.test(line)) {
-      collectingDesired = true;
-      desiredBuffer.length = 0;
+    const headingMatch = line.match(/^##\s+(Desired\s+Outcome|Description)\b/i);
+    if (headingMatch) {
+      collectingDesired = /^Desired\s+Outcome$/i.test(headingMatch[1]);
+      collectingDescription = /^Description$/i.test(headingMatch[1]);
       continue;
     }
 
-    if (collectingDesired) {
+    if (collectingDesired || collectingDescription) {
       if (/^##\s+/.test(line)) {
-        break;
+        collectingDesired = false;
+        collectingDescription = false;
+        continue;
       }
-      desiredBuffer.push(rawLine);
+      if (collectingDesired) {
+        desiredBuffer.push(rawLine);
+      } else if (collectingDescription) {
+        descriptionBuffer.push(rawLine);
+      }
     }
   }
 
-  const desiredOutcome = desiredBuffer.length
-    ? desiredBuffer.join('\n').replace(/^\s*\n+/, '').trimEnd()
+  const desiredSource = desiredBuffer.length > 0 ? desiredBuffer : descriptionBuffer;
+  const desiredOutcome = desiredSource.length
+    ? desiredSource.join('\n').replace(/^\s*\n+/, '').trimEnd()
     : '';
 
   const includeHabitsList = /\[!habits-list(?:[:\]])/i.test(content);

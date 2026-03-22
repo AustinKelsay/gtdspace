@@ -160,9 +160,9 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
         const currentPath = filePath || '';
 
         if (currentPath) {
-          // Check if this is a habit file (case-insensitive and handle both forward and back slashes)
-          const lower = currentPath.toLowerCase();
-          const isHabitFile = lower.includes('/habits/') || lower.includes('\\habits\\');
+          const normalizedHabitPath = norm(currentPath) ?? currentPath.replace(/\\/g, '/');
+          const lower = normalizedHabitPath.toLowerCase();
+          const isHabitFile = lower.includes('/habits/');
 
           if (isHabitFile) {
             // Check if Tauri is available before attempting import
@@ -171,7 +171,6 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
               const inTauriContext = await checkTauriContextAsync();
               
               if (inTauriContext) {
-                const normalizedHabitPath = norm(currentPath) ?? currentPath;
                 const result = await withErrorHandling(async () => {
                   const { invoke } = await import('@tauri-apps/api/core');
                   return invoke('update_habit_status', {

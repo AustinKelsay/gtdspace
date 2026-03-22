@@ -107,7 +107,7 @@ function HabitsListBlockComponent(incomingProps: unknown) {
     if (blocknotePath) {
       return blocknotePath;
     }
-    return getPersistedActiveTabFilePath();
+    return getPersistedActiveTabFilePath(localStorage.getItem('gtdspace-current-path'));
   }, []);
 
   const loadHabits = React.useCallback(async () => {

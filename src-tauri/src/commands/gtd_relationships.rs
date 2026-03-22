@@ -118,6 +118,12 @@ fn parse_reference_paths(raw: &str) -> Vec<String> {
     }
 }
 
+fn normalize_reference_target(path: &str) -> String {
+    path.replace('\\', "/")
+        .replace("/README.markdown", "")
+        .replace("/README.md", "")
+}
+
 /// Find files that reference a target file (reverse relationships)
 ///
 /// Searches through GTD horizon files to find which ones reference the target file.
@@ -148,7 +154,7 @@ pub fn find_reverse_relationships(
     let target = Path::new(&target_path);
 
     // Normalize the target path for comparison - handle both absolute and relative paths
-    let target_normalized = target_path.replace('\\', "/");
+    let target_normalized = normalize_reference_target(&target_path);
     log::debug!("Target normalized: {}", target_normalized);
 
     // Determine which directories to search based on filter type
@@ -270,6 +276,7 @@ pub fn find_reverse_relationships(
                             .map(|block| {
                                 parse_reference_paths(&block)
                                     .into_iter()
+                                    .map(|path| normalize_reference_target(&path))
                                     .any(|path| path == target_normalized)
                             })
                             .unwrap_or(false)
@@ -302,8 +309,9 @@ pub fn find_reverse_relationships(
                     for tag in &reference_tags {
                         if let Some(block) = extract_reference_block(&content, tag) {
                             for path in parse_reference_paths(&block) {
-                                if path == target_normalized {
-                                    references.push(path);
+                                let normalized_path = normalize_reference_target(&path);
+                                if normalized_path == target_normalized {
+                                    references.push(normalized_path);
                                 }
                             }
                         }

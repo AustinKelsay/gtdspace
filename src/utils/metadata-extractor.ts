@@ -94,7 +94,13 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
       try {
         const decoded = decodeHtmlAttribute(match[1]);
         const parsed = JSON.parse(decoded) as { type?: string; value?: string };
-        const field = mapSingleSelectField(parsed.type ?? '');
+        if (typeof parsed.type !== 'string' || !parsed.type.trim()) {
+          return null;
+        }
+        const field = mapSingleSelectField(parsed.type);
+        if (!field) {
+          return null;
+        }
         return { key: field, value: parsed.value ?? '' };
       } catch {
         return null;

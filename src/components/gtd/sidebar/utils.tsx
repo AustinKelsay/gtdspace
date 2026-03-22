@@ -236,5 +236,5 @@ export const filterVisibleSectionFiles = (
   files: MarkdownFile[]
 ): MarkdownFile[] =>
   isHorizonSection(sectionId)
-    ? files.filter((file) => file.name.toLowerCase() !== 'readme.md')
+    ? files.filter((file) => !['readme.md', 'readme.markdown'].includes(file.name.toLowerCase()))
     : files;

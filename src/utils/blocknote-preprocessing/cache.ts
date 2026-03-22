@@ -31,12 +31,12 @@ export function createContentHash(markdown: string, blockCount: number): string 
   const gtdFieldCount = gtdFieldMarkers.length;
 
   if (gtdFieldCount === 0) {
-    const contentHash = createNumericHash(markdown.trim());
+    const contentHash = createNumericHash(markdown);
     return `empty-${blockCount}-${contentHash}`;
   }
 
   const structuralHash = createNumericHash(gtdFieldMarkers.join("|"));
-  const contentHash = createNumericHash(markdown.trim());
+  const contentHash = createNumericHash(markdown);
   return `${blockCount}-${gtdFieldCount}-${structuralHash}-${contentHash}`;
 }
 

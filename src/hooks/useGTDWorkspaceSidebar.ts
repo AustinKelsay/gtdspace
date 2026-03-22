@@ -173,8 +173,15 @@ export function useGTDWorkspaceSidebar({
 
     const readmePath = `${folderPath}/README.md`;
 
+    const existingContent = await withErrorHandling(async () => {
+      return safeInvoke<string>('read_file', { path: readmePath }, null);
+    }, 'Failed to read horizon overview', 'workspace-sidebar');
+
+    if (typeof existingContent !== 'string') {
+      return;
+    }
+
     try {
-      const existingContent = (await safeInvoke<string>('read_file', { path: readmePath }, '')) ?? '';
       const { content, changed } = syncHorizonReadmeContent({
         horizon: horizonType,
         existingContent,
@@ -186,7 +193,7 @@ export function useGTDWorkspaceSidebar({
     } catch (error) {
       console.error('Failed to sync horizon README', { folderPath, error });
     }
-  }, []);
+  }, [withErrorHandling]);
 
   const updateProjectOverlay = React.useCallback(
     (projectPath: string, patch: Partial<SidebarProjectMetadata>) => {
@@ -412,9 +419,13 @@ export function useGTDWorkspaceSidebar({
   React.useEffect(() => {
     const unsubscribeMetadata = onMetadataChange((event) => {
       const { filePath, metadata, changedFields } = event;
+      const normalizedFilePath = normalizePath(filePath) ?? filePath.replace(/\\/g, '/');
 
-      if (filePath.includes('/Projects/') && filePath.endsWith('/README.md')) {
-        const projectPath = filePath.substring(0, filePath.lastIndexOf('/'));
+      if (
+        normalizedFilePath.includes('/Projects/') &&
+        /\/README\.(md|markdown)$/i.test(normalizedFilePath)
+      ) {
+        const projectPath = normalizedFilePath.substring(0, normalizedFilePath.lastIndexOf('/'));
 
         if (changedFields?.status || changedFields?.projectStatus) {
           const nextStatus = metadata.projectStatus || metadata.status;
@@ -434,16 +445,16 @@ export function useGTDWorkspaceSidebar({
       }
 
       if (
-        filePath.includes('/Projects/') &&
-        !filePath.endsWith('/README.md') &&
-        filePath.endsWith('.md')
+        normalizedFilePath.includes('/Projects/') &&
+        !/\/README\.(md|markdown)$/i.test(normalizedFilePath) &&
+        /\.(md|markdown)$/i.test(normalizedFilePath)
       ) {
         if (changedFields?.status && metadata.status) {
           setActionStatuses((prev) => ({
             ...prev,
-            [filePath]: String(metadata.status),
+            [normalizedFilePath]: String(metadata.status),
           }));
-          updateActionOverlay(filePath, { status: String(metadata.status) });
+          updateActionOverlay(normalizedFilePath, { status: String(metadata.status) });
         }
       }
 
@@ -458,8 +469,8 @@ export function useGTDWorkspaceSidebar({
       ];
 
       for (const sectionPath of sectionPaths) {
-        if (filePath.includes(sectionPath)) {
-          const folderPath = filePath.substring(0, filePath.lastIndexOf('/'));
+        if (normalizedFilePath.includes(sectionPath)) {
+          const folderPath = normalizedFilePath.substring(0, normalizedFilePath.lastIndexOf('/'));
           void loadSectionFiles(folderPath, true);
           break;
         }
@@ -468,9 +479,13 @@ export function useGTDWorkspaceSidebar({
 
     const unsubscribeChanged = onContentChange((event) => {
       const { filePath, metadata, changedFields } = event;
+      const normalizedFilePath = normalizePath(filePath) ?? filePath.replace(/\\/g, '/');
 
-      if (filePath.includes('/Projects/') && filePath.endsWith('/README.md')) {
-        const projectPath = filePath.substring(0, filePath.lastIndexOf('/'));
+      if (
+        normalizedFilePath.includes('/Projects/') &&
+        /\/README\.(md|markdown)$/i.test(normalizedFilePath)
+      ) {
+        const projectPath = normalizedFilePath.substring(0, normalizedFilePath.lastIndexOf('/'));
         if (changedFields?.dueDate || changedFields?.due_date || changedFields?.datetime) {
           const nextDue =
             (metadata as { due_date?: string; dueDate?: string }).dueDate ||
@@ -484,65 +499,69 @@ export function useGTDWorkspaceSidebar({
 
     const unsubscribeSaved = onContentSaved(async (event) => {
       const { filePath, metadata } = event;
+      const normalizedFilePath = normalizePath(filePath) ?? filePath.replace(/\\/g, '/');
 
-      if (filePath.includes('/Projects/') && filePath.endsWith('/README.md')) {
-        const projectPath = filePath.substring(0, filePath.lastIndexOf('/'));
+      if (
+        normalizedFilePath.includes('/Projects/') &&
+        /\/README\.(md|markdown)$/i.test(normalizedFilePath)
+      ) {
+        const projectPath = normalizedFilePath.substring(0, normalizedFilePath.lastIndexOf('/'));
         const nextTitle = metadata.title;
 
         if (nextTitle) {
           const currentProjectName = projectPath.split('/').pop();
 
           if (currentProjectName && currentProjectName !== nextTitle) {
-            safeInvoke<string>(
-              'rename_gtd_project',
-              { oldProjectPath: projectPath, newProjectName: nextTitle },
-              null
-            )
-              .then(async (newProjectPath) => {
-                if (!newProjectPath || typeof newProjectPath !== 'string') return;
+            await withErrorHandling(async () => {
+              const newProjectPath = await safeInvoke<string>(
+                'rename_gtd_project',
+                { oldProjectPath: projectPath, newProjectName: nextTitle },
+                null
+              );
+              if (!newProjectPath || typeof newProjectPath !== 'string') return;
 
-                updateProjectOverlay(projectPath, {
-                  title: String(nextTitle),
-                  currentPath: newProjectPath,
+              const normalizedNewProjectPath = normalizePath(newProjectPath) ?? newProjectPath;
+              updateProjectOverlay(projectPath, {
+                title: String(nextTitle),
+                currentPath: normalizedNewProjectPath,
+              });
+              updateProjectOverlay(normalizedNewProjectPath, {
+                title: String(nextTitle),
+                currentPath: normalizedNewProjectPath,
+              });
+
+              setExpandedProjects((prev) =>
+                prev.map((path) => (path === projectPath ? normalizedNewProjectPath : path))
+              );
+              setProjectActions((prev) =>
+                prev[projectPath]
+                  ? {
+                      ...prev,
+                      [normalizedNewProjectPath]: prev[projectPath],
+                    }
+                  : prev
+              );
+
+              if (gtdSpace?.root_path) {
+                await loadProjects(gtdSpace.root_path);
+                removeProjectOverlay(projectPath);
+                setProjectActions((prev) => {
+                  const next = { ...prev };
+                  delete next[projectPath];
+                  return next;
                 });
-                updateProjectOverlay(newProjectPath, {
-                  title: String(nextTitle),
-                  currentPath: newProjectPath,
-                });
+              }
 
-                setExpandedProjects((prev) =>
-                  prev.map((path) => (path === projectPath ? newProjectPath : path))
-                );
-                setProjectActions((prev) =>
-                  prev[projectPath]
-                    ? {
-                        ...prev,
-                        [newProjectPath]: prev[projectPath],
-                      }
-                    : prev
-                );
-
-                if (gtdSpace?.root_path) {
-                  await loadProjects(gtdSpace.root_path);
-                  removeProjectOverlay(projectPath);
-                  setProjectActions((prev) => {
-                    const next = { ...prev };
-                    delete next[projectPath];
-                    return next;
-                  });
-                }
-
-                window.dispatchEvent(
-                  new CustomEvent('project-renamed', {
-                    detail: {
-                      oldPath: projectPath,
-                      newPath: newProjectPath,
-                      newName: nextTitle,
-                    },
-                  })
-                );
-              })
-              .catch(() => undefined);
+              window.dispatchEvent(
+                new CustomEvent('project-renamed', {
+                  detail: {
+                    oldPath: projectPath,
+                    newPath: normalizedNewProjectPath,
+                    newName: nextTitle,
+                  },
+                })
+              );
+            }, 'Failed to rename project', 'workspace-sidebar');
           }
         }
 
@@ -559,46 +578,49 @@ export function useGTDWorkspaceSidebar({
       }
 
       if (
-        filePath.includes('/Projects/') &&
-        !filePath.endsWith('/README.md') &&
-        filePath.endsWith('.md')
+        normalizedFilePath.includes('/Projects/') &&
+        !/\/README\.(md|markdown)$/i.test(normalizedFilePath) &&
+        /\.(md|markdown)$/i.test(normalizedFilePath)
       ) {
         const nextTitle = metadata.title;
         if (nextTitle) {
-          const currentActionName = filePath.split('/').pop()?.replace('.md', '');
+          const currentActionName = normalizedFilePath
+            .split('/')
+            .pop()
+            ?.replace(/\.(md|markdown)$/i, '');
           if (currentActionName && currentActionName !== nextTitle) {
-            safeInvoke<string>(
-              'rename_gtd_action',
-              { oldActionPath: filePath, newActionName: nextTitle },
-              null
-            )
-              .then(async (newActionPath) => {
-                if (!newActionPath || typeof newActionPath !== 'string') return;
+            await withErrorHandling(async () => {
+              const newActionPath = await safeInvoke<string>(
+                'rename_gtd_action',
+                { oldActionPath: normalizedFilePath, newActionName: nextTitle },
+                null
+              );
+              if (!newActionPath || typeof newActionPath !== 'string') return;
 
-                updateActionOverlay(filePath, {
-                  title: String(nextTitle),
-                  currentPath: newActionPath,
-                });
-                updateActionOverlay(newActionPath, {
-                  title: String(nextTitle),
-                  currentPath: newActionPath,
-                });
+              const normalizedNewActionPath = normalizePath(newActionPath) ?? newActionPath;
+              updateActionOverlay(normalizedFilePath, {
+                title: String(nextTitle),
+                currentPath: normalizedNewActionPath,
+              });
+              updateActionOverlay(normalizedNewActionPath, {
+                title: String(nextTitle),
+                currentPath: normalizedNewActionPath,
+              });
 
-                const projectPath = filePath.substring(0, filePath.lastIndexOf('/'));
-                await loadProjectActions(projectPath);
-                removeActionOverlay(filePath);
+              const projectPath = normalizedFilePath.substring(0, normalizedFilePath.lastIndexOf('/'));
+              await loadProjectActions(projectPath);
+              removeActionOverlay(normalizedFilePath);
 
-                window.dispatchEvent(
-                  new CustomEvent('action-renamed', {
-                    detail: {
-                      oldPath: filePath,
-                      newPath: newActionPath,
-                      newName: nextTitle,
-                    },
-                  })
-                );
-              })
-              .catch(() => undefined);
+              window.dispatchEvent(
+                new CustomEvent('action-renamed', {
+                  detail: {
+                    oldPath: normalizedFilePath,
+                    newPath: normalizedNewActionPath,
+                    newName: nextTitle,
+                  },
+                })
+              );
+            }, 'Failed to rename action', 'workspace-sidebar');
           }
         }
       }
@@ -614,44 +636,50 @@ export function useGTDWorkspaceSidebar({
       ];
 
       for (const sectionPath of sectionPaths) {
-        if (filePath.includes(sectionPath) && filePath.endsWith('.md')) {
+        if (
+          normalizedFilePath.includes(sectionPath) &&
+          /\.(md|markdown)$/i.test(normalizedFilePath)
+        ) {
           const nextTitle = metadata.title;
 
           if (nextTitle) {
-            const currentFileName = filePath.split('/').pop()?.replace('.md', '');
+            const currentFileName = normalizedFilePath
+              .split('/')
+              .pop()
+              ?.replace(/\.(md|markdown)$/i, '');
             if (currentFileName && currentFileName !== nextTitle) {
-              safeInvoke<string>(
-                'rename_gtd_action',
-                { oldActionPath: filePath, newActionName: nextTitle },
-                null
-              )
-                .then(async (newFilePath) => {
-                  if (!newFilePath || typeof newFilePath !== 'string') return;
+              await withErrorHandling(async () => {
+                const newFilePath = await safeInvoke<string>(
+                  'rename_gtd_action',
+                  { oldActionPath: normalizedFilePath, newActionName: nextTitle },
+                  null
+                );
+                if (!newFilePath || typeof newFilePath !== 'string') return;
 
-                  updateSectionFileOverlay(filePath, {
-                    title: String(nextTitle),
-                    currentPath: newFilePath,
-                  });
-                  updateSectionFileOverlay(newFilePath, {
-                    title: String(nextTitle),
-                    currentPath: newFilePath,
-                  });
+                const normalizedNewFilePath = normalizePath(newFilePath) ?? newFilePath;
+                updateSectionFileOverlay(normalizedFilePath, {
+                  title: String(nextTitle),
+                  currentPath: normalizedNewFilePath,
+                });
+                updateSectionFileOverlay(normalizedNewFilePath, {
+                  title: String(nextTitle),
+                  currentPath: normalizedNewFilePath,
+                });
 
-                  const folderPath = filePath.substring(0, filePath.lastIndexOf('/'));
-                  await loadSectionFiles(folderPath, true);
-                  removeSectionFileOverlay(filePath);
+                const folderPath = normalizedFilePath.substring(0, normalizedFilePath.lastIndexOf('/'));
+                await loadSectionFiles(folderPath, true);
+                removeSectionFileOverlay(normalizedFilePath);
 
-                  window.dispatchEvent(
-                    new CustomEvent('section-file-renamed', {
-                      detail: {
-                        oldPath: filePath,
-                        newPath: newFilePath,
-                        newName: nextTitle,
-                      },
-                    })
-                  );
-                })
-                .catch(() => undefined);
+                window.dispatchEvent(
+                  new CustomEvent('section-file-renamed', {
+                    detail: {
+                      oldPath: normalizedFilePath,
+                      newPath: normalizedNewFilePath,
+                      newName: nextTitle,
+                    },
+                  })
+                );
+              }, 'Failed to rename file', 'workspace-sidebar');
             }
           }
           break;
@@ -719,6 +747,7 @@ export function useGTDWorkspaceSidebar({
     updateActionOverlay,
     updateProjectOverlay,
     updateSectionFileOverlay,
+    withErrorHandling,
   ]);
 
   React.useEffect(() => {

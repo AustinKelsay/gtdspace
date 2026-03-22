@@ -794,14 +794,11 @@ describe('App integration workflows', () => {
     });
 
     await waitFor(() => {
-      expect(mocks.tabManager.updateTabContent).toHaveBeenCalledWith(
-        'tab-habit',
-        '# Refreshed habit content'
-      );
+      expect(mocks.tabManager.reloadTabFromDisk).toHaveBeenCalledWith('tab-habit');
       expect(mocks.gtdSpace.refreshSpace).toHaveBeenCalledTimes(1);
     });
 
-    mocks.tabManager.updateTabContent.mockClear();
+    mocks.tabManager.reloadTabFromDisk.mockClear();
     act(() => {
       window.dispatchEvent(
         new CustomEvent('habit-content-changed', { detail: { filePath: habitPath } })
@@ -809,10 +806,7 @@ describe('App integration workflows', () => {
     });
 
     await waitFor(() => {
-      expect(mocks.tabManager.updateTabContent).toHaveBeenCalledWith(
-        'tab-habit',
-        '# Refreshed habit content'
-      );
+      expect(mocks.tabManager.reloadTabFromDisk).toHaveBeenCalledWith('tab-habit');
     });
   });
 

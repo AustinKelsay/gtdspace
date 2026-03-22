@@ -158,4 +158,22 @@ describe('habit history parsing and reconstruction', () => {
       },
     ]);
   });
+
+  it('parses legacy bullet history entries into rows for analytics', () => {
+    const raw = [
+      '- **2026-03-01** at **7:30 AM**: Complete (Manual - Done)',
+      '- **2026-03-03** at **12:00 AM**: To Do (Auto-Reset - New period)',
+    ].join('\n');
+
+    const parsed = splitHabitHistory(raw);
+
+    expect(parsed.rows).toHaveLength(2);
+    expect(parsed.rows[0]).toMatchObject({
+      date: '2026-03-01',
+      time: '7:30 AM',
+      status: 'Complete',
+      action: 'Manual',
+      details: 'Done',
+    });
+  });
 });

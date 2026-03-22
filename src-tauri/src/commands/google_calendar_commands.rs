@@ -268,14 +268,18 @@ pub async fn google_calendar_connect(app: AppHandle) -> Result<String, String> {
 ///
 /// Success message or error if token deletion fails
 #[tauri::command]
-pub fn google_calendar_disconnect_simple(app: AppHandle) -> Result<String, String> {
+pub async fn google_calendar_disconnect_simple(app: AppHandle) -> Result<String, String> {
     use crate::google_calendar::token_manager::TokenManager;
 
     println!("[GoogleCalendar] Disconnecting...");
 
-    let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
-    token_manager.delete_tokens().map_err(|e| e.to_string())?;
-    tauri::async_runtime::block_on(clear_google_calendar_manager());
+    tokio::task::spawn_blocking(move || {
+        let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
+        token_manager.delete_tokens().map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Failed to disconnect Google Calendar: {}", e))??;
+    clear_google_calendar_manager().await;
 
     println!("[GoogleCalendar] Tokens deleted, disconnected successfully");
     Ok("Successfully disconnected from Google Calendar".to_string())
@@ -421,7 +425,7 @@ pub async fn google_oauth_get_config(app: AppHandle) -> Result<Option<serde_json
 ///
 /// Success message or error details
 #[tauri::command]
-pub fn google_oauth_clear_config(app: AppHandle) -> Result<String, String> {
+pub async fn google_oauth_clear_config(app: AppHandle) -> Result<String, String> {
     use crate::google_calendar::config_manager::GoogleConfigManager;
 
     let config_manager = GoogleConfigManager::new(app)
@@ -430,7 +434,7 @@ pub fn google_oauth_clear_config(app: AppHandle) -> Result<String, String> {
     config_manager
         .clear_config()
         .map_err(|e| format!("Failed to clear configuration: {}", e))?;
-    tauri::async_runtime::block_on(clear_google_calendar_manager());
+    clear_google_calendar_manager().await;
 
     Ok("Google OAuth configuration cleared".to_string())
 }

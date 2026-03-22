@@ -139,7 +139,7 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
     if (blocknotePath) {
       return blocknotePath;
     }
-    return getPersistedActiveTabFilePath();
+    return getPersistedActiveTabFilePath(localStorage.getItem('gtdspace-current-path'));
   }, []);
 
   // Load items that reference the current page - debounced to prevent excessive calls

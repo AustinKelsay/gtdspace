@@ -118,8 +118,6 @@ pub async fn start_file_watcher(app: AppHandle, folder_path: String) -> Result<S
     let handle = tokio::task::spawn_blocking(move || {
         // Keep debouncer alive in this task
         let _debouncer = debouncer;
-        let runtime_handle = tokio::runtime::Handle::current();
-
         loop {
             if shutdown_for_task.load(Ordering::SeqCst) {
                 log::info!("File watcher shutdown requested");
@@ -129,11 +127,7 @@ pub async fn start_file_watcher(app: AppHandle, folder_path: String) -> Result<S
             match rx.recv_timeout(Duration::from_millis(250)) {
                 Ok(Ok(events)) => {
                     for event in events {
-                        runtime_handle.block_on(handle_file_event(
-                            &app_handle,
-                            &event.path,
-                            &event.kind,
-                        ));
+                        handle_file_event(&app_handle, &event.path, &event.kind);
                     }
                 }
                 Ok(Err(e)) => {
@@ -190,7 +184,7 @@ pub async fn stop_file_watcher() -> Result<String, String> {
 /// Handle individual file system events
 ///
 /// Processes file change events and emits appropriate events to the frontend.
-async fn handle_file_event(app: &AppHandle, path: &std::path::Path, _kind: &DebouncedEventKind) {
+fn handle_file_event(app: &AppHandle, path: &std::path::Path, _kind: &DebouncedEventKind) {
     // Only process markdown files
     if let Some(extension) = path.extension() {
         let ext_str = extension.to_string_lossy().to_lowercase();

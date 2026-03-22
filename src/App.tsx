@@ -492,26 +492,40 @@ export const App: React.FC = () => {
     if (!gtdSpace?.root_path) return;
 
     let reloadTimer: number | null = null;
-    const unsubscribe = onContentSaved((event) => {
+    const scheduleProjectReload = (filePath?: string | null) => {
+      const normalized = norm(filePath);
       if (
-        isUnder(event.filePath, `${gtdSpace.root_path}/Projects/`) &&
-        norm(event.filePath)?.endsWith(".md")
+        !normalized ||
+        !isUnder(filePath, `${gtdSpace.root_path}/Projects/`) ||
+        (!normalized.endsWith(".md") && !normalized.endsWith(".markdown"))
       ) {
-        if (reloadTimer !== null) {
-          window.clearTimeout(reloadTimer);
-        }
-
-        reloadTimer = window.setTimeout(() => {
-          void loadProjects(gtdSpace.root_path);
-          reloadTimer = null;
-        }, 50);
+        return;
       }
+
+      if (reloadTimer !== null) {
+        window.clearTimeout(reloadTimer);
+      }
+
+      reloadTimer = window.setTimeout(() => {
+        void loadProjects(gtdSpace.root_path);
+        reloadTimer = null;
+      }, 50);
+    };
+
+    const unsubscribe = onContentSaved((event) => {
+      scheduleProjectReload(event.filePath);
     });
+    const previousOnTabFileSaved = window.onTabFileSaved;
+    window.onTabFileSaved = (filePath, fileName, content, metadata) => {
+      previousOnTabFileSaved?.(filePath, fileName, content, metadata);
+      scheduleProjectReload(filePath);
+    };
 
     return () => {
       if (reloadTimer !== null) {
         window.clearTimeout(reloadTimer);
       }
+      window.onTabFileSaved = previousOnTabFileSaved;
       unsubscribe();
     };
   }, [gtdSpace?.root_path, loadProjects]);

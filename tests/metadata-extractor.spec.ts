@@ -157,4 +157,12 @@ describe('metadata extractor utilities', () => {
       })
     ).toThrow(/Duplicate metadata extractor pattern/);
   });
+
+  it('ignores legacy singleselect blocks that do not map to a metadata key', () => {
+    const metadata = extractMetadata(
+      "<div data-singleselect='{\"value\":\"waiting\"}' class=\"singleselect-block\">Status</div>"
+    );
+
+    expect(Object.keys(metadata)).not.toContain('');
+  });
 });

@@ -196,9 +196,12 @@ export async function restoreTabStateFromStorage(
   };
 }
 
-export function getPersistedActiveTabFilePath(): string | null {
+export function getPersistedActiveTabFilePath(workspacePath?: string | null): string | null {
   const snapshot = parsePersistedTabSnapshot(localStorage.getItem(TAB_STORAGE_KEY));
   if (!snapshot || snapshot.openTabs.length === 0) {
+    return null;
+  }
+  if (snapshot.workspacePath && pathKey(snapshot.workspacePath) !== pathKey(workspacePath)) {
     return null;
   }
 

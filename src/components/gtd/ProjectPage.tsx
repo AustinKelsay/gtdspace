@@ -151,8 +151,12 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
         (files ?? []).map(async (file) => {
           const content = await safeInvoke<string>("read_file", { path: file.path }, "");
           const parsedAction = parseActionMarkdown(content || "");
+          const fallbackName = file.name.replace(/\.(md|markdown)$/i, "");
           return {
-            name: parsedAction.title || file.name.replace(/\.md$/i, ""),
+            name:
+              parsedAction.title && parsedAction.title !== "Untitled"
+                ? parsedAction.title
+                : fallbackName,
             path: file.path,
             status: parsedAction.status,
             dueDate: parsedAction.dueDate || null,

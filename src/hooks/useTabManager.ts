@@ -363,7 +363,14 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
           }
 
           case 'manual-merge': {
-            const contentToSave = resolution.content ?? '';
+            if (
+              !Object.prototype.hasOwnProperty.call(resolution, 'content') ||
+              resolution.content === undefined
+            ) {
+              return false;
+            }
+
+            const contentToSave = resolution.content;
             await saveTabFile(tab.file, contentToSave);
             cleanupTabResources(tabId);
             pendingContentRef.current.delete(tabId);

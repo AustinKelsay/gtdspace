@@ -442,6 +442,78 @@ describe('useTabManager integration', () => {
     });
   });
 
+  it('keeps a recently closed entry when disk-backed reopen fails', async () => {
+    const { getCurrent } = renderTabManagerHook({ workspacePath: '/mock/workspace' });
+    const file = buildFile('f-reopen-fail', '/mock/workspace/reopen-fail.md');
+
+    let tabId = '';
+    await act(async () => {
+      tabId = await getCurrent().openTab(file);
+    });
+
+    await act(async () => {
+      await getCurrent().closeTab(tabId);
+    });
+
+    expect(getCurrent().tabState.recentlyClosed[0]?.id).toBe(tabId);
+
+    mocks.safeInvoke.mockImplementation(async (command: string) => {
+      if (command === 'read_file') return null;
+      if (command === 'save_file') return 'ok';
+      return null;
+    });
+
+    await act(async () => {
+      await expect(getCurrent().reopenLastClosedTab()).resolves.toBeNull();
+    });
+
+    expect(getCurrent().tabState.recentlyClosed[0]?.id).toBe(tabId);
+  });
+
+  it('restores persisted draft content instead of overwriting it with disk content', async () => {
+    localStorage.setItem(
+      'gtdspace-tabs',
+      JSON.stringify({
+        version: 2,
+        workspacePath: '/mock/workspace',
+        activeTabId: 'draft-tab',
+        maxTabs: 10,
+        openTabs: [
+          {
+            id: 'draft-tab',
+            filePath: '/mock/workspace/Projects/Alpha/README.md',
+            fileName: 'README.md',
+            hasUnsavedChanges: true,
+            isActive: true,
+            draftContent: '# local draft',
+          },
+        ],
+      }),
+    );
+
+    mocks.safeInvoke.mockImplementation(async (command: string) => {
+      if (command === 'read_file') return '# on disk';
+      if (command === 'save_file') return 'ok';
+      return null;
+    });
+
+    const { getCurrent } = renderTabManagerHook({
+      workspacePath: '/mock/workspace',
+      restoreTabs: true,
+    });
+
+    await waitFor(() => {
+      expect(getCurrent().tabState.openTabs).toHaveLength(1);
+    });
+
+    expect(getCurrent().activeTab).toMatchObject({
+      id: 'draft-tab',
+      content: '# local draft',
+      originalContent: '# on disk',
+      hasUnsavedChanges: true,
+    });
+  });
+
   it('restores persisted tabs only when restore is enabled for the matching workspace', async () => {
     localStorage.setItem(
       'gtdspace-tabs',

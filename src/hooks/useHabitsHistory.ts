@@ -74,6 +74,7 @@ interface UseHabitsHistoryReturn {
  * Parse habit history from markdown table format
  */
 const habitsLog = createScopedLogger('useHabitsHistory');
+const CREATED_AT_FALLBACK_WINDOW_MS = 5_000;
 
 /**
  * Calculate the next reset time based on frequency
@@ -302,6 +303,14 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
               parsedHabit.title && parsedHabit.title !== 'Untitled'
                 ? parsedHabit.title
                 : fallbackName;
+            const parsedCreatedAt = parsedHabit.createdDateTime
+              ? Date.parse(parsedHabit.createdDateTime)
+              : NaN;
+            const createdDateTime =
+              Number.isNaN(parsedCreatedAt) ||
+              Math.abs(Date.now() - parsedCreatedAt) <= CREATED_AT_FALLBACK_WINDOW_MS
+                ? toISOStringFromEpoch(file.last_modified)
+                : parsedHabit.createdDateTime;
             
             const habit: HabitWithHistory = {
               name: habitName,
@@ -309,7 +318,7 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
               status: parsedHabit.status,
               path: file.path,
               last_updated: toISOStringFromEpoch(file.last_modified),
-              createdDateTime: parsedHabit.createdDateTime,
+              createdDateTime,
               history,
               currentStreak: patterns.currentStreak,
               bestStreak: patterns.bestStreak,

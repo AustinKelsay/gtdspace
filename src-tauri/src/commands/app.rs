@@ -64,8 +64,9 @@ pub fn test_select_folder() -> Result<String, String> {
 ///
 /// ```typescript
 /// import { invoke } from '@tauri-apps/api/core';
+/// import { withErrorHandling } from '@/hooks/useErrorHandler';
 ///
-/// const version = await invoke('get_app_version');
+/// const version = await withErrorHandling(() => invoke<string>('getAppVersion'));
 /// console.log(`App version: ${version}`);
 /// ```
 #[tauri::command]

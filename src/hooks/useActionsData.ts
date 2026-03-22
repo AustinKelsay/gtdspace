@@ -263,20 +263,24 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       }));
 
       // Dispatch content-updated event to notify other components
+      const normalizedPath = norm(filePath);
+      const fileName = normalizedPath.split('/').pop() || '';
+      const metadata = extractMetadata(finalContent);
+
       window.dispatchEvent(new CustomEvent('content-updated', {
-        detail: { path: filePath, content: finalContent }
+        detail: { path: normalizedPath, content: finalContent }
       }));
       emitContentSaved({
-        filePath,
-        fileName: filePath.split('/').pop() || '',
+        filePath: normalizedPath,
+        fileName,
         content: finalContent,
-        metadata: extractMetadata(finalContent),
+        metadata,
       });
       window.onTabFileSaved?.(
-        filePath,
-        filePath.split('/').pop() || '',
+        normalizedPath,
+        fileName,
         finalContent,
-        extractMetadata(finalContent)
+        metadata
       );
 
       log.debug('[updateActionStatus] Successfully updated action status');

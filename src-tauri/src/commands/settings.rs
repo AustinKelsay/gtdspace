@@ -154,12 +154,14 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                     log::info!("Migrating encryption key from settings.json to secure storage");
                     match keyring::Entry::new(SECURE_STORAGE_SERVICE, GIT_SYNC_ENCRYPTION_KEY_NAME)
                     {
-                        Ok(entry) => match entry.set_password(trimmed) {
-                            Ok(_) => {
+                        Ok(entry) => match entry.get_password() {
+                            Ok(existing_secret) if !existing_secret.trim().is_empty() => {
                                 log::info!(
-                                    "Successfully migrated encryption key to secure storage"
+                                    "Secure storage already has an encryption key; skipping legacy migration overwrite"
                                 );
                                 legacy_encryption_key = None;
+                            }
+                            Ok(_) | Err(keyring::Error::NoEntry) => {
                                 if let Some(settings_obj) = value_to_deserialize.as_object_mut() {
                                     let original_settings =
                                         store.get("user_settings").unwrap_or_else(|| {
@@ -172,12 +174,6 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                                             "Failed to save settings after migration: {}",
                                             e
                                         );
-                                        if let Err(delete_error) = entry.delete_password() {
-                                            log::warn!(
-                                                "Failed to roll back migrated encryption key after save failure: {}",
-                                                delete_error
-                                            );
-                                        }
                                         store.set("user_settings", original_settings);
                                         legacy_encryption_key = Some(trimmed.to_string());
                                         if let Some(settings_obj) =
@@ -189,13 +185,44 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                                             );
                                         }
                                     } else {
-                                        legacy_encryption_key = None;
+                                        match entry.set_password(trimmed) {
+                                            Ok(_) => {
+                                                log::info!(
+                                                    "Successfully migrated encryption key to secure storage"
+                                                );
+                                                legacy_encryption_key = None;
+                                            }
+                                            Err(e) => {
+                                                log::warn!(
+                                                    "Failed to migrate key to secure storage: {}. Restoring legacy value.",
+                                                    e
+                                                );
+                                                store.set("user_settings", original_settings);
+                                                if let Err(save_error) = store.save() {
+                                                    log::warn!(
+                                                        "Failed to restore legacy settings after secure-storage migration failure: {}",
+                                                        save_error
+                                                    );
+                                                }
+                                                legacy_encryption_key = Some(trimmed.to_string());
+                                                if let Some(settings_obj) =
+                                                    value_to_deserialize.as_object_mut()
+                                                {
+                                                    settings_obj.insert(
+                                                        "git_sync_encryption_key".to_string(),
+                                                        serde_json::Value::String(
+                                                            trimmed.to_string(),
+                                                        ),
+                                                    );
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                             Err(e) => {
                                 log::warn!(
-                                    "Failed to migrate key to secure storage: {}. Keeping legacy value.",
+                                    "Unable to inspect secure storage for migration: {}. Keeping legacy value.",
                                     e
                                 );
                             }

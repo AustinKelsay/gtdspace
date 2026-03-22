@@ -128,8 +128,8 @@ pub fn compute_git_status(
     let enabled = settings.git_sync_enabled.unwrap_or(false);
     // Check secure storage for encryption key; fall back to legacy settings value if needed
     let encryption_configured = match load_secure_encryption_key() {
-        Ok(Some(value)) => !value.trim().is_empty(),
-        Ok(None) => settings
+        Ok(Some(value)) if !value.trim().is_empty() => true,
+        Ok(Some(_)) | Ok(None) => settings
             .git_sync_encryption_key
             .as_ref()
             .map(|legacy_key| !legacy_key.trim().is_empty())
@@ -258,8 +258,8 @@ pub fn build_git_sync_config(
 
     // Retrieve encryption key from secure storage (fall back to legacy settings key if migration hasn't completed)
     let encryption_key = match load_secure_encryption_key() {
-        Ok(Some(password)) => password,
-        Ok(None) => settings
+        Ok(Some(password)) if !password.trim().is_empty() => password,
+        Ok(Some(_)) | Ok(None) => settings
             .git_sync_encryption_key
             .clone()
             .ok_or_else(|| "Encryption key has not been set".to_string())?,

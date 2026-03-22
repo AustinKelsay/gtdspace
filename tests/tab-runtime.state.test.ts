@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FileTab, MarkdownFile } from '@/types';
 import {
   createInitialTabState,
+  pathKey,
   tabStateReducer,
   takeMostRecentlyClosedFile,
 } from '@/hooks/tab-runtime';
@@ -131,7 +132,7 @@ describe('tab-runtime state reducer', () => {
     const lastClosed = takeMostRecentlyClosedFile(state);
     expect(lastClosed?.file.path).toBe('/mock/workspace/One.md');
 
-    state = tabStateReducer(state, { type: 'remove-recently-closed-head' });
+    state = tabStateReducer(state, { type: 'remove-recently-closed', tabId: 'tab-1' });
     expect(state.recentlyClosed).toHaveLength(0);
   });
 
@@ -202,5 +203,10 @@ describe('tab-runtime state reducer', () => {
 
     expect(state.openTabs).toHaveLength(0);
     expect(state.recentlyClosed).toHaveLength(0);
+  });
+
+  it('preserves the filesystem root when normalizing path keys', () => {
+    expect(pathKey('/')).toBe('/');
+    expect(pathKey('/mock/workspace///')).toBe('/mock/workspace');
   });
 });

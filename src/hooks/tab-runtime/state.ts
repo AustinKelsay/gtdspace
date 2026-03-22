@@ -22,7 +22,7 @@ export type TabStateAction =
   | { type: 'reorder-tabs'; openTabs: FileTab[] }
   | { type: 'rename-paths'; oldPath: string; newPath: string; mode: RenameMode }
   | { type: 'remove-deleted-path'; path: string }
-  | { type: 'remove-recently-closed-head' }
+  | { type: 'remove-recently-closed'; tabId: string }
   | { type: 'clear-all' };
 
 export function createInitialTabState(maxTabs = DEFAULT_MAX_TABS): TabManagerState {
@@ -35,7 +35,11 @@ export function createInitialTabState(maxTabs = DEFAULT_MAX_TABS): TabManagerSta
 }
 
 export function pathKey(path?: string | null): string {
-  return norm(path)?.replace(/\/+$/, '') ?? '';
+  const normalized = norm(path) ?? '';
+  if (normalized === '/') {
+    return '/';
+  }
+  return normalized.replace(/\/+$/, '');
 }
 
 export function pathsEqual(a?: string | null, b?: string | null): boolean {
@@ -286,10 +290,10 @@ export function tabStateReducer(state: TabManagerState, action: TabStateAction):
       };
     }
 
-    case 'remove-recently-closed-head':
+    case 'remove-recently-closed':
       return {
         ...state,
-        recentlyClosed: state.recentlyClosed.slice(1),
+        recentlyClosed: state.recentlyClosed.filter((tab) => tab.id !== action.tabId),
       };
 
     case 'clear-all':

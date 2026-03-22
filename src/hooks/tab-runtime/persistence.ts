@@ -10,6 +10,7 @@ type CanonicalPersistedTab = {
   fileName: string;
   hasUnsavedChanges: boolean;
   isActive: boolean;
+  draftContent?: string;
 };
 
 type CanonicalPersistedTabSnapshot = {
@@ -28,6 +29,7 @@ type LegacyPersistedTab = {
   name?: string;
   hasUnsavedChanges?: boolean;
   isActive?: boolean;
+  draftContent?: string;
 };
 
 type LegacyPersistedTabSnapshot = {
@@ -61,6 +63,7 @@ function normalizeOpenTabs(snapshot: LegacyPersistedTabSnapshot): CanonicalPersi
           'Untitled.md',
         hasUnsavedChanges: Boolean(tab.hasUnsavedChanges),
         isActive: Boolean(tab.isActive),
+        draftContent: typeof tab.draftContent === 'string' ? tab.draftContent : undefined,
       };
     })
     .filter((tab): tab is CanonicalPersistedTab => tab !== null);
@@ -81,6 +84,7 @@ export function serializeTabState(
       fileName: tab.file.name,
       hasUnsavedChanges: tab.hasUnsavedChanges,
       isActive: tab.id === state.activeTabId,
+      draftContent: tab.hasUnsavedChanges ? tab.content : undefined,
     })),
   };
 }
@@ -167,9 +171,9 @@ export async function restoreTabStateFromStorage(
     validTabs.push({
       id: persistedTab.id,
       file: createRestoredFile(persistedTab.filePath, persistedTab.fileName, fileContent),
-      content: fileContent,
+      content: persistedTab.draftContent ?? fileContent,
       originalContent: fileContent,
-      hasUnsavedChanges: false,
+      hasUnsavedChanges: typeof persistedTab.draftContent === 'string',
       isActive: persistedTab.id === snapshot.activeTabId,
       cursorPosition: 0,
       scrollPosition: 0,

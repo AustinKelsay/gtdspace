@@ -12,7 +12,11 @@ export function isHorizontalRuleParagraph(
 }
 
 export function isHistoryHeading(block: UnknownBlock, blockText: string): boolean {
-  return block.type === "heading" && block.props?.level === 2 && blockText.trim() === "History";
+  return (
+    block.type === "heading" &&
+    block.props?.level === 2 &&
+    blockText.trim().toLowerCase() === "history"
+  );
 }
 
 export function isLevelTwoHeading(block: UnknownBlock): boolean {

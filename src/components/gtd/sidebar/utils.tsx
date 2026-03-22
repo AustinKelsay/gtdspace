@@ -50,7 +50,15 @@ export function parseLocalDateString(dateStr: string): Date | null {
     const month = Number(match[2]) - 1;
     const day = Number(match[3]);
     const dt = new Date(year, month, day);
-    return Number.isNaN(dt.getTime()) ? null : dt;
+    if (
+      Number.isNaN(dt.getTime()) ||
+      dt.getFullYear() !== year ||
+      dt.getMonth() !== month ||
+      dt.getDate() !== day
+    ) {
+      return null;
+    }
+    return dt;
   }
 
   const dt = new Date(trimmed);

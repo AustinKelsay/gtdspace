@@ -8,8 +8,9 @@ use super::utils::sanitize_markdown_file_stem;
 use chrono::{Local, NaiveTime};
 use serde::Deserialize;
 use std::fs::{self, OpenOptions};
-use std::io::{ErrorKind, Write};
+use std::io::{self, ErrorKind, Write};
 use std::path::Path;
+use tempfile::NamedTempFile;
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -24,6 +25,20 @@ pub struct HabitReferenceInput {
     vision: Vec<String>,
     #[serde(default)]
     purpose: Vec<String>,
+}
+
+fn atomic_write_habit_file(path: &Path, content: &str) -> io::Result<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| io::Error::other("Failed to determine habit file parent directory"))?;
+    let mut temp_file = NamedTempFile::new_in(parent)?;
+    temp_file.write_all(content.as_bytes())?;
+    temp_file.flush()?;
+    temp_file.as_file().sync_all()?;
+    temp_file
+        .persist(path)
+        .map(|_| ())
+        .map_err(|error| error.error)
 }
 
 #[tauri::command]
@@ -201,7 +216,7 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<boo
     let updated_content = apply_status_marker(&content, next_status, parsed.status_format);
     let final_content = insert_history_entry(&updated_content, &history_entry)?;
 
-    fs::write(&canonical_habit_path, &final_content)
+    atomic_write_habit_file(&canonical_habit_path, &final_content)
         .map_err(|error| format!("Failed to write habit file: {}", error))?;
 
     Ok(true)
@@ -315,7 +330,7 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
             HabitStatus::Todo,
             parsed.status_format,
         );
-        if let Err(error) = fs::write(&path, final_content) {
+        if let Err(error) = atomic_write_habit_file(&path, &final_content) {
             log::warn!("Skipping habit {:?}: {}", path, error);
             continue;
         }

@@ -118,4 +118,39 @@ describe('tab runtime persistence helpers', () => {
     expect(restored?.activeTabId).toBe('tab-3');
     expect(restored!.openTabs.some((tab) => tab.id === 'tab-3')).toBe(true);
   });
+
+  it('restores persisted draft content as the active unsaved buffer', async () => {
+    localStorage.setItem(
+      TAB_STORAGE_KEY,
+      JSON.stringify({
+        version: 2,
+        workspacePath: '/mock/workspace',
+        activeTabId: 'tab-1',
+        maxTabs: 5,
+        openTabs: [
+          {
+            id: 'tab-1',
+            filePath: '/mock/workspace/Notes.md',
+            fileName: 'Notes.md',
+            hasUnsavedChanges: true,
+            isActive: true,
+            draftContent: '# local draft',
+          },
+        ],
+      }),
+    );
+
+    const restored = await restoreTabStateFromStorage({
+      workspacePath: '/mock/workspace',
+      maxTabs: 5,
+      readFile: async () => '# on disk',
+    });
+
+    expect(restored?.openTabs[0]).toMatchObject({
+      content: '# local draft',
+      originalContent: '# on disk',
+      hasUnsavedChanges: true,
+      isActive: true,
+    });
+  });
 });

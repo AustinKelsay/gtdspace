@@ -160,7 +160,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
         const currentPath = filePath || '';
 
         if (currentPath) {
-          const normalizedHabitPath = norm(currentPath) ?? currentPath.replace(/\\/g, '/');
+          const normalizedHabitPath = norm(currentPath);
           const lower = normalizedHabitPath.toLowerCase();
           const isHabitFile = lower.includes('/habits/');
 
@@ -173,7 +173,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
               if (inTauriContext) {
                 const result = await withErrorHandling(async () => {
                   const { invoke } = await import('@tauri-apps/api/core');
-                  return invoke('update_habit_status', {
+                  return invoke('updateHabitStatus', {
                     habitPath: normalizedHabitPath,
                     newStatus: selectedValue,
                   });

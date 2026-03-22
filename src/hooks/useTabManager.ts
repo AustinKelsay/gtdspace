@@ -532,8 +532,8 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
     try {
       const existingTab = findTabByFile(lastClosed.file);
       if (existingTab) {
+        dispatch({ type: 'remove-recently-closed', tabId: lastClosed.id });
         dispatch({ type: 'activate-tab', tabId: existingTab.id });
-        dispatch({ type: 'remove-recently-closed-head' });
         return existingTab.id;
       }
 
@@ -542,6 +542,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
         lastClosed.hasUnsavedChanges || lastClosed.content !== originalContent;
 
       if (shouldRestoreSnapshot) {
+        dispatch({ type: 'remove-recently-closed', tabId: lastClosed.id });
         dispatch({
           type: 'open-tab',
           tab: {
@@ -549,12 +550,11 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
             isActive: true,
           },
         });
-        dispatch({ type: 'remove-recently-closed-head' });
         return lastClosed.id;
       }
 
       const reopenedTabId = await openTab(lastClosed.file);
-      dispatch({ type: 'remove-recently-closed-head' });
+      dispatch({ type: 'remove-recently-closed', tabId: lastClosed.id });
       return reopenedTabId;
     } catch (error) {
       log.error('Failed to reopen tab', error);
@@ -695,8 +695,13 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
       });
     }, []),
     onDelete: useCallback((detail) => {
+      tabStateRef.current.openTabs.forEach((tab) => {
+        if (isSameOrDescendantPath(tab.file.path, detail.path)) {
+          cleanupTabResources(tab.id);
+        }
+      });
       dispatch({ type: 'remove-deleted-path', path: detail.path });
-    }, []),
+    }, [cleanupTabResources]),
     onOpenReference: useCallback((detail) => {
       if (!detail.path) {
         log.error('No path provided for reference file');

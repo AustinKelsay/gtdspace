@@ -89,7 +89,7 @@ export function SidebarHeader({
 
         {showSearch && (
           <div id="sidebar-search-region" className="px-3 py-2">
-            <FileSearch value={searchQuery} onChange={onSearchChange} placeholder="Search..." />
+            <FileSearch value={searchQuery} onChange={onSearchChange} placeholder="Search..." autoFocus />
           </div>
         )}
       </div>

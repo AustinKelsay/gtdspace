@@ -125,23 +125,15 @@ export const App: React.FC = () => {
     refreshSpace: refreshGTDSpace,
   } = useGTDSpace();
 
-  const activeWorkspacePath = React.useMemo(() => {
-    const gitOverride = settings.git_sync_workspace_path?.trim();
-    if (gitOverride) return gitOverride;
-    return (
-      gtdSpace?.root_path ||
-      fileState.currentFolder ||
-      settings.default_space_path ||
-      settings.last_folder ||
-      null
-    );
-  }, [
-    settings.git_sync_workspace_path,
-    gtdSpace?.root_path,
-    fileState.currentFolder,
-    settings.default_space_path,
-    settings.last_folder,
-  ]);
+  const gitSyncWorkspacePath = React.useMemo(
+    () => settings.git_sync_workspace_path?.trim() || null,
+    [settings.git_sync_workspace_path],
+  );
+
+  const activeWorkspacePath = React.useMemo(
+    () => gtdSpace?.root_path || fileState.currentFolder || settings.last_folder || null,
+    [gtdSpace?.root_path, fileState.currentFolder, settings.last_folder],
+  );
 
   // === TAB MANAGEMENT ===
 
@@ -461,7 +453,7 @@ export const App: React.FC = () => {
 
   const gitSync = useGitSync({
     settings,
-    workspacePath: activeWorkspacePath,
+    workspacePath: gitSyncWorkspacePath,
   });
   const {
     status: gitSyncStatus,

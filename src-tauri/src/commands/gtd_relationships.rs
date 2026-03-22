@@ -427,6 +427,7 @@ pub fn find_habits_referencing(
                         // Check all possible reference fields
                         let tags = [
                             "projects-references",
+                            "habits-references",
                             "areas-references",
                             "goals-references",
                             "vision-references",

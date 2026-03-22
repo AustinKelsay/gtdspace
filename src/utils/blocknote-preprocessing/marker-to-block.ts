@@ -224,6 +224,9 @@ export function buildMarkerOnlyBlock(
 
   if (kind === "multiselect") {
     const [type, value] = splitMarkerRestLegacy(rest);
+    if (shouldSkipLegacyMultiselectType(type)) {
+      return createSingleselectBlock(type, value);
+    }
     return createMultiselectBlock(type, value);
   }
 

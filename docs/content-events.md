@@ -120,6 +120,7 @@ emitMetadataChange({
 - `window.applyBacklinkChange` remains a separate window-level integration used for targeted in-editor backlink mutations
 
 ### GTD Workspace Sidebar
+
 - `useGTDWorkspaceSidebar` owns the sidebar subscriptions and keeps the render components passive
 - Subscribes to metadata changes for real-time status and due-date overlays
 - Subscribes to content saved events for title-based project/action/section-file renaming

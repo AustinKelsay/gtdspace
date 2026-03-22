@@ -38,6 +38,7 @@ import type {
   SidebarProjectMetadata,
 } from './types';
 import type { GTDProject, MarkdownFile } from '@/types';
+import { norm } from '@/utils/path';
 
 type SidebarProjectsSectionProps = {
   isExpanded: boolean;
@@ -182,7 +183,11 @@ function ProjectRow({
   };
   const normalizedStatus = normalizeStatus(display.status);
   const StatusIcon = getStatusIcon(normalizedStatus);
-  const isExpanded = expandedProjects.includes(display.path);
+  const normalizedProjectPath = norm(display.path);
+  const isExpanded = expandedProjects.some((path) => norm(path) === normalizedProjectPath);
+  const isCompletedActionsExpanded = Array.from(expandedCompletedActions).some(
+    (path) => norm(path) === normalizedProjectPath,
+  );
   const isProjectActive =
     isPathActive(`${display.path}/README.md`) ||
     isPathActive(`${display.path}/README.markdown`);
@@ -220,6 +225,12 @@ function ProjectRow({
             onClick={(event) => {
               event.stopPropagation();
               void onToggleProjectExpand(currentProject);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+              }
+              event.stopPropagation();
             }}
             variant="ghost"
             size="icon"
@@ -322,7 +333,7 @@ function ProjectRow({
               ))}
               {completedActions.length > 0 && (
                 <Collapsible
-                  open={expandedCompletedActions.has(display.path)}
+                  open={isCompletedActionsExpanded}
                   onOpenChange={() => onToggleCompletedActions(display.path)}
                   data-sidebar-group="completed-actions"
                 >
@@ -330,7 +341,7 @@ function ProjectRow({
                     <CollapsibleTrigger className="flex-1 min-w-0 text-[11px] text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <ChevronRight
-                          className={`h-2.5 w-2.5 transition-transform ${expandedCompletedActions.has(display.path) ? 'rotate-90' : ''}`}
+                          className={`h-2.5 w-2.5 transition-transform ${isCompletedActionsExpanded ? 'rotate-90' : ''}`}
                         />
                         <span>Completed Actions</span>
                         <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0 h-4">
@@ -443,8 +454,8 @@ export function SidebarProjectsSection({
                   key={getProjectDisplay(project, projectMetadata).path}
                   project={project}
                   projectActions={
-                    projectActions[getProjectDisplay(project, projectMetadata).path] ||
-                    projectActions[project.path] ||
+                    projectActions[norm(getProjectDisplay(project, projectMetadata).path)] ||
+                    projectActions[norm(project.path)] ||
                     []
                   }
                   projectMetadata={projectMetadata}
@@ -499,8 +510,8 @@ export function SidebarProjectsSection({
                           key={`completed-${getProjectDisplay(project, projectMetadata).path}`}
                           project={project}
                           projectActions={
-                            projectActions[getProjectDisplay(project, projectMetadata).path] ||
-                            projectActions[project.path] ||
+                            projectActions[norm(getProjectDisplay(project, projectMetadata).path)] ||
+                            projectActions[norm(project.path)] ||
                             []
                           }
                           projectMetadata={projectMetadata}

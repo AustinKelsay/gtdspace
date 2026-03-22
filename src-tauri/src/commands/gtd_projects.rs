@@ -8,6 +8,19 @@ use std::path::{Component, Path, PathBuf};
 use super::seed_data::{generate_action_template, generate_project_readme};
 use super::utils::sanitize_markdown_file_stem;
 
+fn resolve_project_readme_path(project_path: &Path) -> Option<PathBuf> {
+    let markdown_path = project_path.join("README.markdown");
+    let md_path = project_path.join("README.md");
+
+    if md_path.exists() {
+        Some(md_path)
+    } else if markdown_path.exists() {
+        Some(markdown_path)
+    } else {
+        None
+    }
+}
+
 /// Create a new GTD project
 ///
 /// Creates a new project folder with a README.md template in the Projects directory.
@@ -301,11 +314,11 @@ pub fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, String> 
                         .to_string();
 
                     // Read README.md to extract project metadata
-                    let readme_path = path.join("README.md");
+                    let readme_path = resolve_project_readme_path(&path);
 
                     let (title, description, due_date, status, mut created_date_time) =
-                        if readme_path.exists() {
-                            match fs::read_to_string(&readme_path) {
+                        if let Some(ref readme_path) = readme_path {
+                            match fs::read_to_string(readme_path) {
                                 Ok(content) => {
                                     let (desc, due, stat, created) = parse_project_readme(&content);
                                     // Extract title from README
@@ -332,24 +345,26 @@ pub fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, String> 
 
                     // If created_date_time is empty, use file metadata timestamp as fallback
                     if created_date_time.is_empty() {
-                        if let Ok(metadata) = fs::metadata(&readme_path) {
-                            if let Ok(created_time) =
-                                metadata.created().or_else(|_| metadata.modified())
-                            {
-                                if let Ok(duration) =
-                                    created_time.duration_since(std::time::SystemTime::UNIX_EPOCH)
+                        if let Some(ref readme_path) = readme_path {
+                            if let Ok(metadata) = fs::metadata(readme_path) {
+                                if let Ok(created_time) =
+                                    metadata.created().or_else(|_| metadata.modified())
                                 {
-                                    let timestamp = chrono::DateTime::from_timestamp(
-                                        duration.as_secs() as i64,
-                                        0,
-                                    )
-                                    .unwrap_or_else(chrono::Utc::now);
-                                    created_date_time = timestamp.to_rfc3339();
-                                    log::debug!(
-                                        "Using file metadata timestamp for project {}: {}",
-                                        folder_name,
-                                        created_date_time
-                                    );
+                                    if let Ok(duration) = created_time
+                                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                                    {
+                                        let timestamp = chrono::DateTime::from_timestamp(
+                                            duration.as_secs() as i64,
+                                            0,
+                                        )
+                                        .unwrap_or_else(chrono::Utc::now);
+                                        created_date_time = timestamp.to_rfc3339();
+                                        log::debug!(
+                                            "Using file metadata timestamp for project {}: {}",
+                                            folder_name,
+                                            created_date_time
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -468,8 +483,7 @@ pub fn rename_gtd_project(
             );
 
             // Update the title in README.md
-            let readme_path = new_path.join("README.md");
-            if readme_path.exists() {
+            if let Some(readme_path) = resolve_project_readme_path(&new_path) {
                 match fs::read_to_string(&readme_path) {
                     Ok(content) => {
                         // Update the H1 title (first line starting with #)
@@ -538,6 +552,20 @@ pub fn rename_gtd_action(
 
     if !old_path.is_file() {
         return Err("Path is not a file".to_string());
+    }
+
+    if old_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| {
+            matches!(
+                value.to_ascii_lowercase().as_str(),
+                "readme" | "readme.md" | "readme.markdown"
+            )
+        })
+        .unwrap_or(false)
+    {
+        return Err("Project README files cannot be renamed as actions".to_string());
     }
 
     // Get parent directory (project folder)

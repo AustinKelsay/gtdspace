@@ -21,9 +21,23 @@ fn generate_stable_file_id(path: &Path) -> String {
 }
 
 fn strip_markdown_extension(name: &str) -> &str {
-    name.strip_suffix(".markdown")
-        .or_else(|| name.strip_suffix(".md"))
-        .unwrap_or(name)
+    let lower = name.to_ascii_lowercase();
+    if lower.ends_with(".markdown") {
+        &name[..name.len() - ".markdown".len()]
+    } else if lower.ends_with(".md") {
+        &name[..name.len() - ".md".len()]
+    } else {
+        name
+    }
+}
+
+fn has_markdown_extension(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".md") || lower.ends_with(".markdown")
+}
+
+fn directory_has_project_readme(dir_path: &Path) -> bool {
+    dir_path.join("README.md").exists() || dir_path.join("README.markdown").exists()
 }
 
 fn path_has_component_case_insensitive(path: &Path, expected: &str) -> bool {
@@ -91,15 +105,7 @@ fn rename_path(old_path: &Path, new_path: &Path) -> Result<(), std::io::Error> {
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 return Err(error);
             }
-            Err(_) => {
-                if new_path.exists() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::AlreadyExists,
-                        "destination already exists",
-                    ));
-                }
-                return fs::rename(old_path, new_path);
-            }
+            Err(error) => return Err(error),
         }
     }
 
@@ -541,7 +547,7 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
     let clean_name = strip_markdown_extension(&safe_name).to_string();
 
     // Add .md extension if not present
-    let file_name = if safe_name.ends_with(".md") || safe_name.ends_with(".markdown") {
+    let file_name = if has_markdown_extension(&safe_name) {
         safe_name
     } else {
         format!("{}.md", safe_name)
@@ -558,7 +564,7 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
     let is_in_purpose = path_has_component_case_insensitive(dir_path, "Purpose & Principles");
 
     // For project actions, require README.md to distinguish from project root creation
-    let is_project_dir = dir_path.join("README.md").exists();
+    let is_project_dir = directory_has_project_readme(dir_path);
 
     // Create appropriate template content based on GTD horizon
     let template_content = if is_in_projects && is_project_dir {
@@ -831,7 +837,7 @@ pub fn rename_file(old_path: String, new_name: String) -> Result<FileOperationRe
     };
 
     // Add .md extension if not present
-    let file_name = if safe_name.ends_with(".md") || safe_name.ends_with(".markdown") {
+    let file_name = if has_markdown_extension(&safe_name) {
         safe_name
     } else {
         format!("{}.md", safe_name)
@@ -1107,31 +1113,47 @@ pub fn copy_file(source_path: String, dest_path: String) -> Result<String, Strin
         }
     }
 
-    // Check if destination already exists
-    if dest.exists() {
-        return Err("Destination file already exists".to_string());
-    }
+    let mut source_file = fs::File::open(source).map_err(|e| {
+        log::error!("Failed to open source file {}: {}", source_path, e);
+        format!("Failed to open source file: {}", e)
+    })?;
 
-    // Perform the copy
-    match fs::copy(source, dest) {
-        Ok(bytes_copied) => {
-            log::info!(
-                "Successfully copied file: {} ({} bytes)",
-                dest_path,
-                bytes_copied
-            );
-            Ok(format!("File copied successfully ({} bytes)", bytes_copied))
-        }
-        Err(e) => {
+    let mut dest_file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(dest)
+        .map_err(|e| {
+            if e.kind() == io::ErrorKind::AlreadyExists {
+                "Destination file already exists".to_string()
+            } else {
+                log::error!("Failed to create destination file {}: {}", dest_path, e);
+                format!("Failed to create destination file: {}", e)
+            }
+        })?;
+
+    let copy_result = io::copy(&mut source_file, &mut dest_file)
+        .and_then(|bytes_copied| {
+            dest_file.flush()?;
+            dest_file.sync_all()?;
+            Ok(bytes_copied)
+        })
+        .map_err(|e| {
+            let _ = fs::remove_file(dest);
             log::error!(
                 "Failed to copy file from {} to {}: {}",
                 source_path,
                 dest_path,
                 e
             );
-            Err(format!("Failed to copy file: {}", e))
-        }
-    }
+            format!("Failed to copy file: {}", e)
+        })?;
+
+    log::info!(
+        "Successfully copied file: {} ({} bytes)",
+        dest_path,
+        copy_result
+    );
+    Ok(format!("File copied successfully ({} bytes)", copy_result))
 }
 
 /// Move a file to a new location

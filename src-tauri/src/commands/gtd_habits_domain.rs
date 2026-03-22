@@ -384,7 +384,7 @@ pub(crate) fn insert_history_entry(content: &str, entry: &str) -> Result<String,
                 continue;
             } else if line.starts_with('|') && line.contains(" | ") {
                 last_history_line_idx = Some(i);
-            } else if line.starts_with("##") {
+            } else if line.trim_start().starts_with("##") {
                 break;
             } else if !line.trim().is_empty() {
                 has_old_list_format = true;

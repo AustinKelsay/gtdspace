@@ -41,7 +41,7 @@ This document captures the current Habit page template for GTD Space. It mirrors
 - Field controls:
 - Frequency: singleselect tokens `5-minute | daily | every-other-day | twice-weekly | weekly | weekdays | biweekly | monthly` (aligns with `GTDHabitFrequency`; `5-minute` remains a testing utility).
   - Next Reset: derived timestamp computed locally in `HabitPage` from `determineLastHabitResetDate()` and `calculateNextHabitReset()`; displayed as `Oct 22, 2025 • 12:00 AM` (local time). No markdown token is written.
-  - Last Completion: derived from the latest completion history row; falls back to `—`. Also not written to markdown.
+  - Last Completion: derived from the latest completion history row; falls back to `—`. Also not written to Markdown.
   - Created: read-only ISO datetime normalized to local friendly string; persists in `[!datetime:created_date_time:]`.
   - References: chip lists grouped by horizon type, editing opens existing reference dialog (JSON array storage preferred).
 - Divider: `border-t border-border` separates header and body.

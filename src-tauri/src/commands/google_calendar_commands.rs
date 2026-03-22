@@ -282,7 +282,9 @@ pub async fn google_calendar_disconnect_simple(app: AppHandle) -> Result<String,
 }
 
 #[tauri::command]
-pub async fn google_calendar_disconnect() -> Result<String, String> {
+pub async fn google_calendar_disconnect(app: AppHandle) -> Result<String, String> {
+    use crate::google_calendar::token_manager::TokenManager;
+
     let manager = {
         let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
         manager_guard.as_ref().cloned()
@@ -294,6 +296,14 @@ pub async fn google_calendar_disconnect() -> Result<String, String> {
             .await
             .map_err(|e| format!("Failed to disconnect from Google Calendar: {}", e))?;
     }
+
+    tokio::task::spawn_blocking(move || {
+        let token_manager = TokenManager::new(app).map_err(|e| e.to_string())?;
+        token_manager.delete_tokens().map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Failed to disconnect Google Calendar: {}", e))??;
+
     clear_google_calendar_manager().await;
 
     Ok("Successfully disconnected from Google Calendar".to_string())

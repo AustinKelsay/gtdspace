@@ -1,9 +1,40 @@
 //! Native dialog and file explorer commands.
 
 use std::path::PathBuf;
+use std::process::Command;
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 use tokio::task;
+
+fn open_in_linux_file_manager(path: &std::ffi::OsStr) -> Result<(), std::io::Error> {
+    let mut last_error: Option<std::io::Error> = None;
+    let mut last_non_success: Option<String> = None;
+
+    for launcher in ["xdg-open", "nautilus", "dolphin", "thunar"] {
+        match Command::new(launcher).arg(path).status() {
+            Ok(status) if status.success() => return Ok(()),
+            Ok(status) => {
+                let detail = status
+                    .code()
+                    .map(|code| format!("{} exited with code {}", launcher, code))
+                    .unwrap_or_else(|| format!("{} terminated by signal", launcher));
+                last_non_success = Some(detail);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                continue;
+            }
+            Err(error) => {
+                last_error = Some(error);
+            }
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| {
+        std::io::Error::other(
+            last_non_success.unwrap_or_else(|| "No suitable file manager found".to_string()),
+        )
+    }))
+}
 
 /// Open folder selection dialog and return selected path
 ///
@@ -83,8 +114,6 @@ pub async fn select_folder(app: AppHandle) -> Result<String, String> {
 /// ```
 #[tauri::command]
 pub fn open_folder_in_explorer(path: String) -> Result<String, String> {
-    use std::process::Command;
-
     log::info!("Opening folder in explorer: {}", path);
 
     // Verify the path exists and is a directory
@@ -97,39 +126,19 @@ pub fn open_folder_in_explorer(path: String) -> Result<String, String> {
     }
 
     // Open the folder based on the operating system
+    if cfg!(target_os = "linux") {
+        open_in_linux_file_manager(path_buf.as_os_str()).map_err(|e| {
+            log::error!("Failed to open folder in explorer: {}", e);
+            format!("Failed to open folder: {}", e)
+        })?;
+        log::info!("Successfully opened folder in explorer");
+        return Ok(format!("Opened folder: {}", path));
+    }
+
     let result = if cfg!(target_os = "windows") {
         Command::new("explorer").arg(&path).status()
     } else if cfg!(target_os = "macos") {
         Command::new("open").arg(&path).status()
-    } else if cfg!(target_os = "linux") {
-        let mut last_error: Option<std::io::Error> = None;
-        let mut last_non_success: Option<String> = None;
-        for launcher in ["xdg-open", "nautilus", "dolphin", "thunar"] {
-            match Command::new(launcher).arg(&path).status() {
-                Ok(status) if status.success() => {
-                    return Ok(format!("Opened folder: {}", path));
-                }
-                Ok(status) => {
-                    let detail = status
-                        .code()
-                        .map(|code| format!("{} exited with code {}", launcher, code))
-                        .unwrap_or_else(|| format!("{} terminated by signal", launcher));
-                    last_non_success = Some(detail);
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    continue;
-                }
-                Err(error) => {
-                    last_error = Some(error);
-                }
-            }
-        }
-
-        Err(last_error.unwrap_or_else(|| {
-            std::io::Error::other(
-                last_non_success.unwrap_or_else(|| "No suitable file manager found".to_string()),
-            )
-        }))
     } else {
         return Err("Unsupported operating system".to_string());
     };
@@ -176,8 +185,6 @@ pub fn open_folder_in_explorer(path: String) -> Result<String, String> {
 /// ```
 #[tauri::command]
 pub fn open_file_location(file_path: String) -> Result<String, String> {
-    use std::process::Command;
-
     log::info!("Opening file location: {}", file_path);
 
     // Get the parent directory of the file
@@ -195,6 +202,15 @@ pub fn open_file_location(file_path: String) -> Result<String, String> {
         .ok_or_else(|| format!("Could not get parent directory of: {}", file_path))?;
 
     // Open the folder and select the file based on the operating system
+    if cfg!(target_os = "linux") {
+        open_in_linux_file_manager(parent_dir.as_os_str()).map_err(|e| {
+            log::error!("Failed to open file location: {}", e);
+            format!("Failed to open file location: {}", e)
+        })?;
+        log::info!("Successfully opened file location: {}", file_path);
+        return Ok(format!("Opened file location: {}", file_path));
+    }
+
     let result = if cfg!(target_os = "windows") {
         // On Windows, explorer can select a file with /select
         Command::new("explorer")
@@ -204,12 +220,7 @@ pub fn open_file_location(file_path: String) -> Result<String, String> {
         // On macOS, we can use open -R to reveal the file
         Command::new("open").arg("-R").arg(&file_path).status()
     } else {
-        // On Linux, just open the parent directory
-        // Different file managers have different ways to select files
-        // So we'll just open the parent directory
-        Command::new("xdg-open")
-            .arg(parent_dir.as_os_str())
-            .status()
+        return Err("Unsupported operating system".to_string());
     };
 
     match result {

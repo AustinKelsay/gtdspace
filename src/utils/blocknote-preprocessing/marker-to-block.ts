@@ -24,7 +24,9 @@ const LIST_KIND_META: Record<
   "projects-list": { listType: "projects", type: "projects-list" },
   "areas-list": { listType: "areas", type: "areas-list" },
   "goals-list": { listType: "goals", type: "goals-list" },
+  "vision-list": { listType: "visions", type: "visions-list" },
   "visions-list": { listType: "visions", type: "visions-list" },
+  "purpose-list": { listType: "purpose", type: "purpose-list" },
   "habits-list": { listType: "habits", type: "habits-list" },
   "projects-areas-list": {
     listType: "projects-areas",

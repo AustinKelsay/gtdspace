@@ -176,7 +176,7 @@ export function SidebarStandardSection({
                   className={`group flex items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs ${isActive ? SIDEBAR_ACTIVE_ROW_CLASSES : ''}`}
                 >
                   <div
-                    className="flex items-center gap-1 flex-1 cursor-pointer"
+                    className="flex items-center gap-1 flex-1 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1"
                     role="button"
                     tabIndex={0}
                     onClick={() => onOpenFile(file, display.path)}

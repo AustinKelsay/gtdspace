@@ -132,6 +132,13 @@ function updateTabFilePath(tab: FileTab, nextPath: string): FileTab {
   };
 }
 
+function ensureOriginalContent(tab: FileTab): FileTab {
+  return {
+    ...tab,
+    originalContent: tab.originalContent ?? tab.content,
+  };
+}
+
 export function takeMostRecentlyClosedFile(state: TabManagerState): FileTab | null {
   return state.recentlyClosed[0] ?? null;
 }
@@ -148,21 +155,27 @@ export function tabStateReducer(state: TabManagerState, action: TabStateAction):
       };
     }
 
-    case 'restore-state':
+    case 'restore-state': {
+      const restoredOpenTabs = action.state.openTabs.map(ensureOriginalContent);
+      const restoredRecentlyClosed = action.state.recentlyClosed.map(ensureOriginalContent);
       return {
         ...action.state,
+        openTabs: restoredOpenTabs,
+        recentlyClosed: restoredRecentlyClosed,
         ...enforceMaxTabs(
-          action.state.openTabs,
+          restoredOpenTabs,
           action.state.activeTabId,
-          action.state.recentlyClosed,
+          restoredRecentlyClosed,
           action.state.maxTabs,
         ),
       };
+    }
 
     case 'open-tab': {
-      const existingTab = state.openTabs.find((tab) => pathsEqual(tab.file.path, action.tab.file.path));
+      const nextTab = ensureOriginalContent(action.tab);
+      const existingTab = state.openTabs.find((tab) => pathsEqual(tab.file.path, nextTab.file.path));
       const activeTabId = existingTab?.id ?? action.tab.id;
-      const nextTabs = existingTab ? state.openTabs : [...state.openTabs, action.tab];
+      const nextTabs = existingTab ? state.openTabs : [...state.openTabs, nextTab];
       const enforced = enforceMaxTabs(nextTabs, activeTabId, state.recentlyClosed, state.maxTabs);
       return {
         ...state,
@@ -204,7 +217,7 @@ export function tabStateReducer(state: TabManagerState, action: TabStateAction):
             ? {
                 ...tab,
                 content: action.content,
-                hasUnsavedChanges: (tab.originalContent ?? tab.content) !== action.content,
+                hasUnsavedChanges: (tab.originalContent ?? '') !== action.content,
               }
             : tab,
         ),
@@ -284,6 +297,7 @@ export function tabStateReducer(state: TabManagerState, action: TabStateAction):
         ...state,
         openTabs: [],
         activeTabId: null,
+        recentlyClosed: [],
       };
 
     default:

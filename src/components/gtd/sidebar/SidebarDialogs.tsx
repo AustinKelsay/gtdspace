@@ -81,7 +81,11 @@ export function SidebarDialogs({
           }}
           projectPath={selectedProject.path}
           projectName={selectedProject.name}
-          onSuccess={() => void onActionCreated(selectedProject)}
+          onSuccess={() => {
+            void Promise.resolve(onActionCreated(selectedProject)).catch((error) => {
+              console.error('Sidebar action creation callback failed', error);
+            });
+          }}
         />
       )}
 

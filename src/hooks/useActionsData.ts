@@ -16,7 +16,7 @@ import {
   rebuildActionMarkdown,
 } from '@/utils/gtd-action-markdown';
 import { extractMetadata } from '@/utils/metadata-extractor';
-import { normalizeReferencePath } from '@/utils/gtd-reference-utils';
+import { norm } from '@/utils/path';
 
 export interface ActionItem {
   id: string;
@@ -208,19 +208,19 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
   
   const updateActionStatus = useCallback(async (actionIdOrPath: string, newStatus: string, actionPath?: string): Promise<boolean> => {
     try {
-      const normalizedActionIdOrPath = normalizeReferencePath(actionIdOrPath);
+      const normalizedActionIdOrPath = norm(actionIdOrPath);
       // Determine the actual file path
       let filePath: string;
 
       if (actionPath) {
         // If path is explicitly provided, use it
-        filePath = normalizeReferencePath(actionPath);
+        filePath = actionPath;
         log.debug('[updateActionStatus] Using provided path', filePath);
       } else {
         // Otherwise, try to find it in current actions (using ref for latest state)
         const action = actionsRef.current.find((a) => {
-          const normalizedId = normalizeReferencePath(a.id);
-          const normalizedPath = normalizeReferencePath(a.path);
+          const normalizedId = norm(a.id);
+          const normalizedPath = norm(a.path);
           return normalizedId === normalizedActionIdOrPath || normalizedPath === normalizedActionIdOrPath;
         });
         if (!action) {
@@ -228,7 +228,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
           log.debug('[updateActionStatus] Available actions', actionsRef.current.map(a => ({ id: a.id, path: a.path })));
           return false;
         }
-        filePath = normalizeReferencePath(action.path);
+        filePath = action.path;
         log.debug('[updateActionStatus] Found action in state, using path', filePath);
       }
 
@@ -255,9 +255,9 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
 
       // Update local state optimistically
       setActions(prev => prev.map((a) => {
-        const normalizedId = normalizeReferencePath(a.id);
-        const normalizedPath = normalizeReferencePath(a.path);
-        return normalizedId === normalizedActionIdOrPath || normalizedPath === filePath
+        const normalizedId = norm(a.id);
+        const normalizedPath = norm(a.path);
+        return normalizedId === normalizedActionIdOrPath || normalizedPath === norm(filePath)
           ? { ...a, status: canonicalStatus }
           : a;
       }));

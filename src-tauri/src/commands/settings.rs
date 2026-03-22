@@ -16,6 +16,12 @@ fn load_git_sync_encryption_key() -> Option<String> {
     None
 }
 
+fn default_settings_with_secure_key() -> UserSettings {
+    let mut settings = get_default_settings();
+    settings.git_sync_encryption_key = load_git_sync_encryption_key();
+    settings
+}
+
 #[cfg(not(test))]
 fn load_git_sync_encryption_key() -> Option<String> {
     keyring::Entry::new(SECURE_STORAGE_SERVICE, GIT_SYNC_ENCRYPTION_KEY_NAME)
@@ -125,7 +131,7 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                 Ok(store) => store,
                 Err(e) => {
                     log::error!("Failed to create settings store: {}", e);
-                    return Ok(get_default_settings());
+                    return Ok(default_settings_with_secure_key());
                 }
             }
         }
@@ -214,13 +220,13 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                 }
                 Err(e) => {
                     log::warn!("Failed to parse settings, using defaults: {}", e);
-                    get_default_settings()
+                    default_settings_with_secure_key()
                 }
             }
         }
         None => {
             log::info!("No existing settings found, using defaults");
-            get_default_settings()
+            default_settings_with_secure_key()
         }
     };
 

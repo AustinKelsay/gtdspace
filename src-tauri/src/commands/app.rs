@@ -27,7 +27,7 @@ pub struct PermissionStatus {
 /// # Examples
 ///
 /// ```typescript
-/// import { invoke } from '@tauri-apps/api/tauri';
+/// import { invoke } from '@tauri-apps/api/core';
 ///
 /// const response = await invoke('ping');
 /// console.log(response); // "pong"
@@ -63,7 +63,7 @@ pub fn test_select_folder() -> Result<String, String> {
 /// # Examples
 ///
 /// ```typescript
-/// import { invoke } from '@tauri-apps/api/tauri';
+/// import { invoke } from '@tauri-apps/api/core';
 ///
 /// const version = await invoke('get_app_version');
 /// console.log(`App version: ${version}`);

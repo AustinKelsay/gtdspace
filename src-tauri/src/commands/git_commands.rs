@@ -34,12 +34,13 @@ pub async fn git_sync_push(
 ) -> Result<GitOperationResultPayload, String> {
     let _guard = GIT_SYNC_METADATA_LOCK.lock().await;
     let settings_snapshot = load_settings(app.clone()).await?;
-    let config = build_git_sync_config(&settings_snapshot, workspace_override)?;
     let force_push = force.unwrap_or(false);
-
-    let outcome = task::spawn_blocking(move || perform_git_push(config, force_push))
-        .await
-        .map_err(|e| format!("Git push task failed: {}", e))??;
+    let outcome = task::spawn_blocking(move || {
+        let config = build_git_sync_config(&settings_snapshot, workspace_override)?;
+        perform_git_push(config, force_push)
+    })
+    .await
+    .map_err(|e| format!("Git push task failed: {}", e))??;
 
     if let Err(error) = update_settings(app, |settings| {
         settings.git_sync_last_push = outcome.timestamp.clone();
@@ -61,12 +62,13 @@ pub async fn git_sync_pull(
 ) -> Result<GitOperationResultPayload, String> {
     let _guard = GIT_SYNC_METADATA_LOCK.lock().await;
     let settings_snapshot = load_settings(app.clone()).await?;
-    let config = build_git_sync_config(&settings_snapshot, workspace_override)?;
     let force_pull = force.unwrap_or(false);
-
-    let outcome = task::spawn_blocking(move || perform_git_pull(config, force_pull))
-        .await
-        .map_err(|e| format!("Git pull task failed: {}", e))??;
+    let outcome = task::spawn_blocking(move || {
+        let config = build_git_sync_config(&settings_snapshot, workspace_override)?;
+        perform_git_pull(config, force_pull)
+    })
+    .await
+    .map_err(|e| format!("Git pull task failed: {}", e))??;
 
     if let Err(error) = update_settings(app, |settings| {
         settings.git_sync_last_pull = outcome.timestamp.clone();

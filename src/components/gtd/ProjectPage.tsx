@@ -147,11 +147,18 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
         return;
       }
 
-      const files = await safeInvoke<MarkdownFile[]>(
-        "list_project_actions",
-        { projectPath },
-        []
-      );
+      const files =
+        (await withErrorHandling(async () => {
+          const result = await safeInvoke<MarkdownFile[]>(
+            "list_project_actions",
+            { projectPath },
+            null
+          );
+          if (result == null) {
+            throw new Error(`Failed to load project actions for ${projectPath}`);
+          }
+          return result;
+        }, "Failed to load project actions", "project-actions")) ?? [];
 
       const actions = await Promise.all(
         (files ?? []).map(async (file) => {
@@ -293,11 +300,18 @@ const ProjectHabitsSection: React.FC<{ projectPath: string | null }> = ({ projec
       }
 
       const habitsDir = `${spacePath}/Habits`;
-      const files = await safeInvoke<MarkdownFile[]>(
-        "list_markdown_files",
-        { path: habitsDir },
-        []
-      );
+      const files =
+        (await withErrorHandling(async () => {
+          const result = await safeInvoke<MarkdownFile[]>(
+            "list_markdown_files",
+            { path: habitsDir },
+            null
+          );
+          if (result == null) {
+            throw new Error(`Failed to list habits in ${habitsDir}`);
+          }
+          return result;
+        }, "Failed to load related habits", "project-habits")) ?? [];
 
       const projectNormalized = normalizeProjectReferencePath(projectPath);
 
@@ -508,11 +522,17 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       return withErrorHandling(async () => {
         const dirName = HORIZON_DIRS[key];
         const dirPath = `${spacePath}/${dirName}`;
-        const files = await safeInvoke<MarkdownFile[]>(
-          "list_markdown_files",
-          { path: dirPath },
-          []
-        );
+        const files = await withErrorHandling(async () => {
+          const result = await safeInvoke<MarkdownFile[]>(
+            "list_markdown_files",
+            { path: dirPath },
+            null
+          );
+          if (result == null) {
+            throw new Error(`Failed to list horizon references in ${dirPath}`);
+          }
+          return result;
+        }, "Failed to load horizon references", `project-${key}-references`);
         if (!files) return [];
         return files
           .filter((file) => !README_REFERENCE_REGEX.test(file.path.replace(/\\/g, "/")))

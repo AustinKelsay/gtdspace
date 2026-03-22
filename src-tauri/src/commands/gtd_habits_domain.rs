@@ -233,8 +233,12 @@ fn parse_history_record_from_legacy_list(line: &str) -> Option<HistoryRecord> {
     Some(HistoryRecord { timestamp, action })
 }
 
+fn is_history_heading_line(line: &str) -> bool {
+    line.trim().eq_ignore_ascii_case("## history")
+}
+
 fn parse_history_records(content: &str) -> Vec<HistoryRecord> {
-    let Some(history_index) = content.lines().position(|line| line.trim() == "## History") else {
+    let Some(history_index) = content.lines().position(is_history_heading_line) else {
         return Vec::new();
     };
 
@@ -361,7 +365,7 @@ pub(crate) fn insert_history_entry(content: &str, entry: &str) -> Result<String,
     let mut old_list_entries: Vec<(usize, &str)> = Vec::new();
 
     for (i, line) in lines.iter().enumerate() {
-        if line.starts_with("## History") {
+        if is_history_heading_line(line) {
             in_history_section = true;
             history_section_idx = Some(i);
             continue;
@@ -696,6 +700,29 @@ mod tests {
         assert_eq!(parsed.status, HabitStatus::Completed);
         assert_eq!(parsed.frequency, HabitFrequency::Weekly);
         assert_eq!(parsed.reset_anchor, Some(dt(2026, 3, 1, 9, 30)));
+    }
+
+    #[test]
+    fn parse_habit_state_reads_history_from_trimmed_case_insensitive_heading() {
+        let content = r#"# Habit
+
+## Status
+[!checkbox:habit-status:false]
+
+## Frequency
+[!singleselect:habit-frequency:weekly]
+
+## Created
+[!datetime:created_date_time:2026-03-01T09:30]
+
+   ## history
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2026-03-04 | 8:15 PM | To Do | Manual | |
+"#;
+
+        let parsed = parse_habit_state(content).unwrap();
+        assert_eq!(parsed.reset_anchor, Some(dt(2026, 3, 4, 20, 15)));
     }
 
     #[test]

@@ -18,11 +18,12 @@ function buildFile(path: string): MarkdownFile {
 }
 
 function buildTab(id: string, path: string, options: Partial<FileTab> = {}): FileTab {
+  const hasOriginalContentOverride = Object.prototype.hasOwnProperty.call(options, 'originalContent');
   return {
     id,
     file: buildFile(path),
     content: options.content ?? '# content',
-    originalContent: options.originalContent ?? '# content',
+    originalContent: hasOriginalContentOverride ? options.originalContent : '# content',
     hasUnsavedChanges: options.hasUnsavedChanges ?? false,
     isActive: options.isActive ?? false,
     cursorPosition: 0,
@@ -134,6 +135,26 @@ describe('tab-runtime state reducer', () => {
     expect(state.recentlyClosed).toHaveLength(0);
   });
 
+  it('seeds missing original content when restoring tabs', () => {
+    const restoredTab = buildTab('tab-1', '/mock/workspace/One.md', {
+      content: '# restored',
+      originalContent: undefined,
+      isActive: true,
+    });
+
+    const state = tabStateReducer(createInitialTabState(3), {
+      type: 'restore-state',
+      state: {
+        openTabs: [restoredTab],
+        activeTabId: 'tab-1',
+        maxTabs: 3,
+        recentlyClosed: [],
+      },
+    });
+
+    expect(state.openTabs[0]?.originalContent).toBe('# restored');
+  });
+
   it('removes deleted paths from recently closed history as well as open tabs', () => {
     let state = createInitialTabState(3);
 
@@ -162,6 +183,24 @@ describe('tab-runtime state reducer', () => {
     expect(state.openTabs.map((tab) => tab.file.path)).toEqual([
       '/mock/workspace/Cabinet/Reference.md',
     ]);
+    expect(state.recentlyClosed).toHaveLength(0);
+  });
+
+  it('clears recently closed tabs when clearing all state', () => {
+    let state = createInitialTabState(3);
+
+    state = tabStateReducer(state, {
+      type: 'open-tab',
+      tab: buildTab('tab-1', '/mock/workspace/One.md', { isActive: true }),
+    });
+    state = tabStateReducer(state, {
+      type: 'close-tab',
+      tabId: 'tab-1',
+    });
+
+    state = tabStateReducer(state, { type: 'clear-all' });
+
+    expect(state.openTabs).toHaveLength(0);
     expect(state.recentlyClosed).toHaveLength(0);
   });
 });

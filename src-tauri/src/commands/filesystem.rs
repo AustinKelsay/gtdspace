@@ -1334,8 +1334,7 @@ pub fn replace_in_file(
 
     if match_count == 0 {
         return Err(format!(
-            "No matches found for '{}' in {}",
-            search_term,
+            "No matches found in {}",
             path.file_name().unwrap_or_default().to_string_lossy()
         ));
     }
@@ -1365,10 +1364,8 @@ pub fn replace_in_file(
         file_path
     );
     Ok(format!(
-        "Replaced {} occurrence(s) of '{}' with '{}' in {}",
+        "Replaced {} occurrence(s) in {}",
         match_count,
-        search_term,
-        replace_term,
         path.file_name().unwrap_or_default().to_string_lossy()
     ))
 }

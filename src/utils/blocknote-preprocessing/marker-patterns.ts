@@ -15,7 +15,9 @@ export const MARKER_TYPES = [
   "projects-list",
   "areas-list",
   "goals-list",
+  "vision-list",
   "visions-list",
+  "purpose-list",
   "habits-list",
   "actions-list",
   "projects-areas-list",
@@ -75,7 +77,8 @@ export const REFERENCES_HTML_PATTERN =
 export const PROJECTS_LIST_PATTERN = /\[!projects-list\]/g;
 export const AREAS_LIST_PATTERN = /\[!areas-list\]/g;
 export const GOALS_LIST_PATTERN = /\[!goals-list\]/g;
-export const VISIONS_LIST_PATTERN = /\[!visions-list\]/g;
+export const VISIONS_LIST_PATTERN = /\[!(?:vision|visions)-list\]/g;
+export const PURPOSE_LIST_PATTERN = /\[!purpose-list\]/g;
 export const HABITS_LIST_PATTERN = /\[!habits-list\]/g;
 export const ACTIONS_LIST_PATTERN = /\[!actions-list(?::([^\]]*))?\]/g;
 export const PROJECTS_AREAS_LIST_PATTERN = /\[!projects-areas-list\]/g;

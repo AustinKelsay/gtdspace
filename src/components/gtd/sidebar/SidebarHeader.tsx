@@ -3,7 +3,7 @@ import { Briefcase, FileText, Folder, RefreshCw, Search, Target } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { FileSearch } from '@/components/file-browser/FileSearch';
 
-type SidebarHeaderProps = {
+export type SidebarHeaderProps = {
   projectCount: number;
   actionCount: number;
   showSearch: boolean;

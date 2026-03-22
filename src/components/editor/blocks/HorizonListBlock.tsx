@@ -25,7 +25,7 @@ import {
 interface ListItem {
   path: string;
   name: string;
-  type: 'project' | 'area' | 'goal' | 'vision';
+  type: 'project' | 'area' | 'goal' | 'vision' | 'purpose';
   description?: string;
   status?: string;
   due_date?: string;
@@ -43,21 +43,24 @@ const ITEM_COLORS = {
   project: 'bg-green-100 hover:bg-green-200 dark:bg-green-900/20 dark:hover:bg-green-900/30',
   area: 'bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/20 dark:hover:bg-blue-900/30',
   goal: 'bg-violet-100 hover:bg-violet-200 dark:bg-violet-900/20 dark:hover:bg-violet-900/30',
-  vision: 'bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30'
+  vision: 'bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30',
+  purpose: 'bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/20 dark:hover:bg-amber-900/30'
 };
 
 const ITEM_LABELS = {
   project: 'Projects',
   area: 'Areas of Focus',
   goal: 'Goals',
-  vision: 'Vision'
+  vision: 'Vision',
+  purpose: 'Purpose & Principles'
 };
 
 const ITEM_ICONS = {
   project: FileText,
   area: Target,
   goal: Target,
-  vision: Target
+  vision: Target,
+  purpose: Target
 };
 
 /**
@@ -120,7 +123,7 @@ interface HorizonListRendererProps {
       update: { type: string; props: { listType: string; currentPath?: string } }
     ) => void;
   };
-  listType: 'projects' | 'areas' | 'goals' | 'visions';
+  listType: 'projects' | 'areas' | 'goals' | 'visions' | 'purpose';
   label: string;
   compact?: boolean;
 }
@@ -173,7 +176,7 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
       const listItems: ListItem[] = relationships.map(rel => ({
         path: rel.file_path,
         name: rel.file_name.replace('.md', ''),
-        type: (rel.file_type as 'project' | 'area' | 'goal' | 'vision') || 'project',
+        type: (rel.file_type as 'project' | 'area' | 'goal' | 'vision' | 'purpose') || 'project',
         // Additional metadata could be loaded here if needed
       }));
 
@@ -252,7 +255,8 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
   const itemTypes = listType === 'projects' ? ['project'] :
     listType === 'areas' ? ['area'] :
       listType === 'goals' ? ['goal'] :
-        listType === 'visions' ? ['vision'] : [];
+        listType === 'visions' ? ['vision'] :
+          listType === 'purpose' ? ['purpose'] : [];
 
   return (
     <div className={`${compact ? '' : 'my-3'} border border-border rounded-lg transition-all ${isExpanded ? (compact ? 'p-3' : 'p-4') : 'p-2 bg-muted/30'
@@ -510,6 +514,66 @@ export const VisionsListBlock = createReactBlockSpec(
       const textContent = element.textContent || '';
       if (textContent.includes('[!visions-list]')) {
         return { listType: 'visions' };
+      }
+      return undefined;
+    },
+  }
+);
+
+export const VisionListBlock = createReactBlockSpec(
+  {
+    type: 'vision-list' as const,
+    propSchema: horizonListPropSchema,
+    content: 'none' as const,
+  },
+  {
+    render: (props) => {
+      const baseProps = toHorizonListBlockRenderProps(props);
+      return (
+        <HorizonListRenderer
+          {...baseProps}
+          listType="visions"
+          label="Related Visions"
+        />
+      );
+    },
+    toExternalHTML: () => {
+      return <p>[!vision-list]</p>;
+    },
+    parse: (element) => {
+      const textContent = element.textContent || '';
+      if (textContent.includes('[!vision-list]')) {
+        return { listType: 'visions' };
+      }
+      return undefined;
+    },
+  }
+);
+
+export const PurposeListBlock = createReactBlockSpec(
+  {
+    type: 'purpose-list' as const,
+    propSchema: horizonListPropSchema,
+    content: 'none' as const,
+  },
+  {
+    render: (props) => {
+      const baseProps = toHorizonListBlockRenderProps(props);
+      return (
+        <HorizonListRenderer
+          {...baseProps}
+          listType="purpose"
+          label="Related Purpose & Principles"
+        />
+      );
+    },
+    toExternalHTML: () => {
+      return <p>[!purpose-list]</p>;
+    },
+    parse: (element) => {
+      const textContent = element.textContent || '';
+      if (textContent.includes('[!purpose-list]')) {
+        return { listType: 'purpose' };
       }
       return undefined;
     },

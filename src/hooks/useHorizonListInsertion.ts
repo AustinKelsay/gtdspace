@@ -26,7 +26,7 @@ export function useHorizonListInsertion(editor: BlockNoteEditor | null) {
  */
 export function insertHorizonList(
   editor: BlockNoteEditor | null,
-  listType: 'projects-list' | 'areas-list' | 'goals-list' | 'visions-list' | 
+  listType: 'projects-list' | 'areas-list' | 'goals-list' | 'vision-list' | 'visions-list' | 'purpose-list' |
            'projects-areas-list' | 'goals-areas-list' | 'visions-goals-list'
 ) {
   if (!editor) {

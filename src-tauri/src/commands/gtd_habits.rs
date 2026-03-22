@@ -135,8 +135,20 @@ pub fn create_gtd_habit(
             }
         })?;
 
-    file.write_all(habit_content.as_bytes())
-        .map_err(|error| format!("Failed to create habit file: {}", error))?;
+    match file.write_all(habit_content.as_bytes()) {
+        Ok(()) => {}
+        Err(error) => {
+            drop(file);
+            if let Err(remove_error) = fs::remove_file(&habit_path) {
+                log::warn!(
+                    "Failed to clean up partially created habit file {}: {}",
+                    habit_path.display(),
+                    remove_error
+                );
+            }
+            return Err(format!("Failed to create habit file: {}", error));
+        }
+    }
 
     Ok(habit_path.to_string_lossy().to_string())
 }
@@ -144,7 +156,29 @@ pub fn create_gtd_habit(
 #[tauri::command]
 pub fn update_habit_status(habit_path: String, new_status: String) -> Result<bool, String> {
     let next_status = HabitStatus::from_input(&new_status)?;
-    let content = fs::read_to_string(&habit_path)
+    let canonical_habit_path = Path::new(&habit_path)
+        .canonicalize()
+        .map_err(|error| format!("Failed to resolve habit file: {}", error))?;
+    let is_markdown_habit = canonical_habit_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.eq_ignore_ascii_case("md"))
+        .unwrap_or(false);
+    if !is_markdown_habit {
+        return Err("Habit path must point to a .md file inside the Habits folder".to_string());
+    }
+    let is_in_habits = canonical_habit_path.ancestors().any(|ancestor| {
+        ancestor
+            .file_name()
+            .and_then(|value| value.to_str())
+            .map(|value| value.eq_ignore_ascii_case("Habits"))
+            .unwrap_or(false)
+    });
+    if !is_in_habits {
+        return Err("Habit path must be inside the Habits folder".to_string());
+    }
+
+    let content = fs::read_to_string(&canonical_habit_path)
         .map_err(|error| format!("Failed to read habit file: {}", error))?;
     let parsed = parse_habit_state(&content)?;
 
@@ -167,7 +201,7 @@ pub fn update_habit_status(habit_path: String, new_status: String) -> Result<boo
     let updated_content = apply_status_marker(&content, next_status, parsed.status_format);
     let final_content = insert_history_entry(&updated_content, &history_entry)?;
 
-    fs::write(&habit_path, &final_content)
+    fs::write(&canonical_habit_path, &final_content)
         .map_err(|error| format!("Failed to write habit file: {}", error))?;
 
     Ok(true)
@@ -186,7 +220,17 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
         .map_err(|error| format!("Failed to read Habits directory: {}", error))?;
 
     for entry in entries {
-        let entry = entry.map_err(|error| format!("Failed to read directory entry: {}", error))?;
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                log::warn!(
+                    "Skipping unreadable directory entry in {:?}: {}",
+                    habits_path,
+                    error
+                );
+                continue;
+            }
+        };
         let path = entry.path();
 
         let is_markdown = path

@@ -180,7 +180,7 @@ pub async fn stop_file_watcher() -> Result<String, String> {
 /// Handle individual file system events
 ///
 /// Processes file change events and emits appropriate events to the frontend.
-fn handle_file_event(app: &AppHandle, path: &std::path::Path, _kind: &DebouncedEventKind) {
+fn handle_file_event(app: &AppHandle, path: &std::path::Path, kind: &DebouncedEventKind) {
     // Only process markdown files
     if let Some(extension) = path.extension() {
         let ext_str = extension.to_string_lossy().to_lowercase();
@@ -198,8 +198,12 @@ fn handle_file_event(app: &AppHandle, path: &std::path::Path, _kind: &DebouncedE
         .to_string_lossy()
         .to_string();
 
-    // Simplified event type detection - the debouncer abstracts away specific event types
-    let event_type = "changed".to_string();
+    let event_type = match kind {
+        DebouncedEventKind::Any => "changed",
+        DebouncedEventKind::AnyContinuous => "changed-continuous",
+        _ => "other",
+    }
+    .to_string();
 
     let change_event = FileChangeEvent {
         event_type,

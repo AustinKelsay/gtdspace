@@ -126,5 +126,12 @@ describe("blocknote history rules", () => {
         props: { references: "/tmp/ref.md" },
       })
     ).toBe(false);
+
+    expect(
+      shouldDropArtifactReferencesBlock({
+        type: "references",
+        props: { references: "/tmp/notes---archive.md" },
+      })
+    ).toBe(false);
   });
 });

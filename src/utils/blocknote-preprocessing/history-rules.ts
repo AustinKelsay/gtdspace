@@ -56,10 +56,13 @@ export function shouldDropArtifactReferencesBlock(block: UnknownBlock): boolean 
   const referencesValue = block.props.references;
   const references =
     typeof referencesValue === "string" ? referencesValue.trim() : "";
+  const hasSeparatorRow = references
+    .split(/\r?\n/)
+    .some((line) => /^\s*-{3,}\s*$/.test(line));
 
   return (
     references === "" ||
     references.includes("|") ||
-    references.includes("---")
+    hasSeparatorRow
   );
 }

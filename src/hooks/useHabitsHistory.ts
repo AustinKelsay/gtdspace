@@ -297,9 +297,14 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
             const lastCompleted = history
               .filter(h => h.completed)
               .sort((a, b) => b.date.localeCompare(a.date))[0]?.date;
+            const fallbackName = file.name.replace(/\.(md|markdown)$/i, '');
+            const habitName =
+              parsedHabit.title && parsedHabit.title !== 'Untitled'
+                ? parsedHabit.title
+                : fallbackName;
             
             const habit: HabitWithHistory = {
-              name: parsedHabit.title || file.name.replace('.md', ''),
+              name: habitName,
               frequency: parsedHabit.frequency,
               status: parsedHabit.status,
               path: file.path,

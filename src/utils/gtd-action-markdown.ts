@@ -37,6 +37,16 @@ export interface ParsedActionMarkdown {
   body: string;
 }
 
+const ALLOWED_REFERENCE_MARKERS = new Set([
+  'references',
+  'projects-references',
+  'areas-references',
+  'goals-references',
+  'vision-references',
+  'purpose-references',
+  'habits-references',
+]);
+
 function pad(value: number): string {
   return String(value).padStart(2, '0');
 }
@@ -590,6 +600,10 @@ export function upsertReferenceMarker(
   payload: string,
   headings: string[]
 ): string {
+  if (!ALLOWED_REFERENCE_MARKERS.has(marker)) {
+    return content;
+  }
+
   const markerRegex = new RegExp(`\\[!${marker}:[^\\]]*\\]`, 'i');
   if (markerRegex.test(content)) {
     return content.replace(markerRegex, `[!${marker}:${payload}]`);

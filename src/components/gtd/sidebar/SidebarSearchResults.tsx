@@ -66,18 +66,19 @@ export function SidebarSearchResults({
               const isActive =
                 isPathActive(`${display.path}/README.md`) ||
                 isPathActive(`${display.path}/README.markdown`);
+              const displayedProject = { ...project, path: display.path };
 
               return (
                 <div
                   key={project.path}
                   className={`group flex items-center gap-2 py-1 px-2 hover:bg-accent rounded-lg transition-colors cursor-pointer ${isActive ? SIDEBAR_ACTIVE_ROW_CLASSES : ''}`}
-                  onClick={() => void onOpenProject(project)}
+                  onClick={() => void onOpenProject(displayedProject)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      void onOpenProject(project);
+                      void onOpenProject(displayedProject);
                     }
                   }}
                 >

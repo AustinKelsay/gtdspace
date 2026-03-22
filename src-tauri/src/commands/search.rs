@@ -191,7 +191,7 @@ pub async fn search_files(
                             let file_path = path.to_string_lossy().to_string();
 
                             if filters.include_file_names {
-                                if let Some(match_result) = search_in_text(
+                                for match_result in search_in_text(
                                     &file_name,
                                     &filters,
                                     &regex_pattern,
@@ -227,7 +227,7 @@ pub async fn search_files(
 
                             let lines: Vec<&str> = content.lines().collect();
                             for (line_number, line) in lines.iter().enumerate() {
-                                if let Some(match_result) = search_in_text(
+                                for match_result in search_in_text(
                                     line,
                                     &filters,
                                     &regex_pattern,
@@ -321,12 +321,57 @@ fn search_in_text(
     filters: &SearchFilters,
     regex_pattern: &Option<Regex>,
     plain_text_matcher: &Option<Regex>,
-) -> Option<(usize, usize)> {
+) -> Vec<(usize, usize)> {
     let matcher = if filters.use_regex {
         regex_pattern.as_ref()
     } else {
         plain_text_matcher.as_ref()
     };
 
-    matcher.and_then(|re| re.find(text).map(|mat| (mat.start(), mat.end())))
+    matcher
+        .map(|re| {
+            re.find_iter(text)
+                .map(|mat| (mat.start(), mat.end()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build_filters(use_regex: bool) -> SearchFilters {
+        SearchFilters {
+            case_sensitive: true,
+            whole_word: false,
+            use_regex,
+            include_file_names: false,
+            max_results: 10,
+        }
+    }
+
+    #[test]
+    fn search_in_text_returns_all_plain_text_matches() {
+        let filters = build_filters(false);
+        let matcher = RegexBuilder::new(&regex::escape("test"))
+            .build()
+            .expect("plain text regex should compile");
+
+        let matches = search_in_text("test and test again", &filters, &None, &Some(matcher));
+
+        assert_eq!(matches, vec![(0, 4), (9, 13)]);
+    }
+
+    #[test]
+    fn search_in_text_returns_all_regex_matches() {
+        let filters = build_filters(true);
+        let regex = RegexBuilder::new(r"t\w{3}")
+            .build()
+            .expect("regex should compile");
+
+        let matches = search_in_text("test text tent", &filters, &Some(regex), &None);
+
+        assert_eq!(matches, vec![(0, 4), (5, 9), (10, 14)]);
+    }
 }

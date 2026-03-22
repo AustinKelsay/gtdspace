@@ -5,6 +5,7 @@ import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { readFileText } from '@/hooks/useFileManager';
 import { onContentChange, onContentSaved, onMetadataChange } from '@/utils/content-event-bus';
 import { syncHorizonReadmeContent } from '@/utils/horizon-readme-utils';
+import { parseActionMarkdown } from '@/utils/gtd-action-markdown';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { GTD_SECTIONS, HORIZON_FOLDER_TO_TYPE } from '@/components/gtd/sidebar/constants';
 import {
@@ -171,7 +172,8 @@ export function useGTDWorkspaceSidebar({
     const horizonType = HORIZON_FOLDER_TO_TYPE[folderName];
     if (!horizonType) return;
 
-    const readmePath = `${folderPath}/README.md`;
+    const existingReadme = files.find((file) => /^README\.(md|markdown)$/i.test(file.name));
+    const readmePath = existingReadme?.path ?? `${folderPath}/README.md`;
 
     const existingContent = await withErrorHandling(async () => {
       return safeInvoke<string>('read_file', { path: readmePath }, null);
@@ -336,16 +338,16 @@ export function useGTDWorkspaceSidebar({
         (files ?? []).map(async (action) => {
           try {
             const content = await readFileText(action.path);
-            const statusMatch = content.match(/\[!singleselect:status:([^\]]+?)\]/i);
-            const dueDateMatch = content.match(/\[!datetime:due_date:([^\]]*)\]/i);
+            const parsedAction = parseActionMarkdown(content);
+            const normalizedActionPath = normalizePath(action.path) ?? action.path.replace(/\\/g, '/');
             return {
-              path: action.path,
-              status: statusMatch?.[1]?.trim() || 'in-progress',
-              due_date: dueDateMatch?.[1]?.trim() || '',
+              path: normalizedActionPath,
+              status: parsedAction.status || 'in-progress',
+              due_date: parsedAction.dueDate || '',
             };
           } catch {
             return {
-              path: action.path,
+              path: normalizePath(action.path) ?? action.path.replace(/\\/g, '/'),
               status: 'in-progress',
               due_date: '',
             };
@@ -952,21 +954,11 @@ export function useGTDWorkspaceSidebar({
           await loadProjects(gtdSpace.root_path);
         }
       } else {
-        const deletePromise = safeInvoke<{
+        const result = await safeInvoke<{
           success: boolean;
           path?: string | null;
           message?: string | null;
         }>('delete_file', { path: normalizedDeletePath }, { success: false, message: 'Failed to delete file' });
-
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          window.setTimeout(() => reject(new Error('Delete operation timed out after 5 seconds')), 5000);
-        });
-
-        const result = (await Promise.race([deletePromise, timeoutPromise])) as {
-          success: boolean;
-          path?: string | null;
-          message?: string | null;
-        };
 
         if (!result?.success) {
           throw new Error(result?.message || 'Failed to delete file');

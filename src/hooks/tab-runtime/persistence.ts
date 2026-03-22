@@ -189,10 +189,19 @@ export async function restoreTabStateFromStorage(
   const activeTabId = validTabs.some((tab) => tab.id === snapshot.activeTabId)
     ? snapshot.activeTabId
     : validTabs[0].id;
+  const activeTab = validTabs.find((tab) => tab.id === activeTabId) ?? validTabs[0];
+  const trimmedValidTabs = validTabs.slice(0, maxTabs);
+  if (!trimmedValidTabs.some((tab) => tab.id === activeTabId)) {
+    if (trimmedValidTabs.length === 0) {
+      trimmedValidTabs.push(activeTab);
+    } else {
+      trimmedValidTabs[trimmedValidTabs.length - 1] = activeTab;
+    }
+  }
 
   return {
     ...initialState,
-    openTabs: validTabs.map((tab) => ({
+    openTabs: trimmedValidTabs.map((tab) => ({
       ...tab,
       isActive: tab.id === activeTabId,
     })),

@@ -162,4 +162,24 @@ describe("scanMarkdownForCustomBlocks", () => {
       },
     });
   });
+
+  it("recognizes legacy singular horizon list markers", () => {
+    const markdown = ["[!vision-list]", "[!purpose-list]"].join("\n");
+
+    const result = scanMarkdownForCustomBlocks(markdown);
+
+    expect(result.replacementByText.get("[!vision-list]")?.block).toMatchObject({
+      type: "visions-list",
+      props: {
+        listType: "visions",
+      },
+    });
+
+    expect(result.replacementByText.get("[!purpose-list]")?.block).toMatchObject({
+      type: "purpose-list",
+      props: {
+        listType: "purpose",
+      },
+    });
+  });
 });

@@ -37,6 +37,8 @@ export interface ProjectWithMetadata extends GTDProject {
   outcomes?: string[];
 }
 
+type PersistedProjectUpdates = Partial<Pick<ProjectWithMetadata, 'name' | 'status' | 'dueDate'>>;
+
 interface UseProjectsDataOptions {
   autoLoad?: boolean;
   includeArchived?: boolean;
@@ -58,7 +60,7 @@ interface UseProjectsDataReturn {
     byArea: Record<string, number>;
   };
   loadProjects: (spacePath: string) => Promise<void>;
-  updateProject: (projectPath: string, updates: Partial<ProjectWithMetadata>) => Promise<void>;
+  updateProject: (projectPath: string, updates: PersistedProjectUpdates) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -315,7 +317,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
   
   const updateProject = useCallback(async (
     projectPath: string,
-    updates: Partial<ProjectWithMetadata>
+    updates: PersistedProjectUpdates
   ) => {
     try {
       let readmePath = await resolveProjectReadme(projectPath);

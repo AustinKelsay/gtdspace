@@ -18,7 +18,7 @@ export interface FileMetadata {
 
 export interface MetadataExtractor {
   pattern: RegExp;
-  extract: (match: RegExpMatchArray) => { key: string; value: string | string[] };
+  extract: (match: RegExpMatchArray) => { key: string; value: string | string[] } | null;
 }
 
 function decodeHtmlAttribute(input: string): string {
@@ -91,10 +91,14 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
   {
     pattern: /<div\s+data-singleselect='([^']+)'\s+class="singleselect-block">[^<]*<\/div>/g,
     extract: (match) => {
-      const decoded = decodeHtmlAttribute(match[1]);
-      const parsed = JSON.parse(decoded) as { type?: string; value?: string };
-      const field = mapSingleSelectField(parsed.type ?? '');
-      return { key: field, value: parsed.value ?? '' };
+      try {
+        const decoded = decodeHtmlAttribute(match[1]);
+        const parsed = JSON.parse(decoded) as { type?: string; value?: string };
+        const field = mapSingleSelectField(parsed.type ?? '');
+        return { key: field, value: parsed.value ?? '' };
+      } catch {
+        return null;
+      }
     }
   },
 
@@ -110,10 +114,14 @@ export const DEFAULT_EXTRACTORS: MetadataExtractor[] = [
   {
     pattern: /<div\s+data-datetime='([^']+)'\s+class="datetime-block">[^<]*<\/div>/g,
     extract: (match) => {
-      const decoded = decodeHtmlAttribute(match[1]);
-      const parsed = JSON.parse(decoded) as { type?: string; value?: string };
-      const field = mapDateTimeField(parsed.type ?? '');
-      return { key: field, value: parsed.value ?? '' };
+      try {
+        const decoded = decodeHtmlAttribute(match[1]);
+        const parsed = JSON.parse(decoded) as { type?: string; value?: string };
+        const field = mapDateTimeField(parsed.type ?? '');
+        return { key: field, value: parsed.value ?? '' };
+      } catch {
+        return null;
+      }
     }
   },
   
@@ -204,7 +212,14 @@ export function extractMetadata(
     let match;
     
     while ((match = regex.exec(content)) !== null) {
-      const { key, value } = extractor.extract(match);
+      const extracted = extractor.extract(match);
+      if (!extracted) {
+        if (!regex.global) {
+          break;
+        }
+        continue;
+      }
+      const { key, value } = extracted;
       
       // Handle multiple values for the same key
       const existingValue = metadata[key];

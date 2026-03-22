@@ -11,6 +11,7 @@ import type { GTDHabit, MarkdownFile } from '@/types';
 import { createScopedLogger } from '@/utils/logger';
 import {
   calculateNextHabitReset,
+  isHabitResetAction,
   parseHabitContent,
 } from '@/utils/gtd-habit-markdown';
 
@@ -80,6 +81,20 @@ const habitsLog = createScopedLogger('useHabitsHistory');
 export const calculateNextReset = (frequency: GTDHabit['frequency'], lastUpdate?: Date): string => {
   return calculateNextHabitReset(frequency, lastUpdate).toISOString();
 };
+
+function toAnalyticsHistory(
+  rows: Array<{ date: string; time: string; status: string; action: string; details: string }>
+): HabitHistoryEntry[] {
+  return rows
+    .filter((row) => !isHabitResetAction(row.action))
+    .map((row) => ({
+      date: row.date,
+      time: row.time,
+      completed: /^complete(?:d)?$/i.test((row.status ?? '').trim()),
+      action: row.action,
+      note: row.details || row.action || undefined,
+    }));
+}
 
 /**
  * Analyze habit patterns and trends
@@ -259,13 +274,7 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
           try {
             const content = await readFileText(file.path);
             const parsedHabit = parseHabitContent(content);
-            const history = parsedHabit.historyRows.map((row) => ({
-              date: row.date,
-              time: row.time,
-              completed: /^complete(?:d)?$/i.test((row.status ?? '').trim()),
-              action: row.action,
-              note: row.details || row.action || undefined,
-            }));
+            const history = toAnalyticsHistory(parsedHabit.historyRows);
             habitsLog.debug(`Habit "${file.name}" history entries`, history.length);
 
             // Filter inactive if needed

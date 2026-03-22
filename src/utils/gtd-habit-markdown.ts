@@ -255,7 +255,7 @@ export function splitHabitHistory(raw?: string): {
         .map((cell) =>
           cell
             .trim()
-            .replace(new RegExp(escapedPipePlaceholder, 'g'), '|')
+            .split(escapedPipePlaceholder).join('|')
             .replace(/<br\s*\/?>/gi, '\n')
         );
 

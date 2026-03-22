@@ -156,7 +156,7 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
             path: file.path,
             status: parsedAction.status,
             dueDate: parsedAction.dueDate || null,
-            focusDate: parsedAction.focusDateTime || null,
+            focusDate: parsedAction.focusDate || null,
           } as ProjectActionItem;
         })
       );

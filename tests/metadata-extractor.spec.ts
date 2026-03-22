@@ -29,6 +29,11 @@ describe('metadata extractor utilities', () => {
     expect(metadata.createdDateTime).toBe('2026-02-20T10:00:00Z');
   });
 
+  it('maps an unchecked habit checkbox to todo', () => {
+    const metadata = extractMetadata('[!checkbox:habit-status:false]');
+    expect(metadata.habitStatus).toBe('todo');
+  });
+
   it('extracts horizon-specific singleselect and datetime fields into canonical metadata keys', () => {
     const content = [
       '[!singleselect:vision-horizon:10-years]',

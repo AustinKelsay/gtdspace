@@ -534,11 +534,12 @@ This section summarizes how data moves across layers for each item type.
 
 - Create
 
-  - UI dialog → `create_gtd_habit(spacePath, habitName, frequency, status='todo')` writes file with checkbox, frequency, and a seeded History section including the standard table header.
+  - UI dialog → `create_gtd_habit(spacePath, habitName, frequency, focusTime?, references?)` writes file with checkbox, frequency, and a seeded History section including the standard table header.
 
 - Read
 
   - `useHabitsHistory` lists `Habits/` files, reads content, parses it through `parseHabitContent()`, computes streaks/success rates, and derives next reset times from shared calendar-window logic.
+  - Reset-maintenance rows such as `Auto-Reset` and `Backfill` are excluded from streak/success analytics so only actual completion attempts affect those metrics.
 
 - Update
   - `update_habit_status(habitPath, 'todo'|'completed')` toggles checkbox and appends a history row; frontend emits `habit-content-changed` to refresh open editors.

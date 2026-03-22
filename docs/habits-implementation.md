@@ -104,6 +104,8 @@ Rows may represent:
 - auto-resets
 - catch-up or backfill-style resets when the app was previously offline
 
+For analytics, `useHabitsHistory` excludes reset/backfill rows from streak and success-rate calculations so scheduler maintenance does not count as a failed attempt.
+
 Legacy list-style history is still accepted on read. When the backend writes a new entry, it migrates that legacy history into the canonical table form.
 
 ## References and Related Habits

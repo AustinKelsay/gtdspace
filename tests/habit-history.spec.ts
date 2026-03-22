@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { splitHabitHistory, reconstructHabitHistory } from '@/utils/gtd-habit-markdown';
+import { toAnalyticsHistory } from '@/hooks/useHabitsHistory';
 
 describe('habit history parsing and reconstruction', () => {
   it('inserts a blank line before the history table when intro exists', () => {
@@ -120,5 +121,41 @@ describe('habit history parsing and reconstruction', () => {
 
     expect(reparsed.rows).toHaveLength(1);
     expect(reparsed.rows[0].details).toBe('First line\nSecond line\nThird line');
+  });
+
+  it('excludes auto-reset and backfill rows from analytics history', () => {
+    const analyticsHistory = toAnalyticsHistory([
+      {
+        date: '2026-03-01',
+        time: '9:00 AM',
+        status: 'Complete',
+        action: 'Manual',
+        details: 'Done',
+      },
+      {
+        date: '2026-03-02',
+        time: '12:00 AM',
+        status: 'To Do',
+        action: 'Auto-Reset',
+        details: 'New period',
+      },
+      {
+        date: '2026-03-03',
+        time: '12:00 AM',
+        status: 'To Do',
+        action: 'Backfill',
+        details: 'Missed - app offline',
+      },
+    ]);
+
+    expect(analyticsHistory).toEqual([
+      {
+        date: '2026-03-01',
+        time: '9:00 AM',
+        completed: true,
+        action: 'Manual',
+        note: 'Done',
+      },
+    ]);
   });
 });

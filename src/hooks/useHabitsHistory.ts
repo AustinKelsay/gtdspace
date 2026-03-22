@@ -82,7 +82,7 @@ export const calculateNextReset = (frequency: GTDHabit['frequency'], lastUpdate?
   return calculateNextHabitReset(frequency, lastUpdate).toISOString();
 };
 
-function toAnalyticsHistory(
+export function toAnalyticsHistory(
   rows: Array<{ date: string; time: string; status: string; action: string; details: string }>
 ): HabitHistoryEntry[] {
   return rows

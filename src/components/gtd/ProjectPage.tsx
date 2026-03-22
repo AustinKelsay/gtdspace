@@ -625,34 +625,22 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       const normalizedTarget = normalizeReferencePath(value);
       if (!normalizedTarget) return;
 
-      let queuedChange:
-        | {
-            key: HorizonKey;
-            targetPath: string;
-            mode: "toggle" | "remove";
-          }
-        | null = null;
-
       setHorizonRefs((prev) => {
         const normalizedCurrent = normalizeProjectHorizonReferences(prev);
         const group = normalizedCurrent[key] ?? [];
         const nextGroup = group.includes(normalizedTarget)
           ? group.filter((ref) => ref !== normalizedTarget)
           : [...group, normalizedTarget];
-        queuedChange = {
+        pendingHorizonChangeRef.current.push({
           key,
           targetPath: normalizedTarget,
           mode: group.includes(normalizedTarget) ? "remove" : "toggle",
-        };
+        });
         return {
           ...normalizedCurrent,
           [key]: nextGroup,
         };
       });
-
-      if (queuedChange) {
-        pendingHorizonChangeRef.current.push(queuedChange);
-      }
     },
     []
   );
@@ -662,13 +650,6 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       const normalizedTarget = normalizeReferencePath(value);
       if (!normalizedTarget) return;
 
-      let queuedChange:
-        | {
-            key: HorizonKey;
-            targetPath: string;
-            mode: "toggle" | "remove";
-          }
-        | null = null;
       setHorizonRefs((prev) => {
         const normalizedCurrent = normalizeProjectHorizonReferences(prev);
         const group = normalizedCurrent[key] ?? [];
@@ -676,23 +657,17 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
           return prev;
         }
 
-        queuedChange = {
+        pendingHorizonChangeRef.current.push({
           key,
           targetPath: normalizedTarget,
           mode: "remove",
-        };
+        });
         const nextGroup = group.filter((ref) => ref !== normalizedTarget);
         return {
           ...normalizedCurrent,
           [key]: nextGroup,
         };
       });
-
-      if (!queuedChange) {
-        return;
-      }
-
-      pendingHorizonChangeRef.current.push(queuedChange);
     },
     []
   );

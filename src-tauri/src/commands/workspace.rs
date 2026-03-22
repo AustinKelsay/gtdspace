@@ -484,6 +484,35 @@ fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, Strin
         }
     }
 
+    fn ensure_action(
+        project_path: &str,
+        action_name: &str,
+        status: &str,
+        due_date: Option<String>,
+        focus_date: Option<String>,
+        effort: &str,
+    ) -> Result<(), String> {
+        let action_path = Path::new(project_path).join(format!("{}.md", action_name));
+        if action_path.exists() {
+            return Ok(());
+        }
+
+        match create_gtd_action(
+            project_path.to_string(),
+            action_name.to_string(),
+            status.to_string(),
+            due_date,
+            focus_date,
+            effort.to_string(),
+            None,
+            None,
+        ) {
+            Ok(_) => Ok(()),
+            Err(error) if error.contains("already exists") => Ok(()),
+            Err(error) => Err(error),
+        }
+    }
+
     // MINIMAL Project with MAXIMUM references (Project → Area + Goal)
     let base_next_week = chrono::Local::now() + chrono::Duration::days(7);
     let next_week = base_next_week
@@ -535,26 +564,22 @@ fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, Strin
         .map_err(|e| format!("Failed to update seeded project README: {}", e))?;
 
     // Just 2 simple actions
-    create_gtd_action(
-        project1_path.clone(),
-        "Define service offerings".to_string(),
-        "in-progress".to_string(),
+    ensure_action(
+        &project1_path,
+        "Define service offerings",
+        "in-progress",
         None,
         Some(chrono::Local::now().to_rfc3339()),
-        "medium".to_string(),
-        None, // No contexts specified
-        None, // No notes for seed action
+        "medium",
     )?;
 
-    create_gtd_action(
-        project1_path.clone(),
-        "Create landing page".to_string(),
-        "waiting".to_string(),
+    ensure_action(
+        &project1_path,
+        "Create landing page",
+        "waiting",
         Some(next_week.to_rfc3339()),
         None,
-        "large".to_string(),
-        None, // No contexts specified
-        None, // No notes for seed action
+        "large",
     )?;
 
     // That's it - just ONE project with maximum connections!

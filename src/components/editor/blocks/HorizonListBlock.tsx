@@ -541,8 +541,8 @@ export const VisionListBlock = createReactBlockSpec(
       return <p>[!vision-list]</p>;
     },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      if (textContent.includes('[!vision-list]')) {
+      const textContent = element.textContent?.trim() || '';
+      if (textContent === '[!vision-list]') {
         return { listType: 'visions' };
       }
       return undefined;
@@ -571,8 +571,8 @@ export const PurposeListBlock = createReactBlockSpec(
       return <p>[!purpose-list]</p>;
     },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      if (textContent.includes('[!purpose-list]')) {
+      const textContent = element.textContent?.trim() || '';
+      if (textContent === '[!purpose-list]') {
         return { listType: 'purpose' };
       }
       return undefined;

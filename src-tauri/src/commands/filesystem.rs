@@ -48,13 +48,11 @@ fn directory_has_project_readme(dir_path: &Path) -> bool {
         })
 }
 
-fn path_has_component_case_insensitive(path: &Path, expected: &str) -> bool {
-    path.components().any(|component| {
-        component
-            .as_os_str()
-            .to_string_lossy()
-            .eq_ignore_ascii_case(expected)
-    })
+fn path_file_name_eq_case_insensitive(path: &Path, expected: &str) -> bool {
+    path.file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| value.eq_ignore_ascii_case(expected))
+        .unwrap_or(false)
 }
 
 fn validate_cross_platform_file_name(name: &str) -> Result<String, String> {
@@ -622,12 +620,16 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
     let file_path = dir_path.join(&file_name);
 
     // Normalize horizon detection
-    let is_in_projects = path_has_component_case_insensitive(dir_path, "Projects");
-    let is_in_habits = path_has_component_case_insensitive(dir_path, "Habits");
-    let is_in_vision = path_has_component_case_insensitive(dir_path, "Vision");
-    let is_in_goals = path_has_component_case_insensitive(dir_path, "Goals");
-    let is_in_areas = path_has_component_case_insensitive(dir_path, "Areas of Focus");
-    let is_in_purpose = path_has_component_case_insensitive(dir_path, "Purpose & Principles");
+    let parent_is_projects = dir_path
+        .parent()
+        .map(|parent| path_file_name_eq_case_insensitive(parent, "Projects"))
+        .unwrap_or(false);
+    let is_in_projects = parent_is_projects;
+    let is_in_habits = path_file_name_eq_case_insensitive(dir_path, "Habits");
+    let is_in_vision = path_file_name_eq_case_insensitive(dir_path, "Vision");
+    let is_in_goals = path_file_name_eq_case_insensitive(dir_path, "Goals");
+    let is_in_areas = path_file_name_eq_case_insensitive(dir_path, "Areas of Focus");
+    let is_in_purpose = path_file_name_eq_case_insensitive(dir_path, "Purpose & Principles");
 
     // For project actions, require README.md to distinguish from project root creation
     let is_project_dir = directory_has_project_readme(dir_path);

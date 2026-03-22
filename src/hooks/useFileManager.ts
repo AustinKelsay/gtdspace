@@ -45,7 +45,7 @@ export const useFileManager = () => {
   // === SETTINGS INTEGRATION ===
   
   const { settings, setLastFolder, setEditorMode } = useSettings();
-  const { withErrorHandling } = useErrorHandler();
+  useErrorHandler();
   
   // === STATE ===
   
@@ -164,15 +164,14 @@ export const useFileManager = () => {
     try {
       console.log('Opening folder selection dialog...');
       const inTauriContext = await checkTauriContextAsync();
-      const folderPath = inTauriContext
-        ? await withErrorHandling(async () => {
-            const { invoke } = await import('@tauri-apps/api/core');
-            return invoke<string | null>('select_folder');
-          }, 'Failed to select folder')
-        : await withErrorHandling(
-            async () => safeInvoke<string | null>('select_folder', undefined),
-            'Failed to select folder'
-          );
+      let folderPath: string | null;
+
+      if (inTauriContext) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        folderPath = await invoke<string | null>('select_folder');
+      } else {
+        folderPath = await safeInvoke<string | null>('select_folder', undefined);
+      }
 
       if (folderPath === null) {
         return;
@@ -185,10 +184,10 @@ export const useFileManager = () => {
       console.log('Folder selection cancelled or failed:', error);
       setState(prev => ({
         ...prev,
-        error: typeof error === 'string' ? error : 'Failed to select folder',
+        error: typeof error === 'string' ? error : error instanceof Error ? error.message : 'Failed to select folder',
       }));
     }
-  }, [loadFolder, withErrorHandling]);
+  }, [loadFolder]);
 
   /**
    * Refresh the current folder's file list

@@ -180,7 +180,7 @@ export function useGTDWorkspaceSidebar({
       path: filePath,
       size: 0,
       last_modified: Math.floor(Date.now() / 1000),
-      extension: markdownExists ? 'markdown' : 'md',
+      extension: markdownExists ? '.markdown' : '.md',
     };
   }, [withErrorHandling]);
 
@@ -1168,7 +1168,7 @@ export function useGTDWorkspaceSidebar({
         path: filePath,
         size: 0,
         last_modified: Math.floor(Date.now() / 1000),
-        extension: 'md',
+        extension: '.md',
       };
 
       flushSync(() => {
@@ -1206,7 +1206,7 @@ export function useGTDWorkspaceSidebar({
         path: habitPath,
         size: 0,
         last_modified: Math.floor(Date.now() / 1000),
-        extension: 'md',
+        extension: '.md',
       };
 
       setSectionFiles((prev) => {

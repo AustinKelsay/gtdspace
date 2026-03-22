@@ -26,24 +26,41 @@ export function useTabManagerSubscriptions({
   onOpenReference,
 }: TabManagerSubscriptionHandlers): void {
   useEffect(() => {
+    const getEventDetail = <T,>(event: Event): T | null => {
+      if (!(event instanceof CustomEvent) || event.detail == null) {
+        return null;
+      }
+      return event.detail as T;
+    };
+
     const handleProjectRename = (event: Event) => {
-      onRename((event as CustomEvent<RenameEventDetail>).detail, 'prefix');
+      const detail = getEventDetail<RenameEventDetail>(event);
+      if (!detail) return;
+      onRename(detail, 'prefix');
     };
 
     const handleActionRename = (event: Event) => {
-      onRename((event as CustomEvent<RenameEventDetail>).detail, 'exact');
+      const detail = getEventDetail<RenameEventDetail>(event);
+      if (!detail) return;
+      onRename(detail, 'exact');
     };
 
     const handleSectionFileRename = (event: Event) => {
-      onRename((event as CustomEvent<RenameEventDetail>).detail, 'exact');
+      const detail = getEventDetail<RenameEventDetail>(event);
+      if (!detail) return;
+      onRename(detail, 'exact');
     };
 
     const handleFileDeleted = (event: Event) => {
-      onDelete((event as CustomEvent<DeleteEventDetail>).detail);
+      const detail = getEventDetail<DeleteEventDetail>(event);
+      if (!detail) return;
+      onDelete(detail);
     };
 
     const handleOpenReference = (event: Event) => {
-      onOpenReference((event as CustomEvent<OpenReferenceEventDetail>).detail);
+      const detail = getEventDetail<OpenReferenceEventDetail>(event);
+      if (!detail) return;
+      onOpenReference(detail);
     };
 
     window.addEventListener('project-renamed', handleProjectRename);

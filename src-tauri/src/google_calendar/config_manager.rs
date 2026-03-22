@@ -162,7 +162,9 @@ impl GoogleConfigManager {
             if config_value
                 .as_object()
                 .and_then(|object| object.get("client_secret"))
-                .is_some()
+                .and_then(|value| value.as_str())
+                .map(|value| !value.is_empty())
+                .unwrap_or(false)
             {
                 return true;
             }

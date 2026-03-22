@@ -23,6 +23,7 @@ pub fn sanitize_markdown_file_stem(name: &str) -> String {
     let sanitized = strip_markdown_suffixes(name)
         .chars()
         .map(|ch| match ch {
+            _ if ch.is_control() => '-',
             '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '-',
             _ => ch,
         })

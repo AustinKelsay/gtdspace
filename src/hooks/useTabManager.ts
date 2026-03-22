@@ -663,6 +663,11 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
 
         resetTransientTabState();
         dispatch({ type: 'clear-and-restore', state: null });
+        tabStateRef.current = {
+          ...tabStateRef.current,
+          openTabs: [],
+          activeTabId: null,
+        };
       }
 
       try {

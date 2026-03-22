@@ -61,7 +61,10 @@ const updateProjectDueDateInMarkdown = (content: string, dueDate: string): strin
     return content.replace(PROJECT_DUE_DATE_PATTERN, `[!datetime:due_date:${dueDate}]`);
   }
   if (!dueDate.trim()) {
-    return content;
+    return content
+      .replace(/^###\s+Due Date\s*\n+[\s\S]*?(?=^###\s+|^##\s+|^#\s+|$)/im, '')
+      .replace(/^Due Date:\s*.*$\n?/gim, '')
+      .replace(/\n{3,}/g, '\n\n');
   }
 
   const statusMatch = content.match(PROJECT_STATUS_PATTERN);

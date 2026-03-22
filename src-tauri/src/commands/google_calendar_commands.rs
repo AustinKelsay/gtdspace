@@ -149,6 +149,9 @@ fn load_google_oauth_credentials(app: AppHandle) -> Result<(String, String), Str
 
     match config_manager.get_config() {
         Ok(Some(config)) => {
+            if config.client_id.trim().is_empty() || config.client_secret.trim().is_empty() {
+                return load_env_oauth_credentials();
+            }
             println!("[GoogleCalendar] Using stored OAuth configuration");
             Ok((config.client_id, config.client_secret))
         }
@@ -429,6 +432,9 @@ pub async fn google_oauth_get_config(app: AppHandle) -> Result<Option<serde_json
 
     match config_manager.get_config() {
         Ok(Some(config)) => {
+            if config.client_id.trim().is_empty() || config.client_secret.trim().is_empty() {
+                return Ok(None);
+            }
             // Return config as JSON value for frontend consumption
             // Never expose the actual client_secret to the frontend
             let json_config = serde_json::json!({

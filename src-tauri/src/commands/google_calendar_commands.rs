@@ -9,11 +9,13 @@ use tokio::sync::Mutex as TokioMutex;
 lazy_static! {
     static ref GOOGLE_CALENDAR_MANAGER: TokioMutex<Option<Arc<GoogleCalendarManager>>> =
         TokioMutex::new(None);
+    static ref GOOGLE_CALENDAR_LIFECYCLE_LOCK: TokioMutex<()> = TokioMutex::new(());
 }
 
 async fn get_or_init_google_calendar_manager(
     app: AppHandle,
 ) -> Result<Arc<GoogleCalendarManager>, String> {
+    let _lifecycle_guard = GOOGLE_CALENDAR_LIFECYCLE_LOCK.lock().await;
     let mut manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
 
     if let Some(manager) = manager_guard.as_ref() {
@@ -44,7 +46,7 @@ async fn clear_google_calendar_manager() {
     *manager_guard = None;
 }
 
-async fn clear_google_calendar_session(app: AppHandle) -> Result<(), String> {
+async fn clear_google_calendar_session_locked(app: AppHandle) -> Result<(), String> {
     use crate::google_calendar::token_manager::TokenManager;
 
     let token_cleanup_result = tokio::task::spawn_blocking(move || {
@@ -60,6 +62,11 @@ async fn clear_google_calendar_session(app: AppHandle) -> Result<(), String> {
         Ok(Err(error)) => Err(format!("Failed to disconnect Google Calendar: {}", error)),
         Err(error) => Err(format!("Failed to disconnect Google Calendar: {}", error)),
     }
+}
+
+async fn clear_google_calendar_session(app: AppHandle) -> Result<(), String> {
+    let _lifecycle_guard = GOOGLE_CALENDAR_LIFECYCLE_LOCK.lock().await;
+    clear_google_calendar_session_locked(app).await
 }
 
 /// Helper function to load Google OAuth credentials from secure storage or environment variables.
@@ -292,6 +299,7 @@ pub async fn google_calendar_disconnect_simple(app: AppHandle) -> Result<String,
 
 #[tauri::command]
 pub async fn google_calendar_disconnect(app: AppHandle) -> Result<String, String> {
+    let _lifecycle_guard = GOOGLE_CALENDAR_LIFECYCLE_LOCK.lock().await;
     let manager = {
         let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
         manager_guard.as_ref().cloned()
@@ -306,7 +314,7 @@ pub async fn google_calendar_disconnect(app: AppHandle) -> Result<String, String
         Ok(())
     };
 
-    clear_google_calendar_session(app).await?;
+    clear_google_calendar_session_locked(app).await?;
     disconnect_result?;
 
     Ok("Successfully disconnected from Google Calendar".to_string())

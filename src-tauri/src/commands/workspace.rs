@@ -16,6 +16,8 @@ use super::seed_data::{
 };
 use super::settings::{get_default_settings, load_settings};
 
+const CABINET_REFERENCE_FILE_NAME: &str = "GTD Principles Reference.md";
+
 fn write_file_if_missing(path: &Path, content: &str, description: &str) -> Result<(), String> {
     if path.exists() {
         return Ok(());
@@ -333,7 +335,7 @@ fn initialize_gtd_space_blocking(space_path: String) -> Result<String, String> {
                 )?;
             }
             "Cabinet" => {
-                let example_file = dir_path.join("GTD Principles Reference.md");
+                let example_file = dir_path.join(CABINET_REFERENCE_FILE_NAME);
                 write_file_if_missing(
                     &example_file,
                     CABINET_GTD_PRINCIPLES_TEMPLATE,
@@ -499,7 +501,8 @@ fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, Strin
             .join("Purpose & Principles")
             .join("Core Values.md"),
     );
-    let cabinet_ref = existing_reference(space_root.join("Cabinet").join("GTD Quick Reference.md"));
+    let cabinet_ref =
+        existing_reference(space_root.join("Cabinet").join(CABINET_REFERENCE_FILE_NAME));
 
     let readme_path = Path::new(&project1_path).join("README.md");
     let readme_params = ProjectReadmeParams {
@@ -578,12 +581,10 @@ fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, Strin
     // Create just ONE Cabinet reference (that the project references)
     let cabinet_dir = Path::new(&space_path).join("Cabinet");
     if cabinet_dir.exists() {
-        // Only create the GTD Quick Reference that our project references
-        let gtd_ref = cabinet_dir.join("GTD Quick Reference.md");
+        let gtd_ref = cabinet_dir.join(CABINET_REFERENCE_FILE_NAME);
         if !gtd_ref.exists() {
-            // Using the existing CABINET_GTD_PRINCIPLES_TEMPLATE
             fs::write(&gtd_ref, CABINET_GTD_PRINCIPLES_TEMPLATE)
-                .map_err(|e| format!("Failed to create GTD Quick Reference: {}", e))?;
+                .map_err(|e| format!("Failed to create GTD Principles Reference: {}", e))?;
         }
     }
 

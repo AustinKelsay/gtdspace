@@ -745,7 +745,13 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
   return {
     tabState,
     activeTab,
-    hasUnsavedChanges: tabState.openTabs.some((tab) => tab.hasUnsavedChanges),
+    hasUnsavedChanges: tabState.openTabs.some((tab) => {
+      const bufferedContent = pendingContentRef.current.get(tab.id);
+      if (bufferedContent === undefined) {
+        return tab.hasUnsavedChanges;
+      }
+      return bufferedContent !== (tab.originalContent ?? tab.content);
+    }),
     openTab,
     activateTab,
     closeTab,

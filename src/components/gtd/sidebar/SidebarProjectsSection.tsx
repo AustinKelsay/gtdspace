@@ -175,6 +175,16 @@ function ProjectRow({
   onQueueDelete,
   isPathActive,
 }: ProjectRowProps) {
+  const runAsyncAction = React.useCallback(
+    (label: string, operation: () => void | Promise<void>) => {
+      Promise.resolve()
+        .then(operation)
+        .catch((error) => {
+        console.error(`[SidebarProjectsSection] ${label} failed`, error);
+      });
+    },
+    []
+  );
   const display = getProjectDisplay(project, projectMetadata);
   const currentProject: GTDProject = {
     ...project,
@@ -213,18 +223,20 @@ function ProjectRow({
           className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer"
           role="button"
           tabIndex={0}
-          onClick={() => void onOpenProject(currentProject)}
+          onClick={() => {
+            runAsyncAction('open project', () => onOpenProject(currentProject));
+          }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
-              void onOpenProject(currentProject);
+              runAsyncAction('open project', () => onOpenProject(currentProject));
             }
           }}
         >
           <Button
             onClick={(event) => {
               event.stopPropagation();
-              void onToggleProjectExpand(currentProject);
+              runAsyncAction('toggle project expand', () => onToggleProjectExpand(currentProject));
             }}
             onKeyDown={(event) => {
               event.stopPropagation();
@@ -280,9 +292,9 @@ function ProjectRow({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
               <DropdownMenuItem
-                onClick={async (event) => {
+                onClick={(event) => {
                   event.stopPropagation();
-                  await onOpenProjectFolder(display.path);
+                  runAsyncAction('open project folder', () => onOpenProjectFolder(display.path));
                 }}
               >
                 <Folder className="h-3 w-3 mr-2" />

@@ -193,9 +193,16 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
             { path: projectsRoot },
             []
           );
-          const readmes = files.filter(f => /\/Projects\/.+\/README\.(md|markdown)$/i.test(f.path));
+          const readmes = files.filter((f) => {
+            const normalizedFilePath = norm(f.path);
+            return (
+              typeof normalizedFilePath === 'string' &&
+              /\/Projects\/.+\/README\.(md|markdown)$/i.test(normalizedFilePath)
+            );
+          });
           baseProjects = await Promise.all(readmes.map(async (f) => {
-            const projectPath = f.path.replace(/\/README\.(md|markdown)$/i, '');
+            const normalizedFilePath = norm(f.path) ?? f.path;
+            const projectPath = normalizedFilePath.replace(/\/README\.(md|markdown)$/i, '');
             const normalizedProjectPath = norm(projectPath) ?? projectPath;
             const name = normalizedProjectPath.split('/').filter(Boolean).pop() || 'Project';
             let description = '';
@@ -408,9 +415,23 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
       window.onTabFileSaved?.(readmePath, fileName, nextContent, metadata);
 
       // Update local state
-      setProjects(prev => prev.map(p =>
-        p.path === projectPath ? { ...p, ...updates } : p
-      ));
+      const canonicalProjectPath = norm(projectPath) ?? projectPath;
+      const nextParsedProject = parseProjectMarkdown(nextContent);
+      setProjects(prev => prev.map((project) => {
+        if ((norm(project.path) ?? project.path) !== canonicalProjectPath) {
+          return project;
+        }
+
+        return {
+          ...project,
+          name:
+            nextParsedProject.title && !isSyntheticProjectTitle(nextParsedProject.title)
+              ? nextParsedProject.title
+              : project.name,
+          status: nextParsedProject.status,
+          dueDate: nextParsedProject.dueDate || null,
+        };
+      }));
     } catch (err) {
       console.error('Failed to update project:', err);
       throw err;

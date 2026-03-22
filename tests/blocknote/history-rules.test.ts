@@ -71,6 +71,13 @@ describe("blocknote history rules", () => {
         { type: "paragraph", content: "Track your habit daily" },
         "Track your habit daily"
       )
+    ).toBe(false);
+
+    expect(
+      shouldSkipBlockInsideHistory(
+        { type: "paragraph", content: "*Track your habit completions below:*" },
+        "*Track your habit completions below:*"
+      )
     ).toBe(true);
 
     expect(
@@ -80,6 +87,21 @@ describe("blocknote history rules", () => {
           content: [{ text: "helper", styles: { italic: true } }],
         },
         "helper"
+      )
+    ).toBe(false);
+
+    expect(
+      shouldSkipBlockInsideHistory(
+        {
+          type: "paragraph",
+          content: [
+            {
+              text: "*Track your habit completions below:*",
+              styles: { italic: true },
+            },
+          ],
+        },
+        "*Track your habit completions below:*"
       )
     ).toBe(true);
 

@@ -2,7 +2,6 @@ import { isParagraphBlock } from "./block-text";
 import type { TextChild, UnknownBlock } from "./types";
 
 const HISTORY_HELPER_TEXT = "*Track your habit completions below:*";
-const HISTORY_HELPER_PREFIX = "track your habit";
 
 export function isHorizontalRuleParagraph(
   block: UnknownBlock,
@@ -45,11 +44,17 @@ export function shouldSkipBlockInsideHistory(
       return child.styles?.italic === true;
     });
 
+  const trimmedText = blockText.trim();
+  const isExactHelperText =
+    trimmedText.localeCompare(HISTORY_HELPER_TEXT, undefined, {
+      sensitivity: "accent",
+      usage: "search",
+    }) === 0;
+
   return (
-    blockText.trim() === HISTORY_HELPER_TEXT ||
-    blockText.trim().toLowerCase().startsWith(HISTORY_HELPER_PREFIX) ||
-    blockText.trim() === "" ||
-    hasOnlyItalicContent
+    trimmedText === "" ||
+    isExactHelperText ||
+    (hasOnlyItalicContent && isExactHelperText)
   );
 }
 

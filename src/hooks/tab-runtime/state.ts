@@ -134,8 +134,8 @@ function updateTabFilePath(tab: FileTab, nextPath: string): FileTab {
     ...tab,
     file: {
       ...tab.file,
-      id: nextPath,
-      path: nextPath,
+      id: normalizedNextPath,
+      path: normalizedNextPath,
       name: basename || tab.file.name,
       extension,
     },

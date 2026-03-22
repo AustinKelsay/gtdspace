@@ -398,21 +398,23 @@ pub(crate) fn insert_history_entry(content: &str, entry: &str) -> Result<String,
         }
 
         if in_history_section {
-            if line.starts_with("*Track your habit completions")
-                || line.starts_with("*Track your habit")
+            let trimmed_line = line.trim_start();
+
+            if trimmed_line.starts_with("*Track your habit completions")
+                || trimmed_line.starts_with("*Track your habit")
             {
                 continue;
-            } else if line.contains("| Date") && line.contains("| Time") {
+            } else if trimmed_line.contains("| Date") && trimmed_line.contains("| Time") {
                 has_table_header = true;
                 continue;
-            } else if line.contains("|---") || line.contains("| ---") {
+            } else if trimmed_line.contains("|---") || trimmed_line.contains("| ---") {
                 table_separator_idx = Some(i);
                 continue;
             } else if is_history_table_row_line(line) {
                 last_history_line_idx = Some(i);
-            } else if line.trim_start().starts_with("##") {
+            } else if trimmed_line.starts_with("##") {
                 break;
-            } else if !line.trim().is_empty() {
+            } else if !trimmed_line.trim().is_empty() {
                 has_old_list_format = true;
                 old_list_entries.push((i, line));
                 if last_history_line_idx.is_none() || i > last_history_line_idx.unwrap() {

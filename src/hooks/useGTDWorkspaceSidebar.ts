@@ -26,6 +26,7 @@ import type {
   SidebarSectionFileMetadata,
 } from '@/components/gtd/sidebar/types';
 import type { GTDProject, GTDSpace, MarkdownFile } from '@/types';
+import { norm } from '@/utils/path';
 
 type UseGTDWorkspaceSidebarResult = {
   gtdSpace: GTDSpace | null;
@@ -212,7 +213,17 @@ export function useGTDWorkspaceSidebar({
         files: filteredFiles,
       });
       if (changed) {
-        await safeInvoke('save_file', { path: readmePath, content });
+        const saveResult = await withErrorHandling(async () => {
+          const result = await safeInvoke('save_file', { path: readmePath, content }, null);
+          if (!result) {
+            throw new Error('Failed to save horizon overview');
+          }
+          return result;
+        }, 'Failed to save horizon overview', 'workspace-sidebar');
+
+        if (!saveResult) {
+          return;
+        }
       }
     } catch (error) {
       console.error('Failed to sync horizon README', { folderPath, error });
@@ -816,14 +827,23 @@ export function useGTDWorkspaceSidebar({
         };
 
         setPendingProjects((prev) =>
-          prev.some((project) => project.path === optimistic.path) ? prev : [...prev, optimistic]
+          prev.some(
+            (project) => (norm(project.path) ?? project.path) === (norm(optimistic.path) ?? optimistic.path)
+          )
+            ? prev
+            : [...prev, optimistic]
         );
       }
 
       if (gtdSpace?.root_path) {
         const projects = await loadProjects(gtdSpace.root_path);
         setPendingProjects((prev) =>
-          prev.filter((project) => !projects.some((loaded) => loaded.path === project.path))
+          prev.filter(
+            (project) =>
+              !projects.some(
+                (loaded) => (norm(loaded.path) ?? loaded.path) === (norm(project.path) ?? project.path)
+              )
+          )
         );
       }
     };
@@ -1180,7 +1200,11 @@ export function useGTDWorkspaceSidebar({
     const merged = [...baseProjects];
 
     pendingProjects.forEach((pending) => {
-      if (!merged.some((project) => project.path === pending.path)) {
+      if (
+        !merged.some(
+          (project) => (norm(project.path) ?? project.path) === (norm(pending.path) ?? pending.path)
+        )
+      ) {
         merged.push(pending);
       }
     });

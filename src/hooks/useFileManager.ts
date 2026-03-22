@@ -6,6 +6,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
+import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { useSettings } from '@/hooks/useSettings';
 // Performance monitoring and caching removed during simplification
 import { serializeMultiselectsToMarkers, deserializeMarkersToMultiselects } from '@/utils/multiselect-block-helpers';
@@ -160,8 +161,14 @@ export const useFileManager = () => {
   const selectFolder = useCallback(async () => {
     try {
       console.log('Opening folder selection dialog...');
-      const folderPath = await safeInvoke<string | null>('select_folder', undefined);
-      if (!folderPath) {
+      const inTauriContext = await checkTauriContextAsync();
+      const folderPath = inTauriContext
+        ? await import('@tauri-apps/api/core').then(({ invoke }) =>
+            invoke<string | null>('select_folder')
+          )
+        : await safeInvoke<string | null>('select_folder', undefined);
+
+      if (folderPath === null) {
         return;
       }
       console.log('Folder selected:', folderPath);

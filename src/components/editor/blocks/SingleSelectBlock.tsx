@@ -196,6 +196,15 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                   metadata: { habitStatus: selectedValue },
                   changedFields: { habitStatus: selectedValue }
                 });
+                window.dispatchEvent(
+                  new CustomEvent('habit-status-updated', {
+                    detail: {
+                      filePath: currentPath,
+                      fileName,
+                      habitStatus: selectedValue,
+                    },
+                  })
+                );
               } else {
                 // Tauri not available (browser/dev mode) - revert UI to previous value
                 console.warn('[SingleSelectBlock] Tauri not available, reverting habit status change');

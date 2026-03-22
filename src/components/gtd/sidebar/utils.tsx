@@ -182,7 +182,11 @@ export const buildSidebarSearchResults = ({
       const projectName = project
         ? getProjectDisplay(project, projectMetadata).title
         : getFolderName(projectPath) || projectPath;
-      results.actions.push({ project: projectName, actions: matches });
+      results.actions.push({
+        project: projectName,
+        projectPath: normalizePath(projectPath) ?? projectPath,
+        actions: matches,
+      });
     }
   });
 

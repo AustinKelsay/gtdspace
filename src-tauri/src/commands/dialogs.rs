@@ -36,6 +36,14 @@ fn open_in_linux_file_manager(path: &std::ffi::OsStr) -> Result<(), std::io::Err
     }))
 }
 
+fn redact_path(path: &str) -> String {
+    PathBuf::from(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.to_string())
+        .unwrap_or_else(|| "<redacted>".to_string())
+}
+
 /// Open folder selection dialog and return selected path
 ///
 /// Uses Tauri's dialog API to present a native folder selection dialog
@@ -80,7 +88,7 @@ pub async fn select_folder(app: AppHandle) -> Result<Option<String>, String> {
     match result {
         Some(folder_path) => {
             let path_str = folder_path.to_string();
-            log::debug!("Folder selected: {}", path_str);
+            log::debug!("Folder selected: {}", redact_path(&path_str));
             Ok(Some(path_str))
         }
         None => {

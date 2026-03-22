@@ -507,6 +507,12 @@ export const App: React.FC = () => {
     const unsubscribe = onContentSaved((event) => {
       scheduleProjectReload(event.filePath);
     });
+    const handleExternalProjectChange = (
+      event: Event
+    ) => {
+      const customEvent = event as CustomEvent<{ file_path?: string | null }>;
+      scheduleProjectReload(customEvent.detail?.file_path);
+    };
     const previousOnTabFileSaved = window.onTabFileSaved;
     const wrappedOnTabFileSaved = (
       filePath: string,
@@ -518,6 +524,10 @@ export const App: React.FC = () => {
       scheduleProjectReload(filePath);
     };
     window.onTabFileSaved = wrappedOnTabFileSaved;
+    window.addEventListener(
+      "gtd-external-file-changed",
+      handleExternalProjectChange as EventListener
+    );
 
     return () => {
       if (reloadTimer !== null) {
@@ -526,6 +536,10 @@ export const App: React.FC = () => {
       if (window.onTabFileSaved === wrappedOnTabFileSaved) {
         window.onTabFileSaved = previousOnTabFileSaved;
       }
+      window.removeEventListener(
+        "gtd-external-file-changed",
+        handleExternalProjectChange as EventListener
+      );
       unsubscribe();
     };
   }, [gtdSpace?.root_path, loadProjects]);

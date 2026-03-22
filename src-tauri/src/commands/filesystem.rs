@@ -37,7 +37,15 @@ fn has_markdown_extension(name: &str) -> bool {
 }
 
 fn directory_has_project_readme(dir_path: &Path) -> bool {
-    dir_path.join("README.md").exists() || dir_path.join("README.markdown").exists()
+    fs::read_dir(dir_path)
+        .ok()
+        .into_iter()
+        .flat_map(|entries| entries.filter_map(Result::ok))
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .any(|name| {
+            let lowered = name.to_ascii_lowercase();
+            lowered == "readme.md" || lowered == "readme.markdown"
+        })
 }
 
 fn path_has_component_case_insensitive(path: &Path, expected: &str) -> bool {

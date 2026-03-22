@@ -469,11 +469,11 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
   const [horizonOptions, setHorizonOptions] = React.useState<HorizonOption[]>([]);
   const [horizonSearch, setHorizonSearch] = React.useState<string>("");
   const [horizonLoading, setHorizonLoading] = React.useState(false);
-  const pendingHorizonChangeRef = React.useRef<{
+  const pendingHorizonChangeRef = React.useRef<Array<{
     key: HorizonKey;
     targetPath: string;
     mode: "toggle" | "remove";
-  } | null>(null);
+  }>>([]);
 
   React.useEffect(() => {
     setTitle(parsed.title);
@@ -625,23 +625,34 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       const normalizedTarget = normalizeReferencePath(value);
       if (!normalizedTarget) return;
 
+      let queuedChange:
+        | {
+            key: HorizonKey;
+            targetPath: string;
+            mode: "toggle" | "remove";
+          }
+        | null = null;
+
       setHorizonRefs((prev) => {
         const normalizedCurrent = normalizeProjectHorizonReferences(prev);
         const group = normalizedCurrent[key] ?? [];
         const nextGroup = group.includes(normalizedTarget)
           ? group.filter((ref) => ref !== normalizedTarget)
           : [...group, normalizedTarget];
+        queuedChange = {
+          key,
+          targetPath: normalizedTarget,
+          mode: group.includes(normalizedTarget) ? "remove" : "toggle",
+        };
         return {
           ...normalizedCurrent,
           [key]: nextGroup,
         };
       });
 
-      pendingHorizonChangeRef.current = {
-        key,
-        targetPath: normalizedTarget,
-        mode: "toggle",
-      };
+      if (queuedChange) {
+        pendingHorizonChangeRef.current.push(queuedChange);
+      }
     },
     []
   );
@@ -651,7 +662,13 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       const normalizedTarget = normalizeReferencePath(value);
       if (!normalizedTarget) return;
 
-      let removed = false;
+      let queuedChange:
+        | {
+            key: HorizonKey;
+            targetPath: string;
+            mode: "toggle" | "remove";
+          }
+        | null = null;
       setHorizonRefs((prev) => {
         const normalizedCurrent = normalizeProjectHorizonReferences(prev);
         const group = normalizedCurrent[key] ?? [];
@@ -659,7 +676,11 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
           return prev;
         }
 
-        removed = true;
+        queuedChange = {
+          key,
+          targetPath: normalizedTarget,
+          mode: "remove",
+        };
         const nextGroup = group.filter((ref) => ref !== normalizedTarget);
         return {
           ...normalizedCurrent,
@@ -667,44 +688,33 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
         };
       });
 
-      if (!removed) {
+      if (!queuedChange) {
         return;
       }
 
-      pendingHorizonChangeRef.current = {
-        key,
-        targetPath: normalizedTarget,
-        mode: "remove",
-      };
-
+      pendingHorizonChangeRef.current.push(queuedChange);
     },
     []
   );
 
   React.useEffect(() => {
     const pending = pendingHorizonChangeRef.current;
-    if (!pending) {
+    if (pending.length === 0) {
       return;
     }
 
     const next = normalizeProjectHorizonReferences(horizonRefs);
-    const group = next[pending.key] ?? [];
-    const action: "add" | "remove" =
-      pending.mode === "remove"
-        ? "remove"
-        : group.includes(pending.targetPath)
-          ? "add"
-          : "remove";
-
-    pendingHorizonChangeRef.current = null;
+    const queuedChanges = pending.splice(0);
     emitRebuild({ horizonReferences: next });
 
     if (normalizedFilePath) {
-      void syncHorizonBacklink({
-        sourcePath: normalizedFilePath,
-        sourceKind: "projects",
-        targetPath: pending.targetPath,
-        action,
+      queuedChanges.forEach((change) => {
+        void syncHorizonBacklink({
+          sourcePath: normalizedFilePath,
+          sourceKind: "projects",
+          targetPath: change.targetPath,
+          action: change.mode === "remove" ? "remove" : "add",
+        });
       });
     }
   }, [emitRebuild, horizonRefs, normalizedFilePath]);

@@ -52,6 +52,6 @@ export type SidebarSectionFileMetadata = {
 
 export type SidebarSearchResults = {
   projects: GTDProject[];
-  actions: Array<{ project: string; actions: MarkdownFile[] }>;
+  actions: Array<{ project: string; projectPath: string; actions: MarkdownFile[] }>;
   sections: Array<{ section: GTDSection; files: MarkdownFile[] }>;
 };

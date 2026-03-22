@@ -276,9 +276,7 @@ pub fn build_git_sync_config(
         }
     };
 
-    let encryption_key = encryption_key.trim().to_string();
-
-    if encryption_key.is_empty() {
+    if encryption_key.trim().is_empty() {
         return Err("Encryption key has not been set".to_string());
     }
 

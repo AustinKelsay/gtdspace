@@ -101,8 +101,8 @@ export function SidebarSearchResults({
             </Badge>
           </div>
           <div className="space-y-2 pl-2">
-            {results.actions.map(({ project, actions }) => (
-              <div key={project}>
+            {results.actions.map(({ project, projectPath, actions }) => (
+              <div key={projectPath}>
                 <div className="text-xs text-muted-foreground mb-1">{project}</div>
                 {actions.map((action) => {
                   const display = getActionDisplay(action, actionMetadata, actionStatuses);

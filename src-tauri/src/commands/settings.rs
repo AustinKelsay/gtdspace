@@ -23,13 +23,14 @@ fn default_settings_with_secure_key() -> UserSettings {
 }
 
 fn sync_git_sync_encryption_key(settings: &UserSettings) -> Result<(), String> {
+    sync_git_sync_encryption_key_value(settings.git_sync_encryption_key.as_deref())
+}
+
+fn sync_git_sync_encryption_key_value(value: Option<&str>) -> Result<(), String> {
     let entry = keyring::Entry::new(SECURE_STORAGE_SERVICE, GIT_SYNC_ENCRYPTION_KEY_NAME)
         .map_err(|error| format!("Failed to access secure storage: {}", error))?;
 
-    let value_to_store = settings
-        .git_sync_encryption_key
-        .as_ref()
-        .filter(|value| !value.trim().is_empty());
+    let value_to_store = value.filter(|candidate| !candidate.trim().is_empty());
 
     match value_to_store {
         Some(value) => entry
@@ -42,6 +43,17 @@ fn sync_git_sync_encryption_key(settings: &UserSettings) -> Result<(), String> {
                 error
             )),
         },
+    }
+}
+
+fn restore_user_settings_value(
+    store: &std::sync::Arc<tauri_plugin_store::Store<tauri::Wry>>,
+    previous_value: Option<serde_json::Value>,
+) {
+    if let Some(value) = previous_value {
+        store.set("user_settings", value);
+    } else {
+        store.delete("user_settings");
     }
 }
 
@@ -398,11 +410,25 @@ fn save_settings_unlocked(app: &AppHandle, settings: &UserSettings) -> Result<St
     // Save settings to store
     match serde_json::to_value(settings) {
         Ok(value) => {
+            let previous_value = store.get("user_settings");
+            let previous_git_sync_encryption_key = load_git_sync_encryption_key();
             store.set("user_settings", value);
 
-            sync_git_sync_encryption_key(settings)?;
+            if let Err(error) = sync_git_sync_encryption_key(settings) {
+                restore_user_settings_value(&store, previous_value);
+                return Err(error);
+            }
 
             if let Err(e) = store.save() {
+                restore_user_settings_value(&store, previous_value);
+                if let Err(restore_error) =
+                    sync_git_sync_encryption_key_value(previous_git_sync_encryption_key.as_deref())
+                {
+                    log::error!(
+                        "Failed to restore git sync encryption key after settings save failure: {}",
+                        restore_error
+                    );
+                }
                 return Err(format!("Failed to persist settings: {}", e));
             }
 

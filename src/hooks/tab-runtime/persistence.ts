@@ -43,7 +43,7 @@ type LegacyPersistedTabSnapshot = {
 export type PersistedTabSnapshot = CanonicalPersistedTabSnapshot;
 
 function normalizeWorkspacePath(path?: string | null): string | null {
-  const normalized = (path ?? '').trim().replace(/\\/g, '/').replace(/\/+$/, '');
+  const normalized = pathKey(path);
   return normalized || null;
 }
 

@@ -102,13 +102,34 @@ pub fn open_folder_in_explorer(path: String) -> Result<String, String> {
     } else if cfg!(target_os = "macos") {
         Command::new("open").arg(&path).status()
     } else if cfg!(target_os = "linux") {
-        // Try common Linux file managers
-        Command::new("xdg-open")
-            .arg(&path)
-            .status()
-            .or_else(|_| Command::new("nautilus").arg(&path).status())
-            .or_else(|_| Command::new("dolphin").arg(&path).status())
-            .or_else(|_| Command::new("thunar").arg(&path).status())
+        let mut last_error: Option<std::io::Error> = None;
+        let mut last_non_success: Option<String> = None;
+        for launcher in ["xdg-open", "nautilus", "dolphin", "thunar"] {
+            match Command::new(launcher).arg(&path).status() {
+                Ok(status) if status.success() => {
+                    return Ok(format!("Opened folder: {}", path));
+                }
+                Ok(status) => {
+                    let detail = status
+                        .code()
+                        .map(|code| format!("{} exited with code {}", launcher, code))
+                        .unwrap_or_else(|| format!("{} terminated by signal", launcher));
+                    last_non_success = Some(detail);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    continue;
+                }
+                Err(error) => {
+                    last_error = Some(error);
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            std::io::Error::other(
+                last_non_success.unwrap_or_else(|| "No suitable file manager found".to_string()),
+            )
+        }))
     } else {
         return Err("Unsupported operating system".to_string());
     };

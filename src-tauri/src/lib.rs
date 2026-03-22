@@ -43,6 +43,7 @@ pub fn run() {
 fn register_handlers(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
     builder.invoke_handler(tauri::generate_handler![
         commands::app::ping,
+        commands::app::test_select_folder,
         commands::app::get_app_version,
         commands::app::check_permissions,
         commands::workspace::get_default_gtd_space_path,
@@ -110,7 +111,6 @@ fn register_handlers(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<taur
 fn register_handlers(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
     builder.invoke_handler(tauri::generate_handler![
         commands::app::ping,
-        commands::app::test_select_folder,
         commands::app::get_app_version,
         commands::app::check_permissions,
         commands::workspace::get_default_gtd_space_path,

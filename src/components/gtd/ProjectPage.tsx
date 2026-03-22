@@ -126,8 +126,14 @@ const statusLabel = (status: string) => {
 const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ projectPath }) => {
   const [items, setItems] = React.useState<ProjectActionItem[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const requestIdRef = React.useRef(0);
+  const { withErrorHandling } = useErrorHandler();
 
   const load = React.useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const requestedProjectPath = projectPath;
+
     if (!projectPath) {
       setItems([]);
       return;
@@ -149,9 +155,18 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
 
       const actions = await Promise.all(
         (files ?? []).map(async (file) => {
-          const content = await safeInvoke<string>("read_file", { path: file.path }, null);
-          if (content == null) {
-            console.warn("ProjectActionsSection: skipping unreadable action", file.path);
+          if (requestId !== requestIdRef.current || requestedProjectPath !== projectPath) {
+            return null;
+          }
+
+          const content = await withErrorHandling(async () => {
+            const result = await safeInvoke<string>("read_file", { path: file.path }, null);
+            if (result == null) {
+              throw new Error(`Failed to read action file: ${file.path}`);
+            }
+            return result;
+          });
+          if (typeof content !== "string") {
             return null;
           }
           const parsedAction = parseActionMarkdown(content);
@@ -169,16 +184,24 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
         })
       );
 
+      if (requestId !== requestIdRef.current || requestedProjectPath !== projectPath) {
+        return;
+      }
+
       const validActions = actions.filter((item): item is ProjectActionItem => item !== null);
       validActions.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
       setItems(validActions);
     } catch (error) {
-      console.error("ProjectActionsSection: failed to load actions", error);
-      setItems([]);
+      if (requestId === requestIdRef.current && requestedProjectPath === projectPath) {
+        console.error("ProjectActionsSection: failed to load actions", error);
+        setItems([]);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current && requestedProjectPath === projectPath) {
+        setLoading(false);
+      }
     }
-  }, [projectPath]);
+  }, [projectPath, withErrorHandling]);
 
   React.useEffect(() => {
     void load();
@@ -242,8 +265,14 @@ type ProjectHabitItem = {
 const ProjectHabitsSection: React.FC<{ projectPath: string | null }> = ({ projectPath }) => {
   const [habits, setHabits] = React.useState<ProjectHabitItem[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const requestIdRef = React.useRef(0);
+  const { withErrorHandling } = useErrorHandler();
 
   const load = React.useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const requestedProjectPath = projectPath;
+
     if (!projectPath) {
       setHabits([]);
       return;
@@ -274,9 +303,18 @@ const ProjectHabitsSection: React.FC<{ projectPath: string | null }> = ({ projec
 
       const matches: ProjectHabitItem[] = [];
       for (const file of files ?? []) {
-        const content = await safeInvoke<string>("read_file", { path: file.path }, null);
-        if (content == null) {
-          console.warn("ProjectHabitsSection: skipping unreadable habit", file.path);
+        if (requestId !== requestIdRef.current || requestedProjectPath !== projectPath) {
+          return;
+        }
+
+        const content = await withErrorHandling(async () => {
+          const result = await safeInvoke<string>("read_file", { path: file.path }, null);
+          if (result == null) {
+            throw new Error(`Failed to read habit file: ${file.path}`);
+          }
+          return result;
+        });
+        if (typeof content !== "string") {
           continue;
         }
         const parsedHabit = parseHabitContent(content);
@@ -291,15 +329,23 @@ const ProjectHabitsSection: React.FC<{ projectPath: string | null }> = ({ projec
         }
       }
 
+      if (requestId !== requestIdRef.current || requestedProjectPath !== projectPath) {
+        return;
+      }
+
       matches.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
       setHabits(matches);
     } catch (error) {
-      console.error("ProjectHabitsSection: failed to load habits", error);
-      setHabits([]);
+      if (requestId === requestIdRef.current && requestedProjectPath === projectPath) {
+        console.error("ProjectHabitsSection: failed to load habits", error);
+        setHabits([]);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current && requestedProjectPath === projectPath) {
+        setLoading(false);
+      }
     }
-  }, [projectPath]);
+  }, [projectPath, withErrorHandling]);
 
   React.useEffect(() => {
     void load();

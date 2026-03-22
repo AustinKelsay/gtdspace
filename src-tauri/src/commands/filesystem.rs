@@ -4,7 +4,7 @@ use super::seed_data::generate_action_template;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Component, Path};
 use tempfile::NamedTempFile;
 
@@ -80,7 +80,27 @@ fn rename_path(old_path: &Path, new_path: &Path) -> Result<(), std::io::Error> {
     }
 
     if !paths_refer_to_same_entry(old_path, new_path) {
-        return fs::rename(old_path, new_path);
+        match fs::hard_link(old_path, new_path) {
+            Ok(()) => {
+                if let Err(error) = fs::remove_file(old_path) {
+                    let _ = fs::remove_file(new_path);
+                    return Err(error);
+                }
+                return Ok(());
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                return Err(error);
+            }
+            Err(_) => {
+                if new_path.exists() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::AlreadyExists,
+                        "destination already exists",
+                    ));
+                }
+                return fs::rename(old_path, new_path);
+            }
+        }
     }
 
     let parent = old_path
@@ -529,15 +549,6 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
 
     let file_path = dir_path.join(&file_name);
 
-    // Check if file already exists
-    if file_path.exists() {
-        return Ok(FileOperationResult {
-            success: false,
-            path: None,
-            message: Some("File already exists".to_string()),
-        });
-    }
-
     // Normalize horizon detection
     let is_in_projects = path_has_component_case_insensitive(dir_path, "Projects");
     let is_in_habits = path_has_component_case_insensitive(dir_path, "Habits");
@@ -721,8 +732,22 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
         )
     };
 
-    match fs::write(&file_path, template_content) {
-        Ok(_) => {
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&file_path)
+    {
+        Ok(mut file) => {
+            if let Err(e) = file.write_all(template_content.as_bytes()) {
+                drop(file);
+                let _ = fs::remove_file(&file_path);
+                log::error!("Failed to create file {}: {}", file_path.display(), e);
+                return Ok(FileOperationResult {
+                    success: false,
+                    path: None,
+                    message: Some(format!("Failed to create file: {}", e)),
+                });
+            }
             let path_str = file_path.to_string_lossy().to_string();
             log::info!("Successfully created file: {}", path_str);
             Ok(FileOperationResult {
@@ -736,7 +761,11 @@ pub fn create_file(directory: String, name: String) -> Result<FileOperationResul
             Ok(FileOperationResult {
                 success: false,
                 path: None,
-                message: Some(format!("Failed to create file: {}", e)),
+                message: Some(if e.kind() == io::ErrorKind::AlreadyExists {
+                    "File already exists".to_string()
+                } else {
+                    format!("Failed to create file: {}", e)
+                }),
             })
         }
     }
@@ -810,15 +839,6 @@ pub fn rename_file(old_path: String, new_name: String) -> Result<FileOperationRe
 
     let new_file_path = directory.join(&file_name);
 
-    // Check if target file already exists
-    if new_file_path.exists() && !paths_refer_to_same_entry(old_file_path, &new_file_path) {
-        return Ok(FileOperationResult {
-            success: false,
-            path: None,
-            message: Some("A file with that name already exists".to_string()),
-        });
-    }
-
     match rename_path(old_file_path, &new_file_path) {
         Ok(_) => {
             let path_str = new_file_path.to_string_lossy().to_string();
@@ -834,7 +854,11 @@ pub fn rename_file(old_path: String, new_name: String) -> Result<FileOperationRe
             Ok(FileOperationResult {
                 success: false,
                 path: None,
-                message: Some(format!("Failed to rename file: {}", e)),
+                message: Some(if e.kind() == io::ErrorKind::AlreadyExists {
+                    "A file with that name already exists".to_string()
+                } else {
+                    format!("Failed to rename file: {}", e)
+                }),
             })
         }
     }
@@ -1162,13 +1186,8 @@ pub fn move_file(source_path: String, dest_path: String) -> Result<String, Strin
         }
     }
 
-    // Check if destination already exists
-    if dest.exists() {
-        return Err("Destination file already exists".to_string());
-    }
-
     // Perform the move
-    match fs::rename(source, dest) {
+    match rename_path(source, dest) {
         Ok(()) => {
             log::info!("Successfully moved file to: {}", dest_path);
             Ok("File moved successfully".to_string())
@@ -1180,10 +1199,39 @@ pub fn move_file(source_path: String, dest_path: String) -> Result<String, Strin
                     source_path
                 );
 
-                fs::copy(source, dest).map_err(|copy_error| {
+                let mut source_file = fs::File::open(source).map_err(|copy_error| {
+                    format!(
+                        "Failed to open source file during cross-device move: {}",
+                        copy_error
+                    )
+                })?;
+                let mut dest_file = fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(dest)
+                    .map_err(|copy_error| {
+                        if copy_error.kind() == io::ErrorKind::AlreadyExists {
+                            "Destination file already exists".to_string()
+                        } else {
+                            format!(
+                                "Failed to create destination during cross-device move: {}",
+                                copy_error
+                            )
+                        }
+                    })?;
+
+                io::copy(&mut source_file, &mut dest_file).map_err(|copy_error| {
+                    let _ = fs::remove_file(dest);
                     format!(
                         "Failed to copy file during cross-device move: {}",
                         copy_error
+                    )
+                })?;
+                dest_file.sync_all().map_err(|sync_error| {
+                    let _ = fs::remove_file(dest);
+                    format!(
+                        "Failed to sync destination during cross-device move: {}",
+                        sync_error
                     )
                 })?;
                 fs::remove_file(source).map_err(|remove_error| {
@@ -1204,7 +1252,11 @@ pub fn move_file(source_path: String, dest_path: String) -> Result<String, Strin
                 dest_path,
                 e
             );
-            Err(format!("Failed to move file: {}", e))
+            Err(if e.kind() == io::ErrorKind::AlreadyExists {
+                "Destination file already exists".to_string()
+            } else {
+                format!("Failed to move file: {}", e)
+            })
         }
     }
 }
@@ -1242,13 +1294,6 @@ pub fn replace_in_file(
     replace_term: String,
     is_regex: Option<bool>,
 ) -> Result<String, String> {
-    log::info!(
-        "Replacing '{}' with '{}' in file: {}",
-        search_term,
-        replace_term,
-        file_path
-    );
-
     // Validate file path
     let path = Path::new(&file_path);
 
@@ -1272,7 +1317,7 @@ pub fn replace_in_file(
 
     // Perform replacement
     let treat_as_regex = is_regex.unwrap_or(false);
-    let (new_content, replacements_made) = if treat_as_regex {
+    let (new_content, match_count) = if treat_as_regex {
         let regex =
             regex::Regex::new(&search_term).map_err(|e| format!("Invalid regex pattern: {}", e))?;
         let match_count = regex.find_iter(&content).count();
@@ -1287,13 +1332,15 @@ pub fn replace_in_file(
         (content.replace(&search_term, &replace_term), match_count)
     };
 
-    if replacements_made == 0 {
+    if match_count == 0 {
         return Err(format!(
             "No matches found for '{}' in {}",
             search_term,
             path.file_name().unwrap_or_default().to_string_lossy()
         ));
     }
+
+    log::info!("Replacing {} matches in file: {}", match_count, file_path);
 
     let temp_dir = path.parent().unwrap_or_else(|| Path::new("."));
     let mut temp_file = NamedTempFile::new_in(temp_dir)
@@ -1314,12 +1361,12 @@ pub fn replace_in_file(
 
     log::info!(
         "Successfully replaced {} occurrence(s) in {}",
-        replacements_made,
+        match_count,
         file_path
     );
     Ok(format!(
         "Replaced {} occurrence(s) of '{}' with '{}' in {}",
-        replacements_made,
+        match_count,
         search_term,
         replace_term,
         path.file_name().unwrap_or_default().to_string_lossy()

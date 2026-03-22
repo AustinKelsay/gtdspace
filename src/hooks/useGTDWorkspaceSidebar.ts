@@ -197,10 +197,11 @@ export function useGTDWorkspaceSidebar({
 
   const updateProjectOverlay = React.useCallback(
     (projectPath: string, patch: Partial<SidebarProjectMetadata>) => {
+      const normalizedKey = normalizePath(projectPath) ?? projectPath.replace(/\\/g, '/');
       setProjectMetadata((prev) => ({
         ...prev,
-        [projectPath]: {
-          ...prev[projectPath],
+        [normalizedKey]: {
+          ...prev[normalizedKey],
           ...patch,
         },
       }));
@@ -210,10 +211,11 @@ export function useGTDWorkspaceSidebar({
 
   const updateActionOverlay = React.useCallback(
     (actionPath: string, patch: Partial<SidebarActionMetadata>) => {
+      const normalizedKey = normalizePath(actionPath) ?? actionPath.replace(/\\/g, '/');
       setActionMetadata((prev) => ({
         ...prev,
-        [actionPath]: {
-          ...prev[actionPath],
+        [normalizedKey]: {
+          ...prev[normalizedKey],
           ...patch,
         },
       }));
@@ -223,10 +225,11 @@ export function useGTDWorkspaceSidebar({
 
   const updateSectionFileOverlay = React.useCallback(
     (filePath: string, patch: Partial<SidebarSectionFileMetadata>) => {
+      const normalizedKey = normalizePath(filePath) ?? filePath.replace(/\\/g, '/');
       setSectionFileMetadata((prev) => ({
         ...prev,
-        [filePath]: {
-          ...prev[filePath],
+        [normalizedKey]: {
+          ...prev[normalizedKey],
           ...patch,
         },
       }));
@@ -235,25 +238,28 @@ export function useGTDWorkspaceSidebar({
   );
 
   const removeActionOverlay = React.useCallback((filePath: string) => {
+    const normalizedKey = normalizePath(filePath) ?? filePath.replace(/\\/g, '/');
     setActionMetadata((prev) => {
       const next = { ...prev };
-      delete next[filePath];
+      delete next[normalizedKey];
       return next;
     });
   }, []);
 
   const removeProjectOverlay = React.useCallback((projectPath: string) => {
+    const normalizedKey = normalizePath(projectPath) ?? projectPath.replace(/\\/g, '/');
     setProjectMetadata((prev) => {
       const next = { ...prev };
-      delete next[projectPath];
+      delete next[normalizedKey];
       return next;
     });
   }, []);
 
   const removeSectionFileOverlay = React.useCallback((filePath: string) => {
+    const normalizedKey = normalizePath(filePath) ?? filePath.replace(/\\/g, '/');
     setSectionFileMetadata((prev) => {
       const next = { ...prev };
-      delete next[filePath];
+      delete next[normalizedKey];
       return next;
     });
   }, []);
@@ -315,21 +321,19 @@ export function useGTDWorkspaceSidebar({
 
   const loadProjectActions = React.useCallback(async (projectPath: string) => {
     try {
-      let files: MarkdownFile[] = [];
-      try {
-        files = await safeInvoke<MarkdownFile[]>('list_project_actions', { projectPath }, []);
-      } catch {
+      let files = await safeInvoke<MarkdownFile[]>('list_project_actions', { projectPath }, []);
+      if (!files || files.length === 0) {
         const all = await safeInvoke<MarkdownFile[]>('list_markdown_files', { path: projectPath }, []);
-        files = (all ?? []).filter((file) => file.name !== 'README.md');
+        files = (all ?? []).filter((file) => !/^README\.(md|markdown)$/i.test(file.name));
       }
 
       setProjectActions((prev) => ({
         ...prev,
-        [projectPath]: files,
+        [projectPath]: files ?? [],
       }));
 
       const statusResults = await Promise.all(
-        files.map(async (action) => {
+        (files ?? []).map(async (action) => {
           try {
             const content = await readFileText(action.path);
             const statusMatch = content.match(/\[!singleselect:status:([^\]]+?)\]/i);
@@ -1025,7 +1029,7 @@ export function useGTDWorkspaceSidebar({
 
       const newFile: MarkdownFile = {
         id: filePath,
-        name: filePath.split('/').pop() || '',
+        name: getFolderName(normalizePath(filePath) ?? filePath),
         path: filePath,
         size: 0,
         last_modified: Math.floor(Date.now() / 1000),
@@ -1062,7 +1066,7 @@ export function useGTDWorkspaceSidebar({
       const habitsPath = buildSectionPath(rootPath, habitsSection.path);
       const newFile: MarkdownFile = {
         id: habitPath,
-        name: habitPath.split('/').pop() || '',
+        name: getFolderName(normalizePath(habitPath) ?? habitPath),
         path: habitPath,
         size: 0,
         last_modified: Math.floor(Date.now() / 1000),
@@ -1113,8 +1117,22 @@ export function useGTDWorkspaceSidebar({
         sectionFiles,
         sections: GTD_SECTIONS,
         rootPath,
+        projectMetadata,
+        actionMetadata,
+        actionStatuses,
+        sectionFileMetadata,
       }),
-    [gtdSpace?.projects, projectActions, rootPath, searchQuery, sectionFiles]
+    [
+      actionMetadata,
+      actionStatuses,
+      gtdSpace?.projects,
+      projectActions,
+      projectMetadata,
+      rootPath,
+      searchQuery,
+      sectionFileMetadata,
+      sectionFiles,
+    ]
   );
 
   const [activeProjects, completedProjects] = React.useMemo(

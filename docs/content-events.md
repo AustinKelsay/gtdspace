@@ -115,7 +115,8 @@ emitMetadataChange({
 - `useTabManager` emits content change events when tab content is updated
 - It emits metadata change events when specific fields change
 - It emits content saved events after successful save and after disk reloads used during conflict resolution
-- The app shell listens to `content:saved` for project markdown files so project lists refresh without `window.onTabFileSaved`
+- The app shell currently listens to both `content:saved` and `window.onTabFileSaved` for project markdown reloads
+- `useActionsData` and the tab runtime lifecycle both still invoke `window.onTabFileSaved` for compatibility alongside `content:saved`
 - `window.applyBacklinkChange` remains a separate window-level integration used for targeted in-editor backlink mutations
 
 ### GTD Workspace Sidebar

@@ -20,8 +20,11 @@ pub(crate) mod utils;
 pub(crate) mod watcher;
 pub(crate) mod workspace;
 
+#[cfg(debug_assertions)]
 #[allow(unused_imports)]
-pub use app::{check_permissions, get_app_version, ping, test_select_folder, PermissionStatus};
+pub use app::test_select_folder;
+#[allow(unused_imports)]
+pub use app::{check_permissions, get_app_version, ping, PermissionStatus};
 #[allow(unused_imports)]
 pub use dialogs::{open_file_location, open_folder_in_explorer, select_folder};
 #[allow(unused_imports)]

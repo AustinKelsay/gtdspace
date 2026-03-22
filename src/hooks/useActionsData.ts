@@ -10,6 +10,7 @@ import { toISOStringFromEpoch } from '@/utils/time';
 import { parseLocalDate } from '@/utils/date-formatting';
 import type { GTDActionStatus, GTDProject, MarkdownFile } from '@/types';
 import { createScopedLogger } from '@/utils/logger';
+import { emitContentSaved } from '@/utils/content-event-bus';
 import {
   parseActionMarkdown,
   rebuildActionMarkdown,
@@ -59,32 +60,6 @@ interface UseActionsDataReturn {
   updateActionStatus: (actionIdOrPath: string, newStatus: string, actionPath?: string) => Promise<boolean>;
   refresh: () => Promise<void>;
 }
-
-/**
- * Extract first paragraph as description
- */
-const extractDescription = (content: string): string => {
-  const lines = content.split('\n');
-  const descLines: string[] = [];
-  let foundContent = false;
-  
-  for (const line of lines) {
-    const trimmed = line.trim();
-    
-    // Skip metadata lines and headers
-    if (trimmed.startsWith('[!') || trimmed.startsWith('#')) continue;
-    
-    if (trimmed) {
-      foundContent = true;
-      descLines.push(trimmed);
-    } else if (foundContent) {
-      // Found empty line after content, stop
-      break;
-    }
-  }
-  
-  return descLines.join(' ').substring(0, 200);
-};
 
 /**
  * Check if date is overdue, due today, or due this week
@@ -185,7 +160,7 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
                 references: parsedAction.references,
                 createdDate: parsedAction.createdDateTime ?? toISOStringFromEpoch(file.last_modified),
                 modifiedDate: toISOStringFromEpoch(file.last_modified),
-                description: extractDescription(parsedAction.body || content),
+                description: (parsedAction.body || '').trim().substring(0, 200),
                 notes: parsedAction.body || undefined
               };
 
@@ -291,6 +266,12 @@ export function useActionsData(options: UseActionsDataOptions = {}): UseActionsD
       window.dispatchEvent(new CustomEvent('content-updated', {
         detail: { path: filePath, content: finalContent }
       }));
+      emitContentSaved({
+        filePath,
+        fileName: filePath.split('/').pop() || '',
+        content: finalContent,
+        metadata: extractMetadata(finalContent),
+      });
       window.onTabFileSaved?.(
         filePath,
         filePath.split('/').pop() || '',

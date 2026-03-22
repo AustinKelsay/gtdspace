@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 
 use super::seed_data::{generate_action_template, generate_project_readme};
@@ -58,10 +59,6 @@ pub fn create_gtd_project(
     // Create project folder
     let project_path = projects_path.join(&safe_project_name);
 
-    if project_path.exists() {
-        return Err(format!("Project '{}' already exists", safe_project_name));
-    }
-
     // Validate status if provided
     if let Some(ref status_value) = status {
         let valid_statuses = ["in-progress", "waiting", "completed"];
@@ -74,7 +71,10 @@ pub fn create_gtd_project(
         }
     }
 
-    if let Err(e) = fs::create_dir_all(&project_path) {
+    if let Err(e) = fs::create_dir(&project_path) {
+        if e.kind() == io::ErrorKind::AlreadyExists {
+            return Err(format!("Project '{}' already exists", safe_project_name));
+        }
         return Err(format!("Failed to create project directory: {}", e));
     }
 
@@ -154,10 +154,6 @@ pub fn create_gtd_action(
     let file_name = format!("{}.md", sanitize_markdown_file_stem(&action_name));
     let action_path = project_dir.join(&file_name);
 
-    if action_path.exists() {
-        return Err(format!("Action '{}' already exists", action_name));
-    }
-
     // Validate status
     let status_value = status.as_str();
     let valid_statuses = ["in-progress", "waiting", "completed"];
@@ -211,12 +207,27 @@ pub fn create_gtd_action(
         notes,
     );
 
-    match fs::write(&action_path, action_content) {
-        Ok(_) => {
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&action_path)
+    {
+        Ok(mut file) => {
+            if let Err(e) = file.write_all(action_content.as_bytes()) {
+                drop(file);
+                let _ = fs::remove_file(&action_path);
+                return Err(format!("Failed to create action file: {}", e));
+            }
             log::info!("Successfully created action: {}", action_name);
             Ok(action_path.to_string_lossy().to_string())
         }
-        Err(e) => Err(format!("Failed to create action file: {}", e)),
+        Err(e) => {
+            if e.kind() == io::ErrorKind::AlreadyExists {
+                Err(format!("Action '{}' already exists", action_name))
+            } else {
+                Err(format!("Failed to create action file: {}", e))
+            }
+        }
     }
 }
 

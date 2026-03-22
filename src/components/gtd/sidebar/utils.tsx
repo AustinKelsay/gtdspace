@@ -59,7 +59,9 @@ export function parseLocalDateString(dateStr: string): Date | null {
 
 export const sortMarkdownFiles = (files: MarkdownFile[]): MarkdownFile[] =>
   [...files].sort((a, b) =>
-    a.name.replace(/\.md$/i, '').localeCompare(b.name.replace(/\.md$/i, ''))
+    a.name
+      .replace(/\.(?:md|markdown)$/i, '')
+      .localeCompare(b.name.replace(/\.(?:md|markdown)$/i, ''))
   );
 
 export const getStatusColorClass = (statusInput: string): string => {
@@ -91,7 +93,7 @@ export const getStatusIcon = (statusInput: string) => {
   }
 };
 
-export const getDisplayName = (name: string): string => name.replace(/\.md$/i, '');
+export const getDisplayName = (name: string): string => name.replace(/\.(?:md|markdown)$/i, '');
 
 export const buildSectionPath = (
   rootPath: string | null | undefined,
@@ -119,6 +121,10 @@ export const buildSidebarSearchResults = ({
   sectionFiles,
   sections,
   rootPath,
+  projectMetadata,
+  actionMetadata,
+  actionStatuses,
+  sectionFileMetadata,
 }: {
   searchQuery: string;
   projects: GTDProject[];
@@ -126,24 +132,33 @@ export const buildSidebarSearchResults = ({
   sectionFiles: Record<string, MarkdownFile[]>;
   sections: GTDSection[];
   rootPath: string | null;
+  projectMetadata: Record<string, SidebarProjectMetadata>;
+  actionMetadata: Record<string, SidebarActionMetadata>;
+  actionStatuses: Record<string, string>;
+  sectionFileMetadata: Record<string, SidebarSectionFileMetadata>;
 }): SidebarSearchResults | null => {
   if (!searchQuery) return null;
 
   const query = searchQuery.toLowerCase();
   const results: SidebarSearchResults = {
     projects: projects.filter(
-      (project) =>
-        project.name.toLowerCase().includes(query) ||
-        (project.description || '').toLowerCase().includes(query)
+      (project) => {
+        const display = getProjectDisplay(project, projectMetadata);
+        return (
+          display.title.toLowerCase().includes(query) ||
+          (project.description || '').toLowerCase().includes(query)
+        );
+      }
     ),
     actions: [],
     sections: [],
   };
 
   Object.entries(projectActions).forEach(([projectPath, actions]) => {
-    const matches = actions.filter((action) =>
-      getDisplayName(action.name).toLowerCase().includes(query)
-    );
+    const matches = actions.filter((action) => {
+      const display = getActionDisplay(action, actionMetadata, actionStatuses);
+      return display.title.toLowerCase().includes(query);
+    });
 
     if (matches.length > 0) {
       const projectName = getFolderName(projectPath) || projectPath;
@@ -155,9 +170,10 @@ export const buildSidebarSearchResults = ({
     if (section.id === 'calendar' || section.id === 'projects') return;
 
     const sectionPath = buildSectionPath(rootPath, section.path);
-    const matches = (sectionFiles[sectionPath] || []).filter((file) =>
-      getDisplayName(file.name).toLowerCase().includes(query)
-    );
+    const matches = (sectionFiles[sectionPath] || []).filter((file) => {
+      const display = getSectionFileDisplay(file, sectionFileMetadata);
+      return display.title.toLowerCase().includes(query);
+    });
 
     if (matches.length > 0) {
       results.sections.push({ section, files: matches });

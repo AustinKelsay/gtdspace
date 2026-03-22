@@ -10,6 +10,8 @@ export function SidebarEmptyFolderState({
   className?: string;
   onSelectFolder: () => void | Promise<void>;
 }) {
+  const [isSelecting, setIsSelecting] = React.useState(false);
+
   return (
     <Card className={`flex flex-col h-full border-r ${className}`}>
       <div className="flex-1 flex items-center justify-center p-6">
@@ -19,9 +21,22 @@ export function SidebarEmptyFolderState({
           <p className="text-sm text-muted-foreground mb-4">
             Select a folder to create or open a GTD workspace
           </p>
-          <Button onClick={() => void onSelectFolder()} variant="default" size="sm">
+          <Button
+            onClick={async () => {
+              if (isSelecting) return;
+              setIsSelecting(true);
+              try {
+                await onSelectFolder();
+              } finally {
+                setIsSelecting(false);
+              }
+            }}
+            variant="default"
+            size="sm"
+            disabled={isSelecting}
+          >
             <Folder className="h-4 w-4 mr-2" />
-            Select Folder
+            {isSelecting ? 'Selecting...' : 'Select Folder'}
           </Button>
         </div>
       </div>

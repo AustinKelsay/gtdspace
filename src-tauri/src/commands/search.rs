@@ -201,6 +201,7 @@ pub async fn search_files(
                                     let prefix_utf16_len = prefix.encode_utf16().count();
                                     let (match_start, match_end) =
                                         match_range_to_utf16(&file_name, match_result);
+                                    total_matches += 1;
 
                                     if results.len() >= filters.max_results {
                                         return Ok(truncated_response(
@@ -221,16 +222,6 @@ pub async fn search_files(
                                         context_before: None,
                                         context_after: None,
                                     });
-                                    total_matches += 1;
-
-                                    if results.len() >= filters.max_results {
-                                        return Ok(truncated_response(
-                                            start_time,
-                                            results,
-                                            total_matches,
-                                            files_searched,
-                                        ));
-                                    }
                                 }
                             }
 
@@ -244,6 +235,7 @@ pub async fn search_files(
                                 ) {
                                     let (match_start, match_end) =
                                         match_range_to_utf16(line, match_result);
+                                    total_matches += 1;
 
                                     if results.len() >= filters.max_results {
                                         return Ok(truncated_response(
@@ -296,16 +288,6 @@ pub async fn search_files(
                                         context_before,
                                         context_after,
                                     });
-                                    total_matches += 1;
-
-                                    if results.len() >= filters.max_results {
-                                        return Ok(truncated_response(
-                                            start_time,
-                                            results,
-                                            total_matches,
-                                            files_searched,
-                                        ));
-                                    }
                                 }
                             }
                         }

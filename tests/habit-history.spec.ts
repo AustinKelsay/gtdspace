@@ -176,4 +176,19 @@ describe('habit history parsing and reconstruction', () => {
       details: 'Done',
     });
   });
+
+  it('removes parsed legacy bullet rows from intro and outro when rebuilding', () => {
+    const raw = [
+      'Legacy intro',
+      '- **2026-03-01** at **7:30 AM**: Complete (Manual - Done)',
+      '',
+      'Trailing note',
+    ].join('\n');
+
+    const parsed = splitHabitHistory(raw);
+
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.intro).toEqual(['Legacy intro', '', 'Trailing note']);
+    expect(parsed.outro).toBe('');
+  });
 });

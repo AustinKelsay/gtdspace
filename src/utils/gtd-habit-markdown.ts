@@ -226,13 +226,15 @@ export function splitHabitHistory(raw?: string): {
 } {
   const effective = raw && raw.trim().length > 0 ? raw : DEFAULT_HABIT_HISTORY_BODY;
   const lines = effective.split(/\r?\n/);
+  const legacyBulletPattern =
+    /^\s*[-*+]\s+\*{0,2}(\d{4}-\d{2}-\d{2})\*{0,2}(?:\s+at\s+\*{0,2}([^*]+)\*{0,2})?:\s*([^()]+?)\s*\(([^-]+?)\s*-\s*(.+)\)\s*$/i;
 
   let tableStart = lines.findIndex((line) => line.trim().startsWith('|'));
   if (tableStart === -1) {
     tableStart = lines.length;
   }
 
-  const intro = lines.slice(0, tableStart);
+  let intro = lines.slice(0, tableStart);
   const header: string[] = [];
   const rows: HabitHistoryRow[] = [];
   let lastTableLineIndex = tableStart - 1;
@@ -285,9 +287,6 @@ export function splitHabitHistory(raw?: string): {
   }
 
   if (rows.length === 0) {
-    const legacyBulletPattern =
-      /^\s*[-*+]\s+\*{0,2}(\d{4}-\d{2}-\d{2})\*{0,2}(?:\s+at\s+\*{0,2}([^*]+)\*{0,2})?:\s*([^()]+?)\s*\(([^-]+?)\s*-\s*(.+)\)\s*$/i;
-
     for (const line of lines) {
       const match = line.trim().match(legacyBulletPattern);
       if (!match) {
@@ -303,6 +302,13 @@ export function splitHabitHistory(raw?: string): {
         extraCells: [],
       });
     }
+
+    intro = intro.filter((line) => !legacyBulletPattern.test(line.trim()));
+  }
+
+  let outroLines = lines.slice(lastTableLineIndex + 1);
+  if (rows.length > 0 && header.length === 0) {
+    outroLines = outroLines.filter((line) => !legacyBulletPattern.test(line.trim()));
   }
 
   return {
@@ -310,7 +316,7 @@ export function splitHabitHistory(raw?: string): {
     intro,
     header,
     rows,
-    outro: lines.slice(lastTableLineIndex + 1).join('\n'),
+    outro: outroLines.join('\n'),
   };
 }
 

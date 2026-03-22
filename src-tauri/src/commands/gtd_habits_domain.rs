@@ -234,8 +234,17 @@ fn parse_history_record_from_legacy_list(line: &str) -> Option<HistoryRecord> {
 }
 
 fn parse_history_records(content: &str) -> Vec<HistoryRecord> {
+    let Some(history_index) = content.lines().position(|line| line.trim() == "## History") else {
+        return Vec::new();
+    };
+
     content
         .lines()
+        .skip(history_index + 1)
+        .take_while(|line| {
+            let trimmed = line.trim();
+            trimmed.is_empty() || !trimmed.starts_with('#')
+        })
         .filter_map(|line| {
             parse_history_record_from_table(line)
                 .or_else(|| parse_history_record_from_legacy_list(line))

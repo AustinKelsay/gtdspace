@@ -256,6 +256,7 @@ pub fn find_reverse_relationships(
                         "goals-references",
                         "vision-references",
                         "purpose-references",
+                        "references",
                     ];
                     let tags_all = [
                         "areas-references",

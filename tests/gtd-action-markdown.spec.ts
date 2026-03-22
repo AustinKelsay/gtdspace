@@ -260,4 +260,45 @@ describe('gtd action markdown utilities', () => {
     expect(normalizeActionEffort('extra_large')).toBe('extra-large');
     expect(normalizeActionEffort('ExtraLarge')).toBe('extra-large');
   });
+
+  it('preserves local wall-clock focus datetimes when rebuilding from date and time', () => {
+    const content = [
+      '# Focus Block',
+      '',
+      '## Status',
+      '[!singleselect:status:in-progress]',
+      '',
+      '## Focus Date',
+      '[!datetime:focus_date:2026-03-01T09:00:00]',
+      '',
+      '## Due Date',
+      '[!datetime:due_date:]',
+      '',
+      '## Effort',
+      '[!singleselect:effort:medium]',
+      '',
+      'Body.',
+      '',
+      '## References',
+      '[!references:]',
+      '',
+      '## Horizon References (optional)',
+      '[!projects-references:]',
+      '[!areas-references:]',
+      '[!goals-references:]',
+      '[!vision-references:]',
+      '[!purpose-references:]',
+      '',
+      '## Created',
+      '[!datetime:created_date_time:2026-02-20T10:00:00Z]',
+    ].join('\n');
+
+    const rebuilt = rebuildActionMarkdown(content, {
+      focusDate: '2026-03-04',
+      focusTime: '14:30',
+    });
+
+    expect(rebuilt).toContain('[!datetime:focus_date:2026-03-04T14:30:00]');
+    expect(rebuilt).not.toContain('[!datetime:focus_date:2026-03-04T14:30:00Z]');
+  });
 });

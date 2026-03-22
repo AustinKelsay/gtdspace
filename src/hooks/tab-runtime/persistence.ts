@@ -54,7 +54,11 @@ function normalizeOpenTabs(snapshot: LegacyPersistedTabSnapshot): CanonicalPersi
       return {
         id: tab.id ?? filePath,
         filePath,
-        fileName: tab.fileName ?? tab.name ?? filePath.split('/').pop() ?? 'Untitled.md',
+        fileName:
+          tab.fileName ??
+          tab.name ??
+          filePath.split(/[/\\]/).filter(Boolean).pop() ??
+          'Untitled.md',
         hasUnsavedChanges: Boolean(tab.hasUnsavedChanges),
         isActive: Boolean(tab.isActive),
       };

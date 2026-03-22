@@ -74,14 +74,21 @@ export function SidebarHeader({
 
       <div className="flex-shrink-0">
         <div className="px-3 pt-2">
-          <Button onClick={onToggleSearch} variant="outline" size="sm" className="w-full justify-start">
+          <Button
+            onClick={onToggleSearch}
+            variant="outline"
+            size="sm"
+            className="w-full justify-start"
+            aria-expanded={showSearch}
+            aria-controls="sidebar-search-region"
+          >
             <Search className="h-3.5 w-3.5 mr-1.5 flex-shrink-0" />
             <span className="truncate inline-block">Search</span>
           </Button>
         </div>
 
         {showSearch && (
-          <div className="px-3 py-2">
+          <div id="sidebar-search-region" className="px-3 py-2">
             <FileSearch value={searchQuery} onChange={onSearchChange} placeholder="Search..." />
           </div>
         )}

@@ -142,6 +142,28 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
     });
   }, []);
 
+  const buildPersistableState = useCallback((state: TabManagerState): TabManagerState => {
+    if (pendingContentRef.current.size === 0) {
+      return state;
+    }
+
+    return {
+      ...state,
+      openTabs: state.openTabs.map((tab) => {
+        const bufferedContent = pendingContentRef.current.get(tab.id);
+        if (bufferedContent === undefined) {
+          return tab;
+        }
+
+        return {
+          ...tab,
+          content: bufferedContent,
+          hasUnsavedChanges: true,
+        };
+      }),
+    };
+  }, []);
+
   const processMetadataDebounced = useCallback(
     (tabId: string, filePath: string, fileName: string, oldContent: string, newContent: string) => {
       if (filePath === CALENDAR_FILE_ID) {
@@ -293,12 +315,13 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
         originalContent: contentToSave,
         hasUnsavedChanges: false,
       });
+      cleanupTabResources(tabId);
       return true;
     } catch (error) {
       log.error('Failed to save tab', error);
       throw new Error(`Failed to save file: ${error}`);
     }
-  }, [findTabById]);
+  }, [cleanupTabResources, findTabById]);
 
   const checkForConflicts = useCallback(async (tabId: string): Promise<boolean> => {
     const tab = findTabById(tabId);
@@ -572,11 +595,12 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
 
   useEffect(() => {
     const handleBeforeUnload = () => {
+      const persistableState = buildPersistableState(tabStateRef.current);
       if (
-        tabStateRef.current.openTabs.length > 0 &&
-        tabsBelongToWorkspace(tabStateRef.current.openTabs, workspacePath)
+        persistableState.openTabs.length > 0 &&
+        tabsBelongToWorkspace(persistableState.openTabs, workspacePath)
       ) {
-        persistTabState(tabStateRef.current, workspacePath);
+        persistTabState(persistableState, workspacePath);
       }
     };
 
@@ -584,7 +608,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [tabsBelongToWorkspace, workspacePath]);
+  }, [buildPersistableState, tabsBelongToWorkspace, workspacePath]);
 
   useEffect(() => {
     if (!restoreTabs || !workspacePath) {
@@ -643,11 +667,13 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
       return;
     }
 
-    if (tabState.openTabs.length > 0) {
-      if (!tabsBelongToWorkspace(tabState.openTabs, workspacePath)) {
+    const persistableState = buildPersistableState(tabState);
+
+    if (persistableState.openTabs.length > 0) {
+      if (!tabsBelongToWorkspace(persistableState.openTabs, workspacePath)) {
         return;
       }
-      persistTabState(tabState, workspacePath);
+      persistTabState(persistableState, workspacePath);
     } else if (
       restoreTabs &&
       workspacePath &&
@@ -657,7 +683,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
     } else {
       clearPersistedTabStorage();
     }
-  }, [restoreTabs, tabState, tabsBelongToWorkspace, workspacePath]);
+  }, [buildPersistableState, restoreTabs, tabState, tabsBelongToWorkspace, workspacePath]);
 
   useTabManagerSubscriptions({
     onRename: useCallback((detail, mode) => {

@@ -123,7 +123,7 @@ Notes:
   - Next Reset is derived locally in `HabitPage` from `determineLastHabitResetDate()` plus `calculateNextHabitReset()`.
   - Last Completion is derived locally in `HabitPage` from `findLastHabitCompletionDate()`.
   - Ensure derived badges never write to markdown; they are UI-only for clarity.
-- Markdown parsing and rebuild: `parseHabitContent()` and `canonicalizeHabitMarkdown()` in `src/utils/gtd-habit-markdown.ts` own the habit-specific markdown contract, while `buildHabitMarkdown()` in `src/utils/gtd-markdown-helpers.ts` remains the low-level builder.
+- Markdown parsing and rebuild: `parseHabitContent()` and `canonicalizeHabitMarkdown()` in `src/utils/gtd-habit-markdown.ts` own the habit-specific markdown contract, including `generalReferences` between the horizon-reference groups and `Created`. `HabitPage` parses `generalReferences`, passes it into `buildHabitMarkdown()`, and renders it with `GeneralReferencesField`, while derived UI-only fields like Next Reset and Last Completion continue to come from `determineLastHabitResetDate()`, `calculateNextHabitReset()`, and `findLastHabitCompletionDate()`.
 - Scheduler hooks: `useHabitTracking` handles manual updates, while periodic reset polling currently runs in `App.tsx`; the page should not duplicate polling timers.
 
 ## Theming & Accessibility

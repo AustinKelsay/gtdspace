@@ -404,7 +404,7 @@ function normalizeFocusDateTime(date: string, time: string): string | undefined 
     return `${date}T${time}:00`;
   }
 
-  return local.toISOString();
+  return `${date}T${time}:00`;
 }
 
 export function buildActionMarkdown(

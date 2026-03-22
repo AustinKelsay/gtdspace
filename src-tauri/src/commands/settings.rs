@@ -155,6 +155,10 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                                 );
                                 legacy_encryption_key = None;
                                 if let Some(settings_obj) = value_to_deserialize.as_object_mut() {
+                                    let original_settings =
+                                        store.get("user_settings").unwrap_or_else(|| {
+                                            serde_json::Value::Object(settings_obj.clone())
+                                        });
                                     settings_obj.remove("git_sync_encryption_key");
                                     store.set("user_settings", value_to_deserialize.clone());
                                     if let Err(e) = store.save() {
@@ -168,6 +172,7 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                                                 delete_error
                                             );
                                         }
+                                        store.set("user_settings", original_settings);
                                         legacy_encryption_key = Some(trimmed.to_string());
                                         if let Some(settings_obj) =
                                             value_to_deserialize.as_object_mut()

@@ -94,9 +94,7 @@ fn load_google_oauth_credentials(app: AppHandle) -> Result<(String, String), Str
                 }
             }
 
-            let client_id = std::env::var("GOOGLE_CALENDAR_CLIENT_ID")
-                .or_else(|_| std::env::var("VITE_GOOGLE_CALENDAR_CLIENT_ID"))
-                .map_err(|_| {
+            let client_id = std::env::var("GOOGLE_CALENDAR_CLIENT_ID").map_err(|_| {
                     #[cfg(debug_assertions)]
                     {
                         println!("[GoogleCalendar] Failed to get client ID from environment");
@@ -110,9 +108,7 @@ fn load_google_oauth_credentials(app: AppHandle) -> Result<(String, String), Str
                     "Google Calendar client ID not found. Please configure OAuth credentials in Settings.".to_string()
                 })?;
 
-            let client_secret = std::env::var("GOOGLE_CALENDAR_CLIENT_SECRET")
-                .or_else(|_| std::env::var("VITE_GOOGLE_CALENDAR_CLIENT_SECRET"))
-                .map_err(|_| {
+            let client_secret = std::env::var("GOOGLE_CALENDAR_CLIENT_SECRET").map_err(|_| {
                     #[cfg(debug_assertions)]
                     {
                         println!("[GoogleCalendar] Failed to get client secret from environment");
@@ -289,16 +285,15 @@ pub async fn google_calendar_disconnect_simple(app: AppHandle) -> Result<String,
 pub async fn google_calendar_disconnect() -> Result<String, String> {
     let manager = {
         let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
-        manager_guard
-            .as_ref()
-            .ok_or_else(|| "Google Calendar manager not initialized".to_string())?
-            .clone()
+        manager_guard.as_ref().cloned()
     };
 
-    manager
-        .disconnect()
-        .await
-        .map_err(|e| format!("Failed to disconnect from Google Calendar: {}", e))?;
+    if let Some(manager) = manager {
+        manager
+            .disconnect()
+            .await
+            .map_err(|e| format!("Failed to disconnect from Google Calendar: {}", e))?;
+    }
     clear_google_calendar_manager().await;
 
     Ok("Successfully disconnected from Google Calendar".to_string())

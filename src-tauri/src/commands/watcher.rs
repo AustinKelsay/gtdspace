@@ -1,11 +1,7 @@
 //! File watcher commands and emitted event payloads.
 
-#[allow(unused_imports)]
-use notify_debouncer_mini::{
-    new_debouncer,
-    notify::{RecursiveMode, Watcher},
-    DebouncedEventKind,
-};
+use notify_debouncer_mini::DebouncedEventKind;
+use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};

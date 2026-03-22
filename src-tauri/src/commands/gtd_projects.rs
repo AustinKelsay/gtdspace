@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
+use tempfile::NamedTempFile;
 
 use super::seed_data::{generate_action_template, generate_project_readme};
 use super::utils::sanitize_markdown_file_stem;
@@ -19,6 +20,26 @@ fn resolve_project_readme_path(project_path: &Path) -> Option<PathBuf> {
     } else {
         None
     }
+}
+
+fn write_string_atomically(path: &Path, content: &str) -> Result<(), String> {
+    let temp_dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut temp_file = NamedTempFile::new_in(temp_dir)
+        .map_err(|e| format!("Failed to create temporary file: {}", e))?;
+    temp_file
+        .write_all(content.as_bytes())
+        .map_err(|e| format!("Failed to write temporary file: {}", e))?;
+    temp_file
+        .flush()
+        .map_err(|e| format!("Failed to flush temporary file: {}", e))?;
+    temp_file
+        .as_file()
+        .sync_all()
+        .map_err(|e| format!("Failed to sync temporary file: {}", e))?;
+    temp_file
+        .persist(path)
+        .map_err(|e| format!("Failed to replace file atomically: {}", e.error))?;
+    Ok(())
 }
 
 /// Create a new GTD project
@@ -513,7 +534,7 @@ pub fn rename_gtd_project(
                         // Update the H1 title (first line starting with #)
                         let updated_content = update_readme_title(&content, &safe_project_name);
 
-                        if let Err(e) = fs::write(&readme_path, updated_content) {
+                        if let Err(e) = write_string_atomically(&readme_path, &updated_content) {
                             log::error!("Failed to update README title: {}", e);
                             // Don't fail the operation, folder is already renamed
                         }
@@ -634,7 +655,7 @@ pub fn rename_gtd_action(
                 let updated_content = update_readme_title(&content, &new_action_name);
 
                 // Write back the updated content
-                if let Err(e) = fs::write(old_path, updated_content) {
+                if let Err(e) = write_string_atomically(old_path, &updated_content) {
                     log::error!("Failed to update action title: {}", e);
                     return Err(format!("Failed to update action title: {}", e));
                 }
@@ -678,7 +699,7 @@ pub fn rename_gtd_action(
                     // Update the H1 title
                     let updated_content = update_readme_title(&content, &new_action_name);
 
-                    if let Err(e) = fs::write(&new_path, updated_content) {
+                    if let Err(e) = write_string_atomically(&new_path, &updated_content) {
                         log::error!("Failed to update action title: {}", e);
                         // Don't fail the operation, file is already renamed
                     }

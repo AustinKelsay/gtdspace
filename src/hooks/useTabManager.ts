@@ -20,6 +20,7 @@ import { createScopedLogger } from '@/utils/logger';
 import { norm } from '@/utils/path';
 import { CALENDAR_FILE_ID } from '@/utils/special-files';
 import { safeInvoke } from '@/utils/safe-invoke';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
 import {
   clearPersistedTabs as clearPersistedTabStorage,
   createInitialTabState,
@@ -67,6 +68,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
   const resolvedMaxTabs = sanitizeMaxTabs(config.maxTabs);
   const workspacePath = config.workspacePath ?? null;
   const restoreTabs = config.restoreTabs === true;
+  const { withErrorHandling } = useErrorHandler();
 
   const [tabState, dispatch] = useReducer(
     tabStateReducer,
@@ -528,16 +530,18 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
       case 'reveal-in-folder': {
         const tab = findTabById(tabId);
         if (tab) {
-          void safeInvoke('open_file_location', { filePath: tab.file.path }, null).then((result) => {
+          void withErrorHandling(async () => {
+            const result = await safeInvoke('open_file_location', { filePath: tab.file.path }, null);
             if (result == null) {
-              log.error('Failed to reveal tab in folder', tab.file.path);
+              throw new Error('Failed to reveal tab in folder');
             }
-          });
+            return result;
+          }, 'Failed to reveal tab in folder', 'tab_manager');
         }
         break;
       }
     }
-  }, [closeTab, closeTabIds, findTabById]);
+  }, [closeTab, closeTabIds, findTabById, withErrorHandling]);
 
   const reopenLastClosedTab = useCallback(async () => {
     const lastClosed = takeMostRecentlyClosedFile(tabStateRef.current);

@@ -21,6 +21,48 @@ import {
 import { buildProjectMarkdown } from '@/utils/gtd-markdown-helpers';
 import { normalizeProjectStatus } from '@/utils/gtd-status';
 
+const PROJECT_TITLE_PATTERN = /^#\s+.*$/m;
+const PROJECT_STATUS_PATTERN = /\[!singleselect:project-status:[^\]]*\]/i;
+const PROJECT_DUE_DATE_PATTERN = /\[!datetime:due_date:[^\]]*\]/i;
+
+const updateProjectTitleInMarkdown = (content: string, title: string): string => {
+  const nextTitle = title.trim() || 'Untitled Project';
+  if (PROJECT_TITLE_PATTERN.test(content)) {
+    return content.replace(PROJECT_TITLE_PATTERN, `# ${nextTitle}`);
+  }
+  return `# ${nextTitle}\n\n${content.trimStart()}`;
+};
+
+const updateProjectStatusInMarkdown = (content: string, status: string): string => {
+  if (PROJECT_STATUS_PATTERN.test(content)) {
+    return content.replace(PROJECT_STATUS_PATTERN, `[!singleselect:project-status:${status}]`);
+  }
+
+  const titleMatch = content.match(/^#\s+.+$/m);
+  if (titleMatch && titleMatch.index !== undefined) {
+    const titleEndIndex = titleMatch.index + titleMatch[0].length;
+    return (
+      content.slice(0, titleEndIndex) +
+      `\n[!singleselect:project-status:${status}]` +
+      content.slice(titleEndIndex)
+    );
+  }
+
+  return `# Untitled Project\n[!singleselect:project-status:${status}]\n\n${content.trimStart()}`;
+};
+
+const updateProjectDueDateInMarkdown = (content: string, dueDate: string): string => {
+  if (PROJECT_DUE_DATE_PATTERN.test(content)) {
+    if (!dueDate.trim()) {
+      return content
+        .replace(PROJECT_DUE_DATE_PATTERN, '')
+        .replace(/\n{3,}/g, '\n\n');
+    }
+    return content.replace(PROJECT_DUE_DATE_PATTERN, `[!datetime:due_date:${dueDate}]`);
+  }
+  return content;
+};
+
 export interface ProjectWithMetadata extends GTDProject {
   linkedAreas?: string[];
   linkedGoals?: string[];
@@ -341,6 +383,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
   ) => {
     try {
       let readmePath = await resolveProjectReadme(projectPath);
+      const hadExistingReadme = Boolean(readmePath);
       let content: string;
       if (!readmePath) {
         readmePath = `${projectPath}/README.md`;
@@ -364,28 +407,40 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
       }
 
       const parsedProject = parseProjectMarkdown(content);
-      const nextContent = buildProjectMarkdown({
-        title:
-          typeof updates.name === 'string' && updates.name.trim()
-            ? updates.name.trim()
-            : isSyntheticProjectTitle(parsedProject.title)
-              ? (norm(projectPath) ?? projectPath).split('/').filter(Boolean).pop() || 'Project'
-              : parsedProject.title,
-        status:
-          typeof updates.status === 'string'
-            ? normalizeProjectStatus(updates.status)
-            : parsedProject.status,
-        dueDate:
-          updates.dueDate !== undefined
-            ? toDateOnly(updates.dueDate)
-            : parsedProject.dueDate,
-        desiredOutcome: parsedProject.desiredOutcome,
-        horizonReferences: parsedProject.horizonReferences,
-        references: parsedProject.references,
-        createdDateTime: parsedProject.createdDateTime,
-        includeHabitsList: parsedProject.includeHabitsList,
-        additionalContent: parsedProject.additionalContent,
-      });
+      const nextTitle =
+        typeof updates.name === 'string' && updates.name.trim()
+          ? updates.name.trim()
+          : isSyntheticProjectTitle(parsedProject.title)
+            ? (norm(projectPath) ?? projectPath).split('/').filter(Boolean).pop() || 'Project'
+            : parsedProject.title;
+      const nextStatus =
+        typeof updates.status === 'string'
+          ? normalizeProjectStatus(updates.status)
+          : parsedProject.status;
+      const nextDueDate =
+        updates.dueDate !== undefined
+          ? toDateOnly(updates.dueDate)
+          : parsedProject.dueDate;
+
+      const nextContent = hadExistingReadme
+        ? updateProjectDueDateInMarkdown(
+            updateProjectStatusInMarkdown(
+              updateProjectTitleInMarkdown(content, nextTitle),
+              nextStatus
+            ),
+            nextDueDate ?? ''
+          )
+        : buildProjectMarkdown({
+            title: nextTitle,
+            status: nextStatus,
+            dueDate: nextDueDate,
+            desiredOutcome: parsedProject.desiredOutcome,
+            horizonReferences: parsedProject.horizonReferences,
+            references: parsedProject.references,
+            createdDateTime: parsedProject.createdDateTime,
+            includeHabitsList: parsedProject.includeHabitsList,
+            additionalContent: parsedProject.additionalContent,
+          });
       
       const writeResult = await safeInvoke('save_file', {
         path: readmePath,
@@ -400,19 +455,23 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
 
       const metadata = extractMetadata(nextContent);
       const fileName = (norm(readmePath) ?? readmePath).split('/').pop() || 'README.md';
-      emitMetadataChange({
-        filePath: readmePath,
-        fileName,
-        content: nextContent,
-        metadata,
-      });
-      emitContentSaved({
-        filePath: readmePath,
-        fileName,
-        content: nextContent,
-        metadata,
-      });
-      window.onTabFileSaved?.(readmePath, fileName, nextContent, metadata);
+      try {
+        emitMetadataChange({
+          filePath: readmePath,
+          fileName,
+          content: nextContent,
+          metadata,
+        });
+        emitContentSaved({
+          filePath: readmePath,
+          fileName,
+          content: nextContent,
+          metadata,
+        });
+        window.onTabFileSaved?.(readmePath, fileName, nextContent, metadata);
+      } catch (notificationError) {
+        console.error('Failed to notify project update listeners:', notificationError);
+      }
 
       // Update local state
       const canonicalProjectPath = norm(projectPath) ?? projectPath;

@@ -1044,27 +1044,25 @@ pub fn delete_file(path: String) -> Result<FileOperationResult, String> {
                             ));
                         }
                         match fs::rename(&target, &tmp) {
-                            Ok(_) => {
-                                match fs::remove_file(&tmp) {
-                                    Ok(_) => {
-                                        log::info!("Deleted file via rename workaround: {}", path);
-                                        return Ok(FileOperationResult {
-                                            success: true,
-                                            path: Some(path.clone()),
-                                            message: Some("File deleted successfully".to_string()),
-                                        });
-                                    }
-                                    Err(e2) => {
-                                        log::error!(
-                                            "Failed to remove renamed temp file {:?}: {}",
-                                            tmp,
-                                            e2
-                                        );
-                                        // Keep trying to remove the renamed target in subsequent attempts
-                                        target = tmp;
-                                    }
+                            Ok(_) => match fs::remove_file(&tmp) {
+                                Ok(_) => {
+                                    log::info!("Deleted file via rename workaround: {}", path);
+                                    return Ok(FileOperationResult {
+                                        success: true,
+                                        path: Some(path.clone()),
+                                        message: Some("File deleted successfully".to_string()),
+                                    });
                                 }
-                            }
+                                Err(e2) => {
+                                    log::error!(
+                                        "Failed to remove renamed temp file {:?}: {}",
+                                        tmp,
+                                        e2
+                                    );
+                                    // Keep trying to remove the renamed target in subsequent attempts.
+                                    target = tmp;
+                                }
+                            },
                             Err(e1) => {
                                 log::warn!("Failed to rename locked file for deletion: {}", e1);
                             }

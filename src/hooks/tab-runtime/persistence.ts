@@ -128,7 +128,7 @@ function snapshotMatchesWorkspace(
 ): boolean {
   const normalizedWorkspacePath = normalizeWorkspacePath(workspacePath);
   if (!normalizedWorkspacePath) {
-    return true;
+    return false;
   }
 
   if (snapshot.workspacePath) {
@@ -142,13 +142,14 @@ function snapshotMatchesWorkspace(
 
 function createRestoredFile(filePath: string, fileName: string, content: string): MarkdownFile {
   const lastDotIndex = fileName.lastIndexOf('.');
+  const extension = lastDotIndex >= 0 ? fileName.slice(lastDotIndex) || '.md' : '.md';
   return {
     id: filePath,
     name: fileName,
     path: filePath,
     size: content.length,
     last_modified: Math.floor(Date.now() / 1000),
-    extension: lastDotIndex >= 0 ? fileName.slice(lastDotIndex + 1) || 'md' : 'md',
+    extension,
   };
 }
 

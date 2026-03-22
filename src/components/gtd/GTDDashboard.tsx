@@ -602,9 +602,21 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     const selectedLabel = prompt(`Select frequency:\n${frequencyLabels}`, 'Daily');
 
                     if (selectedLabel) {
-                      const frequency = frequencyOptions.find(f =>
-                        f.label.toLowerCase() === selectedLabel.toLowerCase()
-                      )?.value || 'daily';
+                      const normalizedSelection = selectedLabel.trim().toLowerCase();
+                      const selectedFrequency = frequencyOptions.find(
+                        (f) => f.label.trim().toLowerCase() === normalizedSelection
+                      );
+
+                      if (!selectedFrequency) {
+                        toast({
+                          title: 'Invalid frequency',
+                          description: 'Please choose one of the listed frequency options.',
+                          variant: 'destructive'
+                        });
+                        return;
+                      }
+
+                      const frequency = selectedFrequency.value;
 
                       try {
                         const habitPath = await withErrorHandling(async () => {
@@ -617,11 +629,6 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                           return createdPath;
                         }, 'Failed to create habit');
                         if (!habitPath) {
-                          toast({
-                            title: 'Failed to create habit',
-                            description: 'The habit could not be created. Please try again.',
-                            variant: 'destructive'
-                          });
                           return;
                         }
 

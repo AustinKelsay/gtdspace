@@ -92,6 +92,7 @@ Notes:
 - Horizons references are emitted in the markdown but not surfaced in the Action header (yet). They can be edited via blocks or future pickers.
 
 ## Behaviors & Data Flow
+
 - Live rebuild: Changing any header field or typing in the body rebuilds the canonical markdown and updates the open tab.
 - No‑op guard: The component compares rebuild output to current content; identical content does not re‑emit (prevents churn).
 - Stable Created: held in a ref; never re‑generated once set.

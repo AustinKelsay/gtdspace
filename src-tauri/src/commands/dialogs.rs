@@ -122,25 +122,25 @@ pub async fn select_folder(app: AppHandle) -> Result<Option<String>, String> {
 /// ```
 #[tauri::command]
 pub fn open_folder_in_explorer(path: String) -> Result<String, String> {
-    log::info!("Opening folder in explorer: {}", path);
+    log::info!("Opening folder in explorer: {}", redact_path(&path));
 
     // Verify the path exists and is a directory
     let path_buf = PathBuf::from(&path);
     if !path_buf.exists() {
-        return Err(format!("Path does not exist: {}", path));
+        return Err(format!("Path does not exist: {}", redact_path(&path)));
     }
     if !path_buf.is_dir() {
-        return Err(format!("Path is not a directory: {}", path));
+        return Err(format!("Path is not a directory: {}", redact_path(&path)));
     }
 
     // Open the folder based on the operating system
     if cfg!(target_os = "linux") {
         open_in_linux_file_manager(path_buf.as_os_str()).map_err(|e| {
             log::error!("Failed to open folder in explorer: {}", e);
-            format!("Failed to open folder: {}", e)
+            format!("Failed to open folder {}: {}", redact_path(&path), e)
         })?;
         log::info!("Successfully opened folder in explorer");
-        return Ok(format!("Opened folder: {}", path));
+        return Ok(format!("Opened folder: {}", redact_path(&path)));
     }
 
     let result = if cfg!(target_os = "windows") {
@@ -154,7 +154,7 @@ pub fn open_folder_in_explorer(path: String) -> Result<String, String> {
     match result {
         Ok(status) if status.success() => {
             log::info!("Successfully opened folder in explorer");
-            Ok(format!("Opened folder: {}", path))
+            Ok(format!("Opened folder: {}", redact_path(&path)))
         }
         Ok(status) => {
             let status_detail = status
@@ -166,13 +166,18 @@ pub fn open_folder_in_explorer(path: String) -> Result<String, String> {
                 status_detail
             );
             Err(format!(
-                "Failed to open folder: launcher exited unsuccessfully ({})",
+                "Failed to open folder {}: launcher exited unsuccessfully ({})",
+                redact_path(&path),
                 status_detail
             ))
         }
         Err(e) => {
             log::error!("Failed to open folder in explorer: {}", e);
-            Err(format!("Failed to open folder: {}", e))
+            Err(format!(
+                "Failed to open folder {}: {}",
+                redact_path(&path),
+                e
+            ))
         }
     }
 }
@@ -193,30 +198,40 @@ pub fn open_folder_in_explorer(path: String) -> Result<String, String> {
 /// ```
 #[tauri::command]
 pub fn open_file_location(file_path: String) -> Result<String, String> {
-    log::info!("Opening file location: {}", file_path);
+    log::info!("Opening file location: {}", redact_path(&file_path));
 
     // Get the parent directory of the file
     let path_buf = PathBuf::from(&file_path);
     if !path_buf.exists() {
-        return Err(format!("File does not exist: {}", file_path));
+        return Err(format!("File does not exist: {}", redact_path(&file_path)));
     }
     if !path_buf.is_file() {
-        return Err(format!("Not a file: {}", file_path));
+        return Err(format!("Not a file: {}", redact_path(&file_path)));
     }
 
     // Get the parent directory
-    let parent_dir = path_buf
-        .parent()
-        .ok_or_else(|| format!("Could not get parent directory of: {}", file_path))?;
+    let parent_dir = path_buf.parent().ok_or_else(|| {
+        format!(
+            "Could not get parent directory of: {}",
+            redact_path(&file_path)
+        )
+    })?;
 
     // Open the folder and select the file based on the operating system
     if cfg!(target_os = "linux") {
         open_in_linux_file_manager(parent_dir.as_os_str()).map_err(|e| {
             log::error!("Failed to open file location: {}", e);
-            format!("Failed to open file location: {}", e)
+            format!(
+                "Failed to open file location for {}: {}",
+                redact_path(&file_path),
+                e
+            )
         })?;
-        log::info!("Successfully opened file location: {}", file_path);
-        return Ok(format!("Opened file location: {}", file_path));
+        log::info!(
+            "Successfully opened file location: {}",
+            redact_path(&file_path)
+        );
+        return Ok(format!("Opened file location: {}", redact_path(&file_path)));
     }
 
     let result = if cfg!(target_os = "windows") {

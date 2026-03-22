@@ -651,7 +651,6 @@ export function useGTDWorkspaceSidebar({
                 prev[projectPath]
                   ? {
                       ...prev,
-                      [normalizedNewProjectPath]: [],
                     }
                   : prev
               );

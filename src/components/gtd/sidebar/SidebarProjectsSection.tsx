@@ -117,7 +117,7 @@ function ProjectActionRow({
       className={`group flex w-full items-center justify-between gap-1 px-1 py-0.5 hover:bg-accent/50 rounded text-xs min-w-0 max-w-full ${opacityClass} ${isActive ? SIDEBAR_ACTIVE_ROW_CLASSES : ''}`}
     >
       <div
-        className="flex items-center gap-1 flex-1 min-w-0 overflow-hidden cursor-pointer"
+        className="flex items-center gap-1 flex-1 min-w-0 overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-1 rounded"
         role="button"
         tabIndex={0}
         onClick={() => onOpenAction(action, display.path)}
@@ -220,7 +220,7 @@ function ProjectRow({
         className={`group flex w-full items-center justify-between py-1 px-1 hover:bg-accent rounded-lg transition-colors min-w-0 max-w-full ${shouldHighlightProjectRow ? SIDEBAR_ACTIVE_ROW_CLASSES : ''}`}
       >
         <div
-          className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer"
+          className="flex items-center gap-0.5 flex-1 min-w-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-1 rounded"
           role="button"
           tabIndex={0}
           onClick={() => {
@@ -292,7 +292,7 @@ function ProjectRow({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
               <DropdownMenuItem
-                onClick={(event) => {
+                onSelect={(event) => {
                   event.stopPropagation();
                   runAsyncAction('open project folder', () => onOpenProjectFolder(display.path));
                 }}
@@ -302,7 +302,7 @@ function ProjectRow({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={(event) => {
+                onSelect={(event) => {
                   event.stopPropagation();
                   onQueueDelete({
                     type: 'project',

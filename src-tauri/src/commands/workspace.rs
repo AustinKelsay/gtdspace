@@ -45,6 +45,10 @@ fn join_existing_references(paths: Vec<PathBuf>) -> String {
         .join(",")
 }
 
+fn reference_path(path: PathBuf) -> String {
+    path.to_string_lossy().to_string()
+}
+
 /// Get the default GTD space path for the current user
 ///
 /// Returns a platform-appropriate path in the user's home directory:
@@ -249,15 +253,20 @@ fn initialize_gtd_space_blocking(space_path: String) -> Result<String, String> {
                 // Create MINIMAL goal with MAXIMUM relationships
                 let next_year = chrono::Local::now().year() + 1;
                 let vision_ref =
-                    existing_reference(root_path.join("Vision").join("My 3-5 Year Vision.md"));
-                let purpose_refs = join_existing_references(vec![
-                    root_path
-                        .join("Purpose & Principles")
-                        .join("Life Mission.md"),
-                    root_path
-                        .join("Purpose & Principles")
-                        .join("Core Values.md"),
-                ]);
+                    reference_path(root_path.join("Vision").join("My 3-5 Year Vision.md"));
+                let purpose_refs = [
+                    reference_path(
+                        root_path
+                            .join("Purpose & Principles")
+                            .join("Life Mission.md"),
+                    ),
+                    reference_path(
+                        root_path
+                            .join("Purpose & Principles")
+                            .join("Core Values.md"),
+                    ),
+                ]
+                .join(",");
 
                 // Just ONE goal with ALL possible references
                 let goal_name = "Build Financial Freedom";
@@ -286,14 +295,19 @@ fn initialize_gtd_space_blocking(space_path: String) -> Result<String, String> {
                 // Create vision document with references to Purpose
                 let vision_file = dir_path.join("My 3-5 Year Vision.md");
                 if !vision_file.exists() {
-                    let purpose_refs = join_existing_references(vec![
-                        root_path
-                            .join("Purpose & Principles")
-                            .join("Life Mission.md"),
-                        root_path
-                            .join("Purpose & Principles")
-                            .join("Core Values.md"),
-                    ]);
+                    let purpose_refs = [
+                        reference_path(
+                            root_path
+                                .join("Purpose & Principles")
+                                .join("Life Mission.md"),
+                        ),
+                        reference_path(
+                            root_path
+                                .join("Purpose & Principles")
+                                .join("Core Values.md"),
+                        ),
+                    ]
+                    .join(",");
 
                     let content = generate_vision_document_template_with_refs(&purpose_refs);
                     fs::write(&vision_file, content)

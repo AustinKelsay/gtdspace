@@ -135,7 +135,13 @@ pub async fn search_files(
         let markdown_extensions = ["md", "markdown"];
 
         let regex_pattern = if filters.use_regex {
-            match RegexBuilder::new(&query)
+            let pattern = if filters.whole_word {
+                format!(r"\b(?:{})\b", query)
+            } else {
+                query.clone()
+            };
+
+            match RegexBuilder::new(&pattern)
                 .case_insensitive(!filters.case_sensitive)
                 .build()
             {

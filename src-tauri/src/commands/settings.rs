@@ -484,6 +484,12 @@ pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<Str
 pub async fn secure_store_set(key: String, value: String) -> Result<String, String> {
     log::debug!("Storing secret in secure storage: {}", key);
 
+    if key == GIT_SYNC_ENCRYPTION_KEY_NAME {
+        sync_git_sync_encryption_key_value(Some(value.as_str()))?;
+        log::debug!("Secret stored successfully: {}", key);
+        return Ok("Secret stored successfully".to_string());
+    }
+
     let entry = match keyring::Entry::new(SECURE_STORAGE_SERVICE, &key) {
         Ok(entry) => entry,
         Err(e) => {

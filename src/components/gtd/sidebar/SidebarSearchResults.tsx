@@ -42,6 +42,14 @@ export function SidebarSearchResults({
   onOpenAction,
   onOpenFile,
 }: SidebarSearchResultsProps) {
+  const handleProjectOpen = React.useCallback(
+    (project: GTDProject) => {
+      Promise.resolve(onOpenProject(project)).catch((error) => {
+        console.error('[SidebarSearchResults] Failed to open project', error);
+      });
+    },
+    [onOpenProject]
+  );
   const totalActions = results.actions.reduce((sum, project) => sum + project.actions.length, 0);
   const hasResults =
     results.projects.length > 0 ||
@@ -72,13 +80,13 @@ export function SidebarSearchResults({
                 <div
                   key={project.path}
                   className={`group flex items-center gap-2 py-1 px-2 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-lg transition-colors cursor-pointer ${isActive ? SIDEBAR_ACTIVE_ROW_CLASSES : ''}`}
-                  onClick={() => void onOpenProject(displayedProject)}
+                  onClick={() => handleProjectOpen(displayedProject)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      void onOpenProject(displayedProject);
+                      handleProjectOpen(displayedProject);
                     }
                   }}
                 >

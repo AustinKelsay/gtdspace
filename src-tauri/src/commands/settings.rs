@@ -261,43 +261,17 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                                         store.get("user_settings").unwrap_or_else(|| {
                                             serde_json::Value::Object(settings_obj.clone())
                                         });
-                                    settings_obj.remove("git_sync_encryption_key");
-                                    store.set("user_settings", value_to_deserialize.clone());
-                                    if let Err(e) = store.save() {
-                                        log::warn!(
-                                            "Failed to save settings after migration: {}",
-                                            e
-                                        );
-                                        store.set("user_settings", original_settings);
-                                        legacy_encryption_key = Some(key_str.to_string());
-                                        if let Some(settings_obj) =
-                                            value_to_deserialize.as_object_mut()
-                                        {
-                                            settings_obj.insert(
-                                                "git_sync_encryption_key".to_string(),
-                                                serde_json::Value::String(key_str.to_string()),
-                                            );
-                                        }
-                                    } else {
-                                        match entry.set_password(key_str) {
-                                            Ok(_) => {
-                                                log::info!(
-                                                    "Successfully migrated encryption key to secure storage"
-                                                );
-                                                legacy_encryption_key = None;
-                                            }
-                                            Err(e) => {
+                                    match entry.set_password(key_str) {
+                                        Ok(_) => {
+                                            settings_obj.remove("git_sync_encryption_key");
+                                            store
+                                                .set("user_settings", value_to_deserialize.clone());
+                                            if let Err(e) = store.save() {
                                                 log::warn!(
-                                                    "Failed to migrate key to secure storage: {}. Restoring legacy value.",
+                                                    "Failed to save settings after migration: {}",
                                                     e
                                                 );
                                                 store.set("user_settings", original_settings);
-                                                if let Err(save_error) = store.save() {
-                                                    log::warn!(
-                                                            "Failed to restore legacy settings after secure-storage migration failure: {}",
-                                                            save_error
-                                                        );
-                                                }
                                                 legacy_encryption_key = Some(key_str.to_string());
                                                 if let Some(settings_obj) =
                                                     value_to_deserialize.as_object_mut()
@@ -309,7 +283,19 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
                                                         ),
                                                     );
                                                 }
+                                            } else {
+                                                log::info!(
+                                                    "Successfully migrated encryption key to secure storage"
+                                                );
+                                                legacy_encryption_key = None;
                                             }
+                                        }
+                                        Err(e) => {
+                                            log::warn!(
+                                                "Failed to migrate key to secure storage: {}. Keeping legacy value.",
+                                                e
+                                            );
+                                            legacy_encryption_key = Some(key_str.to_string());
                                         }
                                     }
                                 }
@@ -483,6 +469,7 @@ pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<Str
 #[tauri::command]
 pub async fn secure_store_set(key: String, value: String) -> Result<String, String> {
     log::debug!("Storing secret in secure storage: {}", key);
+    let _guard = SETTINGS_LOCK.lock().await;
 
     if key == GIT_SYNC_ENCRYPTION_KEY_NAME {
         sync_git_sync_encryption_key_value(Some(value.as_str()))?;
@@ -532,6 +519,7 @@ pub async fn secure_store_set(key: String, value: String) -> Result<String, Stri
 #[tauri::command]
 pub async fn secure_store_get(key: String) -> Result<String, String> {
     log::debug!("Retrieving secret from secure storage: {}", key);
+    let _guard = SETTINGS_LOCK.lock().await;
 
     let entry = match keyring::Entry::new(SECURE_STORAGE_SERVICE, &key) {
         Ok(entry) => entry,
@@ -579,6 +567,7 @@ pub async fn secure_store_get(key: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn secure_store_remove(key: String) -> Result<String, String> {
     log::debug!("Removing secret from secure storage: {}", key);
+    let _guard = SETTINGS_LOCK.lock().await;
 
     let entry = match keyring::Entry::new(SECURE_STORAGE_SERVICE, &key) {
         Ok(entry) => entry,

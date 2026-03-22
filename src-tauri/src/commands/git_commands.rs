@@ -1,5 +1,6 @@
 //! Tauri command wrappers for git sync.
 
+use chrono::Utc;
 use once_cell::sync::Lazy;
 use tauri::AppHandle;
 use tokio::sync::Mutex as TokioMutex;
@@ -71,7 +72,7 @@ pub async fn git_sync_pull(
     .map_err(|e| format!("Git pull task failed: {}", e))??;
 
     if let Err(error) = update_settings(app, |settings| {
-        settings.git_sync_last_pull = outcome.timestamp.clone();
+        settings.git_sync_last_pull = Some(Utc::now().to_rfc3339());
     })
     .await
     {

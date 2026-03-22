@@ -89,7 +89,9 @@ export function SidebarStandardSection({
       onOpenChange={() => {
         onToggleSection(section.id);
         if (!isExpanded && !isLoaded) {
-          void onLoadSection(sectionPath);
+          void onLoadSection(sectionPath).catch((error) => {
+            console.error('[SidebarStandardSection] Failed to load section', error);
+          });
         }
       }}
     >

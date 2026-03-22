@@ -429,9 +429,9 @@ pub fn list_gtd_projects(space_path: String) -> Result<Vec<GTDProject>, String> 
 
                     projects.push(GTDProject {
                         name: if title != folder_name {
-                            folder_name.clone()
-                        } else {
                             title
+                        } else {
+                            folder_name.clone()
                         },
                         description,
                         due_date,

@@ -4,7 +4,10 @@ import { safeInvoke } from '@/utils/safe-invoke';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { readFileText } from '@/hooks/useFileManager';
 import { onContentChange, onContentSaved, onMetadataChange } from '@/utils/content-event-bus';
-import { syncHorizonReadmeContent } from '@/utils/horizon-readme-utils';
+import {
+  buildHorizonReadmeMarkdown,
+  syncHorizonReadmeContent,
+} from '@/utils/horizon-readme-utils';
 import { parseActionMarkdown } from '@/utils/gtd-action-markdown';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { GTD_SECTIONS, HORIZON_FOLDER_TO_TYPE } from '@/components/gtd/sidebar/constants';
@@ -25,7 +28,7 @@ import type {
   SidebarProjectMetadata,
   SidebarSectionFileMetadata,
 } from '@/components/gtd/sidebar/types';
-import type { GTDProject, GTDSpace, MarkdownFile } from '@/types';
+import type { FileOperationResult, GTDProject, GTDSpace, MarkdownFile } from '@/types';
 import { norm } from '@/utils/path';
 
 type UseGTDWorkspaceSidebarResult = {
@@ -203,6 +206,27 @@ export function useGTDWorkspaceSidebar({
     }, 'Failed to read horizon overview', 'workspace-sidebar');
 
     if (typeof existingContent !== 'string') {
+      if (existingReadme) {
+        return;
+      }
+
+      const { content } = buildHorizonReadmeMarkdown({
+        horizon: horizonType,
+        referencePaths: filteredFiles.map((file) => file.path),
+      });
+
+      const writeResult = await withErrorHandling(async () => {
+        const result = await safeInvoke('save_file', { path: readmePath, content }, null);
+        if (!result) {
+          throw new Error('Failed to create horizon overview');
+        }
+        return result;
+      }, 'Failed to create horizon overview', 'workspace-sidebar');
+
+      if (!writeResult) {
+        return;
+      }
+
       return;
     }
 
@@ -770,14 +794,15 @@ export function useGTDWorkspaceSidebar({
               currentFileName !== nextTitle
             ) {
               await withErrorHandling(async () => {
-                const newFilePath = await safeInvoke<string>(
-                  'rename_gtd_action',
-                  { oldActionPath: normalizedFilePath, newActionName: nextTitle },
+                const renameResult = await safeInvoke<FileOperationResult>(
+                  'rename_file',
+                  { oldPath: normalizedFilePath, newName: nextTitle },
                   null
                 );
-                if (!newFilePath || typeof newFilePath !== 'string') {
-                  throw new Error('rename_gtd_action failed');
+                if (!renameResult?.success || !renameResult.path) {
+                  throw new Error(renameResult?.message || 'rename_file failed');
                 }
+                const newFilePath = renameResult.path;
 
                 const normalizedNewFilePath = normalizePath(newFilePath) ?? newFilePath;
                 updateSectionFileOverlay(normalizedFilePath, {

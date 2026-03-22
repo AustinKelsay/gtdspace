@@ -662,7 +662,6 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
         }
 
         resetTransientTabState();
-        dispatch({ type: 'clear-all' });
       }
 
       try {
@@ -672,19 +671,19 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
           readFile: readTabFile,
         });
 
-        if (
-          restoredState &&
-          restoreAttemptRef.current === restoreAttempt &&
-          tabStateRef.current.openTabs.length === 0
-        ) {
-          dispatch({ type: 'restore-state', state: restoredState });
+        if (restoreAttemptRef.current === restoreAttempt) {
+          dispatch({ type: 'clear-and-restore', state: restoredState });
+          restoringWorkspaceRef.current = null;
+          restoredWorkspaceRef.current = normalizedWorkspaceKey;
         }
       } catch (error) {
         log.warn('Failed to initialize tabs from storage', error);
       } finally {
         if (restoreAttemptRef.current === restoreAttempt) {
-          restoringWorkspaceRef.current = null;
-          restoredWorkspaceRef.current = normalizedWorkspaceKey;
+          if (restoringWorkspaceRef.current === normalizedWorkspaceKey) {
+            restoringWorkspaceRef.current = null;
+            restoredWorkspaceRef.current = normalizedWorkspaceKey;
+          }
         }
       }
     };

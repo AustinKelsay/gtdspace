@@ -248,8 +248,11 @@ pub fn open_file_location(file_path: String) -> Result<String, String> {
 
     match result {
         Ok(status) if status.success() => {
-            log::info!("Successfully opened file location: {}", file_path);
-            Ok(format!("Opened file location: {}", file_path))
+            log::info!(
+                "Successfully opened file location: {}",
+                redact_path(&file_path)
+            );
+            Ok(format!("Opened file location: {}", redact_path(&file_path)))
         }
         Ok(status) => {
             let status_detail = status

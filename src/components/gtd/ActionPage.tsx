@@ -33,12 +33,13 @@ export const ActionPage: React.FC<ActionPageProps> = ({
   className,
 }) => {
   const parsed = React.useMemo(() => parseActionMarkdown(content || ''), [content]);
+  const parsedTitle = parsed.title === 'Untitled' ? '' : parsed.title;
   const createdDisplay = React.useMemo(() => {
     const createdDate = new Date(parsed.createdDateTime);
     return Number.isNaN(createdDate.getTime()) ? '—' : createdDate.toLocaleString();
   }, [parsed.createdDateTime]);
 
-  const [title, setTitle] = React.useState(parsed.title);
+  const [title, setTitle] = React.useState(parsedTitle);
   const [status, setStatus] = React.useState<GTDActionStatus>(parsed.status);
   const [effort, setEffort] = React.useState<GTDActionEffort>(parsed.effort);
   const [focusDate, setFocusDate] = React.useState(parsed.focusDate);
@@ -51,7 +52,7 @@ export const ActionPage: React.FC<ActionPageProps> = ({
   const bodyRef = React.useRef(parsed.body);
 
   React.useEffect(() => {
-    setTitle(parsed.title);
+    setTitle(parsedTitle);
     setStatus(parsed.status);
     setEffort(parsed.effort);
     setFocusDate(parsed.focusDate);
@@ -60,7 +61,7 @@ export const ActionPage: React.FC<ActionPageProps> = ({
     setContexts(parsed.contexts);
     setReferences(parsed.references);
     bodyRef.current = parsed.body;
-  }, [parsed]);
+  }, [parsed, parsedTitle]);
 
   const emitRebuild = React.useCallback(
     (

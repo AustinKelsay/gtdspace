@@ -8,6 +8,7 @@ export type RenameMode = 'exact' | 'prefix';
 export type TabStateAction =
   | { type: 'set-max-tabs'; maxTabs: number }
   | { type: 'restore-state'; state: TabManagerState }
+  | { type: 'clear-and-restore'; state: TabManagerState | null }
   | { type: 'open-tab'; tab: FileTab }
   | { type: 'activate-tab'; tabId: string }
   | { type: 'close-tab'; tabId: string; snapshot?: FileTab }
@@ -122,6 +123,9 @@ function remapPath(currentPath: string, oldPath: string, newPath: string, mode: 
   const normalizedOld = pathKey(oldPath);
   const normalizedNew = pathKey(newPath);
   const relativePath = normalizedCurrent.slice(normalizedOld.length);
+  if (normalizedNew === '/') {
+    return relativePath || '/';
+  }
   return `${normalizedNew}${relativePath}`;
 }
 
@@ -166,6 +170,31 @@ export function tabStateReducer(state: TabManagerState, action: TabStateAction):
     }
 
     case 'restore-state': {
+      const restoredOpenTabs = action.state.openTabs.map(ensureOriginalContent);
+      const restoredRecentlyClosed = action.state.recentlyClosed.map(ensureOriginalContent);
+      return {
+        ...action.state,
+        openTabs: restoredOpenTabs,
+        recentlyClosed: restoredRecentlyClosed,
+        ...enforceMaxTabs(
+          restoredOpenTabs,
+          action.state.activeTabId,
+          restoredRecentlyClosed,
+          action.state.maxTabs,
+        ),
+      };
+    }
+
+    case 'clear-and-restore': {
+      if (!action.state) {
+        return {
+          ...state,
+          openTabs: [],
+          activeTabId: null,
+          recentlyClosed: [],
+        };
+      }
+
       const restoredOpenTabs = action.state.openTabs.map(ensureOriginalContent);
       const restoredRecentlyClosed = action.state.recentlyClosed.map(ensureOriginalContent);
       return {

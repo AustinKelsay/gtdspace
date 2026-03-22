@@ -169,15 +169,18 @@ export async function restoreTabStateFromStorage(
 
   for (const persistedTab of snapshot.openTabs) {
     const fileContent = await options.readFile(persistedTab.filePath);
-    if (fileContent == null) {
+    if (fileContent == null && persistedTab.draftContent == null) {
       continue;
     }
 
+    const restoredContent = persistedTab.draftContent ?? fileContent ?? '';
+    const originalContent = fileContent ?? '';
+
     validTabs.push({
       id: persistedTab.id,
-      file: createRestoredFile(persistedTab.filePath, persistedTab.fileName, fileContent),
-      content: persistedTab.draftContent ?? fileContent,
-      originalContent: fileContent,
+      file: createRestoredFile(persistedTab.filePath, persistedTab.fileName, restoredContent),
+      content: restoredContent,
+      originalContent,
       hasUnsavedChanges: typeof persistedTab.draftContent === 'string',
       isActive: persistedTab.id === snapshot.activeTabId,
       cursorPosition: 0,

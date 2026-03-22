@@ -169,7 +169,10 @@ export const useFileManager = () => {
             const { invoke } = await import('@tauri-apps/api/core');
             return invoke<string | null>('select_folder');
           }, 'Failed to select folder')
-        : await safeInvoke<string | null>('select_folder', undefined);
+        : await withErrorHandling(
+            async () => safeInvoke<string | null>('select_folder', undefined),
+            'Failed to select folder'
+          );
 
       if (folderPath === null) {
         return;

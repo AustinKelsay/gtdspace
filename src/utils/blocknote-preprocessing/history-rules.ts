@@ -7,9 +7,10 @@ export function isHorizontalRuleParagraph(
   block: UnknownBlock,
   blockText: string
 ): boolean {
+  const normalizedText = blockText.trim();
   return (
     block.type === "paragraph" &&
-    (blockText === "---" || blockText === "***" || blockText === "___")
+    (normalizedText === "---" || normalizedText === "***" || normalizedText === "___")
   );
 }
 

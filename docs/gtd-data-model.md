@@ -80,6 +80,7 @@ Implementation note:
   - `src/utils/gtd-project-content.ts`
   - `src/utils/gtd-habit-markdown.ts`
   - `src/utils/gtd-reference-utils.ts`
+- For projects specifically, `src/hooks/useProjectsData.ts` only calls `buildProjectMarkdown()` when a project README is missing; updates to an existing README use the targeted in-place patchers (`updateProjectTitleInMarkdown`, `updateProjectStatusInMarkdown`, and `updateProjectDueDateInMarkdown`) instead of doing a full canonical rewrite.
 - Frontend hooks and pages consume those helpers rather than reimplementing marker parsing, reference normalization, or section slicing locally.
 - Habit reset scheduling is mirrored in `src-tauri/src/commands/gtd_habits_domain.rs` so frontend and backend use the same calendar-window model.
 
@@ -514,7 +515,7 @@ This section summarizes how data moves across layers for each item type.
   - README metadata is enriched in the frontend through `parseProjectMarkdown()`, which normalizes project status, due date, desired outcome, trailing references, habits-list placement, and preserved freeform content.
 
 - Update
-  - `useProjectsData.updateProject()` now parses the existing README, applies targeted field changes, and rebuilds it canonically instead of patching markers ad hoc.
+  - `useProjectsData.updateProject()` in `src/hooks/useProjectsData.ts` only uses `buildProjectMarkdown()` when a README is missing. The normal edit path patches the existing README in place with the targeted title/status/due-date helpers instead of doing a full canonical rebuild.
   - Changing README Status/Due Date still emits content/metadata events; `useGTDWorkspaceSidebar` updates project overlays live; rename on save triggers `rename_gtd_project` if H1 differs from folder.
 
 ### Actions

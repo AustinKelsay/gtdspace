@@ -462,11 +462,11 @@ export function SidebarProjectsSection({
                 <ProjectRow
                   key={getProjectDisplay(project, projectMetadata).path}
                   project={project}
-                  projectActions={
-                    projectActions[norm(getProjectDisplay(project, projectMetadata).path)] ||
-                    projectActions[norm(project.path)] ||
-                    []
-                  }
+                  projectActions={(() => {
+                    const displayKey = norm(getProjectDisplay(project, projectMetadata).path) ?? project.path;
+                    const projectKey = norm(project.path) ?? project.path;
+                    return projectActions[displayKey] || projectActions[projectKey] || [];
+                  })()}
                   projectMetadata={projectMetadata}
                   actionMetadata={actionMetadata}
                   actionStatuses={actionStatuses}
@@ -518,11 +518,11 @@ export function SidebarProjectsSection({
                         <ProjectRow
                           key={`completed-${getProjectDisplay(project, projectMetadata).path}`}
                           project={project}
-                          projectActions={
-                            projectActions[norm(getProjectDisplay(project, projectMetadata).path)] ||
-                            projectActions[norm(project.path)] ||
-                            []
-                          }
+                          projectActions={(() => {
+                            const displayKey = norm(getProjectDisplay(project, projectMetadata).path) ?? project.path;
+                            const projectKey = norm(project.path) ?? project.path;
+                            return projectActions[displayKey] || projectActions[projectKey] || [];
+                          })()}
                           projectMetadata={projectMetadata}
                           actionMetadata={actionMetadata}
                           actionStatuses={actionStatuses}

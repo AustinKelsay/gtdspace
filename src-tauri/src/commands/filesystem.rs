@@ -872,6 +872,14 @@ pub fn rename_file(old_path: String, new_name: String) -> Result<FileOperationRe
         });
     }
 
+    if !old_file_path.is_file() {
+        return Ok(FileOperationResult {
+            success: false,
+            path: None,
+            message: Some("Path is not a file".to_string()),
+        });
+    }
+
     let directory = match old_file_path.parent() {
         Some(parent) => parent,
         None => {

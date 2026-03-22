@@ -447,9 +447,6 @@ fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, Strin
     }
 
     if has_any_projects {
-        // Still write a marker so we don't attempt again
-        fs::write(&seed_marker, "seeded: existing-projects")
-            .map_err(|e| format!("Failed to write seed marker: {}", e))?;
         return Ok("Projects already exist; skipping example seeding".to_string());
     }
 

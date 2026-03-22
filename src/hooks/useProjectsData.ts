@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { readFileText } from './useFileManager';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
 import type { GTDProject, MarkdownFile } from '@/types';
 import { toISOStringFromEpoch } from '@/utils/time';
 import { parseLocalDate } from '@/utils/date-formatting';
@@ -208,6 +209,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cachedSpacePath, setCachedSpacePath] = useState<string>('');
+  const { withErrorHandling } = useErrorHandler();
 
   const loadProjects = useCallback(async (spacePath: string) => {
     setIsLoading(true);
@@ -470,10 +472,12 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
             additionalContent: parsedProject.additionalContent,
           });
       
-      const writeResult = await safeInvoke('save_file', {
-        path: readmePath,
-        content: nextContent
-      }, null);
+      const writeResult = await withErrorHandling(async () => {
+        return safeInvoke('saveFile', {
+          path: readmePath,
+          content: nextContent
+        }, null);
+      }, 'Failed to save project changes', 'projects-data');
 
       // Check if write succeeded
       if (!writeResult) {
@@ -481,9 +485,9 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
         throw new Error('Failed to save project changes');
       }
 
-      const metadata = extractMetadata(nextContent);
       const fileName = (norm(readmePath) ?? readmePath).split('/').pop() || 'README.md';
       try {
+        const metadata = extractMetadata(nextContent);
         emitMetadataChange({
           filePath: readmePath,
           fileName,
@@ -523,7 +527,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
       console.error('Failed to update project:', err);
       throw err;
     }
-  }, []);
+  }, [withErrorHandling]);
   
   const refresh = useCallback(async () => {
     if (cachedSpacePath) {

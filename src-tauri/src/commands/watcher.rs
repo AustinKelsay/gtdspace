@@ -70,8 +70,9 @@ async fn shutdown_running_watcher(watcher_slot: &mut Option<RunningWatcher>) -> 
 ///
 /// ```typescript
 /// import { invoke } from '@tauri-apps/api/core';
-/// import { withErrorHandling } from '@/hooks/useErrorHandler';
+/// import { useErrorHandler } from '@/hooks/useErrorHandler';
 ///
+/// const { withErrorHandling } = useErrorHandler();
 /// await withErrorHandling(() =>
 ///   invoke('startFileWatcher', {
 ///     folderPath: '/path/to/markdown/files'
@@ -163,8 +164,9 @@ pub async fn start_file_watcher(app: AppHandle, folder_path: String) -> Result<S
 ///
 /// ```typescript
 /// import { invoke } from '@tauri-apps/api/core';
-/// import { withErrorHandling } from '@/hooks/useErrorHandler';
+/// import { useErrorHandler } from '@/hooks/useErrorHandler';
 ///
+/// const { withErrorHandling } = useErrorHandler();
 /// await withErrorHandling(() => invoke('stopFileWatcher'));
 /// ```
 #[tauri::command]

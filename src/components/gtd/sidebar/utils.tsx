@@ -234,11 +234,13 @@ export const getProjectDisplay = (
   metadata: Record<string, SidebarProjectMetadata>
 ) => {
   const overlay = metadata[norm(project.path) ?? project.path];
+  const hasOverlayDueDate =
+    overlay != null && Object.prototype.hasOwnProperty.call(overlay, 'due_date');
   return {
     title: overlay?.title || project.name,
     path: overlay?.currentPath || project.path,
     status: overlay?.status || project.status || 'in-progress',
-    dueDate: overlay?.due_date ?? project.dueDate ?? '',
+    dueDate: hasOverlayDueDate ? overlay?.due_date ?? '' : project.dueDate ?? '',
   };
 };
 

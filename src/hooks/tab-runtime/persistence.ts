@@ -173,7 +173,13 @@ export async function restoreTabStateFromStorage(
   const validTabs: FileTab[] = [];
 
   for (const persistedTab of snapshot.openTabs) {
-    const fileContent = await options.readFile(persistedTab.filePath);
+    let fileContent: string | null = null;
+    try {
+      fileContent = await options.readFile(persistedTab.filePath);
+    } catch (error) {
+      console.warn('Failed to restore persisted tab file', persistedTab.filePath, error);
+      fileContent = null;
+    }
     if (fileContent == null && persistedTab.draftContent == null) {
       continue;
     }

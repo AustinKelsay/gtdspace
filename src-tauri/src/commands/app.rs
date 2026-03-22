@@ -28,8 +28,9 @@ pub struct PermissionStatus {
 ///
 /// ```typescript
 /// import { invoke } from '@tauri-apps/api/core';
-/// import { withErrorHandling } from '@/hooks/useErrorHandler';
+/// import { useErrorHandler } from '@/hooks/useErrorHandler';
 ///
+/// const { withErrorHandling } = useErrorHandler();
 /// const response = await withErrorHandling(() => invoke<string>('ping'));
 /// console.log(response); // "pong"
 /// ```
@@ -65,8 +66,9 @@ pub fn test_select_folder() -> Result<String, String> {
 ///
 /// ```typescript
 /// import { invoke } from '@tauri-apps/api/core';
-/// import { withErrorHandling } from '@/hooks/useErrorHandler';
+/// import { useErrorHandler } from '@/hooks/useErrorHandler';
 ///
+/// const { withErrorHandling } = useErrorHandler();
 /// const version = await withErrorHandling(() => invoke<string>('getAppVersion'));
 /// console.log(`App version: ${version}`);
 /// ```

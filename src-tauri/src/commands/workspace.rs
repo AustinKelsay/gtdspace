@@ -179,9 +179,15 @@ pub fn check_is_gtd_space(path: String) -> Result<bool, String> {
 }
 
 fn initialize_gtd_space_blocking(space_path: String) -> Result<String, String> {
-    log::info!("Initializing GTD space at: {}", space_path);
+    let trimmed_space_path = space_path.trim();
+    if trimmed_space_path.is_empty() {
+        log::error!("Refusing to initialize GTD space with blank path");
+        return Err("space_path cannot be blank".to_string());
+    }
 
-    let root_path = Path::new(&space_path);
+    log::info!("Initializing GTD space at: {}", trimmed_space_path);
+
+    let root_path = Path::new(trimmed_space_path);
 
     // Create root directory if it doesn't exist
     if !root_path.exists() {
@@ -443,6 +449,7 @@ fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, Strin
     let sample_project_name = "Launch Side Business";
     let sample_project_path = projects_root.join(sample_project_name);
     let sample_seed_complete_marker = sample_project_path.join(".seed_complete");
+    let sample_project_exists = sample_project_path.is_dir();
     let mut has_non_sample_projects = false;
     if let Ok(entries) = fs::read_dir(&projects_root) {
         for entry in entries.flatten() {
@@ -454,7 +461,11 @@ fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, Strin
         }
     }
 
-    if has_non_sample_projects || sample_seed_complete_marker.exists() {
+    if has_non_sample_projects {
+        return Ok("Projects already exist; skipping example seeding".to_string());
+    }
+
+    if sample_project_exists && !sample_seed_complete_marker.exists() {
         return Ok("Projects already exist; skipping example seeding".to_string());
     }
 
@@ -534,6 +545,11 @@ fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, Strin
         Some(next_week.to_rfc3339()),
         Some("in-progress".to_string()),
     )?;
+
+    if !sample_seed_complete_marker.exists() {
+        fs::write(&sample_seed_complete_marker, "in-progress")
+            .map_err(|e| format!("Failed to claim sample seed ownership: {}", e))?;
+    }
 
     // Update with references to BOTH Area and Goal
     let space_root = Path::new(&space_path);
@@ -637,14 +653,13 @@ fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, Strin
 
     // Habits already created above - removed duplicates
 
-    // Write seed marker
+    fs::write(&sample_seed_complete_marker, "complete")
+        .map_err(|e| format!("Failed to write sample seed marker: {}", e))?;
     fs::write(
         &seed_marker,
         format!("seeded: {}", chrono::Local::now().to_rfc3339()),
     )
     .map_err(|e| format!("Failed to write seed marker: {}", e))?;
-    fs::write(&sample_seed_complete_marker, "complete")
-        .map_err(|e| format!("Failed to write sample seed marker: {}", e))?;
 
     Ok("Seeded example projects, actions, horizons, habits, and reference materials".to_string())
 }

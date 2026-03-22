@@ -141,6 +141,7 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
 
     if (!projectPath) {
       setItems([]);
+      setLoading(false);
       return;
     }
 
@@ -304,12 +305,14 @@ const ProjectHabitsSection: React.FC<{ projectPath: string | null }> = ({ projec
 
     if (!projectPath) {
       setHabits([]);
+      setLoading(false);
       return;
     }
 
     const spacePath = window.localStorage.getItem("gtdspace-current-path") || "";
     if (!spacePath) {
       setHabits([]);
+      setLoading(false);
       return;
     }
 

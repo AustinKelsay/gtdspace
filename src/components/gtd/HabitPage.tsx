@@ -67,6 +67,7 @@ import {
   README_REFERENCE_REGEX,
   stripReadmeReferences,
 } from '@/utils/gtd-reference-utils';
+import { norm } from '@/utils/path';
 
 const HABIT_FREQUENCY_OPTIONS: Array<{ value: GTDHabitFrequency; label: string }> = [
   { value: '5-minute', label: 'Every 5 Minutes (Testing)' },
@@ -247,7 +248,9 @@ export const HabitPage: React.FC<HabitPageProps> = ({
           if (!projects) return [];
           return projects
             .map((project) => ({
-              path: (project.path || `${spacePath}/${HORIZON_DIRS.projects}/${project.name}`).replace(/\\/g, '/'),
+              path:
+                norm(project.path || `${spacePath}/${HORIZON_DIRS.projects}/${project.name}`) ??
+                (project.path || `${spacePath}/${HORIZON_DIRS.projects}/${project.name}`).replace(/\\/g, '/'),
               name: project.name,
               horizon: key,
             }))
@@ -265,7 +268,7 @@ export const HabitPage: React.FC<HabitPageProps> = ({
         return files
           .filter((file) => !README_REFERENCE_REGEX.test(file.name))
           .map((file) => ({
-            path: file.path.replace(/\\/g, '/'),
+            path: norm(file.path) ?? file.path.replace(/\\/g, '/'),
             name: file.name.replace(/\.(md|markdown)$/i, ''),
             horizon: key,
           }))
@@ -446,11 +449,12 @@ export const HabitPage: React.FC<HabitPageProps> = ({
 
   const handleReferenceToggle = React.useCallback(
     (key: ReferenceKey, value: string) => {
+      const normalizedValue = norm(value) ?? value;
       updateReferencesGroup(key, (current) => {
-        if (current.includes(value)) {
-          return current.filter((ref) => ref !== value);
+        if (current.some((ref) => (norm(ref) ?? ref) === normalizedValue)) {
+          return current.filter((ref) => (norm(ref) ?? ref) !== normalizedValue);
         }
-        return [...current, value];
+        return [...current, normalizedValue];
       });
     },
     [updateReferencesGroup]
@@ -690,7 +694,10 @@ export const HabitPage: React.FC<HabitPageProps> = ({
                 ) : (
                   <div className="p-4 space-y-2">
                     {filteredPickerOptions.map((option) => {
-                      const isSelected = references[activePicker].includes(option.path);
+                      const normalizedOptionPath = norm(option.path) ?? option.path;
+                      const isSelected = references[activePicker].some(
+                        (path) => (norm(path) ?? path) === normalizedOptionPath
+                      );
                       return (
                         <button
                           key={option.path}

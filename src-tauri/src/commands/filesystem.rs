@@ -197,10 +197,12 @@ fn rename_path(old_path: &Path, new_path: &Path) -> Result<(), std::io::Error> {
 fn is_cross_device_rename_error(error: &std::io::Error) -> bool {
     #[cfg(target_family = "unix")]
     {
+        // Unix: EXDEV = 18
         matches!(error.raw_os_error(), Some(18))
     }
     #[cfg(target_family = "windows")]
     {
+        // Windows: ERROR_NOT_SAME_DEVICE = 17
         matches!(error.raw_os_error(), Some(17))
     }
     #[cfg(not(any(target_family = "unix", target_family = "windows")))]
@@ -245,11 +247,29 @@ fn scan_directory_recursive(dir_path: &Path, files: &mut Vec<MarkdownFile>) -> R
     match fs::read_dir(dir_path) {
         Ok(entries) => {
             for entry_result in entries {
-                let entry = entry_result
-                    .map_err(|e| format!("Failed to read entry in {:?}: {}", dir_path, e))?;
+                let entry = match entry_result {
+                    Ok(entry) => entry,
+                    Err(error) => {
+                        log::warn!(
+                            "Skipping unreadable entry in {}: {}",
+                            dir_path.display(),
+                            error
+                        );
+                        continue;
+                    }
+                };
                 let path = entry.path();
-                let metadata = fs::symlink_metadata(&path)
-                    .map_err(|e| format!("Failed to read metadata for {:?}: {}", path, e))?;
+                let metadata = match fs::symlink_metadata(&path) {
+                    Ok(metadata) => metadata,
+                    Err(error) => {
+                        log::warn!(
+                            "Skipping entry with unreadable metadata {}: {}",
+                            path.display(),
+                            error
+                        );
+                        continue;
+                    }
+                };
 
                 // Recursively scan subdirectories
                 if metadata.file_type().is_symlink() {

@@ -426,11 +426,12 @@ pub(crate) fn insert_history_entry(content: &str, entry: &str) -> Result<String,
 
     fn convert_list_to_table_row(list_entry: &str) -> Option<String> {
         let captures = LIST_TO_TABLE_REGEX.captures(list_entry)?;
-        let escaped_action = escape_history_cell(captures[3].trim());
-        let escaped_details = escape_history_cell(captures[4].trim());
+        let escaped_status = escape_history_cell(captures[3].trim());
+        let escaped_action = escape_history_cell(captures[4].trim());
+        let escaped_details = escape_history_cell(captures[5].trim());
         Some(format!(
             "| {} | {} | {} | {} | {} |",
-            &captures[1], &captures[2], escaped_action, escaped_details, &captures[5]
+            &captures[1], &captures[2], escaped_status, escaped_action, escaped_details
         ))
     }
 

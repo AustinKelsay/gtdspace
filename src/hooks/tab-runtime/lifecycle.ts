@@ -9,9 +9,8 @@ import { CALENDAR_FILE_ID } from '@/utils/special-files';
 const log = createScopedLogger('tabRuntimeLifecycle');
 
 function safelyNotifyTabSave(file: MarkdownFile, content: string): void {
-  const metadata = extractMetadata(content);
-
   try {
+    const metadata = extractMetadata(content);
     emitContentSaved({
       filePath: file.path,
       fileName: file.name,

@@ -57,6 +57,8 @@ impl GoogleConfigManager {
         };
         self.store
             .set("oauth_config", serde_json::to_value(&stored_config)?);
+        self.store.delete("client_id");
+        self.store.delete("client_secret");
 
         self.store
             .save()

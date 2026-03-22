@@ -44,9 +44,14 @@ export function SidebarSearchResults({
 }: SidebarSearchResultsProps) {
   const handleProjectOpen = React.useCallback(
     (project: GTDProject) => {
-      Promise.resolve(onOpenProject(project)).catch((error) => {
+      try {
+        const result = onOpenProject(project);
+        Promise.resolve(result).catch((error) => {
+          console.error('[SidebarSearchResults] Failed to open project', error);
+        });
+      } catch (error) {
         console.error('[SidebarSearchResults] Failed to open project', error);
-      });
+      }
     },
     [onOpenProject]
   );

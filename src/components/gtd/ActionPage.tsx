@@ -47,6 +47,7 @@ export const ActionPage: React.FC<ActionPageProps> = ({
   const [dueDate, setDueDate] = React.useState(parsed.dueDate);
   const [contexts, setContexts] = React.useState<string[]>(parsed.contexts);
   const [references, setReferences] = React.useState<string[]>(parsed.references);
+  const [body, setBody] = React.useState(parsed.body);
   const [ctxPickerOpen, setCtxPickerOpen] = React.useState(false);
 
   const bodyRef = React.useRef(parsed.body);
@@ -60,6 +61,7 @@ export const ActionPage: React.FC<ActionPageProps> = ({
     setDueDate(parsed.dueDate);
     setContexts(parsed.contexts);
     setReferences(parsed.references);
+    setBody(parsed.body);
     bodyRef.current = parsed.body;
   }, [parsed, parsedTitle]);
 
@@ -266,8 +268,9 @@ export const ActionPage: React.FC<ActionPageProps> = ({
 
       <div className="px-12 pt-6 align-with-header">
         <EnhancedTextEditor
-          content={parsed.body}
+          content={body}
           onChange={(nextBody) => {
+            setBody(nextBody);
             bodyRef.current = nextBody;
             emitRebuild({ body: nextBody });
           }}

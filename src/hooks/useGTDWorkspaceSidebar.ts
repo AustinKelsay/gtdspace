@@ -238,7 +238,7 @@ export function useGTDWorkspaceSidebar({
 
       const { content } = buildHorizonReadmeMarkdown({
         horizon: horizonType,
-        referencePaths: filteredFiles.map((file) => file.path),
+        referencePaths: filteredFiles.map((file) => norm(file.path) ?? file.path),
       });
 
       const writeResult = await withErrorHandling(async () => {

@@ -213,6 +213,7 @@ function ProjectRow({
       excludeReadme: true,
     }
   );
+  const displayedActionCount = incompleteActions.length + completedActions.length;
 
   return (
     <div>
@@ -253,7 +254,7 @@ function ProjectRow({
           <div className="flex-1 min-w-0 ml-1">
             <div className="font-medium text-sm break-words whitespace-normal">{display.title}</div>
             <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <span className="truncate inline-block">{project.action_count || 0} actions</span>
+              <span className="truncate inline-block">{displayedActionCount} actions</span>
               {dueDate && (
                 <span className="flex items-center flex-shrink-0">
                   <Calendar className="h-2.5 w-2.5 mr-0.5" />

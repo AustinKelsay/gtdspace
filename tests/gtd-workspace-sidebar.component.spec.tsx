@@ -342,4 +342,50 @@ describe('GTDWorkspaceSidebar component', () => {
     );
     expect(habitListCalls.length).toBeGreaterThanOrEqual(2);
   });
+
+  it('does not preload missing alias section paths when the canonical directory exists', async () => {
+    safeInvokeMock.mockImplementation(
+      async (command: string, args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
+        if (command === 'check_directory_exists') {
+          return args?.path === `${rootPath}/Purpose & Principles`;
+        }
+
+        if (command === 'list_project_actions' && args?.projectPath === activeProject.path) {
+          return projectActions;
+        }
+
+        if (command === 'list_markdown_files') {
+          switch (args?.path) {
+            case `${rootPath}/Habits`:
+            case `${rootPath}/Areas of Focus`:
+            case `${rootPath}/Goals`:
+            case `${rootPath}/Vision`:
+            case `${rootPath}/Purpose & Principles`:
+            case `${rootPath}/Someday Maybe`:
+            case `${rootPath}/Cabinet`:
+              return [];
+            default:
+              return fallback ?? [];
+          }
+        }
+
+        if (command === 'read_file') return '# README';
+        if (command === 'save_file') return 'ok';
+        return fallback ?? null;
+      }
+    );
+
+    renderSidebar();
+
+    expect(await screen.findByText('Project Alpha')).toBeInTheDocument();
+
+    await waitFor(() => {
+      const listCalls = (safeInvokeMock as Mock).mock.calls
+        .filter(([command]) => command === 'list_markdown_files')
+        .map(([, args]) => args?.path);
+
+      expect(listCalls).toContain(`${rootPath}/Purpose & Principles`);
+      expect(listCalls).not.toContain(`${rootPath}/Purpose and Principles`);
+    });
+  });
 });

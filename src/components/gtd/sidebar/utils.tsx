@@ -40,8 +40,29 @@ export function parseLocalDateString(dateStr: string): Date | null {
   const trimmed = dateStr?.trim();
   if (!trimmed) return null;
   if (/\d{4}-\d{2}-\d{2}T/.test(trimmed)) {
+    const match = trimmed.match(
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/
+    );
+    if (!match) return null;
     const dt = new Date(trimmed);
-    return Number.isNaN(dt.getTime()) ? null : dt;
+    if (Number.isNaN(dt.getTime())) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const hours = Number(match[4]);
+    const minutes = Number(match[5]);
+    const seconds = Number(match[6] || '0');
+    if (
+      dt.getFullYear() !== year ||
+      dt.getMonth() + 1 !== month ||
+      dt.getDate() !== day ||
+      dt.getHours() !== hours ||
+      dt.getMinutes() !== minutes ||
+      dt.getSeconds() !== seconds
+    ) {
+      return null;
+    }
+    return dt;
   }
 
   const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);

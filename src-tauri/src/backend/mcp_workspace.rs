@@ -2140,13 +2140,17 @@ fn write_cached_context_pack(
     Ok(())
 }
 
-fn normalize_path<P: AsRef<Path>>(path: P) -> String {
+pub fn normalize_workspace_path<P: AsRef<Path>>(path: P) -> String {
     let normalized = path.as_ref().to_string_lossy().replace('\\', "/");
     normalized
         .strip_prefix("//?/")
         .or_else(|| normalized.strip_prefix("\\\\?/"))
         .unwrap_or(&normalized)
         .to_string()
+}
+
+fn normalize_path<P: AsRef<Path>>(path: P) -> String {
+    normalize_workspace_path(path)
 }
 
 fn normalize_relative_input(path: &str) -> String {

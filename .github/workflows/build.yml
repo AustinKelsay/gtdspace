@@ -259,6 +259,37 @@ jobs:
         with:
           args: ${{ matrix.args }}
 
+      - name: Verify macOS app bundle executable
+        if: startsWith(matrix.platform, 'macos')
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP_BUNDLE=$(find \
+            "src-tauri/target/${{ matrix.rust-targets }}/release/bundle/macos" \
+            -maxdepth 1 \
+            -name "GTD Space.app" \
+            -print \
+            -quit)
+
+          if [ -z "$APP_BUNDLE" ]; then
+            echo "Unable to locate GTD Space.app bundle" >&2
+            exit 1
+          fi
+
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_BUNDLE/Contents/Info.plist")
+          echo "Bundle executable: $EXECUTABLE"
+
+          if [ "$EXECUTABLE" != "gtdspace" ]; then
+            echo "Unexpected macOS bundle executable: $EXECUTABLE" >&2
+            exit 1
+          fi
+
+          if [ ! -x "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE" ]; then
+            echo "Expected app executable missing from bundle: $APP_BUNDLE/Contents/MacOS/$EXECUTABLE" >&2
+            exit 1
+          fi
+
       - name: List built artifacts
         shell: bash
         run: |

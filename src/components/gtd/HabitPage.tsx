@@ -462,7 +462,10 @@ export const HabitPage: React.FC<HabitPageProps> = ({
 
   const handleRemoveReference = React.useCallback(
     (key: ReferenceKey, value: string) => {
-      updateReferencesGroup(key, (current) => current.filter((ref) => ref !== value));
+      const normalizedValue = norm(value) ?? value;
+      updateReferencesGroup(key, (current) =>
+        current.filter((ref) => (norm(ref) ?? ref) !== normalizedValue)
+      );
     },
     [updateReferencesGroup]
   );

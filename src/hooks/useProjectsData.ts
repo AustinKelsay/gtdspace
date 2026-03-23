@@ -473,7 +473,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
           });
       
       const writeResult = await withErrorHandling(async () => {
-        return safeInvoke('saveFile', {
+        return safeInvoke('save_file', {
           path: readmePath,
           content: nextContent
         }, null);

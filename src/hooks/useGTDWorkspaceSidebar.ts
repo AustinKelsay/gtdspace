@@ -371,11 +371,15 @@ export function useGTDWorkspaceSidebar({
 
       try {
         const files = await withErrorHandling(async () => {
-          return safeInvoke<MarkdownFile[]>(
+          const result = await safeInvoke<MarkdownFile[]>(
             'list_markdown_files',
             { path: normalizedKey },
-            undefined
+            null
           );
+          if (result == null) {
+            throw new Error(`Failed to load section files for ${normalizedKey}`);
+          }
+          return result;
         }, 'Failed to load section files', 'workspace-sidebar');
         if (files === undefined || files === null) {
           return current || [];
@@ -421,12 +425,16 @@ export function useGTDWorkspaceSidebar({
     const normalizedKey = normalizePath(projectPath) ?? projectPath.replace(/\\/g, '/');
     try {
       let files = await withErrorHandling(async () => {
-        return safeInvoke<MarkdownFile[]>('list_project_actions', { projectPath: normalizedKey }, []);
+        return safeInvoke<MarkdownFile[]>('list_project_actions', { projectPath: normalizedKey }, null);
       }, 'Failed to load project actions', 'workspace-sidebar');
       files = files ?? [];
       if (files.length === 0) {
         const all = await withErrorHandling(async () => {
-          return safeInvoke<MarkdownFile[]>('list_markdown_files', { path: normalizedKey }, []);
+          const result = await safeInvoke<MarkdownFile[]>('list_markdown_files', { path: normalizedKey }, null);
+          if (result == null) {
+            throw new Error(`Failed to load project files for ${normalizedKey}`);
+          }
+          return result;
         }, 'Failed to load project files', 'workspace-sidebar');
         files = (all ?? []).filter((file) => !/^README\.(md|markdown)$/i.test(file.name));
       }
@@ -577,6 +585,8 @@ export function useGTDWorkspaceSidebar({
           const nextStatus = metadata.projectStatus || metadata.status;
           if (nextStatus) {
             updateProjectOverlay(projectPath, { status: String(nextStatus) });
+          } else {
+            updateProjectOverlay(projectPath, { status: '' });
           }
         }
 

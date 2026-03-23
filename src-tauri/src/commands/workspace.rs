@@ -432,15 +432,16 @@ fn seed_example_gtd_content_blocking(space_path: String) -> Result<String, Strin
     if trimmed_space_path.is_empty() {
         return Err("space_path cannot be blank".to_string());
     }
+    let space_path = trimmed_space_path.to_string();
 
-    let projects_root = Path::new(trimmed_space_path).join("Projects");
+    let projects_root = Path::new(&space_path).join("Projects");
 
     if !projects_root.exists() {
         return Err("Projects directory does not exist. Initialize GTD space first.".to_string());
     }
 
     // If a seed marker exists, skip seeding
-    let seed_marker = Path::new(trimmed_space_path).join(".gtdspace_seeded");
+    let seed_marker = Path::new(&space_path).join(".gtdspace_seeded");
     if seed_marker.exists() {
         return Ok("Example content already seeded".to_string());
     }

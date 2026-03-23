@@ -278,7 +278,13 @@ fn scan_directory_recursive(dir_path: &Path, files: &mut Vec<MarkdownFile>) -> R
                     // Skip hidden directories (starting with .)
                     if let Some(dir_name) = path.file_name() {
                         if !dir_name.to_string_lossy().starts_with('.') {
-                            scan_directory_recursive(&path, files)?;
+                            if let Err(error) = scan_directory_recursive(&path, files) {
+                                log::warn!(
+                                    "Skipping unreadable child directory {}: {}",
+                                    path.display(),
+                                    error
+                                );
+                            }
                         }
                     }
                 } else if metadata.file_type().is_file() {

@@ -72,12 +72,19 @@ async fn shutdown_running_watcher(watcher_slot: &mut Option<RunningWatcher>) -> 
 /// import { invoke } from '@tauri-apps/api/core';
 /// import { useErrorHandler } from '@/hooks/useErrorHandler';
 ///
-/// const { withErrorHandling } = useErrorHandler();
-/// await withErrorHandling(() =>
-///   invoke('startFileWatcher', {
-///     folderPath: '/path/to/markdown/files'
-///   })
-/// );
+/// function WatcherControls() {
+///   const { withErrorHandling } = useErrorHandler();
+///
+///   const handleStart = async () => {
+///     await withErrorHandling(() =>
+///       invoke('startFileWatcher', {
+///         folderPath: '/path/to/markdown/files'
+///       })
+///     );
+///   };
+///
+///   return <button onClick={handleStart}>Start watcher</button>;
+/// }
 /// ```
 #[tauri::command]
 pub async fn start_file_watcher(app: AppHandle, folder_path: String) -> Result<String, String> {
@@ -166,8 +173,15 @@ pub async fn start_file_watcher(app: AppHandle, folder_path: String) -> Result<S
 /// import { invoke } from '@tauri-apps/api/core';
 /// import { useErrorHandler } from '@/hooks/useErrorHandler';
 ///
-/// const { withErrorHandling } = useErrorHandler();
-/// await withErrorHandling(() => invoke('stopFileWatcher'));
+/// function WatcherControls() {
+///   const { withErrorHandling } = useErrorHandler();
+///
+///   const handleStop = async () => {
+///     await withErrorHandling(() => invoke('stopFileWatcher'));
+///   };
+///
+///   return <button onClick={handleStop}>Stop watcher</button>;
+/// }
 /// ```
 #[tauri::command]
 pub async fn stop_file_watcher() -> Result<String, String> {

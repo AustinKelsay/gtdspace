@@ -30,9 +30,16 @@ pub struct PermissionStatus {
 /// import { invoke } from '@tauri-apps/api/core';
 /// import { useErrorHandler } from '@/hooks/useErrorHandler';
 ///
-/// const { withErrorHandling } = useErrorHandler();
-/// const response = await withErrorHandling(() => invoke<string>('ping'));
-/// console.log(response); // "pong"
+/// function PingButton() {
+///   const { withErrorHandling } = useErrorHandler();
+///
+///   const handleClick = async () => {
+///     const response = await withErrorHandling(() => invoke<string>('ping'));
+///     console.log(response); // "pong"
+///   };
+///
+///   return <button onClick={handleClick}>Ping</button>;
+/// }
 /// ```
 #[tauri::command]
 pub fn ping() -> Result<String, String> {
@@ -68,9 +75,16 @@ pub fn test_select_folder() -> Result<String, String> {
 /// import { invoke } from '@tauri-apps/api/core';
 /// import { useErrorHandler } from '@/hooks/useErrorHandler';
 ///
-/// const { withErrorHandling } = useErrorHandler();
-/// const version = await withErrorHandling(() => invoke<string>('getAppVersion'));
-/// console.log(`App version: ${version}`);
+/// function VersionLabel() {
+///   const { withErrorHandling } = useErrorHandler();
+///
+///   const loadVersion = async () => {
+///     const version = await withErrorHandling(() => invoke<string>('getAppVersion'));
+///     console.log(`App version: ${version}`);
+///   };
+///
+///   return <button onClick={loadVersion}>Load Version</button>;
+/// }
 /// ```
 #[tauri::command]
 pub fn get_app_version(app: AppHandle) -> Result<String, String> {

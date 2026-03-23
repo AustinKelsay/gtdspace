@@ -139,8 +139,8 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
     requestIdRef.current = requestId;
     const requestedProjectPath = projectPath;
 
+    setItems([]);
     if (!projectPath) {
-      setItems([]);
       setLoading(false);
       return;
     }
@@ -303,15 +303,14 @@ const ProjectHabitsSection: React.FC<{ projectPath: string | null }> = ({ projec
     requestIdRef.current = requestId;
     const requestedProjectPath = projectPath;
 
+    setHabits([]);
     if (!projectPath) {
-      setHabits([]);
       setLoading(false);
       return;
     }
 
     const spacePath = window.localStorage.getItem("gtdspace-current-path") || "";
     if (!spacePath) {
-      setHabits([]);
       setLoading(false);
       return;
     }
@@ -365,7 +364,10 @@ const ProjectHabitsSection: React.FC<{ projectPath: string | null }> = ({ projec
         );
         if (normalizedRefs.includes(projectNormalized)) {
           matches.push({
-            name: file.name.replace(/\.(md|markdown)$/i, ""),
+            name:
+              parsedHabit.title && parsedHabit.title !== "Untitled Habit"
+                ? parsedHabit.title
+                : file.name.replace(/\.(md|markdown)$/i, ""),
             path: file.path,
           });
         }
@@ -687,27 +689,35 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
 
     if (normalizedFilePath) {
       void (async () => {
-        const results = await Promise.allSettled(
-          queuedChanges.map((change) =>
-            syncHorizonBacklink({
-              sourcePath: normalizedFilePath,
-              sourceKind: "projects",
-              targetPath: change.targetPath,
-              action: change.mode === "remove" ? "remove" : "add",
-            })
-          )
+        const groupedChanges = queuedChanges.reduce<Record<string, typeof queuedChanges>>(
+          (acc, change) => {
+            acc[change.targetPath] ??= [];
+            acc[change.targetPath].push(change);
+            return acc;
+          },
+          {}
         );
 
-        results.forEach((result, index) => {
-          if (result.status === "rejected") {
-            const change = queuedChanges[index];
-            console.error("Failed to sync project horizon backlink", {
-              targetPath: change?.targetPath,
-              mode: change?.mode,
-              error: result.reason,
-            });
-          }
-        });
+        await Promise.all(
+          Object.values(groupedChanges).map(async (changesForTarget) => {
+            for (const change of changesForTarget) {
+              try {
+                await syncHorizonBacklink({
+                  sourcePath: normalizedFilePath,
+                  sourceKind: "projects",
+                  targetPath: change.targetPath,
+                  action: change.mode === "remove" ? "remove" : "add",
+                });
+              } catch (error) {
+                console.error("Failed to sync project horizon backlink", {
+                  targetPath: change.targetPath,
+                  mode: change.mode,
+                  error,
+                });
+              }
+            }
+          })
+        );
       })();
     }
   }, [emitRebuild, horizonRefs, normalizedFilePath]);

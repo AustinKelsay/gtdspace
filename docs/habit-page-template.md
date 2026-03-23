@@ -83,6 +83,9 @@ The renderer rebuilds habit markdown in this exact sequence. Blank lines separat
 ## Purpose & Principles References
 [!purpose-references:<json-array-or-empty-string>]
 
+## General References
+[!references:<json-array-or-empty-string>]
+
 ## Created
 [!datetime:created_date_time:YYYY-MM-DDTHH:MM:SSZ]
 

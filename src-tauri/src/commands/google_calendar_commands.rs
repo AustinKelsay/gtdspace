@@ -406,11 +406,25 @@ pub async fn google_oauth_store_config(
     GoogleConfigManager::validate_config(&oauth_config)
         .map_err(|e| format!("Invalid configuration: {}", e))?;
 
-    // Store configuration
+    let _lifecycle_guard = GOOGLE_CALENDAR_LIFECYCLE_LOCK.lock().await;
+
     config_manager
         .store_config(&oauth_config)
         .map_err(|e| format!("Failed to store configuration: {}", e))?;
-    clear_google_calendar_session(app).await?;
+
+    if let Err(error) = clear_google_calendar_session_locked(app).await {
+        let rollback_error = config_manager
+            .clear_config()
+            .err()
+            .map(|rollback| rollback.to_string());
+        let rollback_message = rollback_error
+            .map(|rollback| format!(" Rollback also failed: {}", rollback))
+            .unwrap_or_default();
+        return Err(format!(
+            "Failed to refresh Google Calendar session after saving configuration: {}. Persisted changes were rolled back.{}",
+            error, rollback_message
+        ));
+    }
 
     Ok("Google OAuth configuration saved".to_string())
 }

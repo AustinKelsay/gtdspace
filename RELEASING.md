@@ -12,11 +12,25 @@ Use `npm run release:minor` or `npm run release:major` when needed.
 
 ## Before Running It
 
-- `npm test`
+- Add `docs/releases/vX.Y.Z.md` for the version you are about to ship
+- `npm run test:run`
 - `npm run type-check`
 - `npm run lint`
 - `npm run build`
+- `cd src-tauri && cargo test --bins --tests`
 - `npm run tauri:dev` for a quick manual smoke test when needed
+
+Preview the GitHub release body locally with:
+
+```bash
+npm run release:notes -- vX.Y.Z
+```
+
+Validate the full scripted flow without mutating the repo:
+
+```bash
+npm run release:major -- --dry-run
+```
 
 ## Manual Version Scripts
 

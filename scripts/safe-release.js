@@ -6,6 +6,8 @@ import path from 'path';
 import process from 'process';
 import { createInterface } from 'readline';
 import { fileURLToPath } from 'url';
+import { bumpVersion } from './bump-version.js';
+import { resolveReleaseNotesPath, normalizeTag } from './release-notes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,6 +58,22 @@ function execCommandFile(file, args = [], silent = false) {
     }
     throw error;
   }
+}
+
+function resolveTestCommand(packageJson) {
+  if (!packageJson.scripts) {
+    return '';
+  }
+
+  if (packageJson.scripts['test:run']) {
+    return 'npm run test:run';
+  }
+
+  if (packageJson.scripts.test) {
+    return 'npm test';
+  }
+
+  return '';
 }
 
 async function main() {
@@ -152,12 +170,23 @@ async function main() {
   log('\n🧪 Checking for test suite...', 'yellow');
   const packageJsonPath = path.join(__dirname, '..', 'package.json');
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+  const currentVersion = packageJson.version;
+  const plannedVersion = isSemver ? versionType.replace(/^v/i, '') : bumpVersion(currentVersion, versionType);
+  const plannedTag = normalizeTag(plannedVersion);
 
-  const hasTestScript = Boolean(packageJson.scripts && packageJson.scripts.test);
-  if (hasTestScript) {
+  log('\n📝 Checking release notes...', 'yellow');
+  try {
+    const releaseNotesPath = resolveReleaseNotesPath(plannedVersion, path.join(__dirname, '..'));
+    log(`✓ Found release notes for ${plannedTag}: ${path.relative(path.join(__dirname, '..'), releaseNotesPath)}`, 'green');
+  } catch (error) {
+    exitWithError(error instanceof Error ? error.message : String(error));
+  }
+
+  const testCommand = resolveTestCommand(packageJson);
+  if (testCommand) {
     log('Running test suite...', 'yellow');
     try {
-      execCommand('npm test');
+      execCommand(testCommand);
       log('✓ All tests passed', 'green');
     } catch (error) {
       exitWithError('Tests failed. Please fix all failing tests before releasing');
@@ -224,8 +253,14 @@ async function main() {
   }
 
   // Step 7: Get current version
-  const currentVersion = packageJson.version;
   log(`\n📦 Current version: ${currentVersion}`, 'blue');
+  log(`📌 Planned release: ${plannedTag}`, 'blue');
+
+  if (flags.has('--dry-run')) {
+    log('\n🧪 Dry run complete. No files, commits, or tags were changed.', 'yellow');
+    log(`Would release ${plannedTag} from branch '${currentBranch}' after passing the checks above.`, 'green');
+    return;
+  }
 
   // Step 8: Run version bump
   log(`\n⬆️ Bumping version (${versionType})...`, 'yellow');

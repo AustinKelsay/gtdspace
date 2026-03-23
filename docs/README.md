@@ -54,6 +54,7 @@ These are implementation references for specific marker families. They are secon
 ## Build And Release
 
 - [`release-process.md`](./release-process.md): canonical release workflow
+- [`releases/README.md`](./releases/README.md): versioned GitHub release notes convention and preview commands
 - [`icon-generation.md`](./icon-generation.md): icon generation notes
 - [`mac-signing-setup.md`](./mac-signing-setup.md): macOS signing and notarization setup
 

@@ -18,7 +18,7 @@ function writeFile(filePath, content) {
   fs.writeFileSync(filePath, content, 'utf8');
 }
 
-function bumpVersion(currentVersion, type) {
+export function bumpVersion(currentVersion, type) {
   const sanitize = (v) => String(v).trim().replace(/^v/i, '');
   const base = (v) => sanitize(v).replace(/[+-].*$/, ''); // strip prerelease/build for bump math
   const parse = (v) => {

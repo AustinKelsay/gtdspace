@@ -7,6 +7,7 @@ use gtdspace_lib::backend::{
     ChangeApplyResult, ContextPack, GtdItemSummary, PlannedChange, WorkspaceInfo,
     WorkspaceRefreshResult, WorkspaceSearchResult,
 };
+use gtdspace_lib::test_utils::{seed_test_workspace, write_test_file};
 use rmcp::{
     model::{CallToolRequestParams, ReadResourceRequestParams, ResourceContents},
     transport::{ConfigureCommandExt, TokioChildProcess},
@@ -14,55 +15,6 @@ use rmcp::{
 };
 use serde::de::DeserializeOwned;
 use serde_json::{json, Map, Value};
-use tempfile::TempDir;
-
-fn write_text(path: impl AsRef<Path>, content: &str) -> Result<(), Box<dyn Error>> {
-    let path = path.as_ref();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(path, content)?;
-    Ok(())
-}
-
-fn seed_workspace() -> Result<TempDir, Box<dyn Error>> {
-    let temp_dir = tempfile::tempdir()?;
-    let root = temp_dir.path();
-
-    for folder in ["Projects", "Habits", "Cabinet", "Someday Maybe", "Goals"] {
-        fs::create_dir_all(root.join(folder))?;
-    }
-
-    write_text(
-        root.join("Goals/Fitness.md"),
-        r#"# Fitness
-
-[!singleselect:status:active]
-[!datetime:created_date_time:2026-03-20T09:00:00Z]
-
-## Description
-
-Build a sustainable training habit.
-"#,
-    )?;
-
-    write_text(
-        root.join("Projects/Alpha Project/README.md"),
-        r#"# Alpha Project
-
-[!singleselect:project-status:in-progress]
-[!datetime:due_date:2026-04-01]
-[!datetime:created_date_time:2026-03-20T10:00:00Z]
-[!multiselect:goal_refs:Goals/Fitness.md]
-
-## Desired Outcome
-
-Ship the Alpha project cleanly.
-"#,
-    )?;
-
-    Ok(temp_dir)
-}
 
 async fn start_client(
     workspace: &Path,
@@ -106,7 +58,7 @@ fn read_first_text_resource(
 
 #[tokio::test]
 async fn mcp_server_exposes_resources_and_applies_project_change() -> Result<(), Box<dyn Error>> {
-    let workspace = seed_workspace()?;
+    let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
     let workspace_root = workspace.path().to_path_buf();
     let canonical_workspace_root = fs::canonicalize(&workspace_root)?;
 
@@ -234,10 +186,11 @@ async fn mcp_server_exposes_resources_and_applies_project_change() -> Result<(),
     assert_eq!(refreshed.invalidated_change_sets, 0);
     cached_client.cancel().await?;
 
-    write_text(
+    write_test_file(
         workspace_root.join("Cabinet/External Note.md"),
         "# External Note\n\nCreated outside MCP.\n",
-    )?;
+    )
+    .map_err(|error| -> Box<dyn Error> { error.into() })?;
 
     let regenerated_client = start_client(&workspace_root).await?;
     let regenerated_info: WorkspaceInfo =

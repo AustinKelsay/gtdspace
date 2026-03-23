@@ -53,12 +53,12 @@ export function parseLocalDateString(dateStr: string): Date | null {
     const minutes = Number(match[5]);
     const seconds = Number(match[6] || '0');
     if (
-      dt.getUTCFullYear() !== year ||
-      dt.getUTCMonth() + 1 !== month ||
-      dt.getUTCDate() !== day ||
-      dt.getUTCHours() !== hours ||
-      dt.getUTCMinutes() !== minutes ||
-      dt.getUTCSeconds() !== seconds
+      dt.getFullYear() !== year ||
+      dt.getMonth() + 1 !== month ||
+      dt.getDate() !== day ||
+      dt.getHours() !== hours ||
+      dt.getMinutes() !== minutes ||
+      dt.getSeconds() !== seconds
     ) {
       return null;
     }

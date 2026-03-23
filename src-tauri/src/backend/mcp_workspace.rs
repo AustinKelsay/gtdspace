@@ -1725,7 +1725,7 @@ fn build_item_summaries(
         .into_iter()
         .map(|project| {
             (
-                normalize_path(&Path::new(&project.path).join("README.md")),
+                normalize_path(Path::new(&project.path).join("README.md")),
                 project,
             )
         })
@@ -1797,7 +1797,7 @@ fn parse_item_summary(
     } else if normalized.starts_with("Projects/") {
         let project_path = Path::new(&normalized)
             .parent()
-            .map(|parent| normalize_path(parent))
+            .map(normalize_path)
             .unwrap_or_default();
         Some(GtdItemSummary {
             relative_path: normalized.clone(),
@@ -2827,57 +2827,8 @@ fn horizon_folder_name(page_type: &HorizonPageType) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{seed_test_workspace, write_test_file};
     use std::fs;
-    use tempfile::TempDir;
-
-    fn write_text(path: impl AsRef<Path>, content: &str) -> Result<(), String> {
-        let path = path.as_ref();
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|error| format!("Failed to create test directory: {}", error))?;
-        }
-        fs::write(path, content).map_err(|error| format!("Failed to write test file: {}", error))
-    }
-
-    fn seed_workspace() -> Result<TempDir, String> {
-        let temp_dir = tempfile::tempdir().map_err(|error| error.to_string())?;
-        let root = temp_dir.path();
-
-        for folder in ["Projects", "Habits", "Cabinet", "Someday Maybe", "Goals"] {
-            fs::create_dir_all(root.join(folder))
-                .map_err(|error| format!("Failed to create workspace folder: {}", error))?;
-        }
-
-        write_text(
-            root.join("Goals/Fitness.md"),
-            r#"# Fitness
-
-[!singleselect:status:active]
-[!datetime:created_date_time:2026-03-20T09:00:00Z]
-
-## Description
-
-Build a sustainable training habit.
-"#,
-        )?;
-
-        write_text(
-            root.join("Projects/Alpha Project/README.md"),
-            r#"# Alpha Project
-
-[!singleselect:project-status:in-progress]
-[!datetime:due_date:2026-04-01]
-[!datetime:created_date_time:2026-03-20T10:00:00Z]
-[!multiselect:goal_refs:Goals/Fitness.md]
-
-## Desired Outcome
-
-Ship the Alpha project cleanly.
-"#,
-        )?;
-
-        Ok(temp_dir)
-    }
 
     #[test]
     fn parses_reference_lists_from_json_and_csv() {
@@ -2968,7 +2919,7 @@ Ship the Alpha project cleanly.
 
     #[test]
     fn context_pack_cache_reuses_and_regenerates_when_fingerprint_changes() -> Result<(), String> {
-        let workspace = seed_workspace()?;
+        let workspace = seed_test_workspace()?;
         let workspace_root = workspace.path().to_string_lossy().to_string();
 
         let service = GtdWorkspaceService::new(Some(workspace_root.clone()), false)?;
@@ -2979,7 +2930,7 @@ Ship the Alpha project cleanly.
         let second = second_service.workspace_context_pack()?;
         assert_eq!(second.source, "cache");
 
-        write_text(
+        write_test_file(
             workspace.path().join("Cabinet/External Note.md"),
             "# External Note\n\nCreated outside MCP.\n",
         )?;
@@ -2992,7 +2943,7 @@ Ship the Alpha project cleanly.
 
     #[test]
     fn workspace_refresh_invalidates_pending_change_sets() -> Result<(), String> {
-        let workspace = seed_workspace()?;
+        let workspace = seed_test_workspace()?;
         let service =
             GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
 
@@ -3016,7 +2967,7 @@ Ship the Alpha project cleanly.
 
     #[test]
     fn change_apply_fails_if_file_changed_after_planning() -> Result<(), String> {
-        let workspace = seed_workspace()?;
+        let workspace = seed_test_workspace()?;
         let service =
             GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
 
@@ -3049,7 +3000,7 @@ Ship the Alpha project cleanly.
 
     #[test]
     fn resolve_workspace_file_rejects_parent_traversal_for_missing_paths() -> Result<(), String> {
-        let workspace = seed_workspace()?;
+        let workspace = seed_test_workspace()?;
         let service =
             GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
 
@@ -3062,7 +3013,7 @@ Ship the Alpha project cleanly.
 
     #[test]
     fn change_apply_reports_refresh_after_apply_failure() -> Result<(), String> {
-        let workspace = seed_workspace()?;
+        let workspace = seed_test_workspace()?;
         let service =
             GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
 

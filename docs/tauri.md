@@ -8,6 +8,8 @@ The Rust command layer is now split by domain under `src-tauri/src/commands/`, w
 
 The newest GTD refactor also introduced explicit domain helpers behind the command facade. For habits, `gtd_habits.rs` now delegates parsing, history migration, and reset-window math to `gtd_habits_domain.rs` instead of keeping those rules inline inside command handlers.
 
+The MCP work adds a second backend surface that reuses the same GTD business rules without going through Tauri invoke handlers. `src-tauri/src/backend/mcp_workspace.rs` owns the shared workspace indexing, context-pack generation, and dry-run/apply flow, while `src-tauri/src/mcp_server.rs` exposes that layer as a standalone stdio MCP server for local-model clients.
+
 ## Command Conventions
 
 The app uses these patterns consistently:
@@ -35,6 +37,8 @@ The current command surface falls into these groups:
 - `gtd_habits.rs`: habit creation, updates, and reset logic
 - `gtd_habits_domain.rs`: shared habit-domain parsing, history insertion, and calendar reset calculations
 - `gtd_relationships.rs`: reverse-link and habit-reference lookup
+- `backend/mcp_workspace.rs`: shared GTD workspace service used by both Tauri-adjacent code and the standalone MCP server
+- `mcp_server.rs`: MCP stdio server exposing GTD resources and tools
 - `git_commands.rs`: Tauri command wrappers for git sync
 - `git_sync.rs`: core encrypted git sync implementation
 - `google_calendar_commands.rs`: Tauri command wrappers for Google Calendar and OAuth config
@@ -148,6 +152,7 @@ Use this doc when you need to answer questions like:
 For behavior details, pair this doc with:
 
 - [`architecture.md`](./architecture.md)
+- [`mcp.md`](./mcp.md)
 - [`settings.md`](./settings.md)
 - [`content-events.md`](./content-events.md)
 - [`../spec/03-runtime-behavior.md`](../spec/03-runtime-behavior.md)

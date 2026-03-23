@@ -13,9 +13,50 @@ import { BlockNoteEditor } from '@blocknote/core';
 export function useHorizonListInsertion(editor: BlockNoteEditor | null) {
   useEffect(() => {
     if (!editor) return;
-    
-    // In the future, keyboard shortcuts for list insertion can be added here
-    // For now, lists are inserted through slash commands or programmatically
+
+    const handleInsertHorizonList = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        listType?:
+          | 'projects-list'
+          | 'areas-list'
+          | 'goals-list'
+          | 'vision-list'
+          | 'visions-list'
+          | 'purpose-list'
+          | 'projects-areas-list'
+          | 'goals-areas-list'
+          | 'visions-goals-list';
+      }>;
+      if (!customEvent.detail?.listType) return;
+      insertHorizonList(editor, customEvent.detail.listType);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      const isInEditor = document.activeElement?.closest('.bn-editor');
+      if (!isInEditor) return;
+
+      const isMac = navigator.platform.toLowerCase().includes('mac');
+      const modKey = isMac ? event.metaKey : event.ctrlKey;
+
+      if (modKey && event.shiftKey && event.key.toLowerCase() === 'v') {
+        event.preventDefault();
+        insertHorizonList(editor, 'vision-list');
+      }
+
+      if (modKey && event.shiftKey && event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        insertHorizonList(editor, 'purpose-list');
+      }
+    };
+
+    window.addEventListener('insert-horizon-list', handleInsertHorizonList);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('insert-horizon-list', handleInsertHorizonList);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [editor]);
 }
 
@@ -26,7 +67,7 @@ export function useHorizonListInsertion(editor: BlockNoteEditor | null) {
  */
 export function insertHorizonList(
   editor: BlockNoteEditor | null,
-  listType: 'projects-list' | 'areas-list' | 'goals-list' | 'visions-list' | 
+  listType: 'projects-list' | 'areas-list' | 'goals-list' | 'vision-list' | 'visions-list' | 'purpose-list' |
            'projects-areas-list' | 'goals-areas-list' | 'visions-goals-list'
 ) {
   if (!editor) {
@@ -48,7 +89,7 @@ export function insertHorizonList(
     const newBlock = {
       type: listType as any,
       props: {
-        listType: listType.replace('-list', ''),
+        listType: listType === 'vision-list' ? 'visions' : listType.replace('-list', ''),
       },
     } as any;
 

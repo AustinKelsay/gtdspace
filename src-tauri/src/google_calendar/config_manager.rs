@@ -1,13 +1,15 @@
-/**
- * @fileoverview Configuration manager for Google Calendar OAuth credentials.
- * This module uses Tauri's store plugin to save credentials to a local JSON file.
- * It does not use the OS keychain and does not encrypt data at rest, so the
- * stored credentials are accessible to the local user.
- */
+//! Configuration manager for Google Calendar OAuth credentials.
+//!
+//! The client ID is stored in Tauri's plugin store, while the client secret is
+//! persisted in the OS-backed secure storage via `keyring`.
+
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::AppHandle;
 use tauri_plugin_store::{Store, StoreExt};
+
+const GOOGLE_CALENDAR_SECURE_STORAGE_SERVICE: &str = "com.gtdspace.app";
+const GOOGLE_CALENDAR_CLIENT_SECRET_KEY: &str = "google_calendar_client_secret";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GoogleOAuthConfig {
@@ -15,11 +17,24 @@ pub struct GoogleOAuthConfig {
     pub client_secret: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct StoredGoogleOAuthConfig {
+    client_id: String,
+}
+
 pub struct GoogleConfigManager {
     store: Arc<Store<tauri::Wry>>,
 }
 
 impl GoogleConfigManager {
+    fn client_secret_entry(&self) -> Result<keyring::Entry, Box<dyn std::error::Error>> {
+        keyring::Entry::new(
+            GOOGLE_CALENDAR_SECURE_STORAGE_SERVICE,
+            GOOGLE_CALENDAR_CLIENT_SECRET_KEY,
+        )
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+    }
+
     pub fn new(app_handle: AppHandle) -> Result<Self, Box<dyn std::error::Error>> {
         // Create a store for Google OAuth config
         let store = app_handle
@@ -34,11 +49,17 @@ impl GoogleConfigManager {
         &self,
         config: &GoogleOAuthConfig,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Store as a single atomic operation
-        self.store
-            .set("oauth_config", serde_json::to_value(config)?);
+        self.client_secret_entry()?
+            .set_password(&config.client_secret)?;
 
-        // Save the store to persist changes
+        let stored_config = StoredGoogleOAuthConfig {
+            client_id: config.client_id.clone(),
+        };
+        self.store
+            .set("oauth_config", serde_json::to_value(&stored_config)?);
+        self.store.delete("client_id");
+        self.store.delete("client_secret");
+
         self.store
             .save()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
@@ -49,13 +70,39 @@ impl GoogleConfigManager {
 
     /// Retrieve Google OAuth configuration from storage
     pub fn get_config(&self) -> Result<Option<GoogleOAuthConfig>, Box<dyn std::error::Error>> {
-        // First try to get the new atomic config
+        let secure_secret = match self.client_secret_entry()?.get_password() {
+            Ok(secret) => Some(secret),
+            Err(keyring::Error::NoEntry) => None,
+            Err(error) => return Err(Box::new(error)),
+        };
+
         if let Some(config_value) = self.store.get("oauth_config") {
-            let config: GoogleOAuthConfig = serde_json::from_value(config_value.clone())?;
-            return Ok(Some(config));
+            if config_value
+                .as_object()
+                .and_then(|object| object.get("client_secret"))
+                .is_some()
+            {
+                let legacy_config: GoogleOAuthConfig =
+                    serde_json::from_value(config_value.clone())?;
+                self.store_config(&legacy_config)?;
+                return Ok(Some(legacy_config));
+            }
+
+            if let Ok(config) =
+                serde_json::from_value::<StoredGoogleOAuthConfig>(config_value.clone())
+            {
+                if let Some(client_secret) = secure_secret {
+                    return Ok(Some(GoogleOAuthConfig {
+                        client_id: config.client_id,
+                        client_secret,
+                    }));
+                }
+                return Ok(None);
+            }
+
+            return Ok(None);
         }
 
-        // Fall back to legacy separate keys for backward compatibility
         let client_id = self.store.get("client_id");
         let client_secret = self.store.get("client_secret");
 
@@ -69,16 +116,9 @@ impl GoogleConfigManager {
                     client_secret,
                 };
 
-                // Migrate to new format automatically
-                println!(
-                    "[GoogleConfigManager] Migrating OAuth configuration to new atomic format"
-                );
-                self.store
-                    .set("oauth_config", serde_json::to_value(&config)?);
-                // Clean up legacy keys
+                self.store_config(&config)?;
                 self.store.delete("client_id");
                 self.store.delete("client_secret");
-                // Save the migration
                 self.store
                     .save()
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
@@ -94,13 +134,14 @@ impl GoogleConfigManager {
 
     /// Clear Google OAuth configuration from storage
     pub fn clear_config(&self) -> Result<(), Box<dyn std::error::Error>> {
-        // Delete the new atomic config
         self.store.delete("oauth_config");
-        // Also clean up legacy keys if they exist
         self.store.delete("client_id");
         self.store.delete("client_secret");
+        match self.client_secret_entry()?.delete_password() {
+            Ok(()) | Err(keyring::Error::NoEntry) => {}
+            Err(error) => return Err(Box::new(error)),
+        }
 
-        // Save the store to persist changes
         self.store
             .save()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
@@ -111,11 +152,26 @@ impl GoogleConfigManager {
 
     /// Check if OAuth configuration is stored
     pub fn has_config(&self) -> bool {
-        // Check for new atomic config first
-        if self.store.get("oauth_config").is_some() {
-            return true;
+        let has_secure_secret = match self.client_secret_entry() {
+            Ok(entry) => entry
+                .get_password()
+                .map(|value| !value.is_empty())
+                .unwrap_or(false),
+            Err(_) => false,
+        };
+
+        if let Some(config_value) = self.store.get("oauth_config") {
+            if config_value
+                .as_object()
+                .and_then(|object| object.get("client_secret"))
+                .and_then(|value| value.as_str())
+                .map(|value| !value.is_empty())
+                .unwrap_or(false)
+            {
+                return true;
+            }
+            return has_secure_secret;
         }
-        // Fall back to checking legacy keys for backward compatibility
         self.store.get("client_id").is_some() && self.store.get("client_secret").is_some()
     }
 

@@ -1,6 +1,6 @@
 # Habit Page Template — UI and Markdown Standard
 
-Updated: March 20, 2026
+Updated: March 21, 2026
 
 This document captures the current Habit page template for GTD Space. It mirrors the Action and Project patterns so readers, designers, and engineers share a single blueprint for the current standardized experience.
 
@@ -40,8 +40,8 @@ This document captures the current Habit page template for GTD Space. It mirrors
   - Row 5: Purpose & Principles References (left) • — (right empty for future metrics).
 - Field controls:
 - Frequency: singleselect tokens `5-minute | daily | every-other-day | twice-weekly | weekly | weekdays | biweekly | monthly` (aligns with `GTDHabitFrequency`; `5-minute` remains a testing utility).
-  - Next Reset: derived timestamp computed via `useHabitTracking`; displayed as `Oct 22, 2025 • 12:00 AM` (local time). No markdown token is written.
-  - Last Completion: derived from history table (`Latest status === Complete ? timestamp` else `—`). Also not written to markdown.
+  - Next Reset: derived timestamp computed locally in `HabitPage` from `determineLastHabitResetDate()` and `calculateNextHabitReset()`; displayed as `Oct 22, 2025 • 12:00 AM` (local time). No markdown token is written.
+  - Last Completion: derived from the latest completion history row; falls back to `—`. Also not written to Markdown.
   - Created: read-only ISO datetime normalized to local friendly string; persists in `[!datetime:created_date_time:]`.
   - References: chip lists grouped by horizon type, editing opens existing reference dialog (JSON array storage preferred).
 - Divider: `border-t border-border` separates header and body.
@@ -83,6 +83,9 @@ The renderer rebuilds habit markdown in this exact sequence. Blank lines separat
 ## Purpose & Principles References
 [!purpose-references:<json-array-or-empty-string>]
 
+## General References
+[!references:<json-array-or-empty-string>]
+
 ## Created
 [!datetime:created_date_time:YYYY-MM-DDTHH:MM:SSZ]
 
@@ -104,10 +107,10 @@ Notes:
 ## Behaviors & Data Flow
 
 - Status toggle fires `update_habit_status` (Tauri) with debounce guard; optimistic UI updates history table immediately (`Habits Implementation` doc behavior).
-- Frequency changes re-run the scheduler from `useHabitTracking`, prompting recalculation of next reset and upcoming history entries.
-- Header derived fields:
-  - Next Reset reads from `useHabitsHistory` computed schedule; updates when frequency or local time window changes.
-  - Last Completion inspects the latest `Manual` completion entry (status `Complete`); falls back to “—”.
+- Frequency changes update canonical markdown, and derived reset badges are recalculated from the shared habit-domain helpers in `src/utils/gtd-habit-markdown.ts`.
+- Header-derived fields:
+  - Next Reset is computed locally in `HabitPage.tsx` from `determineLastHabitResetDate()` and `calculateNextHabitReset()`; it updates when frequency or the local time window changes.
+  - Last Completion inspects the latest completion history row; falls back to “—”.
 - History table mutations (manual add/reset) bubble events (`habit-status-updated`, `habits-reset`) so other open views stay in sync (`src/components/editor/BlockNoteEditor.tsx:212`).
 - Reference pickers reuse Horizon reference dialog, writing normalized JSON string tokens and dispatching `habit-content-changed` for live refresh.
 
@@ -120,9 +123,10 @@ Notes:
   - Frequency select: adapt `SingleSelectBlock` with `type="habit-frequency"` and bare mode.
   - Reference chips: reuse horizon reference block internals, grouped visually via Tailwind utilities defined in `src/styles`.
 - Derived metadata:
-  - Next Reset + Last Completion values come from `useHabitsHistory` and `useHabitTracking`.
+  - Next Reset is derived locally in `HabitPage` from `determineLastHabitResetDate()` plus `calculateNextHabitReset()`.
+  - Last Completion is derived locally in `HabitPage` from `findLastHabitCompletionDate()`.
   - Ensure derived badges never write to markdown; they are UI-only for clarity.
-- Markdown rebuild: `buildHabitMarkdown()` in `src/utils/gtd-markdown-helpers.ts` enforces the canonical ordering above and preserves history rows.
+- Markdown parsing and rebuild: `parseHabitContent()` and `canonicalizeHabitMarkdown()` in `src/utils/gtd-habit-markdown.ts` own the habit-specific markdown contract, including `generalReferences` between the horizon-reference groups and `Created`. `HabitPage` parses `generalReferences`, passes it into `buildHabitMarkdown()`, and renders it with `GeneralReferencesField`, while derived UI-only fields like Next Reset and Last Completion continue to come from `determineLastHabitResetDate()`, `calculateNextHabitReset()`, and `findLastHabitCompletionDate()`.
 - Scheduler hooks: `useHabitTracking` handles manual updates, while periodic reset polling currently runs in `App.tsx`; the page should not duplicate polling timers.
 
 ## Theming & Accessibility

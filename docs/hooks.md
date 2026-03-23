@@ -10,8 +10,9 @@ These hooks drive the main app lifecycle:
 
 - `useSettings`: loads, saves, and broadcasts user settings
 - `useFileManager`: loads folders/files, manages editor content, and mediates save/load state
-- `useTabManager`: tracks open tabs, current tab, and tab persistence behavior
+- `useTabManager`: thin composition hook over the reducer-driven tab runtime, handling open tabs, current tab, saves, conflicts, and workspace-scoped tab restore
 - `useGTDSpace`: initializes GTD spaces, validates workspace shape, and creates GTD projects/actions/habits
+- `useGTDWorkspaceSidebar`: orchestrates sidebar preloading, content-event reactions, rename/delete flows, and sidebar-local UI state
 
 These hooks are the main coordination layer between the app shell, workspace state, and Tauri commands.
 
@@ -27,6 +28,12 @@ These hooks derive dashboard and calendar data from markdown content:
 - `useHabitTracking`
 
 They are read-heavy hooks. Most of the GTD dashboards and rollups depend on them rather than on a separate database.
+
+Several of these hooks now intentionally rely on shared markdown/domain utilities rather than custom per-hook parsing:
+
+- `useProjectsData` → `src/utils/gtd-project-content.ts` and `src/utils/gtd-action-markdown.ts`
+- `useActionsData` → `src/utils/gtd-action-markdown.ts`
+- `useHabitsHistory` → `src/utils/gtd-habit-markdown.ts`
 
 ## Editor And Marker Insertion Hooks
 
@@ -70,9 +77,10 @@ The current composition pattern is:
 
 1. `useSettings` restores preferences and workspace hints
 2. `useGTDSpace` and `useFileManager` load the workspace
-3. `useTabManager` manages opened files/pages
-4. Data hooks derive dashboard/calendar models from markdown content
-5. Integration hooks attach watchers, search, and sync behavior
+3. `useGTDWorkspaceSidebar` derives and maintains the workspace navigation tree
+4. `useTabManager` manages opened files/pages through `src/hooks/tab-runtime/` state, persistence, lifecycle, and subscription helpers
+5. Data hooks derive dashboard/calendar models from markdown content
+6. Integration hooks attach watchers, search, and sync behavior
 
 This is a hooks-first architecture, but it is not a generic hook library. Most hooks are tightly coupled to GTD Space’s file-based model.
 
@@ -83,10 +91,12 @@ If you are new to the codebase, read the hooks in this order:
 1. `useSettings`
 2. `useGTDSpace`
 3. `useFileManager`
-4. `useTabManager`
-5. `useProjectsData`, `useActionsData`, `useCalendarData`
-6. the editor insertion hooks
-7. the integration hooks (`useFileWatcher`, `useGitSync`, `useGlobalSearch`)
+4. `useGTDWorkspaceSidebar`
+5. `useTabManager`
+   The supporting `src/hooks/tab-runtime/` modules are worth reading alongside it because most of the reducer and persistence behavior now lives there.
+6. `useProjectsData`, `useActionsData`, `useCalendarData`
+7. the editor insertion hooks
+8. the integration hooks (`useFileWatcher`, `useGitSync`, `useGlobalSearch`)
 
 ## Related Docs
 

@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { FolderOpen, Check } from 'lucide-react';
-import { safeInvoke } from '@/utils/safe-invoke';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 
@@ -39,16 +38,14 @@ export const GTDInitDialog: React.FC<GTDInitDialogProps> = ({
   }, [isOpen, initialPath]);
 
   const handleSelectFolder = async () => {
-    const result = await withErrorHandling(
-      async () => {
-        const folder = await safeInvoke<string>('select_folder', undefined, null);
-        if (!folder) {
-          throw new Error('No folder selected');
-        }
-        return folder;
-      },
-      'Failed to select folder'
-    );
+    const result = await withErrorHandling(async () => {
+      const { invoke } = await import('@tauri-apps/api/core');
+      return invoke<string | null>('select_folder');
+    }, 'Failed to select folder');
+
+    if (result === null) {
+      return;
+    }
 
     if (result) {
       setSelectedPath(result);

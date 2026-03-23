@@ -10,6 +10,7 @@ import { PropSchema } from '@blocknote/core';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { getPersistedActiveTabFilePath } from '@/hooks/tab-runtime';
 import { safeInvoke } from '@/utils/safe-invoke';
 import debounce from 'lodash.debounce';
 import {
@@ -106,21 +107,7 @@ function HabitsListBlockComponent(incomingProps: unknown) {
     if (blocknotePath) {
       return blocknotePath;
     }
-
-    // Fallback: Try to get from localStorage (active tab info)
-    const tabsJson = localStorage.getItem('gtdspace-tabs');
-    if (tabsJson) {
-      try {
-        const persisted = JSON.parse(tabsJson);
-        const activeTab = persisted.openTabs?.find((tab: { id: string; filePath?: string }) => tab.id === persisted.activeTabId);
-        if (activeTab?.filePath) {
-          return activeTab.filePath;
-        }
-      } catch (err) {
-        console.error('Failed to parse tabs from localStorage:', err);
-      }
-    }
-    return null;
+    return getPersistedActiveTabFilePath(localStorage.getItem('gtdspace-current-path'));
   }, []);
 
   const loadHabits = React.useCallback(async () => {

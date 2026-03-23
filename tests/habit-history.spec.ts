@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { __habitHistoryInternals } from '@/components/gtd/HabitPage';
-
-const { splitHistory, reconstructHistory } = __habitHistoryInternals;
+import { splitHabitHistory, reconstructHabitHistory } from '@/utils/gtd-habit-markdown';
+import { toAnalyticsHistory } from '@/hooks/useHabitsHistory';
 
 describe('habit history parsing and reconstruction', () => {
   it('inserts a blank line before the history table when intro exists', () => {
@@ -12,8 +11,8 @@ describe('habit history parsing and reconstruction', () => {
       '| 2024-01-01 | 09:00 | Complete | Reset | Did thing |',
     ].join('\n');
 
-    const parsed = splitHistory(raw);
-    const rebuilt = reconstructHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
+    const parsed = splitHabitHistory(raw);
+    const rebuilt = reconstructHabitHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
 
     expect(rebuilt).toContain('This is the history intro paragraph.\n\n| Date | Time | Status | Action | Details |');
   });
@@ -33,9 +32,9 @@ describe('habit history parsing and reconstruction', () => {
       'After table line 2',
     ].join('\n');
 
-    const parsed = splitHistory(raw);
-    const rebuilt = reconstructHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
-    const reparsed = splitHistory(rebuilt);
+    const parsed = splitHabitHistory(raw);
+    const rebuilt = reconstructHabitHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
+    const reparsed = splitHabitHistory(rebuilt);
 
     expect(reparsed.intro).toEqual(parsed.intro);
     // We allow an extra leading blank line between the table and the outro,
@@ -52,15 +51,15 @@ describe('habit history parsing and reconstruction', () => {
       '| 2024-01-01 | 09:00 | Complete | Reset | First note | extra-1 |',
     ].join('\n');
 
-    const parsed = splitHistory(raw);
+    const parsed = splitHabitHistory(raw);
     expect(parsed.header).toHaveLength(2);
     expect(parsed.header[0]).toBe('| When | Time | State | Action | Note | Extra |');
     expect(parsed.header[1]).toBe('|:-----|:----:|------:|--------|------|-------|');
     expect(parsed.rows).toHaveLength(1);
     expect(parsed.rows[0].extraCells).toEqual(['extra-1']);
 
-    const rebuilt = reconstructHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
-    const reparsed = splitHistory(rebuilt);
+    const rebuilt = reconstructHabitHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
+    const reparsed = splitHabitHistory(rebuilt);
 
     expect(reparsed.header).toEqual(parsed.header);
     expect(reparsed.rows[0].extraCells).toEqual(['extra-1']);
@@ -75,7 +74,7 @@ describe('habit history parsing and reconstruction', () => {
       '| 2024-01-02 | 10:00 | To Do | Something | Second row |',
     ].join('\n');
 
-    const parsed = splitHistory(raw);
+    const parsed = splitHabitHistory(raw);
     expect(parsed.rows).toHaveLength(2);
   });
 
@@ -86,12 +85,12 @@ describe('habit history parsing and reconstruction', () => {
       '| 2024-01-01 | 09:00 | Complete | Note | Had tea \\| lemon |',
     ].join('\n');
 
-    const parsed = splitHistory(raw);
+    const parsed = splitHabitHistory(raw);
     expect(parsed.rows).toHaveLength(1);
     expect(parsed.rows[0].details).toBe('Had tea | lemon');
 
-    const rebuilt = reconstructHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
-    const reparsed = splitHistory(rebuilt);
+    const rebuilt = reconstructHabitHistory(parsed.intro, parsed.header, parsed.rows, parsed.outro);
+    const reparsed = splitHabitHistory(rebuilt);
 
     expect(reparsed.rows).toHaveLength(1);
     expect(reparsed.rows[0].details).toBe('Had tea | lemon');
@@ -105,7 +104,7 @@ describe('habit history parsing and reconstruction', () => {
       '| 2024-01-01 | 09:00 | Complete | Note | First line<br>Second line |',
     ].join('\n');
 
-    const parsed = splitHistory(raw);
+    const parsed = splitHabitHistory(raw);
     expect(parsed.rows).toHaveLength(1);
     expect(parsed.rows[0].details).toBe('First line\nSecond line');
 
@@ -117,10 +116,79 @@ describe('habit history parsing and reconstruction', () => {
       },
     ];
 
-    const rebuilt = reconstructHistory(parsed.intro, parsed.header, editedRows, parsed.outro);
-    const reparsed = splitHistory(rebuilt);
+    const rebuilt = reconstructHabitHistory(parsed.intro, parsed.header, editedRows, parsed.outro);
+    const reparsed = splitHabitHistory(rebuilt);
 
     expect(reparsed.rows).toHaveLength(1);
     expect(reparsed.rows[0].details).toBe('First line\nSecond line\nThird line');
+  });
+
+  it('excludes auto-reset and backfill rows from analytics history', () => {
+    const analyticsHistory = toAnalyticsHistory([
+      {
+        date: '2026-03-01',
+        time: '9:00 AM',
+        status: 'Complete',
+        action: 'Manual',
+        details: 'Done',
+      },
+      {
+        date: '2026-03-02',
+        time: '12:00 AM',
+        status: 'To Do',
+        action: 'Auto-Reset',
+        details: 'New period',
+      },
+      {
+        date: '2026-03-03',
+        time: '12:00 AM',
+        status: 'To Do',
+        action: 'Backfill',
+        details: 'Missed - app offline',
+      },
+    ]);
+
+    expect(analyticsHistory).toEqual([
+      {
+        date: '2026-03-01',
+        time: '9:00 AM',
+        completed: true,
+        action: 'Manual',
+        note: 'Done',
+      },
+    ]);
+  });
+
+  it('parses legacy bullet history entries into rows for analytics', () => {
+    const raw = [
+      '- **2026-03-01** at **7:30 AM**: Complete (Manual - Done)',
+      '- **2026-03-03** at **12:00 AM**: To Do (Auto-Reset - New period)',
+    ].join('\n');
+
+    const parsed = splitHabitHistory(raw);
+
+    expect(parsed.rows).toHaveLength(2);
+    expect(parsed.rows[0]).toMatchObject({
+      date: '2026-03-01',
+      time: '7:30 AM',
+      status: 'Complete',
+      action: 'Manual',
+      details: 'Done',
+    });
+  });
+
+  it('removes parsed legacy bullet rows from intro and outro when rebuilding', () => {
+    const raw = [
+      'Legacy intro',
+      '- **2026-03-01** at **7:30 AM**: Complete (Manual - Done)',
+      '',
+      'Trailing note',
+    ].join('\n');
+
+    const parsed = splitHabitHistory(raw);
+
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.intro).toEqual(['Legacy intro', '', 'Trailing note']);
+    expect(parsed.outro).toBe('');
   });
 });

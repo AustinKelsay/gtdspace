@@ -16,9 +16,13 @@ import {
 } from 'lucide-react';
 import { useGTDSpace } from '@/hooks/useGTDSpace';
 import { useActionsData } from '@/hooks/useActionsData';
-import { useProjectsData } from '@/hooks/useProjectsData';
+import {
+  useProjectsData,
+  type PersistedProjectUpdates,
+} from '@/hooks/useProjectsData';
 import { useHabitsHistory } from '@/hooks/useHabitsHistory';
 import { useHorizonsRelationships } from '@/hooks/useHorizonsRelationships';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { GTDProjectDialog, GTDActionDialog } from '@/components/gtd';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { useToast } from '@/hooks/use-toast';
@@ -31,8 +35,11 @@ import {
   DashboardHorizons
 } from '@/components/dashboard';
 import type { GTDSpace, GTDProject, MarkdownFile, FileOperationResult } from '@/types';
+import type { GTDActionStatus } from '@/types';
 import type { HorizonFile } from '@/hooks/useHorizonsRelationships';
 import { createScopedLogger } from '@/utils/logger';
+import { norm } from '@/utils/path';
+import { invoke } from '@tauri-apps/api/core';
 
 const log = createScopedLogger('GTDDashboard');
 
@@ -109,6 +116,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   // Track if we've loaded data for current space
   const loadedPathRef = React.useRef<string | null>(null);
   const { toast } = useToast();
+  const { withErrorHandling } = useErrorHandler();
 
   // Helper function to sanitize file names for security
   const sanitizeFileName = (input: string): string | null => {
@@ -246,7 +254,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   };
 
   // Handle action status update
-  const handleActionStatusUpdate = async (actionId: string, newStatus: string) => {
+  const handleActionStatusUpdate = async (actionId: string, newStatus: GTDActionStatus) => {
     await updateActionStatus(actionId, newStatus);
   };
 
@@ -304,7 +312,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   };
 
   // Handle bulk action updates
-  const handleBulkActionUpdate = async (actionIds: string[], updates: Partial<{ status: string }>, actionPaths?: string[]) => {
+  const handleBulkActionUpdate = async (actionIds: string[], updates: Partial<{ status: GTDActionStatus }>, actionPaths?: string[]) => {
     if (updates.status) {
       try {
         log.debug('handleBulkActionUpdate called', {
@@ -373,7 +381,10 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   };
 
   // Handle project updates
-  const handleProjectUpdate = async (projectPath: string, updates: Partial<typeof projectsWithMetadata[0]>) => {
+  const handleProjectUpdate = async (
+    projectPath: string,
+    updates: PersistedProjectUpdates
+  ) => {
     await updateProject(projectPath, updates);
   };
 
@@ -566,8 +577,19 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                 if (gtdSpace?.root_path) {
                   const habitName = prompt('Enter habit name:');
                   if (habitName) {
+                    const sanitizedHabitName = sanitizeFileName(habitName);
+                    if (!sanitizedHabitName) {
+                      toast({
+                        title: 'Invalid habit name',
+                        description: 'Please enter a valid habit name without special characters',
+                        variant: 'destructive'
+                      });
+                      return;
+                    }
+
                     // Available frequencies: daily, weekdays, every-other-day, twice-weekly, weekly, biweekly, monthly
                     const frequencyOptions = [
+                      { value: '5-minute', label: 'Every 5 Minutes (Testing)' },
                       { value: 'daily', label: 'Daily' },
                       { value: 'weekdays', label: 'Weekdays (Mon-Fri)' },
                       { value: 'every-other-day', label: 'Every Other Day' },
@@ -581,25 +603,48 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                     const selectedLabel = prompt(`Select frequency:\n${frequencyLabels}`, 'Daily');
 
                     if (selectedLabel) {
-                      const frequency = frequencyOptions.find(f =>
-                        f.label.toLowerCase() === selectedLabel.toLowerCase()
-                      )?.value || 'daily';
+                      const normalizedSelection = selectedLabel.trim().toLowerCase();
+                      const selectedFrequency = frequencyOptions.find(
+                        (f) =>
+                          f.label.trim().toLowerCase() === normalizedSelection ||
+                          f.value.trim().toLowerCase() === normalizedSelection
+                      );
+
+                      if (!selectedFrequency) {
+                        toast({
+                          title: 'Invalid frequency',
+                          description: 'Please choose one of the listed frequency options.',
+                          variant: 'destructive'
+                        });
+                        return;
+                      }
+
+                      const frequency = selectedFrequency.value;
 
                       try {
-                        const habitPath = await safeInvoke<string>('create_gtd_habit', {
-                          space_path: gtdSpace.root_path,
-                          habit_name: habitName,
-                          frequency: frequency,
-                          status: 'todo',
-                          focus_time: null
-                        });
+                        const habitPath = await withErrorHandling(async () => {
+                          const createdPath = await invoke<string>('create_gtd_habit', {
+                            spacePath: gtdSpace.root_path,
+                            habitName: sanitizedHabitName,
+                            frequency,
+                            focusTime: null
+                          });
+                          return createdPath;
+                        }, 'Failed to create habit');
+                        if (!habitPath) {
+                          return;
+                        }
 
                         // Open the new habit file
-                        if (habitPath && onSelectFile) {
+                        if (onSelectFile) {
+                          const normalizedHabitPath = norm(habitPath) ?? habitPath;
+                          const habitBaseName =
+                            normalizedHabitPath.split('/').filter(Boolean).pop() ||
+                            `${sanitizedHabitName}.md`;
                           onSelectFile({
-                            id: habitPath,
-                            name: `${habitName}.md`,
-                            path: habitPath,
+                            id: normalizedHabitPath,
+                            name: habitBaseName,
+                            path: normalizedHabitPath,
                             size: 0,
                             last_modified: Math.floor(Date.now() / 1000),
                             extension: 'md'

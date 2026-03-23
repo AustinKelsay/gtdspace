@@ -23,14 +23,15 @@ Authoritative reference:
 
 ## Markdown → BlockNote Conversion
 
-When opening a markdown file, it's converted to BlockNote blocks:
+When opening a markdown file, the editor first parses standard markdown, then post-processes the parsed blocks so GTD markers and legacy HTML become custom BlockNote blocks:
 
 ```typescript
 // In BlockNoteEditor.tsx
 const loadContent = async () => {
   if (content && editor && content.trim() !== '') {
     try {
-      const blocks = await editor.tryParseMarkdownToBlocks(content);
+      const parsedBlocks = await editor.tryParseMarkdownToBlocks(content);
+      const blocks = postProcessBlockNoteBlocks(parsedBlocks, content);
       editor.replaceBlocks(editor.document, blocks);
     } catch (error) {
       console.error('Error parsing initial content:', error);
@@ -60,13 +61,17 @@ BlockNote handles standard markdown syntax:
 
 ## BlockNote → Markdown Conversion
 
-When saving, BlockNote blocks are converted back to markdown:
+When saving, `BlockNoteEditor.tsx` walks `editor.document` block-by-block. Standard BlockNote content is buffered into groups and serialized with `blocksToMarkdownLossy`, while GTD custom blocks are emitted back into raw marker form immediately. Paragraphs whose trimmed text is exactly one GTD marker are also emitted as raw markers, even if BlockNote still represents them as plain paragraphs:
 
 ```typescript
 // In BlockNoteEditor.tsx
 const handleUpdate = async () => {
   try {
-    const markdown = await editor.blocksToMarkdownLossy(editor.document);
+    const markdownParts: string[] = [];
+    // Standard blocks flush through blocksToMarkdownLossy(...).
+    // Paragraphs that are exactly one marker flush as raw markers too.
+    // Custom GTD blocks append canonical [!...]-style markers directly.
+    const markdown = markdownParts.join("");
     onChange(markdown);
   } catch (error) {
     console.error('Error converting to markdown:', error);
@@ -75,6 +80,7 @@ const handleUpdate = async () => {
 ```
 
 ### Lossy Conversion
+
 
 The `blocksToMarkdownLossy` method means some BlockNote features may not have exact markdown equivalents:
 
@@ -257,7 +263,8 @@ if (file.size > MAX_FILE_SIZE) {
 ### Parsing Performance
 
 - BlockNote parsing is async to avoid blocking
-- Debounced conversion on typing (2s delay)
+- Explicit external refreshes (e.g., from habit-content sync or forced reload paths) are debounced for 300ms before re-parsing and replacing editor blocks
+- GTD post-processing uses a 5-second in-memory cache keyed by parsed block count plus `createContentHash()`, which hashes the full markdown string together with GTD-marker structural information for hit/miss decisions
 - Virtual scrolling for long documents
 
 ### Memory Management
@@ -281,19 +288,70 @@ const content = await invoke<string>('read_file', {
 ```
 
 ### 2. Parse to Blocks
+
 ```typescript
-const blocks = await editor.tryParseMarkdownToBlocks(content);
+const parsedBlocks = await editor.tryParseMarkdownToBlocks(content);
+const blocks = postProcessBlockNoteBlocks(parsedBlocks, content);
 ```
 
-### 3. Edit in BlockNote
+### 3. Post-process GTD markers and legacy HTML
+
+`postProcessBlockNoteBlocks(...)` scans the original markdown for GTD markers and legacy HTML blocks, then replaces matching parsed paragraphs with custom BlockNote blocks.
+
+Important behavior:
+
+- replacements are exact-match on the paragraph's trimmed text unless the paragraph is composed entirely of GTD markers
+- marker-only paragraphs can split into multiple custom blocks
+
+```markdown
+[!singleselect:status:in-progress]
+[!datetime:due_date:2026-03-25]
+```
+
+Those two marker-only lines become two distinct custom blocks.
+
+- list-only paragraphs such as `[!actions-list]` are post-processed the same way as other marker-only paragraphs
+- `## History` sections are passed through so BlockNote can keep handling tables natively, except empty/helper/italic-only paragraphs are filtered inside that section
+- a 5-second in-memory cache avoids re-running the same transform during explicit reloads
+
+Example:
+
+```markdown
+[!references:/tmp/ref.md]
+```
+
+becomes a custom references block, while:
+
+```markdown
+Before [!references:/tmp/ref.md] after
+```
+
+stays a normal paragraph because the marker is not the paragraph's entire trimmed content.
+
+### 4. Edit in BlockNote
+
 User edits with WYSIWYG interface
 
-### 4. Convert to Markdown
+### 5. Convert to Markdown
+
 ```typescript
-const markdown = await editor.blocksToMarkdownLossy(editor.document);
+const markdownParts: string[] = [];
+let standardBuffer: unknown[] = [];
+
+// Standard blocks are buffered and converted together.
+const flushStandardBuffer = async () => {
+  if (standardBuffer.length === 0) return;
+  markdownParts.push(await editor.blocksToMarkdownLossy(standardBuffer));
+  standardBuffer = [];
+};
+
+// Paragraphs whose trimmed text is exactly one marker also emit raw markers.
+// Custom GTD blocks emit canonical markers directly.
+const markdown = markdownParts.join("");
 ```
 
-### 5. Auto-save
+### 6. Save
+
 ```typescript
 await invoke('save_file', { 
   path: file.path, 
@@ -309,7 +367,8 @@ Handle invalid markdown gracefully:
 
 ```typescript
 try {
-  const blocks = await editor.tryParseMarkdownToBlocks(content);
+  const parsedBlocks = await editor.tryParseMarkdownToBlocks(content);
+  const blocks = postProcessBlockNoteBlocks(parsedBlocks, content);
   editor.replaceBlocks(editor.document, blocks);
 } catch (error) {
   console.error('Parse error:', error);
@@ -323,7 +382,8 @@ try {
 
 ```typescript
 try {
-  const markdown = await editor.blocksToMarkdownLossy(editor.document);
+  // Group standard blocks through blocksToMarkdownLossy and emit GTD markers directly.
+  const markdown = markdownParts.join('');
   onChange(markdown);
 } catch (error) {
   console.error('Conversion error:', error);

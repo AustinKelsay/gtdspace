@@ -1,4 +1,4 @@
-use super::UserSettings;
+use super::settings::UserSettings;
 use aes_gcm::{
     aead::{
         stream::{DecryptorBE32, EncryptorBE32, StreamBE32},
@@ -35,6 +35,28 @@ const MIN_KEEP_HISTORY: usize = 1;
 const MAX_KEEP_HISTORY: usize = 20;
 const PLAINTEXT_CHUNK_SIZE: usize = 64 * 1024;
 const TAG_SIZE: usize = 16;
+#[cfg(not(test))]
+const SECURE_STORAGE_SERVICE: &str = "com.gtdspace.app";
+#[cfg(not(test))]
+const GIT_SYNC_ENCRYPTION_KEY_NAME: &str = "git_sync_encryption_key";
+
+#[cfg(test)]
+fn load_secure_encryption_key() -> Result<Option<String>, String> {
+    Ok(None)
+}
+
+#[cfg(not(test))]
+fn load_secure_encryption_key() -> Result<Option<String>, String> {
+    match keyring::Entry::new(SECURE_STORAGE_SERVICE, GIT_SYNC_ENCRYPTION_KEY_NAME) {
+        Ok(entry) => match entry.get_password() {
+            Ok(password) => Ok(Some(password)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(err) => Err(err.to_string()),
+        },
+        Err(err) => Err(err.to_string()),
+    }
+}
+
 #[derive(Clone)]
 pub struct GitSyncConfig {
     pub repo_path: PathBuf,
@@ -104,28 +126,19 @@ pub fn compute_git_status(
     workspace_override: Option<String>,
 ) -> GitSyncStatusResponse {
     let enabled = settings.git_sync_enabled.unwrap_or(false);
-    // Check secure storage for encryption key; fall back to legacy settings value if needed
-    let encryption_configured = {
-        let service = "com.gtdspace.app";
-        match keyring::Entry::new(service, "git_sync_encryption_key") {
-            Ok(entry) => entry
-                .get_password()
-                .map(|v| !v.trim().is_empty())
-                .unwrap_or_else(|err| {
-                    if let Some(legacy_key) = &settings.git_sync_encryption_key {
-                        warn!(
-                            "Secure storage locked/unavailable ({}). Falling back to legacy encryption key for status",
-                            err
-                        );
-                        !legacy_key.trim().is_empty()
-                    } else {
-                        false
-                    }
-                }),
+    let encryption_configured = if enabled {
+        // Check secure storage for encryption key; fall back to legacy settings value if needed
+        match load_secure_encryption_key() {
+            Ok(Some(value)) if !value.trim().is_empty() => true,
+            Ok(Some(_)) | Ok(None) => settings
+                .git_sync_encryption_key
+                .as_ref()
+                .map(|legacy_key| !legacy_key.trim().is_empty())
+                .unwrap_or(false),
             Err(err) => {
                 if let Some(legacy_key) = &settings.git_sync_encryption_key {
                     warn!(
-                        "Secure storage inaccessible ({}). Using legacy encryption key for status",
+                        "Secure storage locked/unavailable ({}). Falling back to legacy encryption key for status",
                         err
                     );
                     !legacy_key.trim().is_empty()
@@ -134,6 +147,12 @@ pub fn compute_git_status(
                 }
             }
         }
+    } else {
+        settings
+            .git_sync_encryption_key
+            .as_ref()
+            .map(|legacy_key| !legacy_key.trim().is_empty())
+            .unwrap_or(false)
     };
 
     let workspace_path = workspace_override
@@ -246,40 +265,26 @@ pub fn build_git_sync_config(
         .ok_or_else(|| "Git sync repository path is not configured".to_string())?;
 
     // Retrieve encryption key from secure storage (fall back to legacy settings key if migration hasn't completed)
-    let encryption_key = {
-        let service = "com.gtdspace.app";
-        match keyring::Entry::new(service, "git_sync_encryption_key") {
-            Ok(entry) => match entry.get_password() {
-                Ok(password) => password,
-                Err(err) => {
-                    if let Some(legacy_key) = settings.git_sync_encryption_key.clone() {
-                        warn!(
-                            "Secure storage entry missing password ({}). Falling back to legacy encryption key.",
-                            err
-                        );
-                        legacy_key
-                    } else {
-                        return Err("Encryption key has not been set".to_string());
-                    }
-                }
-            },
-            Err(err) => {
-                if let Some(legacy_key) = settings.git_sync_encryption_key.clone() {
-                    warn!(
-                        "Secure storage unavailable ({}). Using legacy encryption key from settings until migration succeeds.",
-                        err
-                    );
-                    legacy_key
-                } else {
-                    return Err(format!("Failed to access secure storage: {}", err));
-                }
+    let encryption_key = match load_secure_encryption_key() {
+        Ok(Some(password)) if !password.trim().is_empty() => password,
+        Ok(Some(_)) | Ok(None) => settings
+            .git_sync_encryption_key
+            .clone()
+            .ok_or_else(|| "Encryption key has not been set".to_string())?,
+        Err(err) => {
+            if let Some(legacy_key) = settings.git_sync_encryption_key.clone() {
+                warn!(
+                    "Secure storage unavailable ({}). Using legacy encryption key from settings until migration succeeds.",
+                    err
+                );
+                legacy_key
+            } else {
+                return Err(format!("Failed to access secure storage: {}", err));
             }
         }
     };
 
-    let encryption_key = encryption_key.trim().to_string();
-
-    if encryption_key.is_empty() {
+    if encryption_key.trim().is_empty() {
         return Err("Encryption key has not been set".to_string());
     }
 
@@ -1156,6 +1161,8 @@ mod tests {
             editor_mode: "edit".to_string(),
             window_width: None,
             window_height: None,
+            max_tabs: None,
+            restore_tabs: None,
             auto_initialize: Some(true),
             seed_example_content: Some(true),
             default_space_path: None,

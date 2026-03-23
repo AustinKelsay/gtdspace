@@ -19,6 +19,8 @@ import {
 import type { SingleSelectBlockType } from '@/utils/singleselect-block-helpers';
 import { useFilePath } from '@/components/editor/FilePathContext';
 import { emitMetadataChange } from '@/utils/content-event-bus';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { norm } from '@/utils/path';
 
 // Define status options for GTD
 const GTD_STATUS_OPTIONS = [
@@ -70,6 +72,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
   const { block } = props;
   const { type, value, label, placeholder, customOptionsJson } = block.props;
   const filePath = useFilePath();
+  const { withErrorHandling } = useErrorHandler();
 
   // Define BlockNote block type
   type BlockNoteBlock = {
@@ -157,9 +160,9 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
         const currentPath = filePath || '';
 
         if (currentPath) {
-          // Check if this is a habit file (case-insensitive and handle both forward and back slashes)
-          const lower = currentPath.toLowerCase();
-          const isHabitFile = lower.includes('/habits/') || lower.includes('\\habits\\');
+          const normalizedHabitPath = norm(currentPath) ?? currentPath;
+          const lower = normalizedHabitPath.toLowerCase();
+          const isHabitFile = lower.includes('/habits/');
 
           if (isHabitFile) {
             // Check if Tauri is available before attempting import
@@ -168,45 +171,20 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
               const inTauriContext = await checkTauriContextAsync();
               
               if (inTauriContext) {
-                const { invoke } = await import('@tauri-apps/api/core');
-                await invoke('update_habit_status', {
-                  habitPath: currentPath,
-                  newStatus: selectedValue,
-                });
+                const result = await withErrorHandling(async () => {
+                  const { invoke } = await import('@tauri-apps/api/core');
+                  return invoke('updateHabitStatus', {
+                    habitPath: currentPath,
+                    newStatus: selectedValue,
+                  });
+                }, 'Failed to update habit status');
+
+                if (result === null) {
+                  throw new Error('Failed to update habit status');
+                }
                 
                 // Mark update as successfully applied
                 updateApplied = true;
-
-                // After marking as complete, backend immediately resets to "todo"
-                // Update the UI to reflect this
-                if (selectedValue === 'completed') {
-                  // Give a brief moment to show the completion, then reset UI
-                  setTimeout(() => {
-                    const target = findBlockInDocument(
-                      block.id,
-                      (b) => b.type === 'singleselect' && (b.props as { type?: string })?.type === block.props.type
-                    );
-                    if (target) {
-                      props.editor.updateBlock(target, {
-                        props: {
-                          ...target.props,
-                          value: 'todo',
-                        },
-                      });
-
-                      // Emit reset event so consumers see the persisted state
-                      const normalizedForName = currentPath.replace(/\\/g, '/');
-                      const fileName = normalizedForName.split('/').pop() || '';
-                      emitMetadataChange({
-                        filePath: currentPath,
-                        fileName,
-                        content: '',
-                        metadata: { habitStatus: 'todo' },
-                        changedFields: { habitStatus: 'todo' }
-                      });
-                    }
-                  }, 500); // Brief delay to show completion
-                }
 
                 // Emit initial status change event
                 const normalizedForName = currentPath.replace(/\\/g, '/');
@@ -218,6 +196,24 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                   metadata: { habitStatus: selectedValue },
                   changedFields: { habitStatus: selectedValue }
                 });
+                window.dispatchEvent(
+                  new CustomEvent('habit-status-updated', {
+                    detail: {
+                      filePath: currentPath,
+                      fileName,
+                      habitStatus: selectedValue,
+                    },
+                  })
+                );
+                window.dispatchEvent(
+                  new CustomEvent('habit-content-changed', {
+                    detail: {
+                      filePath: currentPath,
+                      fileName,
+                      habitStatus: selectedValue,
+                    },
+                  })
+                );
               } else {
                 // Tauri not available (browser/dev mode) - revert UI to previous value
                 console.warn('[SingleSelectBlock] Tauri not available, reverting habit status change');
@@ -300,7 +296,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, block.id, block.props.value, block.props.type, block.props.label, props.editor, filePath, findBlockInDocument]);
+  }, [type, block.id, block.props.value, block.props.type, block.props.label, props.editor, filePath, findBlockInDocument, withErrorHandling]);
 
   return (
     <div className="inline-block min-w-[200px] align-middle mx-1">

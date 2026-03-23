@@ -71,6 +71,17 @@ export function useFileWatcher(): FileWatcherHookResult {
       ...prev,
       recentEvents: [event, ...prev.recentEvents].slice(0, maxEvents),
     }));
+
+    window.dispatchEvent(
+      new CustomEvent('gtd-external-file-changed', {
+        detail: event,
+      })
+    );
+    window.dispatchEvent(
+      new CustomEvent('content-updated', {
+        detail: event,
+      })
+    );
   }, []);
   
   // === WATCHER CONTROL FUNCTIONS ===

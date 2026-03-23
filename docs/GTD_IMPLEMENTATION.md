@@ -1,6 +1,6 @@
 # GTD Implementation Guide
 
-Updated: March 20, 2026
+Updated: March 21, 2026
 
 This guide explains how GTD Space applies Getting Things Done at a product level.
 
@@ -62,12 +62,14 @@ The app interprets these items from markdown markers such as single-selects, dat
 - Project READMEs carry project status, due date, desired outcome, references, and list blocks such as `[!actions-list]`.
 - Action files carry status, focus date, due date, effort, contexts, references, and created timestamp.
 - Saving with a changed H1 can trigger rename behavior for the project folder or action file.
+- Shared frontend helpers now own the canonical parsing/rebuild rules for these files so schema changes do not have to be repeated in every page and hook.
 
 ### Habits
 
 - Habits store checkbox state, frequency, references, created timestamp, optional notes, and a history table.
 - Manual toggles call the backend habit update command and append history rows.
 - The app also runs periodic habit reset checks while a GTD space is open.
+- Habit parsing and reset semantics are now centralized in shared frontend and backend domain helpers, including calendar-based reset windows and legacy history migration.
 
 ### Horizons
 

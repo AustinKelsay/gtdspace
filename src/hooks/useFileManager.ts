@@ -6,7 +6,9 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
+import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { useSettings } from '@/hooks/useSettings';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
 // Performance monitoring and caching removed during simplification
 import { serializeMultiselectsToMarkers, deserializeMarkersToMultiselects } from '@/utils/multiselect-block-helpers';
 import type { 
@@ -43,6 +45,7 @@ export const useFileManager = () => {
   // === SETTINGS INTEGRATION ===
   
   const { settings, setLastFolder, setEditorMode } = useSettings();
+  useErrorHandler();
   
   // === STATE ===
   
@@ -160,9 +163,18 @@ export const useFileManager = () => {
   const selectFolder = useCallback(async () => {
     try {
       console.log('Opening folder selection dialog...');
-      const folderPath = await safeInvoke<string>('select_folder', undefined, null);
-      if (!folderPath) {
-        throw new Error('No folder selected');
+      const inTauriContext = await checkTauriContextAsync();
+      let folderPath: string | null;
+
+      if (inTauriContext) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        folderPath = await invoke<string | null>('select_folder');
+      } else {
+        folderPath = await safeInvoke<string | null>('select_folder', undefined);
+      }
+
+      if (folderPath === null) {
+        return;
       }
       console.log('Folder selected:', folderPath);
       
@@ -172,7 +184,7 @@ export const useFileManager = () => {
       console.log('Folder selection cancelled or failed:', error);
       setState(prev => ({
         ...prev,
-        error: typeof error === 'string' ? error : 'Folder selection cancelled',
+        error: typeof error === 'string' ? error : error instanceof Error ? error.message : 'Failed to select folder',
       }));
     }
   }, [loadFolder]);

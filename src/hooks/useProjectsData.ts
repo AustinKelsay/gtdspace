@@ -5,12 +5,92 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
-import { extractMetadata, extractHorizonReferences as extractHorizonReferencesUtil } from '@/utils/metadata-extractor';
 import { readFileText } from './useFileManager';
-import type { GTDProject, GTDProjectStatus, MarkdownFile } from '@/types';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import type { GTDProject, MarkdownFile } from '@/types';
 import { toISOStringFromEpoch } from '@/utils/time';
 import { parseLocalDate } from '@/utils/date-formatting';
 import { migrateGTDObjects } from '@/utils/data-migration';
+import { parseActionMarkdown } from '@/utils/gtd-action-markdown';
+import { emitContentSaved, emitMetadataChange } from '@/utils/content-event-bus';
+import { extractMetadata } from '@/utils/metadata-extractor';
+import { norm } from '@/utils/path';
+import {
+  parseProjectMarkdown,
+  toDateOnly,
+} from '@/utils/gtd-project-content';
+import { buildProjectMarkdown } from '@/utils/gtd-markdown-helpers';
+import { normalizeProjectStatus } from '@/utils/gtd-status';
+
+const PROJECT_TITLE_PATTERN = /^#\s+.*$/m;
+const PROJECT_STATUS_PATTERN = /\[!singleselect:project-status:[^\]]*\]/i;
+const PROJECT_DUE_DATE_PATTERN = /\[!datetime:due_date:[^\]]*\]/i;
+
+const updateProjectTitleInMarkdown = (content: string, title: string): string => {
+  const nextTitle = title.trim() || 'Untitled Project';
+  if (PROJECT_TITLE_PATTERN.test(content)) {
+    return content.replace(PROJECT_TITLE_PATTERN, `# ${nextTitle}`);
+  }
+  return `# ${nextTitle}\n\n${content.trimStart()}`;
+};
+
+const updateProjectStatusInMarkdown = (content: string, status: string): string => {
+  if (PROJECT_STATUS_PATTERN.test(content)) {
+    return content.replace(PROJECT_STATUS_PATTERN, `[!singleselect:project-status:${status}]`);
+  }
+
+  const titleMatch = content.match(/^#\s+.+$/m);
+  if (titleMatch && titleMatch.index !== undefined) {
+    const titleEndIndex = titleMatch.index + titleMatch[0].length;
+    return (
+      content.slice(0, titleEndIndex) +
+      `\n[!singleselect:project-status:${status}]` +
+      content.slice(titleEndIndex)
+    );
+  }
+
+  return `# Untitled Project\n[!singleselect:project-status:${status}]\n\n${content.trimStart()}`;
+};
+
+const updateProjectDueDateInMarkdown = (content: string, dueDate: string): string => {
+  if (PROJECT_DUE_DATE_PATTERN.test(content)) {
+    if (!dueDate.trim()) {
+      return content
+        .replace(PROJECT_DUE_DATE_PATTERN, '')
+        .replace(/\n{3,}/g, '\n\n');
+    }
+    return content.replace(PROJECT_DUE_DATE_PATTERN, `[!datetime:due_date:${dueDate}]`);
+  }
+  if (!dueDate.trim()) {
+    return content
+      .replace(/^##\s+Due Date(?:\s*\(.*?\))?\s*\n+[\s\S]*?(?=^###\s+|^##\s+|^#\s+|$)/im, '')
+      .replace(/^###\s+Due Date\s*\n+[\s\S]*?(?=^###\s+|^##\s+|^#\s+|$)/im, '')
+      .replace(/^Due Date:\s*.*$\n?/gim, '')
+      .replace(/\n{3,}/g, '\n\n');
+  }
+
+  const statusMatch = content.match(PROJECT_STATUS_PATTERN);
+  if (statusMatch && statusMatch.index !== undefined) {
+    const insertIndex = statusMatch.index + statusMatch[0].length;
+    return (
+      content.slice(0, insertIndex) +
+      `\n[!datetime:due_date:${dueDate}]` +
+      content.slice(insertIndex)
+    );
+  }
+
+  const titleMatch = content.match(/^#\s+.+$/m);
+  if (titleMatch && titleMatch.index !== undefined) {
+    const titleEndIndex = titleMatch.index + titleMatch[0].length;
+    return (
+      content.slice(0, titleEndIndex) +
+      `\n[!datetime:due_date:${dueDate}]` +
+      content.slice(titleEndIndex)
+    );
+  }
+
+  return `[!datetime:due_date:${dueDate}]\n\n${content.trimStart()}`;
+};
 
 export interface ProjectWithMetadata extends GTDProject {
   linkedAreas?: string[];
@@ -30,6 +110,13 @@ export interface ProjectWithMetadata extends GTDProject {
   notes?: string;
   outcomes?: string[];
 }
+
+export type PersistedProjectUpdates = Partial<
+  Pick<ProjectWithMetadata, 'name' | 'status' | 'dueDate'>
+>;
+
+const isSyntheticProjectTitle = (title?: string | null): boolean =>
+  !title || /^Untitled(?: Project)?$/i.test(title.trim());
 
 interface UseProjectsDataOptions {
   autoLoad?: boolean;
@@ -52,66 +139,9 @@ interface UseProjectsDataReturn {
     byArea: Record<string, number>;
   };
   loadProjects: (spacePath: string) => Promise<void>;
-  updateProject: (projectPath: string, updates: Partial<ProjectWithMetadata>) => Promise<void>;
+  updateProject: (projectPath: string, updates: PersistedProjectUpdates) => Promise<void>;
   refresh: () => Promise<void>;
 }
-
-/**
- * Normalize project status values
- */
-const normalizeProjectStatus = (status: string): GTDProjectStatus => {
-  const normalized = status.toLowerCase().trim();
-  
-  if (['cancelled', 'canceled', 'abandoned', 'dropped', 'cancel'].includes(normalized)) {
-    return 'cancelled';
-  }
-  
-  if (['in-progress', 'active', 'ongoing'].includes(normalized)) {
-    return 'in-progress';
-  }
-  
-  if (['waiting', 'on-hold', 'paused', 'blocked'].includes(normalized)) {
-    return 'waiting';
-  }
-  
-  if (['completed', 'done', 'finished', 'complete'].includes(normalized)) {
-    return 'completed';
-  }
-  
-  return 'in-progress';
-};
-
-/**
- * Normalize action status values (actions accept an additional "cancelled" state)
- */
-const normalizeActionStatus = (status: string): 'in-progress' | 'waiting' | 'completed' | 'cancelled' => {
-  const normalized = status.toLowerCase().trim();
-
-  if (['cancelled', 'canceled', 'abandoned', 'dropped'].includes(normalized)) {
-    return 'cancelled';
-  }
-  if (['completed', 'done', 'finished'].includes(normalized)) {
-    return 'completed';
-  }
-  if (['waiting', 'blocked', 'on-hold', 'paused'].includes(normalized)) {
-    return 'waiting';
-  }
-  // default and common synonyms
-  return 'in-progress';
-};
-
-/**
- * Extract horizon references from content
- */
-const extractHorizonReferences = (content: string) => {
-  const refs = extractHorizonReferencesUtil(content);
-  return {
-    areas: refs.areas,
-    goals: refs.goals,
-    vision: refs.vision,
-    purpose: refs.purpose
-  };
-};
 
 /**
  * Extract project outcomes from content
@@ -179,6 +209,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cachedSpacePath, setCachedSpacePath] = useState<string>('');
+  const { withErrorHandling } = useErrorHandler();
 
   const loadProjects = useCallback(async (spacePath: string) => {
     setIsLoading(true);
@@ -234,23 +265,27 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
             { path: projectsRoot },
             []
           );
-          const readmes = files.filter(f => /\/Projects\/.+\/README\.(md|markdown)$/i.test(f.path));
+          const readmes = files.filter((f) => {
+            const normalizedFilePath = norm(f.path);
+            return (
+              typeof normalizedFilePath === 'string' &&
+              /\/Projects\/.+\/README\.(md|markdown)$/i.test(normalizedFilePath)
+            );
+          });
           baseProjects = await Promise.all(readmes.map(async (f) => {
-            const projectPath = f.path.replace(/\/README\.(md|markdown)$/i, '');
-            const name = projectPath.split('/').filter(Boolean).pop() || 'Project';
+            const normalizedFilePath = norm(f.path) ?? f.path;
+            const projectPath = normalizedFilePath.replace(/\/README\.(md|markdown)$/i, '');
+            const normalizedProjectPath = norm(projectPath) ?? projectPath;
+            const name = normalizedProjectPath.split('/').filter(Boolean).pop() || 'Project';
             let description = '';
             let status: GTDProject['status'] = 'in-progress';
             let dueDate: string | null | undefined = undefined;
             try {
               const content = await readFileText(f.path);
-              const metadata = extractMetadata(content);
-              if (typeof metadata.title === 'string') {
-                // Prefer explicit title if present
-              }
+              const parsedProject = parseProjectMarkdown(content);
               description = '';
-              const normalized = (metadata.projectStatus || metadata.status || 'in-progress') as string;
-              status = normalizeProjectStatus(normalized) as GTDProject['status'];
-              if (typeof metadata.dueDate === 'string') dueDate = metadata.dueDate;
+              status = parsedProject.status;
+              if (parsedProject.dueDate) dueDate = parsedProject.dueDate;
             } catch {
               // Ignore content parsing errors in fallback
             }
@@ -281,22 +316,13 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
       const enhancedProjects = await Promise.all(
         filteredProjects.map(async (project) => {
           try {
-            // Resolve and read project README
             const readmePath = await resolveProjectReadme(project.path);
-
-            // Default values for when no README exists
-            let metadata: Record<string, any> = {};
-            let horizonRefs = { areas: [], goals: [], vision: [], purpose: [] };
+            let parsedProject = null as ReturnType<typeof parseProjectMarkdown> | null;
             let outcomes: string[] = [];
 
             if (readmePath) {
               const content = await readFileText(readmePath);
-              metadata = extractMetadata(content);
-
-              // Extract horizon references
-              horizonRefs = extractHorizonReferences(content);
-
-              // Extract outcomes
+              parsedProject = parseProjectMarkdown(content);
               outcomes = extractOutcomes(content);
             }
             
@@ -324,8 +350,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
                 await Promise.all(actionFiles.map(async (file) => {
                   try {
                     const actionContent = await readFileText(file.path);
-                    const actionMeta = extractMetadata(actionContent);
-                    const status = normalizeActionStatus((actionMeta.status as string) || 'in-progress');
+                    const status = parseActionMarkdown(actionContent).status;
 
                     if (status === 'completed') stats.completed++;
                     else if (status === 'waiting') stats.waiting++;
@@ -347,17 +372,21 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
             
             const enhanced: ProjectWithMetadata = {
               ...project,
-              status: normalizeProjectStatus(metadata.projectStatus || metadata.status || project.status) as GTDProject['status'],
-              dueDate: metadata.dueDate as string || project.dueDate,
-              linkedAreas: horizonRefs.areas,
-              linkedGoals: horizonRefs.goals,
-              linkedVision: horizonRefs.vision,
-              linkedPurpose: horizonRefs.purpose,
+              name:
+                parsedProject?.title && !isSyntheticProjectTitle(parsedProject.title)
+                  ? parsedProject.title
+                  : project.name,
+              status: parsedProject?.status ?? normalizeProjectStatus(project.status),
+              dueDate: parsedProject?.dueDate !== undefined ? parsedProject.dueDate : project.dueDate,
+              linkedAreas: parsedProject?.horizonReferences.areas ?? [],
+              linkedGoals: parsedProject?.horizonReferences.goals ?? [],
+              linkedVision: parsedProject?.horizonReferences.vision ?? [],
+              linkedPurpose: parsedProject?.horizonReferences.purpose ?? [],
               completionPercentage,
               actionStats,
-              effort: metadata.effort as string | undefined,
-              priority: metadata.priority as string | undefined,
-              notes: metadata.notes as string | undefined,
+              effort: undefined,
+              priority: undefined,
+              notes: parsedProject?.additionalContent,
               outcomes
             };
             
@@ -380,73 +409,75 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
   
   const updateProject = useCallback(async (
     projectPath: string,
-    updates: Partial<ProjectWithMetadata>
+    updates: PersistedProjectUpdates
   ) => {
     try {
-      // Resolve README path, or use default if none exists
       let readmePath = await resolveProjectReadme(projectPath);
-
-      // If no README exists, create a new one with default content
+      const hadExistingReadme = Boolean(readmePath);
       let content: string;
       if (!readmePath) {
         readmePath = `${projectPath}/README.md`;
-        const projectName = projectPath.split('/').filter(Boolean).pop() || 'Project';
-        content = `# ${projectName}\n\n`;
+        const normalizedProjectPath = norm(projectPath) ?? projectPath;
+        const projectName = normalizedProjectPath.split('/').filter(Boolean).pop() || 'Project';
+        content = buildProjectMarkdown({
+          title: projectName,
+          status: normalizeProjectStatus(
+            typeof updates.status === 'string' ? updates.status : 'in-progress'
+          ),
+          dueDate: typeof updates.dueDate === 'string' ? toDateOnly(updates.dueDate) : '',
+          desiredOutcome: '',
+          horizonReferences: { areas: [], goals: [], vision: [], purpose: [] },
+          references: [],
+          createdDateTime: new Date().toISOString(),
+          includeHabitsList: true,
+          additionalContent: '',
+        });
       } else {
         content = await readFileText(readmePath);
       }
 
-      // Helper function to inject marker after H1 or at top
-      const injectMarker = (content: string, marker: string): string => {
-        const lines = content.split('\n');
-        const h1Index = lines.findIndex(line => line.startsWith('# '));
+      const parsedProject = parseProjectMarkdown(content);
+      const nextTitle =
+        typeof updates.name === 'string' && updates.name.trim()
+          ? updates.name.trim()
+          : isSyntheticProjectTitle(parsedProject.title)
+            ? (norm(projectPath) ?? projectPath).split('/').filter(Boolean).pop() || 'Project'
+            : parsedProject.title;
+      const nextStatus =
+        typeof updates.status === 'string'
+          ? normalizeProjectStatus(updates.status)
+          : parsedProject.status;
+      const nextDueDate =
+        updates.dueDate !== undefined
+          ? toDateOnly(updates.dueDate)
+          : parsedProject.dueDate;
 
-        if (h1Index !== -1) {
-          // Insert after H1 (with blank line for readability)
-          lines.splice(h1Index + 1, 0, '', marker);
-        } else {
-          // Prepend to top (with blank line after)
-          lines.unshift(marker, '');
-        }
-
-        return lines.join('\n');
-      };
-
-      // Update status if provided
-      if (updates.status) {
-        if (content.includes('[!singleselect:project-status:')) {
-          content = content.replace(
-            /\[!singleselect:project-status:[^\]]+\]/,
-            `[!singleselect:project-status:${updates.status}]`
-          );
-        } else if (content.includes('[!singleselect:status:')) {
-          content = content.replace(
-            /\[!singleselect:status:[^\]]+\]/,
-            `[!singleselect:status:${updates.status}]`
-          );
-        } else {
-          // No existing status marker, inject new one
-          content = injectMarker(content, `[!singleselect:status:${updates.status}]`);
-        }
-      }
-
-      // Update due date if provided
-      if (updates.dueDate !== undefined) {
-        if (content.includes('[!datetime:due_date:')) {
-          content = content.replace(
-            /\[!datetime:due_date:[^\]]*\]/,
-            `[!datetime:due_date:${updates.dueDate || ''}]`
-          );
-        } else {
-          // No existing due date marker, inject new one
-          content = injectMarker(content, `[!datetime:due_date:${updates.dueDate || ''}]`);
-        }
-      }
+      const nextContent = hadExistingReadme
+        ? updateProjectDueDateInMarkdown(
+            updateProjectStatusInMarkdown(
+              updateProjectTitleInMarkdown(content, nextTitle),
+              nextStatus
+            ),
+            nextDueDate ?? ''
+          )
+        : buildProjectMarkdown({
+            title: nextTitle,
+            status: nextStatus,
+            dueDate: nextDueDate,
+            desiredOutcome: parsedProject.desiredOutcome,
+            horizonReferences: parsedProject.horizonReferences,
+            references: parsedProject.references,
+            createdDateTime: parsedProject.createdDateTime,
+            includeHabitsList: parsedProject.includeHabitsList,
+            additionalContent: parsedProject.additionalContent,
+          });
       
-      const writeResult = await safeInvoke('save_file', {
-        path: readmePath,
-        content
-      }, null);
+      const writeResult = await withErrorHandling(async () => {
+        return safeInvoke('save_file', {
+          path: readmePath,
+          content: nextContent
+        }, null);
+      }, 'Failed to save project changes', 'projects-data');
 
       // Check if write succeeded
       if (!writeResult) {
@@ -454,15 +485,49 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
         throw new Error('Failed to save project changes');
       }
 
+      const fileName = (norm(readmePath) ?? readmePath).split('/').pop() || 'README.md';
+      try {
+        const metadata = extractMetadata(nextContent);
+        emitMetadataChange({
+          filePath: readmePath,
+          fileName,
+          content: nextContent,
+          metadata,
+        });
+        emitContentSaved({
+          filePath: readmePath,
+          fileName,
+          content: nextContent,
+          metadata,
+        });
+        window.onTabFileSaved?.(readmePath, fileName, nextContent, metadata);
+      } catch (notificationError) {
+        console.error('Failed to notify project update listeners:', notificationError);
+      }
+
       // Update local state
-      setProjects(prev => prev.map(p =>
-        p.path === projectPath ? { ...p, ...updates } : p
-      ));
+      const canonicalProjectPath = norm(projectPath) ?? projectPath;
+      const nextParsedProject = parseProjectMarkdown(nextContent);
+      setProjects(prev => prev.map((project) => {
+        if ((norm(project.path) ?? project.path) !== canonicalProjectPath) {
+          return project;
+        }
+
+        return {
+          ...project,
+          name:
+            nextParsedProject.title && !isSyntheticProjectTitle(nextParsedProject.title)
+              ? nextParsedProject.title
+              : project.name,
+          status: nextParsedProject.status,
+          dueDate: nextParsedProject.dueDate || null,
+        };
+      }));
     } catch (err) {
       console.error('Failed to update project:', err);
       throw err;
     }
-  }, []);
+  }, [withErrorHandling]);
   
   const refresh = useCallback(async () => {
     if (cachedSpacePath) {

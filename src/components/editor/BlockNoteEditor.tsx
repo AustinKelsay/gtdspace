@@ -27,7 +27,9 @@ import {
   ProjectsListBlock,
   AreasListBlock,
   GoalsListBlock,
+  VisionListBlock,
   VisionsListBlock,
+  PurposeListBlock,
   ProjectsAndAreasListBlock,
   GoalsAndAreasListBlock,
   VisionsAndGoalsListBlock
@@ -110,7 +112,9 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       'projects-list': ProjectsListBlock,
       'areas-list': AreasListBlock,
       'goals-list': GoalsListBlock,
+      'vision-list': VisionListBlock,
       'visions-list': VisionsListBlock,
+      'purpose-list': PurposeListBlock,
       'habits-list': HabitsListBlock,
       'actions-list': ActionsListBlock,
       'projects-areas-list': ProjectsAndAreasListBlock,
@@ -369,7 +373,9 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
             type === 'projects-list' ||
             type === 'areas-list' ||
             type === 'goals-list' ||
+            type === 'vision-list' ||
             type === 'visions-list' ||
+            type === 'purpose-list' ||
             type === 'habits-list' ||
             type === 'projects-areas-list' ||
             type === 'goals-areas-list' ||
@@ -399,7 +405,9 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
               /^\[!projects-list\]$/.test(fullText) ||
               /^\[!areas-list\]$/.test(fullText) ||
               /^\[!goals-list\]$/.test(fullText) ||
+              /^\[!vision-list\]$/.test(fullText) ||
               /^\[!visions-list\]$/.test(fullText) ||
+              /^\[!purpose-list\]$/.test(fullText) ||
               /^\[!habits-list\]$/.test(fullText) ||
               /^\[!projects-areas-list\]$/.test(fullText) ||
               /^\[!goals-areas-list\]$/.test(fullText) ||
@@ -454,8 +462,12 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
               markdownParts.push(`[!areas-list]\n\n`);
             } else if (blockType === 'goals-list') {
               markdownParts.push(`[!goals-list]\n\n`);
+            } else if (blockType === 'vision-list') {
+              markdownParts.push(`[!vision-list]\n\n`);
             } else if (blockType === 'visions-list') {
               markdownParts.push(`[!visions-list]\n\n`);
+            } else if (blockType === 'purpose-list') {
+              markdownParts.push(`[!purpose-list]\n\n`);
             } else if (blockType === 'habits-list') {
               markdownParts.push(`[!habits-list]\n\n`);
             } else if (blockType === 'projects-areas-list') {

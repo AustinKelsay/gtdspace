@@ -18,22 +18,35 @@ At a high level, the app is split into four layers:
 The current frontend is organized around these major areas:
 
 - `src/components/app/`: top-level shell, loading state, and header
-- `src/components/gtd/`: GTD pages, workspace sidebar, dialogs, and dashboard shell
+- `src/components/gtd/`: GTD pages, dialogs, dashboard shell, and the top-level sidebar entrypoint (`GTDWorkspaceSidebar.tsx`)
+- `src/components/gtd/sidebar/`: workspace sidebar presentation layer with section renderers and shared sidebar helpers, coordinated by `src/hooks/useGTDWorkspaceSidebar.ts`
 - `src/components/dashboard/`: dashboard tabs for overview, projects, actions, habits, and horizons
 - `src/components/calendar/`: calendar view and Google Calendar auto-sync bridge
 - `src/components/editor/`: `EnhancedTextEditor`, `BlockNoteEditor`, and custom editor blocks
 - `src/components/settings/`: settings manager and grouped settings panels
 - `src/components/tabs/` and `src/components/search/`: tab management and global search
 - `src/components/ui/`: shared shadcn/ui primitives and local UI wrappers
+- `src/hooks/tab-runtime/`: reducer-driven tab state, file I/O lifecycle helpers, workspace-scoped persistence, and DOM-event subscriptions used by `useTabManager`
 
 ## Backend Structure
 
 The current backend lives primarily in these modules:
 
-- `src-tauri/src/commands/mod.rs`: Tauri command surface for file operations, GTD workspace management, settings, file watching, habits, git sync, and Google Calendar
+- `src-tauri/src/commands/mod.rs`: thin facade that re-exports backend commands and shared payload types
+- `src-tauri/src/commands/app.rs`: lightweight app-level commands like `ping`, version reporting, and permission checks
+- `src-tauri/src/commands/dialogs.rs`: native folder/file dialog and explorer helpers
+- `src-tauri/src/commands/filesystem.rs`: file CRUD, listing, directory creation, search-and-replace, and existence checks
+- `src-tauri/src/commands/settings.rs`: persisted settings plus secure storage helpers
+- `src-tauri/src/commands/watcher.rs`: file watcher lifecycle and emitted change payloads
+- `src-tauri/src/commands/search.rs`: markdown search payloads and full-text search command
+- `src-tauri/src/commands/workspace.rs`: GTD space detection, initialization, and example seeding
+- `src-tauri/src/commands/gtd_projects.rs`, `gtd_habits.rs`, `gtd_relationships.rs`: GTD domain commands split by concern
+- `src-tauri/src/commands/gtd_habits_domain.rs`: habit parsing, history migration, and reset-window logic shared by the habits command layer
+- `src-tauri/src/commands/git_commands.rs`: Tauri-facing git sync command wrappers
 - `src-tauri/src/commands/git_sync.rs`: encrypted git backup and sync logic
+- `src-tauri/src/commands/google_calendar_commands.rs`: Tauri-facing Google Calendar and OAuth commands
 - `src-tauri/src/google_calendar/`: OAuth, token storage, sync, and cached event handling
-- `src-tauri/src/lib.rs`: Tauri app wiring and command registration
+- `src-tauri/src/lib.rs`: Tauri app wiring and command registration against concrete module paths
 
 ## Startup And Workspace Lifecycle
 
@@ -64,6 +77,7 @@ The backend reads and writes files directly. The frontend derives metadata from 
 Several systems cut across the frontend and backend:
 
 - Content event bus: coordinates save, metadata, and rename-related refreshes
+- Tab runtime persistence: stores open tabs in localStorage, scopes restore to the active workspace, and keeps lightweight active-tab data available to editor blocks
 - File watcher: surfaces external file changes, though watcher event naming still has a known mismatch documented in the spec
 - Markdown migration: normalizes older marker formats during load and some save flows
 - Habit reset loop: runs on startup and on a timer while a workspace is open

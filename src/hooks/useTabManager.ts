@@ -1,1098 +1,771 @@
 /**
  * @fileoverview Tab management hook for Phase 2 multi-file editing
- * @author Development Team  
+ * @author Development Team
  * @created 2024-01-XX
  * @phase 2 - Tab management and multi-file state
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { safeInvoke } from '@/utils/safe-invoke';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import debounce from 'lodash.debounce';
-// Memory leak prevention removed during simplification
-import type { 
-  MarkdownFile, 
-  FileTab, 
-  TabManagerState, 
-  TabAction
+import type {
+  FileTab,
+  MarkdownFile,
+  TabAction,
+  TabManagerConfig,
+  TabManagerState,
 } from '@/types';
 import { extractMetadata, getMetadataChanges } from '@/utils/metadata-extractor';
-import { emitContentChange, emitContentSaved, emitMetadataChange } from '@/utils/content-event-bus';
-import { migrateMarkdownContent, needsMigration } from '@/utils/data-migration';
+import { emitContentChange, emitMetadataChange } from '@/utils/content-event-bus';
 import { createScopedLogger } from '@/utils/logger';
+import { norm } from '@/utils/path';
+import { CALENDAR_FILE_ID } from '@/utils/special-files';
+import { safeInvoke } from '@/utils/safe-invoke';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import {
+  clearPersistedTabs as clearPersistedTabStorage,
+  createInitialTabState,
+  DEFAULT_MAX_TABS,
+  emitReloadedTabContent,
+  isSameOrDescendantPath,
+  loadTabForOpen,
+  pathsEqual,
+  persistTabState,
+  readTabFile,
+  restoreTabStateFromStorage,
+  saveTabFile,
+  tabHasExternalConflict,
+  tabStateReducer,
+  takeMostRecentlyClosedFile,
+  useTabManagerSubscriptions,
+} from '@/hooks/tab-runtime';
 
-// Extend the global Window interface to include our custom callback
-declare global {
-  interface Window {
-    onTabFileSaved?: (path: string) => Promise<void>;
-  }
-}
-
-/**
- * Tab manager hook for handling multiple open files
- * 
- * Provides functionality for tab creation, activation, closing, and state management.
- * Maintains content for each open tab and handles switching between files.
- * 
- * @returns Tab manager state and operations
- */
 const log = createScopedLogger('useTabManager');
 
-export const useTabManager = () => {
-  
-  // === TAB STATE ===
-  
-  const [tabState, setTabState] = useState<TabManagerState>({
-    openTabs: [],
-    activeTabId: null,
-    maxTabs: 10,
-    recentlyClosed: [],
-  });
+type MetadataProcessingEntry = {
+  initialBaseline: string;
+  debounced: ReturnType<typeof debounce>;
+};
 
-  // Ref to always access the latest tabState (prevents stale closures)
+function sanitizeMaxTabs(maxTabs?: number | null): number {
+  return typeof maxTabs === 'number' && maxTabs > 0 ? maxTabs : DEFAULT_MAX_TABS;
+}
+
+function buildReferenceFile(path: string): MarkdownFile {
+  const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  const basename = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+  const lastDot = basename.lastIndexOf('.');
+  const extension = lastDot > 0 ? `.${basename.slice(lastDot + 1) || 'md'}` : '.md';
+  return {
+    id: path,
+    name: basename || 'Unknown.md',
+    path,
+    size: 0,
+    last_modified: Math.floor(Date.now() / 1000),
+    extension,
+  };
+}
+
+export const useTabManager = (config: TabManagerConfig = {}) => {
+  const resolvedMaxTabs = sanitizeMaxTabs(config.maxTabs);
+  const workspacePath = config.workspacePath ?? null;
+  const restoreTabs = config.restoreTabs === true;
+  const { withErrorHandling } = useErrorHandler();
+
+  const [tabState, dispatch] = useReducer(
+    tabStateReducer,
+    resolvedMaxTabs,
+    createInitialTabState,
+  );
+
   const tabStateRef = useRef<TabManagerState>(tabState);
-  
-  // Keep ref in sync with state
+  const metadataProcessingRef = useRef<Map<string, MetadataProcessingEntry>>(new Map());
+  const debouncedStateUpdateRef = useRef<Map<string, ReturnType<typeof debounce>>>(new Map());
+  const pendingContentRef = useRef<Map<string, string>>(new Map());
+  const restoredWorkspaceRef = useRef<string | null>(null);
+  const restoringWorkspaceRef = useRef<string | null>(null);
+  const restoreAttemptRef = useRef(0);
+
   useEffect(() => {
     tabStateRef.current = tabState;
   }, [tabState]);
 
-  // Store for debounced metadata processing
-  const metadataProcessingRef = useRef<Map<string, ReturnType<typeof debounce>>>(new Map());
-  
-  // Remove auto-save activity tracking refs - manual save only now
-  
-  // Debounced state update for content changes
-  const debouncedStateUpdateRef = useRef<Map<string, ReturnType<typeof debounce>>>(new Map());
+  useEffect(() => {
+    dispatch({ type: 'set-max-tabs', maxTabs: resolvedMaxTabs });
+  }, [resolvedMaxTabs]);
 
-  // === MANUAL SAVE ONLY - NO AUTO-SAVE ===
-  // Auto-save removed - users now have full control over when content is saved
-  // GTD fields still auto-save immediately when changed via emitMetadataChange()
+  const cleanupTabResources = useCallback((tabId: string) => {
+    metadataProcessingRef.current.get(tabId)?.debounced.cancel();
+    metadataProcessingRef.current.delete(tabId);
 
-  // === UTILITY FUNCTIONS ===
+    debouncedStateUpdateRef.current.get(tabId)?.cancel();
+    debouncedStateUpdateRef.current.delete(tabId);
 
-  /**
-   * Generate unique tab ID
-   */
+    pendingContentRef.current.delete(tabId);
+  }, []);
+
   const generateTabId = useCallback((file: MarkdownFile): string => {
     return `tab-${file.id}-${Date.now()}`;
   }, []);
 
-  /**
-   * Get the currently active tab
-   */
-  const getActiveTab = useCallback((): FileTab | null => {
-    return tabState.openTabs.find(tab => tab.id === tabState.activeTabId) || null;
-  }, [tabState.openTabs, tabState.activeTabId]);
-
-  /**
-   * Check if a file is already open in a tab
-   */
-  const findTabByFile = useCallback((file: MarkdownFile): FileTab | null => {
-    return tabState.openTabs.find(tab => tab.file.path === file.path) || null;
-  }, [tabState.openTabs]);
-
-  // === TAB PERSISTENCE ===
-
-  /**
-   * Save current tab state to localStorage
-   */
-  const saveTabsToStorage = useCallback((state: TabManagerState) => {
-    try {
-      const persistedState = {
-        openTabs: state.openTabs.map(tab => ({
-          id: tab.id,
-          filePath: tab.file.path,
-          fileName: tab.file.name,
-          hasUnsavedChanges: tab.hasUnsavedChanges,
-          isActive: tab.isActive,
-          // Don't persist the actual content, we'll reload it
-        })),
-        activeTabId: state.activeTabId,
-        maxTabs: state.maxTabs,
-      };
-      localStorage.setItem('gtdspace-tabs', JSON.stringify(persistedState));
-    } catch (error) {
-      log.warn('Failed to save tabs to localStorage', error);
-    }
+  const findTabById = useCallback((tabId: string): FileTab | null => {
+    return tabStateRef.current.openTabs.find((tab) => tab.id === tabId) || null;
   }, []);
 
-  /**
-   * Load tab state from localStorage
-   */
-  const loadTabsFromStorage = useCallback(async (): Promise<TabManagerState | null> => {
-    try {
-      const stored = localStorage.getItem('gtdspace-tabs');
-      if (!stored) return null;
+  const findTabByFile = useCallback((file: MarkdownFile): FileTab | null => {
+    return tabStateRef.current.openTabs.find((tab) => pathsEqual(tab.file.path, file.path)) || null;
+  }, []);
 
-      const persistedState = JSON.parse(stored);
-      const validTabs: FileTab[] = [];
+  const createRecentlyClosedSnapshot = useCallback((tab: FileTab): FileTab => {
+    const bufferedContent = pendingContentRef.current.get(tab.id);
+    if (bufferedContent === undefined) {
+      return tab;
+    }
 
-      // Validate and restore each tab
-      for (const tabInfo of persistedState.openTabs || []) {
-        try {
-          // Check if file still exists and get updated metadata
-          const fileContent = await safeInvoke<string>('read_file', { path: tabInfo.filePath }, null);
-          if (fileContent === null || fileContent === undefined) continue;
-          
-          // Create a minimal MarkdownFile object (we might not have all metadata)
-          const file: MarkdownFile = {
-            id: tabInfo.filePath,
-            name: tabInfo.fileName,
-            path: tabInfo.filePath,
-            size: fileContent.length,
-            last_modified: Math.floor(Date.now() / 1000), // We don't have the real timestamp
-            extension: tabInfo.fileName.split('.').pop() || 'md',
-          };
+    const originalContent = tab.originalContent ?? tab.content;
+    return {
+      ...tab,
+      content: bufferedContent,
+      originalContent,
+      hasUnsavedChanges: bufferedContent !== originalContent,
+    };
+  }, []);
 
-          const tab: FileTab = {
-            id: tabInfo.id,
-            file,
-            content: fileContent,
-            hasUnsavedChanges: false, // Reset unsaved changes on restore
-            isActive: tabInfo.id === persistedState.activeTabId,
-            filePath: tabInfo.filePath,
-          };
+  const resetTransientTabState = useCallback(() => {
+    metadataProcessingRef.current.forEach(({ debounced }) => debounced.cancel());
+    metadataProcessingRef.current.clear();
+    debouncedStateUpdateRef.current.forEach((fn) => fn.cancel());
+    debouncedStateUpdateRef.current.clear();
+    pendingContentRef.current.clear();
+  }, []);
 
-          validTabs.push(tab);
-        } catch (error) {
-          log.warn(`Failed to restore tab for file: ${tabInfo.filePath}`, error);
-          // Skip this tab if file no longer exists or can't be read
+  const tabsBelongToWorkspace = useCallback((tabs: FileTab[], nextWorkspacePath?: string | null) => {
+    if (!nextWorkspacePath) {
+      return false;
+    }
+
+    return tabs.every((tab) => {
+      if (tab.file.path === CALENDAR_FILE_ID) {
+        return true;
+      }
+      return isSameOrDescendantPath(tab.file.path, nextWorkspacePath);
+    });
+  }, []);
+
+  const buildPersistableState = useCallback((state: TabManagerState): TabManagerState => {
+    if (pendingContentRef.current.size === 0) {
+      return state;
+    }
+
+    return {
+      ...state,
+      openTabs: state.openTabs.map((tab) => {
+        const bufferedContent = pendingContentRef.current.get(tab.id);
+        if (bufferedContent === undefined) {
+          return tab;
         }
+
+        return {
+          ...tab,
+          content: bufferedContent,
+          hasUnsavedChanges: bufferedContent !== (tab.originalContent ?? tab.content),
+        };
+      }),
+    };
+  }, []);
+
+  const processMetadataDebounced = useCallback(
+    (tabId: string, filePath: string, fileName: string, oldContent: string, newContent: string) => {
+      if (filePath === CALENDAR_FILE_ID) {
+        return;
       }
 
-      return {
-        openTabs: validTabs,
-        activeTabId: validTabs.length > 0 ? (persistedState.activeTabId || validTabs[0].id) : null,
-        maxTabs: persistedState.maxTabs || 10,
-        recentlyClosed: [],
-      };
-    } catch (error) {
-      log.warn('Failed to load tabs from localStorage', error);
-      return null;
-    }
-  }, []);
+      let entry = metadataProcessingRef.current.get(tabId);
+      if (!entry) {
+        const debounced = debounce((finalContent: string, currentPath: string, currentName: string) => {
+          const currentEntry = metadataProcessingRef.current.get(tabId);
+          const baseline = currentEntry?.initialBaseline ?? oldContent;
+          const oldMetadata = extractMetadata(baseline);
+          const newMetadata = extractMetadata(finalContent);
+          const metadataChanges = getMetadataChanges(oldMetadata, newMetadata);
 
-  /**
-   * Clear persisted tab state
-   */
-  const clearPersistedTabs = useCallback(() => {
-    try {
-      localStorage.removeItem('gtdspace-tabs');
-    } catch (error) {
-      log.warn('Failed to clear persisted tabs', error);
-    }
-  }, []);
+          if (Object.keys(metadataChanges).length > 0) {
+            emitMetadataChange({
+              filePath: currentPath,
+              fileName: currentName,
+              content: finalContent,
+              metadata: newMetadata,
+              changedFields: metadataChanges,
+            });
+          } else {
+            emitContentChange({
+              filePath: currentPath,
+              fileName: currentName,
+              content: finalContent,
+              metadata: newMetadata,
+              changedFields: metadataChanges,
+            });
+          }
+          metadataProcessingRef.current.delete(tabId);
+        }, 500);
 
-  // === TAB OPERATIONS ===
+        entry = {
+          initialBaseline: oldContent,
+          debounced,
+        };
+        metadataProcessingRef.current.set(tabId, entry);
+      }
 
-  /**
-   * Open a file in a new tab or activate existing tab
-   */
+      entry.debounced(newContent, filePath, fileName);
+    },
+    [],
+  );
+
   const openTab = useCallback(async (file: MarkdownFile): Promise<string> => {
-    log.debug('openTab called for', file.path);
-    // Check if file is already open
     const existingTab = findTabByFile(file);
     if (existingTab) {
-      log.debug('File already open in tab', existingTab.id);
-      // Activate existing tab
-      setTabState(prev => ({
-        ...prev,
-        activeTabId: existingTab.id,
-        openTabs: prev.openTabs.map(tab => ({
-          ...tab,
-          isActive: tab.id === existingTab.id,
-        })),
-      }));
+      dispatch({ type: 'activate-tab', tabId: existingTab.id });
       return existingTab.id;
     }
 
     try {
-      // Check if this is a special tab (like Calendar)
-      let content = '';
-      let originalContent = '';
-      
-      if (file.path === '::calendar::') {
-        // Special calendar tab - no file content to load
-        content = ''; // Calendar view doesn't need content
-        originalContent = '';
-      } else {
-        // Normal file - load content
-        log.debug('Loading file content for new tab', file.path);
-        content = await safeInvoke<string>('read_file', { path: file.path }, '') || '';
-        
-        // Apply migrations if needed
-        if (needsMigration(content)) {
-          log.info('Applying data migrations to file', file.path);
-          let migrationApplied = false;
-          try {
-            const migratedContent = migrateMarkdownContent(content);
-            // Create a backup before auto-saving migrated content
-            await safeInvoke<void>('save_file', { path: `${file.path}.backup`, content }, null);
-            await safeInvoke<void>('save_file', { path: file.path, content: migratedContent }, null);
-            content = migratedContent;
-            migrationApplied = true;
-          } catch (migrationError) {
-            log.error('Migration failed', migrationError);
-            // Continue with original content without emitting saved events
-          }
-          
-          if (migrationApplied) {
-            // Emit events to update UI with migrated content
-            const newMetadata = extractMetadata(content);
-            emitContentSaved({
-              filePath: file.path,
-              fileName: file.name,
-              content: content,
-              metadata: newMetadata
-            });
-            emitMetadataChange({
-              filePath: file.path,
-              fileName: file.name,
-              content: content,
-              metadata: newMetadata
-            });
-          }
-        }
-        
-        originalContent = content;
-        log.debug('File content loaded', { path: file.path, length: content.length });
+      const loadedTab = await loadTabForOpen(file);
+      const currentExistingTab = findTabByFile(file);
+      if (currentExistingTab) {
+        dispatch({ type: 'activate-tab', tabId: currentExistingTab.id });
+        return currentExistingTab.id;
       }
 
-      // Create new tab
       const tabId = generateTabId(file);
-      const newTab: FileTab = {
-        id: tabId,
-        file,
-        content,
-        originalContent,
-        hasUnsavedChanges: false,
-        isActive: true,
-        filePath: file.path,
-        cursorPosition: 0,
-        scrollPosition: 0,
-      };
-
-      setTabState(prev => {
-        log.debug('TabState updater prev.openTabs', prev.openTabs.length);
-        const newTabs = [...prev.openTabs, newTab];
-        
-        // Enforce max tabs limit
-        if (newTabs.length > prev.maxTabs) {
-          // Close the oldest non-active tab
-          const oldestInactiveTab = newTabs.find(tab => !tab.isActive && !tab.hasUnsavedChanges);
-          if (oldestInactiveTab) {
-            // Add to recently closed tabs
-            const newRecentlyClosed = [oldestInactiveTab, ...prev.recentlyClosed].slice(0, 10);
-            
-            return {
-              ...prev,
-              openTabs: newTabs
-                .filter(tab => tab.id !== oldestInactiveTab.id)
-                .map(tab => ({ ...tab, isActive: tab.id === tabId })),
-              activeTabId: tabId,
-              recentlyClosed: newRecentlyClosed,
-            };
-          }
-        }
-
-        const nextState = {
-          ...prev,
-          openTabs: newTabs.map(tab => ({ ...tab, isActive: tab.id === tabId })),
-          activeTabId: tabId,
-        };
-        log.debug('TabState updater next.openTabs', {
-          count: nextState.openTabs.length,
-          activeTabId: nextState.activeTabId,
-        });
-        return nextState;
+      dispatch({
+        type: 'open-tab',
+        tab: {
+          id: tabId,
+          file,
+          content: loadedTab.content,
+          originalContent: loadedTab.originalContent,
+          hasUnsavedChanges: false,
+          isActive: true,
+          cursorPosition: 0,
+          scrollPosition: 0,
+        },
       });
 
-      log.debug('Opened new tab', { tabId, fileName: file.name });
-      log.debug('openTab post-setTabState: tabs count will be updated');
       return tabId;
-
     } catch (error) {
       log.error('Failed to load file for tab', error);
       throw new Error(`Failed to open file: ${error}`);
     }
   }, [findTabByFile, generateTabId]);
 
-  /**
-   * Activate a specific tab
-   */
   const activateTab = useCallback((tabId: string) => {
-    setTabState(prev => ({
-      ...prev,
-      activeTabId: tabId,
-      openTabs: prev.openTabs.map(tab => ({
-        ...tab,
-        isActive: tab.id === tabId,
-      })),
-    }));
+    dispatch({ type: 'activate-tab', tabId });
   }, []);
 
-  /**
-   * Close a specific tab
-   */
   const closeTab = useCallback(async (tabId: string): Promise<boolean> => {
-    const tab = tabState.openTabs.find(t => t.id === tabId);
-    if (!tab) return false;
-
-    // Clean up debounced functions for this tab
-    const debouncedFn = metadataProcessingRef.current.get(tabId);
-    if (debouncedFn) {
-      debouncedFn.cancel();
-      metadataProcessingRef.current.delete(tabId);
-    }
-    
-    const debouncedStateUpdate = debouncedStateUpdateRef.current.get(tabId);
-    if (debouncedStateUpdate) {
-      debouncedStateUpdate.cancel();
-      debouncedStateUpdateRef.current.delete(tabId);
+    const tab = findTabById(tabId);
+    if (!tab) {
+      return false;
     }
 
-    // If tab has unsaved changes, we should ask for confirmation
-    // For now, we'll just close it (confirmation can be added later)
-    if (tab.hasUnsavedChanges) {
+    if (tab.hasUnsavedChanges || pendingContentRef.current.has(tabId)) {
       log.warn('Closing tab with unsaved changes', tab.file.name);
     }
 
-    setTabState(prev => {
-      const remainingTabs = prev.openTabs.filter(t => t.id !== tabId);
-      
-      // If we're closing the active tab, activate another tab
-      let newActiveTabId = prev.activeTabId;
-      if (prev.activeTabId === tabId) {
-        if (remainingTabs.length > 0) {
-          // Activate the tab to the right, or the last tab if we're closing the rightmost
-          const closingTabIndex = prev.openTabs.findIndex(t => t.id === tabId);
-          const nextTab = remainingTabs[Math.min(closingTabIndex, remainingTabs.length - 1)];
-          newActiveTabId = nextTab.id;
-        } else {
-          newActiveTabId = null;
-        }
-      }
-
-      return {
-        ...prev,
-        openTabs: remainingTabs.map(tab => ({
-          ...tab,
-          isActive: tab.id === newActiveTabId,
-        })),
-        activeTabId: newActiveTabId,
-        recentlyClosed: [tab, ...prev.recentlyClosed].slice(0, 10),
-      };
-    });
-
-    log.debug('Closed tab', tabId);
+    const snapshot = createRecentlyClosedSnapshot(tab);
+    cleanupTabResources(tabId);
+    dispatch({ type: 'close-tab', tabId, snapshot });
     return true;
-  }, [tabState.openTabs]);
+  }, [cleanupTabResources, createRecentlyClosedSnapshot, findTabById]);
 
-  /**
-   * Process metadata changes with debouncing to avoid performance issues
-   */
-  const processMetadataDebounced = useCallback((tabId: string, filePath: string, fileName: string, oldContent: string, newContent: string) => {
-    // Skip for special tabs
-    if (filePath === '::calendar::') {
+  const updateTabContent = useCallback((tabId: string, content: string) => {
+    const currentTab = findTabById(tabId);
+    if (!currentTab) {
       return;
     }
-    
-    // Get or create debounced function for this tab
-    let debouncedFn = metadataProcessingRef.current.get(tabId);
-    if (!debouncedFn) {
-      debouncedFn = debounce((oldC: string, newC: string, fp: string, fnm: string) => {
-        // Extract metadata from old and new content
-        const oldMetadata = extractMetadata(oldC);
-        const newMetadata = extractMetadata(newC);
-        const metadataChanges = getMetadataChanges(oldMetadata, newMetadata);
-        
-        // Only emit specific events based on what actually changed
-        if (Object.keys(metadataChanges).length > 0) {
-          log.debug('Metadata changed', { metadataChanges, filePath: fp });
-          // Emit metadata change event (which will also trigger content:changed via the event bus)
-          emitMetadataChange({
-            filePath: fp,
-            fileName: fnm,
-            content: newC,
-            metadata: newMetadata,
-            changedFields: metadataChanges
-          });
-        } else {
-          // Only content changed, not metadata
-          emitContentChange({
-            filePath: fp,
-            fileName: fnm,
-            content: newC,
-            metadata: newMetadata,
-            changedFields: metadataChanges
-          });
-        }
-      }, 500); // 500ms debounce for metadata processing
-      
-      metadataProcessingRef.current.set(tabId, debouncedFn);
-    }
-    
-    // Pass current filePath and fileName as parameters to avoid stale closure
-    debouncedFn(oldContent, newContent, filePath, fileName);
-  }, []);
 
-  /**
-   * Update content for a specific tab with debounced state updates
-   * Now manual save only - no auto-save interference with typing
-   */
-  const updateTabContent = useCallback((tabId: string, content: string) => {
-    // Get the current tab to process metadata
-    const currentTab = tabState.openTabs.find(t => t.id === tabId);
-    
-    if (currentTab) {
-      // Process metadata changes with debouncing (GTD fields still auto-save)
-      processMetadataDebounced(tabId, currentTab.file.path, currentTab.file.name, currentTab.content || '', content);
-    }
-    
-    // Get or create debounced function for this tab
+    const previousContent = pendingContentRef.current.get(tabId) ?? currentTab.content ?? '';
+    pendingContentRef.current.set(tabId, content);
+    processMetadataDebounced(tabId, currentTab.file.path, currentTab.file.name, previousContent, content);
+
     let debouncedUpdate = debouncedStateUpdateRef.current.get(tabId);
     if (!debouncedUpdate) {
       debouncedUpdate = debounce((newContent: string) => {
-        setTabState(prev => ({
-          ...prev,
-          openTabs: prev.openTabs.map(tab => 
-            tab.id === tabId
-              ? { 
-                  ...tab, 
-                  content: newContent,
-                  hasUnsavedChanges: (tab.originalContent ?? tab.content) !== newContent,
-                }
-              : tab
-          ),
-        }));
-      }, 150); // 150ms debounce for state updates
-      
+        dispatch({ type: 'update-tab-content', tabId, content: newContent });
+        if (pendingContentRef.current.get(tabId) === newContent) {
+          pendingContentRef.current.delete(tabId);
+        }
+      }, 150);
+
       debouncedStateUpdateRef.current.set(tabId, debouncedUpdate);
     }
-    
-    // Apply debounced state update (tracks unsaved changes automatically)
+
     debouncedUpdate(content);
-    
-    // No auto-save - user must manually save (Cmd+S) or GTD field changes will auto-save
-  }, [tabState.openTabs, processMetadataDebounced]);
+  }, [findTabById, processMetadataDebounced]);
 
-
-  /**
-   * Save content for a specific tab
-   */
   const saveTab = useCallback(async (tabId: string): Promise<boolean> => {
-    const tab = tabState.openTabs.find(t => t.id === tabId);
-    if (!tab || !tab.hasUnsavedChanges) return false;
+    const tab = findTabById(tabId);
+    if (!tab || tab.file.path === CALENDAR_FILE_ID) {
+      return false;
+    }
 
-    // Skip saving for special tabs
-    if (tab.file.path === '::calendar::') {
+    const contentToSave = pendingContentRef.current.get(tabId) ?? tab.content;
+    const originalContent = tab.originalContent ?? tab.content;
+    if (contentToSave === originalContent) {
       return false;
     }
 
     try {
-      log.debug('Saving tab content', tab.file.path);
-      const result = await safeInvoke<string>('save_file', {
-        path: tab.file.path,
-        content: tab.content,
-      }, null);
-      if (result === null) {
-        throw new Error('Failed to save file');
-      }
-
-      // Mark tab as saved and update originalContent
-      setTabState(prev => ({
-        ...prev,
-        openTabs: prev.openTabs.map(t => 
-          t.id === tabId
-            ? { ...t, originalContent: t.content, hasUnsavedChanges: false }
-            : t
-        ),
-      }));
-
-      log.info('Tab saved successfully', tabId);
-      
-      // Emit content saved event for sidebar updates
-      const metadata = extractMetadata(tab.content);
-      emitContentSaved({
-        filePath: tab.file.path,
-        fileName: tab.file.name,
-        content: tab.content,
-        metadata
+      await saveTabFile(tab.file, contentToSave);
+      pendingContentRef.current.delete(tabId);
+      dispatch({
+        type: 'replace-tab-content',
+        tabId,
+        content: contentToSave,
+        originalContent: contentToSave,
+        hasUnsavedChanges: false,
       });
-      
-      // Notify parent component that a file was saved
-      // This will be used to reload projects when a README is saved
-      if (typeof window !== 'undefined' && typeof window.onTabFileSaved === 'function') {
-        try {
-          window.onTabFileSaved(tab.file.path);
-        } catch (error) {
-          log.warn('Error calling onTabFileSaved callback', error);
-        }
-      }
-      
+      cleanupTabResources(tabId);
       return true;
-
     } catch (error) {
       log.error('Failed to save tab', error);
       throw new Error(`Failed to save file: ${error}`);
     }
-  }, [tabState.openTabs]);
+  }, [cleanupTabResources, findTabById]);
 
-  /**
-   * Check if a tab has conflicts with external file changes
-   */
   const checkForConflicts = useCallback(async (tabId: string): Promise<boolean> => {
-    const tab = tabState.openTabs.find(t => t.id === tabId);
-    if (!tab || !tab.hasUnsavedChanges) return false;
+    const tab = findTabById(tabId);
+    if (!tab) {
+      return false;
+    }
+
+    const currentContent = pendingContentRef.current.get(tabId) ?? tab.content;
+    const originalContent = tab.originalContent ?? tab.content;
+    if (currentContent === originalContent) {
+      return false;
+    }
 
     try {
-      // Read the current file content from disk
-      const currentFileContent = await safeInvoke<string>('read_file', { 
-        path: tab.file.path 
-      }, null);
-      if (currentFileContent === null || currentFileContent === undefined) {
-        throw new Error('Failed to read file');
-      }
-
-      // Compare with original content when the tab was opened
-      const originalContent = tab.originalContent || tab.content;
-      return currentFileContent !== originalContent;
+      return await tabHasExternalConflict({
+        ...tab,
+        content: currentContent,
+        hasUnsavedChanges: true,
+      });
     } catch (error) {
       log.error('Failed to check for conflicts', error);
       return false;
     }
-  }, [tabState.openTabs]);
+  }, [findTabById]);
 
-  /**
-   * Get external file content for conflict resolution
-   */
   const getExternalContent = useCallback(async (tabId: string): Promise<string | null> => {
-    const tab = tabState.openTabs.find(t => t.id === tabId);
-    if (!tab) return null;
+    const tab = findTabById(tabId);
+    if (!tab) {
+      return null;
+    }
 
     try {
-      const content = await safeInvoke<string>('read_file', { path: tab.file.path }, null);
-      if (content === null || content === undefined) {
-        throw new Error('Failed to read file');
-      }
-      return content;
+      return await readTabFile(tab.file.path);
     } catch (error) {
       log.error('Failed to read external content', error);
       return null;
     }
-  }, [tabState.openTabs]);
+  }, [findTabById]);
 
-  /**
-   * Reload tab content from disk, discarding any unsaved changes.
-   *
-   * This is used when a file is modified externally and the user chooses
-   * to reload the content (e.g. from a toast action). Tabs with unsaved
-   * changes are not reloaded to avoid losing local edits.
-   * 
-   * Uses tabStateRef to always read the latest state, preventing stale
-   * closure issues when the callback is created before user edits.
-   */
   const reloadTabFromDisk = useCallback(async (tabId: string): Promise<boolean> => {
-    // Use ref to always read the latest state (prevents stale closures)
-    const currentTab = tabStateRef.current.openTabs.find(t => t.id === tabId);
-    if (!currentTab) {
+    const currentTab = findTabById(tabId);
+    if (!currentTab || currentTab.file.path === CALENDAR_FILE_ID) {
       return false;
     }
 
-    // Don't reload special non-file tabs
-    if (currentTab.file.path === '::calendar::') {
-      return false;
-    }
+    const pendingContent = pendingContentRef.current.get(tabId);
+    const isDirty =
+      (pendingContent ?? currentTab.content) !== (currentTab.originalContent ?? currentTab.content);
 
-    // Avoid clobbering local edits - check latest state, not stale closure
-    if (currentTab.hasUnsavedChanges) {
+    if (isDirty) {
       log.warn('Refusing to reload tab with unsaved changes', { tabId, path: currentTab.file.path });
       return false;
     }
 
     try {
-      const content = await safeInvoke<string>('read_file', { path: currentTab.file.path }, null);
+      const content = await readTabFile(currentTab.file.path);
       if (content === null || content === undefined) {
         throw new Error('Failed to read file');
       }
 
-      setTabState(prev => ({
-        ...prev,
-        openTabs: prev.openTabs.map(t =>
-          t.id === tabId
-            ? {
-                ...t,
-                content,
-                originalContent: content,
-                hasUnsavedChanges: false,
-              }
-            : t
-        ),
-      }));
-
-      const metadata = extractMetadata(content);
-      emitContentSaved({
-        filePath: currentTab.file.path,
-        fileName: currentTab.file.name,
+      cleanupTabResources(tabId);
+      pendingContentRef.current.delete(tabId);
+      dispatch({
+        type: 'replace-tab-content',
+        tabId,
         content,
-        metadata,
+        originalContent: content,
+        hasUnsavedChanges: false,
       });
-      emitMetadataChange({
-        filePath: currentTab.file.path,
-        fileName: currentTab.file.name,
-        content,
-        metadata,
-      });
-
-      log.info('Reloaded tab content from disk', { tabId, path: currentTab.file.path });
+      await emitReloadedTabContent(currentTab.file, content);
       return true;
     } catch (error) {
       log.error('Failed to reload tab from disk', error);
       return false;
     }
-  }, []);
+  }, [cleanupTabResources, findTabById]);
 
-  /**
-   * Resolve conflict by applying chosen resolution
-   */
-  const resolveConflict = useCallback(async (tabId: string, resolution: {action: string, content?: string}): Promise<boolean> => {
-    const tab = tabState.openTabs.find(t => t.id === tabId);
-    if (!tab) return false;
-
-    try {
-      let contentToUse: string;
-      
-      switch (resolution.action) {
-        case 'keep-local':
-          contentToUse = tab.content;
-          break;
-        case 'use-external': {
-          const externalContent = await getExternalContent(tabId);
-          if (externalContent === null) return false;
-          contentToUse = externalContent;
-          break;
-        }
-        case 'manual-merge':
-          contentToUse = resolution.content;
-          break;
-        default:
-          return false;
+  const resolveConflict = useCallback(
+    async (tabId: string, resolution: { action: string; content?: string }): Promise<boolean> => {
+      const tab = findTabById(tabId);
+      if (!tab) {
+        return false;
       }
 
-      // Update the tab with resolved content
-      setTabState(prev => ({
-        ...prev,
-        openTabs: prev.openTabs.map(t =>
-          t.id === tabId
-            ? {
-                ...t,
-                content: contentToUse,
-                originalContent: contentToUse,
-                hasUnsavedChanges: false,
-              }
-            : t
-        ),
-      }));
+      try {
+        switch (resolution.action) {
+          case 'keep-local': {
+            const contentToSave = pendingContentRef.current.get(tabId) ?? tab.content;
+            await saveTabFile(tab.file, contentToSave);
+            cleanupTabResources(tabId);
+            pendingContentRef.current.delete(tabId);
+            dispatch({
+              type: 'replace-tab-content',
+              tabId,
+              content: contentToSave,
+              originalContent: contentToSave,
+              hasUnsavedChanges: false,
+            });
+            return true;
+          }
 
-      // Save the resolved content to file
-      await saveTab(tabId);
-      return true;
-    } catch (error) {
-      log.error('Failed to resolve conflict', error);
-      return false;
-    }
-  }, [tabState.openTabs, getExternalContent, saveTab]);
+          case 'manual-merge': {
+            if (
+              !Object.prototype.hasOwnProperty.call(resolution, 'content') ||
+              resolution.content === undefined
+            ) {
+              return false;
+            }
 
-  /**
-   * Handle tab context menu actions
-   */
+            const contentToSave = resolution.content;
+            await saveTabFile(tab.file, contentToSave);
+            cleanupTabResources(tabId);
+            pendingContentRef.current.delete(tabId);
+            dispatch({
+              type: 'replace-tab-content',
+              tabId,
+              content: contentToSave,
+              originalContent: contentToSave,
+              hasUnsavedChanges: false,
+            });
+            return true;
+          }
+
+          case 'use-external': {
+            const externalContent = await getExternalContent(tabId);
+            if (externalContent === null) {
+              return false;
+            }
+
+            cleanupTabResources(tabId);
+            pendingContentRef.current.delete(tabId);
+            dispatch({
+              type: 'replace-tab-content',
+              tabId,
+              content: externalContent,
+              originalContent: externalContent,
+              hasUnsavedChanges: false,
+            });
+            await emitReloadedTabContent(tab.file, externalContent);
+            return true;
+          }
+
+          default:
+            return false;
+        }
+      } catch (error) {
+        log.error('Failed to resolve conflict', error);
+        return false;
+      }
+    },
+    [cleanupTabResources, findTabById, getExternalContent],
+  );
+
+  const closeTabIds = useCallback((tabIds: string[]) => {
+    const currentTabs = tabStateRef.current.openTabs;
+    tabIds.forEach((tabId) => {
+      const tab = currentTabs.find((candidate) => candidate.id === tabId);
+      const snapshot = tab ? createRecentlyClosedSnapshot(tab) : undefined;
+      cleanupTabResources(tabId);
+      dispatch({ type: 'close-tab', tabId, snapshot });
+    });
+  }, [cleanupTabResources, createRecentlyClosedSnapshot]);
+
   const handleTabAction = useCallback(async (tabId: string, action: TabAction) => {
+    const currentState = tabStateRef.current;
+
     switch (action) {
       case 'close':
         await closeTab(tabId);
         break;
 
-      case 'close-others': {
-        const tabsToClose = tabState.openTabs.filter(t => t.id !== tabId);
-        for (const tab of tabsToClose) {
-          await closeTab(tab.id);
-        }
+      case 'close-others':
+        closeTabIds(currentState.openTabs.filter((tab) => tab.id !== tabId).map((tab) => tab.id));
         break;
-      }
 
       case 'close-all':
-        for (const tab of tabState.openTabs) {
-          await closeTab(tab.id);
-        }
+        closeTabIds(currentState.openTabs.map((tab) => tab.id));
         break;
 
       case 'close-to-right': {
-        const tabIndex = tabState.openTabs.findIndex(t => t.id === tabId);
-        const tabsToRight = tabState.openTabs.slice(tabIndex + 1);
-        for (const tab of tabsToRight) {
-          await closeTab(tab.id);
+        const tabIndex = currentState.openTabs.findIndex((tab) => tab.id === tabId);
+        if (tabIndex >= 0) {
+          closeTabIds(currentState.openTabs.slice(tabIndex + 1).map((tab) => tab.id));
         }
         break;
       }
 
       case 'copy-path': {
-        const tab = tabState.openTabs.find(t => t.id === tabId);
+        const tab = findTabById(tabId);
         if (tab) {
-          // Copy path to clipboard (will implement when we add clipboard support)
-          log.info('Copy path', tab.file.path);
+          void navigator.clipboard.writeText(tab.file.path).catch((error) => {
+            log.error('Failed to copy tab path', error);
+          });
         }
         break;
       }
 
-      case 'reveal-in-folder':
-        // Will implement when we add file system integration
-        log.debug('Reveal in folder', tabId);
+      case 'reveal-in-folder': {
+        const tab = findTabById(tabId);
+        if (tab) {
+          void withErrorHandling(async () => {
+            const result = await safeInvoke('open_file_location', { filePath: tab.file.path }, null);
+            if (result == null) {
+              throw new Error('Failed to reveal tab in folder');
+            }
+            return result;
+          }, 'Failed to reveal tab in folder', 'tab_manager');
+        }
         break;
+      }
     }
-  }, [tabState.openTabs, closeTab]);
+  }, [closeTab, closeTabIds, findTabById, withErrorHandling]);
 
-  /**
-   * Reopen the most recently closed tab
-   */
   const reopenLastClosedTab = useCallback(async () => {
-    if (tabState.recentlyClosed.length === 0) return null;
+    const lastClosed = takeMostRecentlyClosedFile(tabStateRef.current);
+    if (!lastClosed) {
+      return null;
+    }
 
-    const lastClosed = tabState.recentlyClosed[0];
-    
     try {
-      const tabId = await openTab(lastClosed.file);
-      
-      // Remove from recently closed
-      setTabState(prev => ({
-        ...prev,
-        recentlyClosed: prev.recentlyClosed.slice(1),
-      }));
+      const existingTab = findTabByFile(lastClosed.file);
+      if (existingTab) {
+        dispatch({ type: 'remove-recently-closed', tabId: lastClosed.id });
+        dispatch({ type: 'activate-tab', tabId: existingTab.id });
+        return existingTab.id;
+      }
 
-      return tabId;
+      const originalContent = lastClosed.originalContent ?? lastClosed.content;
+      const shouldRestoreSnapshot =
+        lastClosed.hasUnsavedChanges || lastClosed.content !== originalContent;
+
+      if (shouldRestoreSnapshot) {
+        dispatch({ type: 'remove-recently-closed', tabId: lastClosed.id });
+        dispatch({
+          type: 'open-tab',
+          tab: {
+            ...lastClosed,
+            isActive: true,
+          },
+        });
+        return lastClosed.id;
+      }
+
+      const reopenedTabId = await openTab(lastClosed.file);
+      dispatch({ type: 'remove-recently-closed', tabId: lastClosed.id });
+      return reopenedTabId;
     } catch (error) {
       log.error('Failed to reopen tab', error);
       return null;
     }
-  }, [tabState.recentlyClosed, openTab]);
+  }, [findTabByFile, openTab]);
 
-  /**
-   * Close all tabs
-   */
   const closeAllTabs = useCallback(async () => {
-    // Cancel all debounced functions
-    metadataProcessingRef.current.forEach(fn => fn.cancel());
-    metadataProcessingRef.current.clear();
-    
-    debouncedStateUpdateRef.current.forEach(fn => fn.cancel());
-    debouncedStateUpdateRef.current.clear();
-    
-    for (const tab of tabState.openTabs) {
-      await closeTab(tab.id);
-    }
-  }, [tabState.openTabs, closeTab]);
+    resetTransientTabState();
+    dispatch({ type: 'clear-all' });
+  }, [resetTransientTabState]);
 
-  /**
-   * Save all tabs with unsaved changes
-   */
   const saveAllTabs = useCallback(async (): Promise<boolean> => {
-    const unsavedTabs = tabState.openTabs.filter(tab => tab.hasUnsavedChanges);
-    
+    const candidateTabIds = new Set(
+      tabStateRef.current.openTabs
+        .filter((tab) => tab.hasUnsavedChanges)
+        .map((tab) => tab.id),
+    );
+
+    pendingContentRef.current.forEach((_content, tabId) => {
+      candidateTabIds.add(tabId);
+    });
+
     try {
-      for (const tab of unsavedTabs) {
-        await saveTab(tab.id);
+      for (const tabId of candidateTabIds) {
+        await saveTab(tabId);
       }
       return true;
     } catch (error) {
       log.error('Failed to save all tabs', error);
       return false;
     }
-  }, [tabState.openTabs, saveTab]);
+  }, [saveTab]);
 
-  /**
-   * Reorder tabs based on new order
-   */
   const reorderTabs = useCallback((newTabs: FileTab[]) => {
-    setTabState(prev => ({
-      ...prev,
-      openTabs: newTabs,
-    }));
-    log.debug('Tabs reordered');
+    dispatch({ type: 'reorder-tabs', openTabs: newTabs });
   }, []);
 
-  // === PERSISTENCE EFFECTS ===
-
-  /**
-   * Initialize tabs from localStorage on mount
-   */
-  useEffect(() => {
-    const ENABLE_TAB_RESTORE = false;
-    const initializeTabs = async () => {
-      if (!ENABLE_TAB_RESTORE) return;
-      try {
-        const restoredState = await loadTabsFromStorage();
-        if (restoredState && restoredState.openTabs.length > 0) {
-          setTabState(prev => (prev.openTabs.length === 0 ? restoredState : prev));
-          log.info(`Restored ${restoredState.openTabs.length} tabs from previous session`);
-        }
-      } catch (error) {
-        log.warn('Failed to initialize tabs from storage', error);
-      }
-    };
-
-    initializeTabs();
-  }, [loadTabsFromStorage]); // Only run on mount
-
-  /**
-   * Save tabs to localStorage whenever tab state changes
-   */
-  useEffect(() => {
-    // Only save if we have tabs to save
-    if (tabState.openTabs.length > 0) {
-      saveTabsToStorage(tabState);
-    } else {
-      // Clear storage if no tabs are open
-      clearPersistedTabs();
-    }
-  }, [tabState, saveTabsToStorage, clearPersistedTabs]);
-
-  /**
-   * Typing-aware auto-save system - triggers only when user becomes idle
-   */
-  // Removed idle detection - no more auto-save on idle
-
-  // Removed pending auto-save processing - manual save only now
-
-  /**
-   * Save tabs before page unload
-   */
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (tabState.openTabs.length > 0) {
-        saveTabsToStorage(tabState);
+      const persistableState = buildPersistableState(tabStateRef.current);
+      if (
+        persistableState.openTabs.length > 0 &&
+        tabsBelongToWorkspace(persistableState.openTabs, workspacePath)
+      ) {
+        persistTabState(persistableState, workspacePath);
       }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-    
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [tabState, saveTabsToStorage]);
+  }, [buildPersistableState, tabsBelongToWorkspace, workspacePath]);
 
-  /**
-   * Handle project rename events
-   */
   useEffect(() => {
-    const handleProjectRename = (event: CustomEvent) => {
-      const { oldPath, newPath } = event.detail;
-      
-      setTabState(prev => {
-        const updatedTabs = prev.openTabs.map(tab => {
-          // Check if this tab's file is within the renamed project
-          if (tab.file.path.startsWith(oldPath)) {
-            // Update the file path
-            const relativePath = tab.file.path.substring(oldPath.length);
-            const newFilePath = newPath + relativePath;
-            
-            // Update the tab with new path
-            return {
-              ...tab,
-              file: {
-                ...tab.file,
-                path: newFilePath,
-                id: newFilePath, // Update ID as well since it's based on path
-              }
-            };
-          }
-          return tab;
-        });
-        
-        return {
-          ...prev,
-          openTabs: updatedTabs
-        };
-      });
-      
-      log.debug(`Updated tab paths for project rename: ${oldPath} -> ${newPath}`);
-    };
-    
-    window.addEventListener('project-renamed', handleProjectRename as EventListener);
-    
-    return () => {
-      window.removeEventListener('project-renamed', handleProjectRename as EventListener);
-    };
-  }, []);
+    if (!restoreTabs || !workspacePath) {
+      restoredWorkspaceRef.current = null;
+      restoringWorkspaceRef.current = null;
+      return;
+    }
 
-  /**
-   * Handle action rename events
-   */
-  useEffect(() => {
-    const handleActionRename = (event: CustomEvent) => {
-      const { oldPath, newPath } = event.detail;
-      
-      setTabState(prev => {
-        const updatedTabs = prev.openTabs.map(tab => {
-          // Check if this tab is the renamed action
-          if (tab.file.path === oldPath) {
-            // Update the tab with new path
-            return {
-              ...tab,
-              file: {
-                ...tab.file,
-                path: newPath,
-                name: newPath.split('/').pop() || tab.file.name,
-                id: newPath, // Update ID as well since it's based on path
-              }
-            };
-          }
-          return tab;
-        });
-        
-        return {
-          ...prev,
-          openTabs: updatedTabs
-        };
-      });
-      
-      log.debug(`Updated tab path for action rename: ${oldPath} -> ${newPath}`);
-    };
-    
-    window.addEventListener('action-renamed', handleActionRename as EventListener);
-    
-    return () => {
-      window.removeEventListener('action-renamed', handleActionRename as EventListener);
-    };
-  }, []);
+    const normalizedWorkspaceKey = norm(workspacePath) ?? workspacePath;
 
-  /**
-   * Handle section file rename events (Someday Maybe, Cabinet)
-   */
-  useEffect(() => {
-    const handleSectionFileRename = (event: CustomEvent) => {
-      const { oldPath, newPath } = event.detail;
-      
-      setTabState(prev => {
-        const updatedTabs = prev.openTabs.map(tab => {
-          // Check if this tab is the renamed file
-          if (tab.file.path === oldPath) {
-            // Update the tab with new path
-            return {
-              ...tab,
-              file: {
-                ...tab.file,
-                path: newPath,
-                name: newPath.split('/').pop() || tab.file.name,
-                id: newPath, // Update ID as well since it's based on path
-              }
-            };
-          }
-          return tab;
-        });
-        
-        return {
-          ...prev,
-          openTabs: updatedTabs
-        };
-      });
-      
-      log.debug(`Updated tab path for section file rename: ${oldPath} -> ${newPath}`);
-    };
-    
-    window.addEventListener('section-file-renamed', handleSectionFileRename as EventListener);
-    
-    return () => {
-      window.removeEventListener('section-file-renamed', handleSectionFileRename as EventListener);
-    };
-  }, []);
+    if (
+      restoredWorkspaceRef.current === normalizedWorkspaceKey ||
+      restoringWorkspaceRef.current === normalizedWorkspaceKey
+    ) {
+      return;
+    }
 
-  /**
-   * Handle file/folder deletion events
-   */
-  useEffect(() => {
-    const handleFileDeleted = (event: CustomEvent<{ path: string }>) => {
-      const { path } = event.detail;
-      log.debug('File/folder deleted event', path);
-      
-      // Close any tabs that match the deleted path or are within a deleted folder
-      setTabState(prev => {
-        const updatedTabs = prev.openTabs.filter(tab => {
-          // Check if this tab's file was deleted or is within a deleted folder
-          const shouldRemove = tab.filePath === path || tab.filePath.startsWith(path + '/');
-          if (shouldRemove) {
-            log.debug('Closing tab due to deletion', tab.filePath);
+    restoringWorkspaceRef.current = normalizedWorkspaceKey;
+    const restoreAttempt = restoreAttemptRef.current + 1;
+    restoreAttemptRef.current = restoreAttempt;
+
+    const restoreTabsForWorkspace = async () => {
+      const currentTabs = tabStateRef.current.openTabs;
+      if (currentTabs.length > 0) {
+        if (tabsBelongToWorkspace(currentTabs, normalizedWorkspaceKey)) {
+          if (restoreAttemptRef.current === restoreAttempt) {
+            restoringWorkspaceRef.current = null;
+            restoredWorkspaceRef.current = normalizedWorkspaceKey;
           }
-          return !shouldRemove;
-        });
-        
-        // If the active tab was closed, activate the last remaining tab
-        let newActiveTabId = prev.activeTabId;
-        if (prev.activeTabId && !updatedTabs.find(t => t.id === prev.activeTabId)) {
-          newActiveTabId = updatedTabs.length > 0 ? updatedTabs[updatedTabs.length - 1].id : null;
+          return;
         }
-        
-        return {
-          ...prev,
-          openTabs: updatedTabs,
-          activeTabId: newActiveTabId
-        };
-      });
-    };
-    
-    window.addEventListener('file-deleted', handleFileDeleted as EventListener);
-    
-    return () => {
-      window.removeEventListener('file-deleted', handleFileDeleted as EventListener);
-    };
-  }, []);
 
-  /**
-   * Handle open-reference-file events from ReferencesBlock
-   */
+        resetTransientTabState();
+        dispatch({ type: 'clear-and-restore', state: null });
+        tabStateRef.current = {
+          ...tabStateRef.current,
+          openTabs: [],
+          activeTabId: null,
+        };
+      }
+
+      try {
+        const restoredState = await restoreTabStateFromStorage({
+          workspacePath: normalizedWorkspaceKey,
+          maxTabs: resolvedMaxTabs,
+          readFile: readTabFile,
+        });
+
+        const currentTabsAfterRestore = tabStateRef.current.openTabs;
+        if (
+          restoreAttemptRef.current === restoreAttempt &&
+          currentTabsAfterRestore.length === 0
+        ) {
+          dispatch({ type: 'clear-and-restore', state: restoredState });
+          restoringWorkspaceRef.current = null;
+          restoredWorkspaceRef.current = normalizedWorkspaceKey;
+        }
+      } catch (error) {
+        log.warn('Failed to initialize tabs from storage', error);
+      } finally {
+        if (restoreAttemptRef.current === restoreAttempt) {
+          if (restoringWorkspaceRef.current === normalizedWorkspaceKey) {
+            restoringWorkspaceRef.current = null;
+            restoredWorkspaceRef.current = normalizedWorkspaceKey;
+          }
+        }
+      }
+    };
+
+    void restoreTabsForWorkspace();
+  }, [resolvedMaxTabs, resetTransientTabState, restoreTabs, tabsBelongToWorkspace, workspacePath]);
+
   useEffect(() => {
-    const handleOpenReference = async (event: CustomEvent) => {
-      const { path } = event.detail;
-      
-      if (!path) {
+    if (!workspacePath) {
+      return;
+    }
+
+    const persistableState = buildPersistableState(tabState);
+
+    if (persistableState.openTabs.length > 0) {
+      if (!tabsBelongToWorkspace(persistableState.openTabs, workspacePath)) {
+        return;
+      }
+      persistTabState(persistableState, workspacePath);
+    } else if (
+      restoreTabs &&
+      workspacePath &&
+      restoringWorkspaceRef.current === (norm(workspacePath) ?? workspacePath)
+    ) {
+      return;
+    } else {
+      clearPersistedTabStorage();
+    }
+  }, [buildPersistableState, restoreTabs, tabState, tabsBelongToWorkspace, workspacePath]);
+
+  useTabManagerSubscriptions({
+    onRename: useCallback((detail, mode) => {
+      dispatch({
+        type: 'rename-paths',
+        oldPath: detail.oldPath,
+        newPath: detail.newPath,
+        mode,
+      });
+    }, []),
+    onDelete: useCallback((detail) => {
+      tabStateRef.current.openTabs.forEach((tab) => {
+        if (isSameOrDescendantPath(tab.file.path, detail.path)) {
+          cleanupTabResources(tab.id);
+        }
+      });
+      dispatch({ type: 'remove-deleted-path', path: detail.path });
+    }, [cleanupTabResources]),
+    onOpenReference: useCallback((detail) => {
+      if (!detail.path) {
         log.error('No path provided for reference file');
         return;
       }
-      
-      try {
-        // Create a MarkdownFile object from the path
-        const fileName = path.split('/').pop() || 'Unknown';
-        const referenceFile: MarkdownFile = {
-          id: path,
-          name: fileName,
-          path: path,
-          size: 0, // Size doesn't matter for opening
-          last_modified: Math.floor(Date.now() / 1000),
-          extension: 'md'
-        };
-        
-        // Open the reference file in a new tab
-        await openTab(referenceFile);
-        log.info(`Opened reference file: ${path}`);
-      } catch (error) {
-        log.error('Failed to open reference file', error);
-      }
-    };
-    
-    window.addEventListener('open-reference-file', handleOpenReference as EventListener);
-    
-    return () => {
-      window.removeEventListener('open-reference-file', handleOpenReference as EventListener);
-    };
-  }, [openTab]);
 
-  // === RETURN STATE AND OPERATIONS ===
+      void openTab(buildReferenceFile(detail.path));
+    }, [openTab]),
+  });
+
+  const activeTab = useMemo(() => {
+    return tabState.openTabs.find((tab) => tab.id === tabState.activeTabId) || null;
+  }, [tabState.activeTabId, tabState.openTabs]);
 
   return {
-    // State
     tabState,
-    activeTab: getActiveTab(),
-    hasUnsavedChanges: tabState.openTabs.some(tab => tab.hasUnsavedChanges),
-    
-    // Operations
+    activeTab,
+    hasUnsavedChanges: tabState.openTabs.some((tab) => {
+      const bufferedContent = pendingContentRef.current.get(tab.id);
+      if (bufferedContent === undefined) {
+        return tab.hasUnsavedChanges;
+      }
+      return bufferedContent !== (tab.originalContent ?? tab.content);
+    }),
     openTab,
     activateTab,
     closeTab,
@@ -1103,20 +776,12 @@ export const useTabManager = () => {
     closeAllTabs,
     saveAllTabs,
     reorderTabs,
-    
-    // Auto-save functions removed - manual save only now
-    
-    // Conflict resolution
     checkForConflicts,
     getExternalContent,
     resolveConflict,
     reloadTabFromDisk,
-    
-    // Utilities
     findTabByFile,
-    
-    // Persistence
-    clearPersistedTabs,
+    clearPersistedTabs: clearPersistedTabStorage,
   };
 };
 

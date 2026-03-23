@@ -20,17 +20,30 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { EnhancedTextEditor } from "@/components/editor/EnhancedTextEditor";
-import { extractMetadata } from "@/utils/metadata-extractor";
 import {
   buildProjectMarkdown,
   DEFAULT_PROJECT_OUTCOME,
   type ProjectHorizonReferences,
 } from "@/utils/gtd-markdown-helpers";
+import { parseActionMarkdown } from "@/utils/gtd-action-markdown";
+import { parseHabitContent } from "@/utils/gtd-habit-markdown";
+import {
+  normalizeProjectHorizonReferences,
+  parseProjectMarkdown,
+  sanitizeProjectAdditionalContent,
+  toDateOnly,
+} from "@/utils/gtd-project-content";
+import {
+  displayNameForReference,
+  normalizeProjectPathFromReadme,
+  normalizeProjectReferencePath,
+  normalizeReferencePath,
+  README_REFERENCE_REGEX,
+} from "@/utils/gtd-reference-utils";
 import { syncHorizonBacklink } from "@/utils/horizon-backlinks";
 import { checkTauriContextAsync } from "@/utils/tauri-ready";
 import { safeInvoke } from "@/utils/safe-invoke";
 import { formatDisplayDate } from "@/utils/format-display-date";
-import { normalizeStatus } from "@/utils/gtd-status";
 import { useErrorHandler } from "@/hooks/useErrorHandler";
 import type { GTDProjectStatus, MarkdownFile } from "@/types";
 import { Circle, CircleDot, CheckCircle2, RefreshCw, LayoutList, Activity, CircleOff } from "lucide-react";
@@ -74,237 +87,6 @@ type HorizonOption = {
   horizon: HorizonKey;
 };
 
-const README_REGEX = /(?:^|\/)README(?:\.(md|markdown))?$/i;
-
-const CANONICAL_HEADINGS: RegExp[] = [
-  /^##\s+Status\b/i,
-  /^##\s+Due\s+Date/i,
-  /^##\s+Desired\s+Outcome\b/i,
-  /^##\s+Horizon\s+References\b/i,
-  /^##\s+References\b/i,
-  /^##\s+Created\b/i,
-  /^##\s+Actions\b/i,
-  /^##\s+Related\s+Habits\b/i,
-];
-
-interface ProjectSections {
-  desiredOutcome: string;
-  includeHabitsList: boolean;
-  additionalContent: string;
-}
-
-const CANONICAL_TRAILING_HEADINGS: RegExp[] = [
-  /^##\s+References\s*(?:\(optional\))?\s*$/i,
-  /^##\s+Horizon\s+References\s*(?:\(optional\))?\s*$/i,
-];
-
-const CANONICAL_MARKERS = [
-  /\[!references:[^\]]*\]/i,
-  /\[!projects-references:[^\]]*\]/i,
-  /\[!areas-references:[^\]]*\]/i,
-  /\[!goals-references:[^\]]*\]/i,
-  /\[!vision-references:[^\]]*\]/i,
-  /\[!purpose-references:[^\]]*\]/i,
-];
-
-function toDateOnly(value?: string | null): string {
-  if (!value) return "";
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    return trimmed;
-  }
-  if (trimmed.length >= 10 && /\d{4}-\d{2}-\d{2}/.test(trimmed.slice(0, 10))) {
-    return trimmed.slice(0, 10);
-  }
-  const parsed = new Date(trimmed);
-  if (!Number.isNaN(parsed.getTime())) {
-    const month = String(parsed.getMonth() + 1).padStart(2, "0");
-    const day = String(parsed.getDate()).padStart(2, "0");
-    return `${parsed.getFullYear()}-${month}-${day}`;
-  }
-  return "";
-}
-
-function sanitizeAdditionalContent(content: string): string {
-  if (!content.trim()) return "";
-
-  const lines = content.split(/\r?\n/);
-  const kept: string[] = [];
-  let skipping = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i];
-    const trimmed = rawLine.trim();
-
-    if (skipping) {
-      if (trimmed.startsWith("## ")) {
-        skipping = false;
-        i -= 1; // re-process this heading normally
-      }
-      continue;
-    }
-
-    if (CANONICAL_TRAILING_HEADINGS.some((regex) => regex.test(trimmed))) {
-      skipping = true;
-      continue;
-    }
-
-    if (CANONICAL_MARKERS.some((regex) => regex.test(trimmed))) {
-      continue;
-    }
-
-    kept.push(rawLine);
-  }
-
-  return kept.join("\n").replace(/\s+$/g, "").replace(/^\s*\n/, "");
-}
-
-function parseProjectSections(content: string): ProjectSections {
-  const lines = content.split(/\r?\n/);
-  const desiredBuffer: string[] = [];
-  let collectingDesired = false;
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (/^##\s+Desired\s+Outcome\b/i.test(line)) {
-      collectingDesired = true;
-      desiredBuffer.length = 0;
-      continue;
-    }
-
-    if (collectingDesired) {
-      if (CANONICAL_HEADINGS.some((regex) => regex.test(line))) {
-        break;
-      }
-      desiredBuffer.push(rawLine);
-    }
-  }
-
-  const desiredOutcome = desiredBuffer.length
-    ? desiredBuffer.join("\n").replace(/^\s*\n+/, "").trimEnd()
-    : "";
-
-  const includeHabitsList = /\[!habits-list(?:[:\]])/i.test(content);
-
-  let additionalContent = "";
-  const habitsMatch = /\[!habits-list[^\]]*\]/i.exec(content);
-  if (habitsMatch) {
-    const start = habitsMatch.index + habitsMatch[0].length;
-    additionalContent = content.slice(start).replace(/^\s*\n/, "");
-  } else {
-    const actionsMatch = /\[!actions-list[^\]]*\]/i.exec(content);
-    if (actionsMatch) {
-      const start = actionsMatch.index + actionsMatch[0].length;
-      additionalContent = content.slice(start).replace(/^\s*\n/, "");
-    }
-  }
-
-  return {
-    desiredOutcome,
-    includeHabitsList,
-    additionalContent: sanitizeAdditionalContent(additionalContent),
-  };
-}
-
-function normalizeProjectStatus(raw: unknown): GTDProjectStatus {
-  const token = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  switch (token) {
-    case "cancelled":
-    case "canceled":
-    case "cancel":
-    case "abandoned":
-    case "dropped":
-      return "cancelled";
-    case "waiting":
-    case "on-hold":
-    case "paused":
-    case "blocked":
-      return "waiting";
-    case "completed":
-    case "complete":
-    case "done":
-    case "finished":
-      return "completed";
-    case "in-progress":
-    case "active":
-    case "ongoing":
-    case "working":
-    default:
-      return "in-progress";
-  }
-}
-
-function normalizeReference(value: string): string {
-  return value.replace(/\\/g, "/").trim();
-}
-
-function normalizeReferenceGroup(values?: ReadonlyArray<string>): string[] {
-  if (!values || values.length === 0) return [];
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-  for (const value of values) {
-    if (typeof value !== "string") continue;
-    const candidate = normalizeReference(value);
-    if (!candidate || seen.has(candidate)) continue;
-    seen.add(candidate);
-    normalized.push(candidate);
-  }
-  return normalized;
-}
-
-function normalizeHorizonReferences(groups: ProjectHorizonReferences): ProjectHorizonReferences {
-  return {
-    areas: normalizeReferenceGroup(groups.areas),
-    goals: normalizeReferenceGroup(groups.goals),
-    vision: normalizeReferenceGroup(groups.vision),
-    purpose: normalizeReferenceGroup(groups.purpose),
-  };
-}
-
-function normalizeGeneralReferences(values?: ReadonlyArray<string>): string[] {
-  return normalizeReferenceGroup(values);
-}
-
-function toStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => (typeof item === "string" ? normalizeReference(item) : ""))
-      .filter(Boolean);
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return [];
-
-    // Try to decode and parse as JSON first
-    try {
-      const decoded = decodeURIComponent(trimmed);
-      const parsed = JSON.parse(decoded);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .map((item) => (typeof item === "string" ? normalizeReference(item) : ""))
-          .filter(Boolean);
-      }
-    } catch {
-      // Fall through to CSV parsing
-    }
-
-    // Fall back to CSV split
-    return trimmed
-      .split(",")
-      .map((entry) => normalizeReference(entry))
-      .filter(Boolean);
-  }
-  return [];
-}
-
-function displayNameForReference(ref: string): string {
-  const normalized = normalizeReference(ref);
-  const leaf = normalized.split("/").pop();
-  if (!leaf) return normalized;
-  return leaf.replace(/\.(md|markdown)$/i, "");
-}
-
 type ProjectActionItem = {
   name: string;
   path: string;
@@ -341,35 +123,25 @@ const statusLabel = (status: string) => {
   }
 };
 
-function normalizeProjectPathFromReadme(filePath?: string): string | null {
-  if (!filePath) return null;
-  const normalized = filePath.replace(/\\/g, "/");
-  const match = normalized.match(/(.+\/Projects\/.+)\/README\.(md|markdown)$/i);
-  if (!match) return null;
-  const projectPath = match[1];
-
-  const relative = projectPath.split("/Projects/")[1];
-  if (!relative) return null;
-  const segments = relative.split("/").filter(Boolean);
-  if (segments.length === 0) return null;
-
-  return projectPath;
-}
-
-function normalizeProjectReferencePath(raw: string): string {
-  return raw
-    .replace(/\\/g, "/")
-    .replace(/\/README\.(md|markdown)$/i, "")
-    .replace(/\/+$/, "");
-}
-
 const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ projectPath }) => {
   const [items, setItems] = React.useState<ProjectActionItem[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const requestIdRef = React.useRef(0);
+  const latestProjectPathRef = React.useRef(projectPath);
+  const { withErrorHandling } = useErrorHandler();
+
+  React.useEffect(() => {
+    latestProjectPathRef.current = projectPath;
+  }, [projectPath]);
 
   const load = React.useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const requestedProjectPath = projectPath;
+
+    setItems([]);
     if (!projectPath) {
-      setItems([]);
+      setLoading(false);
       return;
     }
 
@@ -381,37 +153,80 @@ const ProjectActionsSection: React.FC<{ projectPath: string | null }> = ({ proje
         return;
       }
 
-      const files = await safeInvoke<MarkdownFile[]>(
-        "list_project_actions",
-        { projectPath },
-        []
-      );
+      const files =
+        (await withErrorHandling(async () => {
+          const result = await safeInvoke<MarkdownFile[]>(
+            "list_project_actions",
+            { projectPath },
+            null
+          );
+          if (result == null) {
+            throw new Error(`Failed to load project actions for ${projectPath}`);
+          }
+          return result;
+        }, "Failed to load project actions", "project-actions")) ?? [];
 
       const actions = await Promise.all(
         (files ?? []).map(async (file) => {
-          const content = await safeInvoke<string>("read_file", { path: file.path }, "");
-          const meta = extractMetadata(content || "");
-          const statusRaw = typeof meta.status === "string" ? meta.status : undefined;
-          const status = normalizeStatus(statusRaw as string | undefined) ?? "in-progress";
+          if (
+            requestId !== requestIdRef.current ||
+            requestedProjectPath !== latestProjectPathRef.current
+          ) {
+            return null;
+          }
+
+          const content = await withErrorHandling(async () => {
+            const result = await safeInvoke<string>("read_file", { path: file.path }, null);
+            if (result == null) {
+              throw new Error(`Failed to read action file: ${file.path}`);
+            }
+            return result;
+          });
+          if (typeof content !== "string") {
+            return null;
+          }
+          const parsedAction = parseActionMarkdown(content);
+          const fallbackName = file.name.replace(/\.(md|markdown)$/i, "");
           return {
-            name: meta.title || file.name.replace(/\.md$/i, ""),
+            name:
+              parsedAction.title && parsedAction.title !== "Untitled"
+                ? parsedAction.title
+                : fallbackName,
             path: file.path,
-            status,
-            dueDate: typeof meta.dueDate === "string" ? meta.dueDate : null,
-            focusDate: typeof meta.focusDate === "string" ? meta.focusDate : null,
+            status: parsedAction.status,
+            dueDate: parsedAction.dueDate || null,
+            focusDate: parsedAction.focusDate || null,
           } as ProjectActionItem;
         })
       );
 
-      actions.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-      setItems(actions);
+      if (
+        requestId !== requestIdRef.current ||
+        requestedProjectPath !== latestProjectPathRef.current
+      ) {
+        return;
+      }
+
+      const validActions = actions.filter((item): item is ProjectActionItem => item !== null);
+      validActions.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+      setItems(validActions);
     } catch (error) {
-      console.error("ProjectActionsSection: failed to load actions", error);
-      setItems([]);
+      if (
+        requestId === requestIdRef.current &&
+        requestedProjectPath === latestProjectPathRef.current
+      ) {
+        console.error("ProjectActionsSection: failed to load actions", error);
+        setItems([]);
+      }
     } finally {
-      setLoading(false);
+      if (
+        requestId === requestIdRef.current &&
+        requestedProjectPath === latestProjectPathRef.current
+      ) {
+        setLoading(false);
+      }
     }
-  }, [projectPath]);
+  }, [projectPath, withErrorHandling]);
 
   React.useEffect(() => {
     void load();
@@ -475,16 +290,28 @@ type ProjectHabitItem = {
 const ProjectHabitsSection: React.FC<{ projectPath: string | null }> = ({ projectPath }) => {
   const [habits, setHabits] = React.useState<ProjectHabitItem[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const requestIdRef = React.useRef(0);
+  const latestProjectPathRef = React.useRef(projectPath);
+  const { withErrorHandling } = useErrorHandler();
+
+  React.useEffect(() => {
+    latestProjectPathRef.current = projectPath;
+  }, [projectPath]);
 
   const load = React.useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const requestedProjectPath = projectPath;
+
+    setHabits([]);
     if (!projectPath) {
-      setHabits([]);
+      setLoading(false);
       return;
     }
 
     const spacePath = window.localStorage.getItem("gtdspace-current-path") || "";
     if (!spacePath) {
-      setHabits([]);
+      setLoading(false);
       return;
     }
 
@@ -497,44 +324,81 @@ const ProjectHabitsSection: React.FC<{ projectPath: string | null }> = ({ projec
       }
 
       const habitsDir = `${spacePath}/Habits`;
-      const files = await safeInvoke<MarkdownFile[]>(
-        "list_markdown_files",
-        { path: habitsDir },
-        []
-      );
+      const files =
+        (await withErrorHandling(async () => {
+          const result = await safeInvoke<MarkdownFile[]>(
+            "list_markdown_files",
+            { path: habitsDir },
+            null
+          );
+          if (result == null) {
+            throw new Error(`Failed to list habits in ${habitsDir}`);
+          }
+          return result;
+        }, "Failed to load related habits", "project-habits")) ?? [];
 
       const projectNormalized = normalizeProjectReferencePath(projectPath);
 
       const matches: ProjectHabitItem[] = [];
       for (const file of files ?? []) {
-        const content = await safeInvoke<string>("read_file", { path: file.path }, "");
-        const meta = extractMetadata(content || "");
-        const refs = Array.isArray((meta as any).projectsReferences)
-          ? ((meta as any).projectsReferences as string[])
-          : typeof (meta as any).projectsReferences === "string"
-            ? [(meta as any).projectsReferences as string]
-            : [];
+        if (
+          requestId !== requestIdRef.current ||
+          requestedProjectPath !== latestProjectPathRef.current
+        ) {
+          return;
+        }
 
-        const normalizedRefs = refs
-          .map((ref) => normalizeProjectReferencePath(ref))
-          .filter(Boolean);
+        const content = await withErrorHandling(async () => {
+          const result = await safeInvoke<string>("read_file", { path: file.path }, null);
+          if (result == null) {
+            throw new Error(`Failed to read habit file: ${file.path}`);
+          }
+          return result;
+        });
+        if (typeof content !== "string") {
+          continue;
+        }
+        const parsedHabit = parseHabitContent(content);
+        const normalizedRefs = parsedHabit.references.projects.map((ref) =>
+          normalizeProjectReferencePath(ref)
+        );
         if (normalizedRefs.includes(projectNormalized)) {
           matches.push({
-            name: file.name.replace(/\.md$/i, ""),
+            name:
+              parsedHabit.title && parsedHabit.title !== "Untitled Habit"
+                ? parsedHabit.title
+                : file.name.replace(/\.(md|markdown)$/i, ""),
             path: file.path,
           });
         }
       }
 
+      if (
+        requestId !== requestIdRef.current ||
+        requestedProjectPath !== latestProjectPathRef.current
+      ) {
+        return;
+      }
+
       matches.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
       setHabits(matches);
     } catch (error) {
-      console.error("ProjectHabitsSection: failed to load habits", error);
-      setHabits([]);
+      if (
+        requestId === requestIdRef.current &&
+        requestedProjectPath === latestProjectPathRef.current
+      ) {
+        console.error("ProjectHabitsSection: failed to load habits", error);
+        setHabits([]);
+      }
     } finally {
-      setLoading(false);
+      if (
+        requestId === requestIdRef.current &&
+        requestedProjectPath === latestProjectPathRef.current
+      ) {
+        setLoading(false);
+      }
     }
-  }, [projectPath]);
+  }, [projectPath, withErrorHandling]);
 
   React.useEffect(() => {
     void load();
@@ -589,126 +453,53 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
   filePath,
   className,
 }) => {
-  const meta = React.useMemo(() => extractMetadata(content || ""), [content]);
-  const parsedSections = React.useMemo(
-    () => parseProjectSections(content || ""),
-    [content]
-  );
+  const parsed = React.useMemo(() => parseProjectMarkdown(content || ""), [content]);
   const { withErrorHandling } = useErrorHandler();
-
-  const initialTitle =
-    typeof meta.title === "string" && meta.title.trim().length > 0
-      ? meta.title.trim()
-      : "Untitled Project";
-
-  const initialHorizonRefs = React.useMemo<ProjectHorizonReferences>(() => {
-    const parsed: ProjectHorizonReferences = {
-      areas: toStringArray((meta as any).areasReferences),
-      goals: toStringArray((meta as any).goalsReferences),
-      vision: toStringArray((meta as any).visionReferences),
-      purpose: toStringArray((meta as any).purposeReferences),
-    };
-    return normalizeHorizonReferences(parsed);
-  }, [meta]);
-
-  const initialGeneralRefs = React.useMemo(
-    () => normalizeGeneralReferences(toStringArray((meta as any).references)),
-    [meta]
-  );
-
-  const [title, setTitle] = React.useState<string>(initialTitle);
-  const [status, setStatus] = React.useState<GTDProjectStatus>(
-    normalizeProjectStatus((meta as any).projectStatus ?? (meta as any).status)
-  );
-  const [dueDate, setDueDate] = React.useState<string>(
-    typeof (meta as any).dueDate === "string"
-      ? toDateOnly((meta as any).dueDate)
-      : ""
-  );
-  const [desiredOutcome, setDesiredOutcome] = React.useState<string>(
-    parsedSections.desiredOutcome?.trim() === DEFAULT_PROJECT_OUTCOME.trim()
-      ? ""
-      : parsedSections.desiredOutcome
-  );
+  const [title, setTitle] = React.useState<string>(parsed.title);
+  const [status, setStatus] = React.useState<GTDProjectStatus>(parsed.status);
+  const [dueDate, setDueDate] = React.useState<string>(parsed.dueDate);
+  const [desiredOutcome, setDesiredOutcome] = React.useState<string>(parsed.desiredOutcome);
   const [horizonRefs, setHorizonRefs] = React.useState<ProjectHorizonReferences>(
-    initialHorizonRefs
+    parsed.horizonReferences
   );
-  const [references, setReferences] = React.useState<string[]>(initialGeneralRefs);
+  const [references, setReferences] = React.useState<string[]>(parsed.references);
   const [includeHabitsList, setIncludeHabitsList] = React.useState<boolean>(
-    parsedSections.includeHabitsList
+    parsed.includeHabitsList
   );
   const [additionalContent, setAdditionalContent] = React.useState<string>(
-    parsedSections.additionalContent
+    parsed.additionalContent
   );
 
   const [activeHorizonPicker, setActiveHorizonPicker] = React.useState<HorizonKey | null>(null);
   const [horizonOptions, setHorizonOptions] = React.useState<HorizonOption[]>([]);
   const [horizonSearch, setHorizonSearch] = React.useState<string>("");
   const [horizonLoading, setHorizonLoading] = React.useState(false);
-
-  const createdRef = React.useRef<string>(new Date().toISOString());
-  const [createdDisplayValue, setCreatedDisplayValue] = React.useState<string>(
-    formatDisplayDate(createdRef.current)
-  );
-  const createdInitialized = React.useRef<boolean>(false);
-
-  React.useEffect(() => {
-    if (!createdInitialized.current) {
-      const fromMeta = (meta as any).createdDateTime;
-      createdRef.current =
-        typeof fromMeta === "string" && fromMeta.trim().length > 0
-          ? fromMeta.trim()
-          : new Date().toISOString();
-      createdInitialized.current = true;
-      setCreatedDisplayValue(formatDisplayDate(createdRef.current));
-    } else if (
-      typeof (meta as any).createdDateTime === "string" &&
-      (meta as any).createdDateTime.trim().length > 0
-    ) {
-      createdRef.current = (meta as any).createdDateTime.trim();
-      setCreatedDisplayValue(formatDisplayDate(createdRef.current));
-    }
-  }, [meta]);
+  const pendingHorizonChangeRef = React.useRef<Array<{
+    key: HorizonKey;
+    targetPath: string;
+    mode: "toggle" | "remove";
+  }>>([]);
 
   React.useEffect(() => {
-    const nextTitle =
-      typeof meta.title === "string" && meta.title.trim().length > 0
-        ? meta.title.trim()
-        : "Untitled Project";
-    setTitle(nextTitle);
-    setStatus(
-      normalizeProjectStatus((meta as any).projectStatus ?? (meta as any).status)
-    );
-    setDueDate(
-      typeof (meta as any).dueDate === "string"
-        ? toDateOnly((meta as any).dueDate)
-        : ""
-    );
-    setHorizonRefs(
-      normalizeHorizonReferences({
-        areas: toStringArray((meta as any).areasReferences),
-        goals: toStringArray((meta as any).goalsReferences),
-        vision: toStringArray((meta as any).visionReferences),
-        purpose: toStringArray((meta as any).purposeReferences),
-      })
-    );
-    setReferences(normalizeGeneralReferences(toStringArray((meta as any).references)));
-
-    const updatedSections = parseProjectSections(content || "");
-    setDesiredOutcome(
-      updatedSections.desiredOutcome?.trim() === DEFAULT_PROJECT_OUTCOME.trim()
-        ? ""
-        : updatedSections.desiredOutcome
-    );
-    setIncludeHabitsList(updatedSections.includeHabitsList);
-    setAdditionalContent(updatedSections.additionalContent);
-  }, [meta, content]);
+    setTitle(parsed.title);
+    setStatus(parsed.status);
+    setDueDate(parsed.dueDate);
+    setHorizonRefs(parsed.horizonReferences);
+    setReferences(parsed.references);
+    setDesiredOutcome(parsed.desiredOutcome);
+    setIncludeHabitsList(parsed.includeHabitsList);
+    setAdditionalContent(parsed.additionalContent);
+  }, [parsed]);
 
   const normalizedFilePath = React.useMemo(
     () => (filePath ? filePath.replace(/\\/g, "/") : ""),
     [filePath]
   );
   const projectPath = React.useMemo(() => normalizeProjectPathFromReadme(filePath), [filePath]);
+  const createdDisplayValue = React.useMemo(
+    () => formatDisplayDate(parsed.createdDateTime),
+    [parsed.createdDateTime]
+  );
 
   const emitRebuild = React.useCallback(
     (
@@ -740,7 +531,7 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
         desiredOutcome: nextOutcome,
         horizonReferences: nextHorizon,
         references: nextReferences,
-        createdDateTime: createdRef.current,
+        createdDateTime: parsed.createdDateTime,
         includeHabitsList: nextIncludeHabits,
         additionalContent: nextAdditional,
       });
@@ -758,6 +549,7 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       references,
       includeHabitsList,
       additionalContent,
+      parsed.createdDateTime,
       content,
       onChange,
     ]
@@ -774,14 +566,20 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
       return withErrorHandling(async () => {
         const dirName = HORIZON_DIRS[key];
         const dirPath = `${spacePath}/${dirName}`;
-        const files = await safeInvoke<MarkdownFile[]>(
-          "list_markdown_files",
-          { path: dirPath },
-          []
-        );
+        const files = await withErrorHandling(async () => {
+          const result = await safeInvoke<MarkdownFile[]>(
+            "list_markdown_files",
+            { path: dirPath },
+            null
+          );
+          if (result == null) {
+            throw new Error(`Failed to list horizon references in ${dirPath}`);
+          }
+          return result;
+        }, "Failed to load horizon references", `project-${key}-references`);
         if (!files) return [];
         return files
-          .filter((file) => !README_REGEX.test(file.path.replace(/\\/g, "/")))
+          .filter((file) => !README_REFERENCE_REGEX.test(file.path.replace(/\\/g, "/")))
           .map((file) => ({
             path: file.path.replace(/\\/g, "/"),
             name: file.name.replace(/\.(md|markdown)$/i, ""),
@@ -829,71 +627,100 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
 
   const handleHorizonToggle = React.useCallback(
     (key: HorizonKey, value: string) => {
-      const normalizedTarget = normalizeReference(value);
+      const normalizedTarget = normalizeReferencePath(value);
       if (!normalizedTarget) return;
 
-      setHorizonRefs((current) => {
-        const normalizedCurrent = normalizeHorizonReferences(current);
+      setHorizonRefs((prev) => {
+        const normalizedCurrent = normalizeProjectHorizonReferences(prev);
         const group = normalizedCurrent[key] ?? [];
-        const isPresent = group.includes(normalizedTarget);
-        const action: "add" | "remove" = isPresent ? "remove" : "add";
-        const nextGroup = isPresent
+        const nextGroup = group.includes(normalizedTarget)
           ? group.filter((ref) => ref !== normalizedTarget)
           : [...group, normalizedTarget];
-        const next = {
+        pendingHorizonChangeRef.current.push({
+          key,
+          targetPath: normalizedTarget,
+          mode: group.includes(normalizedTarget) ? "remove" : "toggle",
+        });
+        return {
           ...normalizedCurrent,
           [key]: nextGroup,
         };
-
-        emitRebuild({ horizonReferences: next });
-        if (normalizedFilePath) {
-          void syncHorizonBacklink({
-            sourcePath: normalizedFilePath,
-            sourceKind: "projects",
-            targetPath: normalizedTarget,
-            action,
-          });
-        }
-
-        return next;
       });
     },
-    [emitRebuild, normalizedFilePath]
+    []
   );
 
   const handleHorizonRemove = React.useCallback(
     (key: HorizonKey, value: string) => {
-      const normalizedTarget = normalizeReference(value);
+      const normalizedTarget = normalizeReferencePath(value);
       if (!normalizedTarget) return;
 
-      setHorizonRefs((current) => {
-        const normalizedCurrent = normalizeHorizonReferences(current);
+      setHorizonRefs((prev) => {
+        const normalizedCurrent = normalizeProjectHorizonReferences(prev);
         const group = normalizedCurrent[key] ?? [];
         if (!group.includes(normalizedTarget)) {
-          return normalizedCurrent;
+          return prev;
         }
 
+        pendingHorizonChangeRef.current.push({
+          key,
+          targetPath: normalizedTarget,
+          mode: "remove",
+        });
         const nextGroup = group.filter((ref) => ref !== normalizedTarget);
-        const next = {
+        return {
           ...normalizedCurrent,
           [key]: nextGroup,
         };
-
-        emitRebuild({ horizonReferences: next });
-        if (normalizedFilePath) {
-          void syncHorizonBacklink({
-            sourcePath: normalizedFilePath,
-            sourceKind: "projects",
-            targetPath: normalizedTarget,
-            action: "remove",
-          });
-        }
-
-        return next;
       });
     },
-    [emitRebuild, normalizedFilePath]
+    []
   );
+
+  React.useEffect(() => {
+    const pending = pendingHorizonChangeRef.current;
+    if (pending.length === 0) {
+      return;
+    }
+
+    const next = normalizeProjectHorizonReferences(horizonRefs);
+    const queuedChanges = pending.splice(0);
+    emitRebuild({ horizonReferences: next });
+
+    if (normalizedFilePath) {
+      void (async () => {
+        const groupedChanges = queuedChanges.reduce<Record<string, typeof queuedChanges>>(
+          (acc, change) => {
+            acc[change.targetPath] ??= [];
+            acc[change.targetPath].push(change);
+            return acc;
+          },
+          {}
+        );
+
+        await Promise.all(
+          Object.values(groupedChanges).map(async (changesForTarget) => {
+            for (const change of changesForTarget) {
+              try {
+                await syncHorizonBacklink({
+                  sourcePath: normalizedFilePath,
+                  sourceKind: "projects",
+                  targetPath: change.targetPath,
+                  action: change.mode === "remove" ? "remove" : "add",
+                });
+              } catch (error) {
+                console.error("Failed to sync project horizon backlink", {
+                  targetPath: change.targetPath,
+                  mode: change.mode,
+                  error,
+                });
+              }
+            }
+          })
+        );
+      })();
+    }
+  }, [emitRebuild, horizonRefs, normalizedFilePath]);
 
   const handleDesiredOutcomeChange = React.useCallback(
     (next: string) => {
@@ -906,7 +733,7 @@ const ProjectPage: React.FC<ProjectPageProps> = ({
   const handleAdditionalContentChange = React.useCallback(
     (next: string) => {
       setAdditionalContent(next);
-      emitRebuild({ additionalContent: sanitizeAdditionalContent(next) });
+      emitRebuild({ additionalContent: sanitizeProjectAdditionalContent(next) });
     },
     [emitRebuild]
   );

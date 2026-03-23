@@ -88,13 +88,15 @@ The Action markdown is rebuilt in this exact order. Tokens are single lines and 
 
 Notes:
 - References are stored canonically as CSV (not JSON). The parser supports both, but CSV is the standard going forward.
-- Created timestamp is set at first build or read from the file and remains stable thereafter.
+- Created timestamp is set at first build or read from the file and remains stable thereafter. Older files that only have a legacy `Created:` footer are upgraded without losing that original timestamp.
 - Horizons references are emitted in the markdown but not surfaced in the Action header (yet). They can be edited via blocks or future pickers.
 
 ## Behaviors & Data Flow
+
 - Live rebuild: Changing any header field or typing in the body rebuilds the canonical markdown and updates the open tab.
 - No‑op guard: The component compares rebuild output to current content; identical content does not re‑emit (prevents churn).
 - Stable Created: held in a ref; never re‑generated once set.
+- Body normalization trims only outer blank-line runs so interior spacing in user-authored notes is preserved.
 - References picker: resolves Cabinet and Someday Maybe files via Tauri, search, and multi‑select; writes CSV paths to `[!references:]`.
 - Contexts: chips reflect normalized context tokens (`computer`, `phone`, etc.).
 

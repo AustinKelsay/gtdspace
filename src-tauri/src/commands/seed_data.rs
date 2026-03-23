@@ -423,7 +423,7 @@ pub const SOMEDAY_LEARN_LANGUAGE_TEMPLATE: &str = r#"# Learn Spanish
 "#;
 
 /// Template for Cabinet - GTD Principles Reference
-pub const CABINET_GTD_PRINCIPLES_TEMPLATE: &str = r#"# GTD Quick Reference
+pub const CABINET_GTD_PRINCIPLES_TEMPLATE: &str = r#"# GTD Principles Reference
 
 ## The Five Steps
 1. **Capture** - Get it out of your head

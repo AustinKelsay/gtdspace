@@ -49,7 +49,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
   value,
   onChange,
   placeholder = 'Search files...',
-  // autoFocus = false,
+  autoFocus = false,
   className = '',
 }) => {
   // === KEYBOARD SHORTCUTS ===
@@ -92,6 +92,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           type="search"
+          autoFocus={autoFocus}
           className="pl-10 pr-10"
         />
         {value && (

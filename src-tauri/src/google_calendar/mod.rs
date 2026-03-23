@@ -9,7 +9,6 @@ pub mod calendar_client;
 pub mod config_manager;
 pub mod custom_flow_delegate;
 pub mod oauth_server;
-pub mod simple_auth;
 pub mod storage;
 pub mod sync;
 pub mod token_manager;

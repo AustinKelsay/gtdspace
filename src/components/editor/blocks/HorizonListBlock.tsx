@@ -10,6 +10,7 @@ import { PropSchema } from '@blocknote/core';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { getPersistedActiveTabFilePath } from '@/hooks/tab-runtime';
 import { safeInvoke } from '@/utils/safe-invoke';
 import debounce from 'lodash.debounce';
 import {
@@ -24,7 +25,7 @@ import {
 interface ListItem {
   path: string;
   name: string;
-  type: 'project' | 'area' | 'goal' | 'vision';
+  type: 'project' | 'area' | 'goal' | 'vision' | 'purpose';
   description?: string;
   status?: string;
   due_date?: string;
@@ -42,21 +43,24 @@ const ITEM_COLORS = {
   project: 'bg-green-100 hover:bg-green-200 dark:bg-green-900/20 dark:hover:bg-green-900/30',
   area: 'bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/20 dark:hover:bg-blue-900/30',
   goal: 'bg-violet-100 hover:bg-violet-200 dark:bg-violet-900/20 dark:hover:bg-violet-900/30',
-  vision: 'bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30'
+  vision: 'bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30',
+  purpose: 'bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/20 dark:hover:bg-amber-900/30'
 };
 
 const ITEM_LABELS = {
   project: 'Projects',
   area: 'Areas of Focus',
   goal: 'Goals',
-  vision: 'Vision'
+  vision: 'Vision',
+  purpose: 'Purpose & Principles'
 };
 
 const ITEM_ICONS = {
   project: FileText,
   area: Target,
   goal: Target,
-  vision: Target
+  vision: Target,
+  purpose: Target
 };
 
 /**
@@ -119,7 +123,7 @@ interface HorizonListRendererProps {
       update: { type: string; props: { listType: string; currentPath?: string } }
     ) => void;
   };
-  listType: 'projects' | 'areas' | 'goals' | 'visions';
+  listType: 'projects' | 'areas' | 'goals' | 'visions' | 'purpose';
   label: string;
   compact?: boolean;
 }
@@ -138,39 +142,7 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
     if (blocknotePath) {
       return blocknotePath;
     }
-
-    // Fallback: Try to get from localStorage (active tab info)
-    const tabsJson = localStorage.getItem('gtdspace-tabs');
-    if (tabsJson) {
-      try {
-        const tabsData = JSON.parse(tabsJson);
-
-        // Validate the structure before accessing nested properties
-        if (!tabsData || typeof tabsData !== 'object') {
-          return null;
-        }
-
-        // Ensure openTabs is an array before trying to use find
-        if (!Array.isArray(tabsData.openTabs)) {
-          return null;
-        }
-
-        const activeTab = tabsData.openTabs.find((t: any) =>
-          t && typeof t === 'object' && t.id === tabsData.activeTabId
-        );
-
-        // Check filePath first (preferred), fallback to path if not available
-        if (activeTab?.filePath && typeof activeTab.filePath === 'string') {
-          return activeTab.filePath;
-        } else if (activeTab?.path && typeof activeTab.path === 'string') {
-          return activeTab.path;
-        }
-      } catch (_e) {
-        // Silent fail - this is a fallback
-      }
-    }
-
-    return null;
+    return getPersistedActiveTabFilePath(localStorage.getItem('gtdspace-current-path'));
   }, []);
 
   // Load items that reference the current page - debounced to prevent excessive calls
@@ -204,7 +176,7 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
       const listItems: ListItem[] = relationships.map(rel => ({
         path: rel.file_path,
         name: rel.file_name.replace('.md', ''),
-        type: (rel.file_type as 'project' | 'area' | 'goal' | 'vision') || 'project',
+        type: (rel.file_type as 'project' | 'area' | 'goal' | 'vision' | 'purpose') || 'project',
         // Additional metadata could be loaded here if needed
       }));
 
@@ -283,7 +255,8 @@ const HorizonListRenderer = React.memo(function HorizonListRenderer(props: Horiz
   const itemTypes = listType === 'projects' ? ['project'] :
     listType === 'areas' ? ['area'] :
       listType === 'goals' ? ['goal'] :
-        listType === 'visions' ? ['vision'] : [];
+        listType === 'visions' ? ['vision'] :
+          listType === 'purpose' ? ['purpose'] : [];
 
   return (
     <div className={`${compact ? '' : 'my-3'} border border-border rounded-lg transition-all ${isExpanded ? (compact ? 'p-3' : 'p-4') : 'p-2 bg-muted/30'
@@ -445,8 +418,8 @@ export const ProjectsListBlock = createReactBlockSpec(
       return <p>[!projects-list]</p>;
     },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      if (textContent.includes('[!projects-list]')) {
+      const textContent = element.textContent?.trim() || '';
+      if (textContent === '[!projects-list]') {
         return { listType: 'projects' };
       }
       return undefined;
@@ -476,8 +449,8 @@ export const AreasListBlock = createReactBlockSpec(
       return <p>[!areas-list]</p>;
     },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      if (textContent.includes('[!areas-list]')) {
+      const textContent = element.textContent?.trim() || '';
+      if (textContent === '[!areas-list]') {
         return { listType: 'areas' };
       }
       return undefined;
@@ -507,8 +480,8 @@ export const GoalsListBlock = createReactBlockSpec(
       return <p>[!goals-list]</p>;
     },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      if (textContent.includes('[!goals-list]')) {
+      const textContent = element.textContent?.trim() || '';
+      if (textContent === '[!goals-list]') {
         return { listType: 'goals' };
       }
       return undefined;
@@ -538,9 +511,69 @@ export const VisionsListBlock = createReactBlockSpec(
       return <p>[!visions-list]</p>;
     },
     parse: (element) => {
-      const textContent = element.textContent || '';
-      if (textContent.includes('[!visions-list]')) {
+      const textContent = element.textContent?.trim() || '';
+      if (textContent === '[!visions-list]') {
         return { listType: 'visions' };
+      }
+      return undefined;
+    },
+  }
+);
+
+export const VisionListBlock = createReactBlockSpec(
+  {
+    type: 'vision-list' as const,
+    propSchema: horizonListPropSchema,
+    content: 'none' as const,
+  },
+  {
+    render: (props) => {
+      const baseProps = toHorizonListBlockRenderProps(props);
+      return (
+        <HorizonListRenderer
+          {...baseProps}
+          listType="visions"
+          label="Related Visions"
+        />
+      );
+    },
+    toExternalHTML: () => {
+      return <p>[!vision-list]</p>;
+    },
+    parse: (element) => {
+      const textContent = element.textContent?.trim() || '';
+      if (textContent === '[!vision-list]') {
+        return { listType: 'visions' };
+      }
+      return undefined;
+    },
+  }
+);
+
+export const PurposeListBlock = createReactBlockSpec(
+  {
+    type: 'purpose-list' as const,
+    propSchema: horizonListPropSchema,
+    content: 'none' as const,
+  },
+  {
+    render: (props) => {
+      const baseProps = toHorizonListBlockRenderProps(props);
+      return (
+        <HorizonListRenderer
+          {...baseProps}
+          listType="purpose"
+          label="Related Purpose & Principles"
+        />
+      );
+    },
+    toExternalHTML: () => {
+      return <p>[!purpose-list]</p>;
+    },
+    parse: (element) => {
+      const textContent = element.textContent?.trim() || '';
+      if (textContent === '[!purpose-list]') {
+        return { listType: 'purpose' };
       }
       return undefined;
     },

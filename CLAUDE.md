@@ -138,7 +138,12 @@ Global callbacks registered on window object for cross-component communication:
 
 ```typescript
 // Notifies when a tab file is saved (used to reload projects)
-window.onTabFileSaved: (filePath: string) => Promise<void>
+window.onTabFileSaved: (
+  filePath: string,
+  fileName: string,
+  content: string,
+  metadata: Record<string, unknown>
+) => void
 
 // Updates backlink references in open tabs without saving
 window.applyBacklinkChange: (targetPath: string, mutator: (content: string) => string) => { handled: boolean; wasDirty: boolean }

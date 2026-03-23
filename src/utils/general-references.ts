@@ -6,6 +6,11 @@ import { safeInvoke } from '@/utils/safe-invoke';
 import { extractMetadata } from '@/utils/metadata-extractor';
 import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { encodeReferenceCsv } from '@/utils/gtd-markdown-helpers';
+import {
+  normalizeReferencePath,
+  parseReferenceList,
+} from '@/utils/gtd-reference-utils';
+export { normalizeReferencePath } from '@/utils/gtd-reference-utils';
 
 export type GeneralReferenceOption = {
   path: string;
@@ -14,9 +19,6 @@ export type GeneralReferenceOption = {
 };
 
 const README_REGEX = /(?:^|\/)README(?:\.(md|markdown))?$/i;
-
-export const normalizeReferencePath = (value: string | undefined | null): string =>
-  (value ?? '').replace(/\\/g, '/').trim();
 
 export const isCabinetOrSomedayPath = (path: string, spacePath?: string | null): boolean => {
   const normalized = normalizeReferencePath(path).toLowerCase();
@@ -57,43 +59,6 @@ export async function listCabinetSomedayReferences(spacePath: string): Promise<G
     ...(someday || []).filter((f) => f?.name && !README_REGEX.test(f.name)).map((f) => toOption(f, 'someday')),
   ];
 }
-
-const ensureStringArray = (value: unknown): string[] => {
-  if (!value) return [];
-  if (Array.isArray(value)) return value.map((v) => normalizeReferencePath(String(v))).filter(Boolean);
-
-  if (typeof value === 'string') {
-    const raw = value.trim();
-    if (!raw) return [];
-
-    // Try decode + JSON first
-    const attempts = [raw];
-    try {
-      const decoded = decodeURIComponent(raw);
-      if (decoded && decoded !== raw) attempts.unshift(decoded);
-    } catch {
-      // ignore
-    }
-
-    for (const candidate of attempts) {
-      try {
-        const parsed = JSON.parse(candidate);
-        if (Array.isArray(parsed)) {
-          return parsed.map((v) => normalizeReferencePath(String(v))).filter(Boolean);
-        }
-      } catch {
-        // fall back to CSV
-      }
-    }
-
-    return raw
-      .split(',')
-      .map((entry) => normalizeReferencePath(entry))
-      .filter(Boolean);
-  }
-
-  return [];
-};
 
 const setReferencesToken = (content: string, values: string[]): string => {
   const encoded = encodeReferenceCsv(values);
@@ -142,7 +107,8 @@ export async function syncGeneralBacklink({ spacePath, sourcePath, targetPath, a
     if (rawContent === null || rawContent === undefined) return;
 
     const metadata = extractMetadata(rawContent);
-    const existing = ensureStringArray((metadata as any).references);
+    const referencesValue = (metadata as Record<string, unknown> | null | undefined)?.references;
+    const existing = parseReferenceList(referencesValue);
 
     const next = new Set(existing.map((v) => normalizeReferencePath(v)).filter(Boolean));
     if (action === 'add') next.add(normalizedSource);

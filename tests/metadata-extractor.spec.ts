@@ -13,6 +13,8 @@ describe('metadata extractor utilities', () => {
     const content = [
       '[!singleselect:project-status:waiting]',
       '[!singleselect:status:completed]',
+      '[!checkbox:habit-status:true]',
+      '[!singleselect:habit-frequency:weekly]',
       '[!datetime:due_date_time:2026-03-01]',
       '[!datetime:created_date:2026-02-20T10:00:00Z]',
     ].join('\n');
@@ -21,8 +23,15 @@ describe('metadata extractor utilities', () => {
 
     expect(metadata.projectStatus).toBe('waiting');
     expect(metadata.status).toBe('completed');
+    expect(metadata.habitStatus).toBe('completed');
+    expect(metadata.habitFrequency).toBe('weekly');
     expect(metadata.dueDate).toBe('2026-03-01');
     expect(metadata.createdDateTime).toBe('2026-02-20T10:00:00Z');
+  });
+
+  it('maps an unchecked habit checkbox to todo', () => {
+    const metadata = extractMetadata('[!checkbox:habit-status:false]');
+    expect(metadata.habitStatus).toBe('todo');
   });
 
   it('extracts horizon-specific singleselect and datetime fields into canonical metadata keys', () => {
@@ -147,5 +156,13 @@ describe('metadata extractor utilities', () => {
         extract: () => ({ key: 'duplicate', value: 'nope' }),
       })
     ).toThrow(/Duplicate metadata extractor pattern/);
+  });
+
+  it('ignores legacy singleselect blocks that do not map to a metadata key', () => {
+    const metadata = extractMetadata(
+      "<div data-singleselect='{\"value\":\"waiting\"}' class=\"singleselect-block\">Status</div>"
+    );
+
+    expect(Object.keys(metadata)).not.toContain('');
   });
 });

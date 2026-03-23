@@ -2141,7 +2141,12 @@ fn write_cached_context_pack(
 }
 
 fn normalize_path<P: AsRef<Path>>(path: P) -> String {
-    path.as_ref().to_string_lossy().replace('\\', "/")
+    let normalized = path.as_ref().to_string_lossy().replace('\\', "/");
+    normalized
+        .strip_prefix("//?/")
+        .or_else(|| normalized.strip_prefix("\\\\?/"))
+        .unwrap_or(&normalized)
+        .to_string()
 }
 
 fn normalize_relative_input(path: &str) -> String {
@@ -2151,10 +2156,17 @@ fn normalize_relative_input(path: &str) -> String {
 fn normalize_absolute_to_relative(root: &Path, path: &str) -> String {
     let absolute = Path::new(path);
     if absolute.is_absolute() {
-        absolute
-            .strip_prefix(root)
-            .map(normalize_path)
-            .unwrap_or_else(|_| normalize_path(absolute))
+        let stripped = absolute.strip_prefix(root).map(normalize_path);
+        stripped
+            .unwrap_or_else(|_| {
+                let normalized_root = normalize_path(root).trim_end_matches('/').to_string();
+                let normalized_absolute = normalize_path(absolute);
+                normalized_absolute
+                    .strip_prefix(&(normalized_root.clone() + "/"))
+                    .or_else(|| normalized_absolute.strip_prefix(&normalized_root))
+                    .map(str::to_string)
+                    .unwrap_or(normalized_absolute)
+            })
             .trim_start_matches('/')
             .to_string()
     } else {
@@ -3017,15 +3029,13 @@ mod tests {
         let service =
             GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
 
-        let planned = service.plan_reference_note_create(ReferenceNoteCreateRequest {
-            section: ReferenceNoteSection::Cabinet,
-            title: "Broken Apply".to_string(),
-            body: Some("This should fail during apply.".to_string()),
+        let planned = service.plan_project_rename(ProjectRenameRequest {
+            path: "Projects/Alpha Project/README.md".to_string(),
+            new_name: "Renamed Project".to_string(),
         })?;
 
-        let cabinet_path = workspace.path().join("Cabinet");
-        fs::remove_dir_all(&cabinet_path).map_err(|error| error.to_string())?;
-        fs::write(&cabinet_path, "not a directory").map_err(|error| error.to_string())?;
+        fs::create_dir_all(workspace.path().join("Projects/Renamed Project"))
+            .map_err(|error| error.to_string())?;
 
         let error = service
             .change_apply(ChangeSetRequest {
@@ -3034,5 +3044,13 @@ mod tests {
             .unwrap_err();
         assert!(error.contains("workspace_refresh"));
         Ok(())
+    }
+
+    #[test]
+    fn normalize_path_strips_windows_verbatim_prefix() {
+        assert_eq!(
+            normalize_path(r"\\?\C:\Temp\GTD Space\Projects\Alpha Project\README.md"),
+            "C:/Temp/GTD Space/Projects/Alpha Project/README.md"
+        );
     }
 }

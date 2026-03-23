@@ -349,6 +349,45 @@ export function useGTDWorkspaceSidebar({
     });
   }, []);
 
+  const resolveSectionLoadPath = React.useCallback(
+    async (sectionId: string, root: string): Promise<string | null> => {
+      const section = GTD_SECTIONS.find((candidate) => candidate.id === sectionId);
+      if (!section || section.id === 'calendar' || section.id === 'projects') {
+        return null;
+      }
+
+      const candidatePaths = buildSectionPathCandidates(root, section);
+      if (candidatePaths.length <= 1) {
+        return candidatePaths[0] ?? null;
+      }
+
+      for (const candidatePath of candidatePaths) {
+        const exists = await safeInvoke<boolean>(
+          'check_directory_exists',
+          { path: candidatePath },
+          false
+        );
+        if (exists) {
+          return candidatePath;
+        }
+      }
+
+      return candidatePaths[0] ?? null;
+    },
+    []
+  );
+
+  const resolveSectionLoadPaths = React.useCallback(
+    async (sectionIds: readonly string[], root: string): Promise<string[]> => {
+      const resolvedPaths = await Promise.all(
+        sectionIds.map((sectionId) => resolveSectionLoadPath(sectionId, root))
+      );
+
+      return [...new Set(resolvedPaths.filter((path): path is string => Boolean(path)))];
+    },
+    [resolveSectionLoadPath]
+  );
+
   const loadSectionFiles = React.useCallback(
     async (sectionPath: string, force: boolean = false): Promise<MarkdownFile[]> => {
       const generationAtStart = workspaceGenerationRef.current;
@@ -547,11 +586,11 @@ export function useGTDWorkspaceSidebar({
       if (!preloadedRef.current) {
         preloadedRef.current = true;
 
-        const priorityPaths = getCombinedSectionPathVariants(
+        const priorityPaths = await resolveSectionLoadPaths(
           PRELOAD_PRIORITY_SECTION_IDS,
           pathToCheck
         );
-        const secondaryPaths = getCombinedSectionPathVariants(
+        const secondaryPaths = await resolveSectionLoadPaths(
           PRELOAD_SECONDARY_SECTION_IDS,
           pathToCheck
         );
@@ -568,7 +607,15 @@ export function useGTDWorkspaceSidebar({
     return () => {
       cancelled = true;
     };
-  }, [checkGTDSpace, currentFolder, gtdSpace?.projects, gtdSpace?.root_path, loadProjects, loadSectionFiles]);
+  }, [
+    checkGTDSpace,
+    currentFolder,
+    gtdSpace?.projects,
+    gtdSpace?.root_path,
+    loadProjects,
+    loadSectionFiles,
+    resolveSectionLoadPaths,
+  ]);
 
   React.useEffect(() => {
     const unsubscribeMetadata = onMetadataChange((event) => {
@@ -1081,13 +1128,23 @@ export function useGTDWorkspaceSidebar({
 
     await loadProjects(rootPath);
 
-    const nonProjectSectionPaths = GTD_SECTIONS.filter(
-      (section) => section.id !== 'calendar' && section.id !== 'projects'
-    ).flatMap((section) => buildSectionPathCandidates(rootPath, section));
+    const nonProjectSectionPaths = await resolveSectionLoadPaths(
+      GTD_SECTIONS.filter((section) => section.id !== 'calendar' && section.id !== 'projects').map(
+        (section) => section.id
+      ),
+      rootPath
+    );
 
     await Promise.all([...new Set(nonProjectSectionPaths)].map((path) => loadSectionFiles(path, true)));
     await Promise.all(Object.keys(projectActionsRef.current).map((path) => loadProjectActions(path)));
-  }, [loadProjectActions, loadProjects, loadSectionFiles, onRefresh, rootPath]);
+  }, [
+    loadProjectActions,
+    loadProjects,
+    loadSectionFiles,
+    onRefresh,
+    resolveSectionLoadPaths,
+    rootPath,
+  ]);
 
   const handleDelete = React.useCallback(async () => {
     if (!deleteItem) return;

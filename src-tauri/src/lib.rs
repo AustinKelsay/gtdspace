@@ -3,8 +3,10 @@
 //! Core library exports for the Tauri markdown editor application.
 
 // Import command modules
+pub mod backend;
 mod commands;
 mod google_calendar;
+pub mod mcp_server;
 
 #[cfg(debug_assertions)]
 use tauri::Manager;

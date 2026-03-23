@@ -16,10 +16,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "gtdspace"
 path = "src/main.rs"
 
-[[bin]]
-name = "gtdspace-mcp"
-path = "src/bin/gtdspace-mcp.rs"
-
 [build-dependencies]
 tauri-build = { version = "2.0", features = [] }
 

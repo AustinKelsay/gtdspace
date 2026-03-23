@@ -18,7 +18,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "mcp:dev": "cargo run --manifest-path src-tauri/Cargo.toml --bin gtdspace-mcp --",
+    "mcp:dev": "cargo run --manifest-path src-tauri/mcp-server/Cargo.toml --",
     "pretauri:build": "npm run icons:generate",
     "tauri:build": "tauri build",
     "icons:generate": "node scripts/icons-generate.mjs",

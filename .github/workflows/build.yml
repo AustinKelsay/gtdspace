@@ -290,6 +290,11 @@ jobs:
             exit 1
           fi
 
+          if [ -e "$APP_BUNDLE/Contents/MacOS/gtdspace-mcp" ]; then
+            echo "Standalone MCP binary should not be bundled inside the desktop app: $APP_BUNDLE/Contents/MacOS/gtdspace-mcp" >&2
+            exit 1
+          fi
+
       - name: List built artifacts
         shell: bash
         run: |

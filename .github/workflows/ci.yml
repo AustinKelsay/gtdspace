@@ -171,9 +171,18 @@ jobs:
       - name: Run Rust tests
         run: |
           cd src-tauri
-          cargo test --lib
+          cargo test --bins --tests
+
+      - name: Run MCP crate checks
+        run: cargo check --manifest-path src-tauri/mcp-server/Cargo.toml
+
+      - name: Run MCP crate tests
+        run: cargo test --manifest-path src-tauri/mcp-server/Cargo.toml --tests
 
       - name: Run Rust clippy
         run: |
           cd src-tauri
-          cargo clippy -- -D warnings
+          cargo clippy --tests -- -D warnings
+
+      - name: Run MCP crate clippy
+        run: cargo clippy --manifest-path src-tauri/mcp-server/Cargo.toml --tests -- -D warnings

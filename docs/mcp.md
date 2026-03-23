@@ -1,6 +1,6 @@
 # MCP Server
 
-This document describes the standalone GTD Space MCP server added under `src-tauri/src/bin/gtdspace-mcp.rs`.
+This document describes the standalone GTD Space MCP server package under `src-tauri/mcp-server/`.
 
 The server is a separate stdio process intended for any MCP-capable local-model client. It is not tied to the desktop UI process, but it reuses the same GTD-aware backend rules through `src-tauri/src/backend/mcp_workspace.rs`.
 
@@ -15,7 +15,7 @@ npm run mcp:dev -- --workspace "/absolute/path/to/GTD Space"
 You can also run the Rust binary directly:
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin gtdspace-mcp -- --workspace "/absolute/path/to/GTD Space"
+cargo run --manifest-path src-tauri/mcp-server/Cargo.toml -- --workspace "/absolute/path/to/GTD Space"
 ```
 
 Supported CLI flags:

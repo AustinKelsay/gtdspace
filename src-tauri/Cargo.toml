@@ -1,6 +1,6 @@
 [package]
 name = "gtdspace"
-version = "2.0.1"
+version = "2.0.2"
 description = "GTD-first productivity system with integrated markdown editing"
 authors = ["you"]
 edition = "2021"
@@ -15,10 +15,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [[bin]]
 name = "gtdspace"
 path = "src/main.rs"
-
-[[bin]]
-name = "gtdspace-mcp"
-path = "src/bin/gtdspace-mcp.rs"
 
 [build-dependencies]
 tauri-build = { version = "2.0", features = [] }

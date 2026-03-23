@@ -4,5 +4,5 @@ pub use mcp_workspace::{
     ChangeApplyResult, ChangeSet, ChangeSetSummary, ChangeStatus, ContextPack, ContextPackCache,
     GtdItemReferenceSummary, GtdItemSummary, GtdItemType, GtdWorkspaceService, PlannedChange,
     RelationshipSummary, WorkspaceFingerprint, WorkspaceInfo, WorkspaceListItemsResult,
-    WorkspaceRefreshResult, WorkspaceSearchResult,
+    WorkspaceRefreshResult, WorkspaceSearchResult, normalize_workspace_path,
 };

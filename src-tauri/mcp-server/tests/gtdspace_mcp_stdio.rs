@@ -6,6 +6,7 @@ use std::process::Stdio;
 use gtdspace_lib::backend::{
     ChangeApplyResult, ContextPack, GtdItemSummary, PlannedChange, WorkspaceInfo,
     WorkspaceRefreshResult, WorkspaceSearchResult,
+    normalize_workspace_path,
 };
 use gtdspace_lib::test_utils::{seed_test_workspace, write_test_file};
 use rmcp::{
@@ -85,7 +86,7 @@ async fn mcp_server_exposes_resources_and_applies_project_change() -> Result<(),
     let context_pack: ContextPack = serde_json::from_str(&read_first_text_resource(context_json)?)?;
     assert_eq!(
         context_pack.workspace_root,
-        canonical_workspace_root.to_string_lossy().to_string()
+        normalize_workspace_path(&canonical_workspace_root)
     );
     assert!(context_pack
         .items

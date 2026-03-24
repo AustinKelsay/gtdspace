@@ -466,7 +466,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                           if (onBulkUpdate) {
                             const selectedActionIds = Array.from(selectedActions);
                             const selectedActionPaths = selectedActionIds.map(id => {
-                              const action = filteredActions.find(a => a.id === id);
+                              const action = actions.find(a => a.id === id);
                               debug('[DashboardActions] bulk map action:', { id, path: action?.path });
                               return action?.path || id;
                             });
@@ -778,7 +778,12 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                           </div>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                aria-label={`More actions for ${action.name}`}
+                              >
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -879,6 +884,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                             }
                           }}
                           className="rounded"
+                          aria-label="Select all actions"
                         />
                       </TableHead>
                       <TableHead>Action</TableHead>
@@ -912,6 +918,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                               checked={selectedActions.has(action.id)}
                               onChange={() => toggleActionSelection(action.id)}
                               className="rounded"
+                              aria-label={`Select action ${action.name}`}
                             />
                           </TableCell>
                           <TableCell className="font-medium">
@@ -999,7 +1006,12 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  aria-label={`More actions for ${action.name}`}
+                                >
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>

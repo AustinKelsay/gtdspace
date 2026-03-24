@@ -406,6 +406,8 @@ export const McpServerSettings: React.FC = () => {
   }
   if (readOnlyDefault) {
     explicitArgs.push('--read-only');
+  } else {
+    explicitArgs.push('--read-only=false');
   }
   explicitArgs.push(`--log-level ${defaultLogLevel}`);
 

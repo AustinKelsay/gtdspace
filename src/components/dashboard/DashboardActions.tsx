@@ -109,6 +109,8 @@ const EFFORT_SHORT: Record<string, string> = {
   'extra-large': 'XL'
 };
 
+const isFinishedAction = (status: string) => status === 'completed' || status === 'cancelled';
+
 const INTERACTIVE_ELEMENT_SELECTOR = [
   'button',
   'a',
@@ -371,7 +373,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
     }, {} as Record<string, number>);
     
     const overdue = filteredActions.filter(a => {
-      if (!a.dueDate) return false;
+      if (!a.dueDate || isFinishedAction(a.status)) return false;
       return isDateOverdue(a.dueDate);
     }).length;
 
@@ -720,7 +722,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                 {filteredActions.map((action) => {
                   const statusDisplay = getStatusDisplay(action.status);
                   const StatusIcon = statusDisplay.icon;
-                  const isOverdue = isDateOverdue(action.dueDate);
+                  const isOverdue = !isFinishedAction(action.status) && isDateOverdue(action.dueDate);
 
                   return (
                     <Card
@@ -893,7 +895,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                     {filteredActions.map((action) => {
                       const statusDisplay = getStatusDisplay(action.status);
                       const StatusIcon = statusDisplay.icon;
-                      const isOverdue = isDateOverdue(action.dueDate);
+                      const isOverdue = !isFinishedAction(action.status) && isDateOverdue(action.dueDate);
 
                       return (
                         <TableRow

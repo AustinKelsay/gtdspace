@@ -1178,6 +1178,9 @@ mod tests {
             git_sync_last_push: None,
             git_sync_last_pull: None,
             git_sync_auto_pull_interval_minutes: None,
+            mcp_server_workspace_path: None,
+            mcp_server_read_only: Some(false),
+            mcp_server_log_level: Some("info".to_string()),
         }
     }
 

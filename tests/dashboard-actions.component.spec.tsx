@@ -134,4 +134,25 @@ describe('DashboardActions component', () => {
     expect(screen.getAllByText('Today').length).toBeGreaterThan(0);
     expect(screen.queryByText('1 overdue')).not.toBeInTheDocument();
   });
+
+  it('does not count completed overdue actions in the overdue summary', () => {
+    render(
+      <DashboardActions
+        actions={[
+          buildAction({
+            id: '/space/projects/gamma/finished-overdue.md',
+            name: 'Finished Overdue',
+            path: '/space/projects/gamma/finished-overdue.md',
+            projectName: 'Gamma',
+            projectPath: '/space/projects/gamma',
+            status: 'completed',
+            dueDate: '2026-01-10',
+          }),
+        ]}
+        projects={projects}
+      />
+    );
+
+    expect(screen.queryByText('1 overdue')).not.toBeInTheDocument();
+  });
 });

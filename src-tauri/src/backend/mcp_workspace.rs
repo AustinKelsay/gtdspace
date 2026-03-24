@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
 use rmcp::schemars;
-use rmcp::schemars::JsonSchema;
 use rmcp::schemars::transform::RecursiveTransform;
+use rmcp::schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -1728,7 +1728,10 @@ fn load_saved_settings() -> Option<Value> {
 }
 
 fn sanitize_mcp_server_log_level(value: Option<&str>) -> String {
-    let normalized = value.unwrap_or(DEFAULT_MCP_SERVER_LOG_LEVEL).trim().to_ascii_lowercase();
+    let normalized = value
+        .unwrap_or(DEFAULT_MCP_SERVER_LOG_LEVEL)
+        .trim()
+        .to_ascii_lowercase();
     if VALID_MCP_SERVER_LOG_LEVELS.contains(&normalized.as_str()) {
         normalized
     } else {
@@ -1738,7 +1741,9 @@ fn sanitize_mcp_server_log_level(value: Option<&str>) -> String {
 
 pub fn load_mcp_server_launch_settings() -> McpServerLaunchSettings {
     let settings = load_saved_settings();
-    let user_settings = settings.as_ref().and_then(|value| value.get("user_settings"));
+    let user_settings = settings
+        .as_ref()
+        .and_then(|value| value.get("user_settings"));
 
     McpServerLaunchSettings {
         read_only: user_settings

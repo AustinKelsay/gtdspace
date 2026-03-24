@@ -23,6 +23,55 @@ fn default_settings_with_secure_key() -> UserSettings {
     settings
 }
 
+fn merge_with_default_settings(mut settings: UserSettings) -> UserSettings {
+    let defaults = get_default_settings();
+
+    settings.last_folder = settings.last_folder.or(defaults.last_folder);
+    settings.window_width = settings.window_width.or(defaults.window_width);
+    settings.window_height = settings.window_height.or(defaults.window_height);
+    settings.max_tabs = settings.max_tabs.or(defaults.max_tabs);
+    settings.restore_tabs = settings.restore_tabs.or(defaults.restore_tabs);
+    settings.auto_initialize = settings.auto_initialize.or(defaults.auto_initialize);
+    settings.seed_example_content = settings
+        .seed_example_content
+        .or(defaults.seed_example_content);
+    settings.default_space_path = settings.default_space_path.or(defaults.default_space_path);
+    settings.git_sync_enabled = settings.git_sync_enabled.or(defaults.git_sync_enabled);
+    settings.git_sync_repo_path = settings.git_sync_repo_path.or(defaults.git_sync_repo_path);
+    settings.git_sync_workspace_path = settings
+        .git_sync_workspace_path
+        .or(defaults.git_sync_workspace_path);
+    settings.git_sync_remote_url = settings
+        .git_sync_remote_url
+        .or(defaults.git_sync_remote_url);
+    settings.git_sync_branch = settings.git_sync_branch.or(defaults.git_sync_branch);
+    settings.git_sync_keep_history = settings
+        .git_sync_keep_history
+        .or(defaults.git_sync_keep_history);
+    settings.git_sync_author_name = settings
+        .git_sync_author_name
+        .or(defaults.git_sync_author_name);
+    settings.git_sync_author_email = settings
+        .git_sync_author_email
+        .or(defaults.git_sync_author_email);
+    settings.git_sync_last_push = settings.git_sync_last_push.or(defaults.git_sync_last_push);
+    settings.git_sync_last_pull = settings.git_sync_last_pull.or(defaults.git_sync_last_pull);
+    settings.git_sync_auto_pull_interval_minutes = settings
+        .git_sync_auto_pull_interval_minutes
+        .or(defaults.git_sync_auto_pull_interval_minutes);
+    settings.mcp_server_workspace_path = settings
+        .mcp_server_workspace_path
+        .or(defaults.mcp_server_workspace_path);
+    settings.mcp_server_read_only = settings
+        .mcp_server_read_only
+        .or(defaults.mcp_server_read_only);
+    settings.mcp_server_log_level = settings
+        .mcp_server_log_level
+        .or(defaults.mcp_server_log_level);
+
+    settings
+}
+
 fn sync_git_sync_encryption_key(settings: &UserSettings) -> Result<(), String> {
     sync_git_sync_encryption_key_value(settings.git_sync_encryption_key.as_deref())
 }
@@ -330,6 +379,7 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
             // Now deserialize without the encryption key field (it will be re-attached via legacy_encryption_key)
             match serde_json::from_value::<UserSettings>(value_to_deserialize) {
                 Ok(mut s) => {
+                    s = merge_with_default_settings(s);
                     s.git_sync_encryption_key =
                         legacy_encryption_key.or_else(load_git_sync_encryption_key);
                     log::info!("Loaded existing settings");
@@ -656,5 +706,24 @@ pub fn get_default_settings() -> UserSettings {
         mcp_server_workspace_path: None,
         mcp_server_read_only: Some(false),
         mcp_server_log_level: Some(DEFAULT_MCP_SERVER_LOG_LEVEL.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{get_default_settings, merge_with_default_settings};
+
+    #[test]
+    fn merge_with_default_settings_backfills_optional_mcp_fields() {
+        let mut settings = get_default_settings();
+        settings.mcp_server_workspace_path = None;
+        settings.mcp_server_read_only = None;
+        settings.mcp_server_log_level = None;
+
+        let merged = merge_with_default_settings(settings);
+
+        assert_eq!(merged.mcp_server_workspace_path, None);
+        assert_eq!(merged.mcp_server_read_only, Some(false));
+        assert_eq!(merged.mcp_server_log_level.as_deref(), Some("info"));
     }
 }

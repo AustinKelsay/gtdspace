@@ -23,11 +23,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useSettings } from '@/hooks/useSettings';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { McpServerLogLevel } from '@/types';
-import { safeInvoke } from '@/utils/safe-invoke';
+import { checkTauriContextAsync } from '@/utils/tauri-ready';
 
 const MCP_RESOURCES = [
   'gtdspace://spec/gtd-spec',
@@ -83,7 +84,71 @@ const FIELD_IDS = {
   logLevel: 'mcp-server-log-level',
 } as const;
 
-const shellQuote = (value: string) => `"${value.replace(/["\\$`]/g, '\\$&')}"`;
+const isWindowsPlatform = () => {
+  const navigatorWithUserAgentData = globalThis.navigator as Navigator & {
+    userAgentData?: { platform?: string };
+  };
+  const platform =
+    navigatorWithUserAgentData?.userAgentData?.platform ??
+    globalThis.navigator?.platform ??
+    globalThis.navigator?.userAgent ??
+    '';
+  return /win/i.test(platform);
+};
+
+const shellQuote = (value: string) => {
+  if (isWindowsPlatform()) {
+    return `"${value.replace(/"/g, '\\"')}"`;
+  }
+  return `"${value.replace(/["\\$`]/g, '\\$&')}"`;
+};
+
+const normalizeWorkspacePath = (value: string): string => {
+  const trimmed = value.trim();
+  if (trimmed === '/' || /^[A-Za-z]:[\\/]?$/.test(trimmed)) {
+    return trimmed.length === 2 ? `${trimmed}\\` : trimmed;
+  }
+  return trimmed.replace(/[\\/]+$/, '');
+};
+
+const getParentWorkspacePath = (value: string): string | null => {
+  const normalized = normalizeWorkspacePath(value);
+  if (!normalized || normalized === '/' || /^[A-Za-z]:[\\/]$/.test(normalized)) {
+    return null;
+  }
+
+  const lastSeparator = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+  if (lastSeparator < 0) {
+    return null;
+  }
+  if (lastSeparator === 0) {
+    return normalized[0];
+  }
+
+  const parent = normalized.slice(0, lastSeparator);
+  if (/^[A-Za-z]:$/.test(parent)) {
+    const separator = normalized.includes('\\') ? '\\' : '/';
+    return `${parent}${separator}`;
+  }
+
+  return parent;
+};
+
+const getWorkspaceAncestors = (value: string): string[] => {
+  const ancestors: string[] = [];
+  let current = normalizeWorkspacePath(value);
+
+  while (current) {
+    ancestors.push(current);
+    const parent = getParentWorkspacePath(current);
+    if (!parent || parent === current) {
+      break;
+    }
+    current = parent;
+  }
+
+  return ancestors;
+};
 
 const getWorkspaceResolutionLabel = (source: 'override' | 'last-folder' | 'default-space' | 'platform-default' | 'unavailable') => {
   switch (source) {
@@ -160,12 +225,37 @@ const ToolChipSection: React.FC<{
 export const McpServerSettings: React.FC = () => {
   const { settings, updateSettings } = useSettings();
   const { toast } = useToast();
+  const { withErrorHandling } = useErrorHandler();
   const [workspaceDraft, setWorkspaceDraft] = React.useState(settings.mcp_server_workspace_path ?? '');
   const [platformDefaultPath, setPlatformDefaultPath] = React.useState<string | null>(null);
   const [isBrowsingWorkspace, setIsBrowsingWorkspace] = React.useState(false);
   const [isCheckingWorkspace, setIsCheckingWorkspace] = React.useState(false);
   const [resolvedWorkspaceIsValid, setResolvedWorkspaceIsValid] = React.useState<boolean | null>(null);
+  const [validationError, setValidationError] = React.useState<string | null>(null);
   const workspaceValidationRequestRef = React.useRef(0);
+
+  const invokeWithHandling = React.useCallback(async <T,>(
+    command: string,
+    args?: Record<string, unknown>,
+    options?: {
+      errorMessage?: string;
+      fallback?: T | null;
+    }
+  ): Promise<T | null> => {
+    const fallback = options?.fallback ?? null;
+    const result = await withErrorHandling(async () => {
+      const inTauri = await checkTauriContextAsync();
+      if (!inTauri) {
+        return fallback;
+      }
+
+      const core = await import('@tauri-apps/api/core');
+      const response = await core.invoke<T>(command, args);
+      return (response ?? fallback) as T | null;
+    }, options?.errorMessage ?? 'An error occurred', 'mcp-server-settings');
+
+    return result ?? fallback;
+  }, [withErrorHandling]);
 
   React.useEffect(() => {
     setWorkspaceDraft(settings.mcp_server_workspace_path ?? '');
@@ -173,12 +263,16 @@ export const McpServerSettings: React.FC = () => {
 
   React.useEffect(() => {
     const loadPlatformDefault = async () => {
-      const result = await safeInvoke<string>('get_default_gtd_space_path', undefined, null);
+      const result = await invokeWithHandling<string>(
+        'get_default_gtd_space_path',
+        undefined,
+        { errorMessage: 'Failed to load the platform default MCP workspace path.' }
+      );
       setPlatformDefaultPath(result);
     };
 
     void loadPlatformDefault();
-  }, []);
+  }, [invokeWithHandling]);
 
   const workspaceOverride = settings.mcp_server_workspace_path?.trim() || null;
   const defaultLogLevel = settings.mcp_server_log_level ?? 'info';
@@ -211,21 +305,41 @@ export const McpServerSettings: React.FC = () => {
       if (!path) {
         setIsCheckingWorkspace(false);
         setResolvedWorkspaceIsValid(null);
+        setValidationError(null);
         return;
       }
 
       setIsCheckingWorkspace(true);
-      const isValid = await safeInvoke<boolean>(
-        'check_is_gtd_space',
-        { path },
-        false,
-      );
+      setValidationError(null);
 
-      if (!isActive || workspaceValidationRequestRef.current !== requestId) {
-        return;
+      for (const candidate of getWorkspaceAncestors(path)) {
+        const isValid = await invokeWithHandling<boolean>(
+          'check_is_gtd_space',
+          { path: candidate },
+          { errorMessage: 'Failed to validate the MCP workspace path.' }
+        );
+
+        if (!isActive || workspaceValidationRequestRef.current !== requestId) {
+          return;
+        }
+
+        if (isValid === null) {
+          setResolvedWorkspaceIsValid(null);
+          setValidationError(null);
+          setIsCheckingWorkspace(false);
+          return;
+        }
+
+        if (isValid) {
+          setResolvedWorkspaceIsValid(true);
+          setValidationError(null);
+          setIsCheckingWorkspace(false);
+          return;
+        }
       }
 
-      setResolvedWorkspaceIsValid(Boolean(isValid));
+      setResolvedWorkspaceIsValid(false);
+      setValidationError('Workspace path is not a valid GTD space');
       setIsCheckingWorkspace(false);
     };
 
@@ -234,7 +348,7 @@ export const McpServerSettings: React.FC = () => {
     return () => {
       isActive = false;
     };
-  }, [workspaceResolution.path]);
+  }, [invokeWithHandling, workspaceResolution.path]);
 
   const persistWorkspaceOverride = React.useCallback(async (nextValue: string) => {
     await updateSettings({
@@ -249,7 +363,11 @@ export const McpServerSettings: React.FC = () => {
   const handleBrowseWorkspace = async () => {
     setIsBrowsingWorkspace(true);
     try {
-      const selected = await safeInvoke<string>('select_folder', undefined, null);
+      const selected = await invokeWithHandling<string>(
+        'select_folder',
+        undefined,
+        { errorMessage: 'Failed to browse for an MCP workspace folder.' }
+      );
       if (!selected) {
         return;
       }
@@ -357,7 +475,7 @@ export const McpServerSettings: React.FC = () => {
                   ? 'Workspace unresolved'
                   : resolvedWorkspaceIsValid
                     ? 'Valid GTD workspace'
-                    : 'Workspace path is not a valid GTD space'}
+                    : validationError ?? 'Workspace path is not a valid GTD space'}
             </Badge>
             <span className="text-muted-foreground">
               Read-only mode disables the mutation planning and apply tools for that process.

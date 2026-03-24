@@ -60,7 +60,7 @@ async fn start_client_from_saved_defaults(
 
     if cfg!(target_os = "windows") {
         command.env("APPDATA", home_root.join("AppData/Roaming"));
-    } else {
+    } else if cfg!(target_os = "linux") {
         command.env("XDG_CONFIG_HOME", home_root.join(".config"));
     }
 

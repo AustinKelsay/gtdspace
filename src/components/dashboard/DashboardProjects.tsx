@@ -64,7 +64,7 @@ import {
 } from 'lucide-react';
 import type { ProjectWithMetadata } from '@/hooks/useProjectsData';
 import { cn } from '@/lib/utils';
-import { formatCompactDate } from '@/utils/date-formatting';
+import { formatCompactDate, isDateOverdue, parseLocalDate } from '@/utils/date-formatting';
 
 // Use unified type from hook to avoid drift
 
@@ -114,20 +114,10 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
   onArchiveProject,
   onAddAction
 }) => {
-  const parseLocal = useCallback((d: string) => {
-    const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    return new Date(d);
-  }, []);
   const isPastDueLocal = useCallback((due?: string | null, status?: string) => {
-    if (!due || status === 'completed' || status === 'cancelled') return false;
-    const dt = parseLocal(due);
-    if (isNaN(dt.getTime())) return false;
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dueStart = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
-    return dueStart < today;
-  }, [parseLocal]);
+    if (status === 'completed' || status === 'cancelled') return false;
+    return isDateOverdue(due);
+  }, []);
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>(['in-progress', 'waiting']);
@@ -139,6 +129,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
+  const sortOrderLabel = sortOrder === 'asc' ? 'Ascending' : 'Descending';
 
   // Filter projects
   const filteredProjects = useMemo(() => {
@@ -195,7 +186,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
           if (!a.dueDate && !b.dueDate) compareValue = 0;
           else if (!a.dueDate) compareValue = 1;
           else if (!b.dueDate) compareValue = -1;
-          else compareValue = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+          else compareValue = parseLocalDate(a.dueDate).getTime() - parseLocalDate(b.dueDate).getTime();
           break;
         case 'created':
           compareValue = new Date(a.createdDateTime).getTime() - new Date(b.createdDateTime).getTime();
@@ -323,14 +314,14 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
       <Card 
         key={project.path}
         className={cn(
-          "transition-all hover:shadow-lg",
+          "border-border/70 shadow-sm transition-colors hover:bg-accent/20",
           isOverdue && "border-destructive/50"
         )}
       >
         <CardHeader className="pb-3">
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
-              <CardTitle className="text-lg flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                 <FolderOpen className="h-4 w-4 text-muted-foreground" />
                 {project.name}
               </CardTitle>
@@ -370,7 +361,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
           </div>
 
           {/* Status and Due Date */}
-          <div className="flex items-center gap-2 mt-3">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="text-xs">
               <StatusIcon className={cn("h-3 w-3 mr-1", statusDisplay.color)} />
               {statusDisplay.label}
@@ -488,7 +479,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
           </Collapsible>
 
           {/* Action Buttons */}
-          <div className="flex gap-2 pt-2">
+          <div className="flex flex-col gap-2 pt-2 sm:flex-row">
             <Button 
               variant="outline" 
               size="sm" 
@@ -518,8 +509,8 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
       {/* Header with filters */}
       <div className="flex flex-col gap-4">
         {/* Search and controls */}
-        <div className="flex gap-2">
-          <div className="flex-1 relative">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search projects..."
@@ -528,88 +519,89 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
               className="pl-9"
             />
           </div>
-          
-          <Button
-            variant="outline"
-            onClick={() => setShowFilters(!showFilters)}
-            className={cn(activeFilterCount > 0 && "border-primary")}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-            {activeFilterCount > 0 && (
-              <Badge variant="secondary" className="ml-2">
-                {activeFilterCount}
-              </Badge>
-            )}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowFilters(!showFilters)}
+              className={cn(activeFilterCount > 0 && "border-primary")}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Filters
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <ArrowUpDown className="h-4 w-4 mr-2" />
-                Sort
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <ArrowUpDown className="h-4 w-4 mr-2" />
+                  Sort
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[200px]">
+                <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {SORT_OPTIONS.map(option => (
+                  <DropdownMenuItem
+                    key={option.value}
+                    onClick={() => setSortBy(option.value)}
+                    className={cn(sortBy === option.value && "bg-accent")}
+                  >
+                    {option.label}
+                    {sortBy === option.value && (
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {sortOrderLabel}
+                      </span>
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button
+              variant="outline"
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              aria-label={`Toggle sort order. Current order: ${sortOrderLabel}`}
+              title={`Current sort order: ${sortOrderLabel}`}
+            >
+              {sortOrder === 'asc' ? 'Asc' : 'Desc'}
+            </Button>
+
+            <div className="flex rounded-md border bg-background p-1">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+                className="px-3"
+              >
+                Grid
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[200px]">
-              <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {SORT_OPTIONS.map(option => (
-                <DropdownMenuItem
-                  key={option.value}
-                  onClick={() => setSortBy(option.value)}
-                  className={cn(sortBy === option.value && "bg-accent")}
-                >
-                  {option.label}
-                  {sortBy === option.value && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="ml-auto h-4 w-4 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                      }}
-                    >
-                      {sortOrder === 'asc' ? '↑' : '↓'}
-                    </Button>
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="px-3"
+              >
+                List
+              </Button>
+              <Button
+                variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('kanban')}
+                className="px-3"
+              >
+                Kanban
+              </Button>
+            </div>
 
-          {/* View mode selector */}
-          <div className="flex gap-1 border rounded-md">
-            <Button
-              variant={viewMode === 'grid' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('grid')}
-              className="px-3"
-            >
-              Grid
-            </Button>
-            <Button
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('list')}
-              className="px-3"
-            >
-              List
-            </Button>
-            <Button
-              variant={viewMode === 'kanban' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('kanban')}
-              className="px-3"
-            >
-              Kanban
+            <Button onClick={onCreateProject}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Project
             </Button>
           </div>
-
-          <Button onClick={onCreateProject}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Project
-          </Button>
         </div>
 
         {/* Filter panel */}
@@ -731,7 +723,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
         )}
 
         {/* Stats bar */}
-        <div className="flex gap-4 text-sm">
+        <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
           <Badge variant="outline">{stats.total} projects</Badge>
           {stats.overdue > 0 && (
             <div className="flex items-center gap-2">
@@ -783,7 +775,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
         <>
           {/* Grid View */}
           {viewMode === 'grid' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
               {filteredProjects.map(project => renderProjectCard(project))}
             </div>
           )}
@@ -801,12 +793,12 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
                     return (
                       <div 
                         key={project.path}
-                        className="p-4 hover:bg-accent cursor-pointer transition-colors"
+                        className="cursor-pointer p-4 transition-colors hover:bg-accent"
                         onClick={() => onSelectProject?.(project)}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 space-y-1">
-                            <div className="flex items-center gap-2">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
                               <FolderOpen className="h-4 w-4 text-muted-foreground" />
                               <span className="font-medium">{project.name}</span>
                               <Badge variant="outline" className="text-xs">
@@ -831,7 +823,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
                               {project.description}
                             </p>
                           </div>
-                          <div className="flex items-center gap-4">
+                          <div className="flex flex-wrap items-center gap-4">
                             <div className="text-right">
                               <div className="text-sm font-medium">
                                 {project.actionStats?.completed || 0}/{project.actionStats?.total || 0}
@@ -878,7 +870,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
 
           {/* Kanban View */}
           {viewMode === 'kanban' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 min-h-[60vh]">
+            <div className="grid min-h-[60vh] grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">
               {STATUS_OPTIONS.map(status => {
                 const StatusIcon = status.icon;
                 const projectsInStatus = projectsByStatus[status.value] || [];

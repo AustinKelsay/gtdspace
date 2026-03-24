@@ -18,7 +18,6 @@ import {
   ListChecks,
   Plus,
   RefreshCw,
-  Sparkles,
   TrendingUp,
   TrendingDown,
   Zap,
@@ -33,7 +32,13 @@ import type { HabitWithHistory } from '@/hooks/useHabitsHistory';
 import { cn } from '@/lib/utils';
 import { localISODate } from '@/utils/time';
 import { Switch } from '@/components/ui/switch';
-import { formatRelativeDate, getDateFromNow, isDateInRange, parseLocalDate } from '@/utils/date-formatting';
+import {
+  formatRelativeDate,
+  getDateFromNow,
+  isDateInRange,
+  isDateOverdue,
+  parseLocalDate,
+} from '@/utils/date-formatting';
 import { QuestionMarkTooltip } from '@/components/ui/QuestionMarkTooltip';
 
 interface DashboardOverviewProps {
@@ -90,12 +95,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     const active = projects.filter(p => p.status === 'in-progress').length;
     const waiting = projects.filter(p => p.status === 'waiting').length;
     const completed = projects.filter(p => p.status === 'completed').length;
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const overdue = projects.filter(p => {
-      if (!p.dueDate || p.status === 'completed' || p.status === 'cancelled') return false;
-      const due = parseLocalDate(p.dueDate);
-      return !isNaN(due.getTime()) && due < today;
+      if (p.status === 'completed' || p.status === 'cancelled') return false;
+      return isDateOverdue(p.dueDate);
     }).length;
 
     // Calculate projects with horizon linkages
@@ -340,51 +342,40 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     <div className="space-y-6">
       {/* Workspace Header */}
       {gtdSpace && (
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-2xl font-bold">
+        <div className="mb-4 flex flex-col gap-4 rounded-xl border border-border/70 bg-card/70 p-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-xl font-semibold sm:text-2xl">
               {gtdSpace.root_path.split('/').pop() || 'GTD Workspace'}
             </h2>
-            <p className="text-sm text-muted-foreground">{gtdSpace.root_path}</p>
+            <p className="mt-1 break-all text-sm text-muted-foreground">{gtdSpace.root_path}</p>
           </div>
-          <Badge variant="outline" className="text-sm">
-            {projectStats.total} projects • {actionSummary.total} actions • {habitStats.total} habits
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="text-sm">
+              {projectStats.total} projects • {actionSummary.total} actions • {habitStats.total} habits
+            </Badge>
+            {onNewProject && (
+              <button
+                type="button"
+                onClick={onNewProject}
+                className="inline-flex h-9 items-center rounded-md border border-border px-3 text-sm font-medium transition-colors hover:bg-accent"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New Project
+              </button>
+            )}
+          </div>
         </div>
       )}
 
       {/* Quick Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* New Project Card */}
-        <Card 
-          className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]"
-          onClick={onNewProject}
-        >
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10">
-                <Plus className="h-6 w-6 text-primary" />
-              </div>
-              <Sparkles className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <p className="font-semibold text-lg">New Project</p>
-            <p className="text-sm text-muted-foreground">Start something amazing</p>
-          </CardContent>
-        </Card>
-
-        {/* Quick Stats */}
-        {quickStats.slice(0, 3).map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between mb-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {quickStats.map((stat) => (
+          <Card key={stat.label} className="border-border/70 shadow-sm">
+            <CardContent className="p-5">
+              <div className="mb-4 flex items-start justify-between gap-3">
                 <div
                   className={cn(
-                    'p-3 rounded-lg bg-gradient-to-br',
-                    stat.color === 'text-blue-500' && 'from-blue-500/20 to-blue-500/10',
-                    stat.color === 'text-green-500' && 'from-green-500/20 to-green-500/10',
-                    stat.color === 'text-purple-500' && 'from-purple-500/20 to-purple-500/10',
-                    stat.color === 'text-yellow-500' && 'from-yellow-500/20 to-yellow-500/10',
-                    stat.color === 'text-red-500' && 'from-red-500/20 to-red-500/10'
+                    'rounded-lg border border-border/60 bg-muted/40 p-2.5'
                   )}
                 >
                   <stat.icon className={cn('h-6 w-6', stat.color)} />
@@ -413,7 +404,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </div>
               ) : (
                 <>
-                  <p className="text-3xl font-bold">{stat.value}</p>
+                  <p className="text-2xl font-semibold sm:text-3xl">{stat.value}</p>
                   <p className="text-sm text-muted-foreground">{stat.label}</p>
                   {stat.description && (
                     <p className="text-xs text-muted-foreground mt-1">{stat.description}</p>
@@ -426,15 +417,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         {/* System Overview - Left Column */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6 xl:col-span-2">
           {/* Project Pipeline with Enhanced Metrics */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>Project Pipeline</span>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {projectStats.withHorizons > 0 && (
                     <Badge variant="secondary">
                       <Target className="h-3 w-3 mr-1" />
@@ -447,7 +438,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <CardDescription>Current distribution and progress</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="text-center">
                   <div className="text-3xl font-bold text-blue-600">{projectStats.active}</div>
                   <div className="text-sm text-muted-foreground">Active</div>
@@ -487,7 +478,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Zap className="h-5 w-5 text-purple-500" />
+                <Zap className="h-5 w-5 text-muted-foreground" />
                 Action Distribution
               </CardTitle>
               <CardDescription>Next actions across all projects</CardDescription>
@@ -553,7 +544,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   )}
                   {upcomingDueCount > 0 && (
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Due this week</span>
+                      <span>Due in next 7 days</span>
                       <Badge variant="outline">{upcomingDueCount}</Badge>
                     </div>
                   )}
@@ -598,12 +589,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           {/* Upcoming Deadlines */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Calendar className="h-5 w-5" />
                   Upcoming Deadlines
                 </CardTitle>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <button
                     type="button"
                     className={cn(
@@ -635,11 +626,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     {upcomingItems.map((item) => (
                       <div
                         key={item.id}
-                        className="p-2 border rounded hover:bg-accent cursor-pointer transition-colors"
+                        className="cursor-pointer rounded-lg border border-border/70 p-3 transition-colors hover:bg-accent/30"
                         onClick={() => item.type === 'action' ? onSelectAction?.(item.id) : onSelectProject?.(item.id)}
                       >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium truncate flex items-center gap-2">
+                        <div className="mb-1 flex items-center justify-between gap-3">
+                          <span className="flex items-center gap-2 truncate text-sm font-medium">
                             {item.type === 'project' ? (
                               <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
                             ) : (
@@ -693,14 +684,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 <Progress value={habitStats.avgSuccessRate} className="h-3" />
                 
                 <div className="grid grid-cols-2 gap-2 pt-2">
-                  <div className="text-center p-2 bg-muted rounded">
+                  <div className="rounded-lg bg-muted/60 p-2 text-center">
                     <div className="flex items-center justify-center gap-1">
                       <Flame className="h-4 w-4 text-orange-500" />
                       <span className="text-xl font-bold">{habitStats.longestCurrentStreak}</span>
                     </div>
                     <div className="text-xs text-muted-foreground">Best Streak</div>
                   </div>
-                  <div className="text-center p-2 bg-muted rounded">
+                  <div className="rounded-lg bg-muted/60 p-2 text-center">
                     <div className="text-xl font-bold text-green-600">{habitStats.completedToday}</div>
                     <div className="text-xs text-muted-foreground">Done Today</div>
                   </div>
@@ -784,9 +775,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-4 text-sm text-muted-foreground">
+              <div className="rounded-lg border border-dashed border-border/70 bg-muted/20 py-5 text-center text-sm text-muted-foreground">
                 <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
-                Activity tracking coming soon
+                Recent activity is on the way
                 <p className="text-xs mt-1">Track creates, updates, and completions</p>
               </div>
             </CardContent>

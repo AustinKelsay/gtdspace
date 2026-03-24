@@ -9,6 +9,7 @@ use tokio::sync::Mutex as TokioMutex;
 
 const SECURE_STORAGE_SERVICE: &str = "com.gtdspace.app";
 const GIT_SYNC_ENCRYPTION_KEY_NAME: &str = "git_sync_encryption_key";
+const DEFAULT_MCP_SERVER_LOG_LEVEL: &str = "info";
 static SETTINGS_LOCK: Lazy<TokioMutex<()>> = Lazy::new(|| TokioMutex::new(()));
 
 #[cfg(test)]
@@ -143,6 +144,12 @@ pub struct UserSettings {
     pub git_sync_last_pull: Option<String>,
     /// Optional automatic pull cadence
     pub git_sync_auto_pull_interval_minutes: Option<u32>,
+    /// Optional dedicated workspace path for the standalone MCP server
+    pub mcp_server_workspace_path: Option<String>,
+    /// Whether the standalone MCP server should default to read-only mode
+    pub mcp_server_read_only: Option<bool>,
+    /// Default log level used by the standalone MCP server
+    pub mcp_server_log_level: Option<String>,
 }
 
 impl std::fmt::Debug for UserSettings {
@@ -169,6 +176,9 @@ impl std::fmt::Debug for UserSettings {
             .field("git_sync_workspace_path", &self.git_sync_workspace_path)
             .field("git_sync_remote_url", &self.git_sync_remote_url)
             .field("git_sync_branch", &self.git_sync_branch)
+            .field("mcp_server_workspace_path", &self.mcp_server_workspace_path)
+            .field("mcp_server_read_only", &self.mcp_server_read_only)
+            .field("mcp_server_log_level", &self.mcp_server_log_level)
             .field(
                 "git_sync_encryption_key",
                 &self
@@ -643,5 +653,8 @@ pub fn get_default_settings() -> UserSettings {
         git_sync_last_push: None,
         git_sync_last_pull: None,
         git_sync_auto_pull_interval_minutes: None,
+        mcp_server_workspace_path: None,
+        mcp_server_read_only: Some(false),
+        mcp_server_log_level: Some(DEFAULT_MCP_SERVER_LOG_LEVEL.to_string()),
     }
 }

@@ -32,6 +32,8 @@ const CONTEXT_PACK_VERSION: u32 = 1;
 const SETTINGS_FILE_NAME: &str = "settings.json";
 const CONTEXT_CACHE_DIR: &str = "mcp-context";
 const MAX_CONTEXT_PACK_RETRIES: usize = 5;
+const DEFAULT_MCP_SERVER_LOG_LEVEL: &str = "info";
+const VALID_MCP_SERVER_LOG_LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
 
 pub(crate) const GTD_SPEC_DOC: &str = include_str!("../../../spec/gtd-spec.md");
 pub(crate) const MARKDOWN_SCHEMA_DOC: &str = include_str!("../../../spec/02-markdown-schema.md");
@@ -119,6 +121,13 @@ pub struct WorkspaceInfo {
     pub item_counts: BTreeMap<String, usize>,
     pub fingerprint: WorkspaceFingerprint,
     pub context_pack_cache: ContextPackCache,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct McpServerLaunchSettings {
+    pub read_only: bool,
+    pub log_level: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -1657,27 +1666,28 @@ fn resolve_workspace(cli_workspace: Option<String>) -> Result<PathBuf, String> {
         return validate_workspace_candidate(Path::new(&path));
     }
 
-    if let Some(settings_path) = settings_file_path() {
-        if let Ok(contents) = fs::read_to_string(&settings_path) {
-            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&contents) {
-                let candidates = [
-                    value
-                        .get("user_settings")
-                        .and_then(|settings| settings.get("last_folder"))
-                        .and_then(|entry| entry.as_str())
-                        .map(str::to_string),
-                    value
-                        .get("user_settings")
-                        .and_then(|settings| settings.get("default_space_path"))
-                        .and_then(|entry| entry.as_str())
-                        .map(str::to_string),
-                ];
+    if let Some(value) = load_saved_settings() {
+        let candidates = [
+            value
+                .get("user_settings")
+                .and_then(|settings| settings.get("mcp_server_workspace_path"))
+                .and_then(|entry| entry.as_str())
+                .map(str::to_string),
+            value
+                .get("user_settings")
+                .and_then(|settings| settings.get("last_folder"))
+                .and_then(|entry| entry.as_str())
+                .map(str::to_string),
+            value
+                .get("user_settings")
+                .and_then(|settings| settings.get("default_space_path"))
+                .and_then(|entry| entry.as_str())
+                .map(str::to_string),
+        ];
 
-                for candidate in candidates.into_iter().flatten() {
-                    if let Ok(path) = validate_workspace_candidate(Path::new(&candidate)) {
-                        return Ok(path);
-                    }
-                }
+        for candidate in candidates.into_iter().flatten() {
+            if let Ok(path) = validate_workspace_candidate(Path::new(&candidate)) {
+                return Ok(path);
             }
         }
     }
@@ -1709,6 +1719,38 @@ fn settings_file_path() -> Option<PathBuf> {
     project_dirs()
         .ok()
         .map(|dirs| dirs.config_dir().join(SETTINGS_FILE_NAME))
+}
+
+fn load_saved_settings() -> Option<Value> {
+    let settings_path = settings_file_path()?;
+    let contents = fs::read_to_string(settings_path).ok()?;
+    serde_json::from_str::<Value>(&contents).ok()
+}
+
+fn sanitize_mcp_server_log_level(value: Option<&str>) -> String {
+    let normalized = value.unwrap_or(DEFAULT_MCP_SERVER_LOG_LEVEL).trim().to_ascii_lowercase();
+    if VALID_MCP_SERVER_LOG_LEVELS.contains(&normalized.as_str()) {
+        normalized
+    } else {
+        DEFAULT_MCP_SERVER_LOG_LEVEL.to_string()
+    }
+}
+
+pub fn load_mcp_server_launch_settings() -> McpServerLaunchSettings {
+    let settings = load_saved_settings();
+    let user_settings = settings.as_ref().and_then(|value| value.get("user_settings"));
+
+    McpServerLaunchSettings {
+        read_only: user_settings
+            .and_then(|settings| settings.get("mcp_server_read_only"))
+            .and_then(|entry| entry.as_bool())
+            .unwrap_or(false),
+        log_level: sanitize_mcp_server_log_level(
+            user_settings
+                .and_then(|settings| settings.get("mcp_server_log_level"))
+                .and_then(|entry| entry.as_str()),
+        ),
+    }
 }
 
 fn snapshot_matches_state(state: &ServiceState, fingerprint: &WorkspaceFingerprint) -> bool {

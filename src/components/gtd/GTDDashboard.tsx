@@ -416,46 +416,48 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   return (
     <div className={`h-full overflow-hidden ${className}`}>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-        <div className="px-6 pt-6 pb-2">
+        <div className="px-4 pb-2 pt-4 sm:px-6 sm:pt-6">
           {/* Header */}
           <div className="mb-4">
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <LayoutDashboard className="h-8 w-8 text-primary" />
-              GTD Command Center
+            <h1 className="flex items-center gap-3 text-2xl font-semibold sm:text-3xl">
+              <LayoutDashboard className="h-7 w-7 text-primary sm:h-8 sm:w-8" />
+              Dashboard
             </h1>
             <p className="text-muted-foreground mt-1">
-              Your complete productivity overview
+              Projects, actions, habits, and horizons in one place
             </p>
           </div>
 
           {/* Navigation Tabs - 5 tabs */}
-          <TabsList className="grid grid-cols-5 w-full">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
-              <Activity className="h-4 w-4" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="actions" className="flex items-center gap-2">
-              <ListChecks className="h-4 w-4" />
-              Actions
-            </TabsTrigger>
-            <TabsTrigger value="projects" className="flex items-center gap-2">
-              <FolderOpen className="h-4 w-4" />
-              Projects
-            </TabsTrigger>
-            <TabsTrigger value="habits" className="flex items-center gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Habits
-            </TabsTrigger>
-            <TabsTrigger value="horizons" className="flex items-center gap-2">
-              <Layers className="h-4 w-4" />
-              Horizons
-            </TabsTrigger>
-          </TabsList>
+          <div className="-mx-1 overflow-x-auto pb-1">
+            <TabsList className="h-auto min-w-max gap-1 rounded-lg bg-muted/60 p-1">
+              <TabsTrigger value="overview" className="min-w-[7.5rem] gap-2 px-3 py-2">
+                <Activity className="h-4 w-4" />
+                Overview
+              </TabsTrigger>
+              <TabsTrigger value="actions" className="min-w-[7.5rem] gap-2 px-3 py-2">
+                <ListChecks className="h-4 w-4" />
+                Actions
+              </TabsTrigger>
+              <TabsTrigger value="projects" className="min-w-[7.5rem] gap-2 px-3 py-2">
+                <FolderOpen className="h-4 w-4" />
+                Projects
+              </TabsTrigger>
+              <TabsTrigger value="habits" className="min-w-[7.5rem] gap-2 px-3 py-2">
+                <RefreshCw className="h-4 w-4" />
+                Habits
+              </TabsTrigger>
+              <TabsTrigger value="horizons" className="min-w-[7.5rem] gap-2 px-3 py-2">
+                <Layers className="h-4 w-4" />
+                Horizons
+              </TabsTrigger>
+            </TabsList>
+          </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-hidden">
           {/* Overview Tab */}
-          <TabsContent value="overview" className="h-full p-6 overflow-auto">
+          <TabsContent value="overview" className="h-full overflow-auto px-4 py-4 sm:px-6 sm:py-6">
             <DashboardOverview
               gtdSpace={gtdSpace}
               projects={projectsWithMetadata}
@@ -491,7 +493,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           </TabsContent>
 
           {/* Actions Tab - Enhanced with new data */}
-          <TabsContent value="actions" className="h-full p-6 overflow-auto">
+          <TabsContent value="actions" className="h-full overflow-auto px-4 py-4 sm:px-6 sm:py-6">
             <DashboardActions
               actions={actions}
               projects={gtdSpace.projects?.map(p => ({ name: p.name, path: p.path })) || []}
@@ -511,7 +513,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           </TabsContent>
 
           {/* Projects Tab - Enhanced with metadata */}
-          <TabsContent value="projects" className="h-full p-6 overflow-auto">
+          <TabsContent value="projects" className="h-full overflow-auto px-4 py-4 sm:px-6 sm:py-6">
             <DashboardProjects
               projects={projectsWithMetadata}
               isLoading={projectsLoading}
@@ -555,7 +557,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           </TabsContent>
 
           {/* Habits Tab - Enhanced with history and analytics */}
-          <TabsContent value="habits" className="h-full p-6 overflow-auto">
+          <TabsContent value="habits" className="h-full overflow-auto px-4 py-4 sm:px-6 sm:py-6">
             <DashboardHabits
               habits={habitsWithHistory}
               isLoading={habitsLoading}
@@ -664,7 +666,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           </TabsContent>
 
           {/* Horizons Tab - Enhanced with relationships */}
-          <TabsContent value="horizons" className="h-full p-6 overflow-auto">
+          <TabsContent value="horizons" className="h-full overflow-auto px-4 py-4 sm:px-6 sm:py-6">
             <DashboardHorizons
               horizonFiles={horizonFiles}
               projects={projectsWithMetadata}

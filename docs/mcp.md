@@ -21,10 +21,17 @@ cargo run --manifest-path src-tauri/mcp-server/Cargo.toml -- --workspace "/absol
 Supported CLI flags:
 
 - `--workspace <path>`: bind the MCP server to a single GTD workspace for the life of the process
-- `--read-only`: disable all mutation tools
+- `--read-only`: disable all mutation tools (`--read-only=false` forces read-write)
 - `--log-level <level>`: set logging for local debugging
 
-If `--workspace` is omitted, the server resolves the workspace from saved GTD Space settings first and then falls back to the platform default GTD Space path.
+If `--workspace` is omitted, the server resolves the workspace from saved GTD Space settings in this order:
+
+- `mcp_server_workspace_path` from Settings > MCP Server
+- `last_folder`
+- `default_space_path`
+- the platform default GTD Space path
+
+If `--read-only` or `--log-level` are omitted, the server also falls back to the defaults saved on the Settings > MCP Server page.
 
 ## Resources
 

@@ -5,19 +5,22 @@ use clap::Parser;
 struct Args {
     #[arg(long)]
     workspace: Option<String>,
-    #[arg(long, default_value_t = false)]
-    read_only: bool,
-    #[arg(long, default_value = "info")]
-    log_level: String,
+    #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+    read_only: Option<bool>,
+    #[arg(long)]
+    log_level: Option<String>,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    init_logger(&args.log_level);
+    let saved_defaults = gtdspace_lib::backend::mcp_workspace::load_mcp_server_launch_settings();
+    let log_level = args.log_level.unwrap_or(saved_defaults.log_level);
+    let read_only = args.read_only.unwrap_or(saved_defaults.read_only);
+    init_logger(&log_level);
 
     let service =
-        match gtdspace_lib::backend::GtdWorkspaceService::new(args.workspace, args.read_only) {
+        match gtdspace_lib::backend::GtdWorkspaceService::new(args.workspace, read_only) {
             Ok(service) => service,
             Err(error) => {
                 eprintln!("Failed to initialize GTD Space MCP service: {}", error);

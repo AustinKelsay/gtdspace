@@ -16,6 +16,7 @@ import {
   Calendar,
   ArrowLeft,
   ShieldCheck,
+  Server,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -27,6 +28,7 @@ import { AdvancedSettings } from './AdvancedSettings';
 import { AboutSection } from './AboutSection';
 import { GoogleCalendarSettings } from './GoogleCalendarSettings';
 import { GitSyncSettings } from './GitSyncSettings';
+import { McpServerSettings } from './McpServerSettings';
 import type { BaseComponentProps, GTDSpace, GTDProject } from '@/types';
 
 export interface SettingsManagerProps extends BaseComponentProps {
@@ -46,6 +48,7 @@ type TabId =
   | 'appearance'
   | 'gtd'
   | 'git-sync'
+  | 'mcp-server'
   | 'google-calendar'
   | 'shortcuts'
   | 'advanced'
@@ -69,6 +72,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
     { id: 'appearance', label: 'Appearance', icon: Palette, group: 'Settings' },
     { id: 'gtd', label: 'GTD Workspace', icon: Target, group: 'Settings' },
     { id: 'git-sync', label: 'Git Sync & Backups', icon: ShieldCheck, group: 'Settings' },
+    { id: 'mcp-server', label: 'MCP Server', icon: Server, group: 'Settings' },
     { id: 'google-calendar', label: 'Google Calendar', icon: Calendar, group: 'Settings' },
     { id: 'shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard, group: 'Reference' },
     { id: 'advanced', label: 'Advanced', icon: Wrench, group: 'Reference' },
@@ -157,6 +161,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
             )}
             {activeTab === 'google-calendar' && <GoogleCalendarSettings />}
             {activeTab === 'git-sync' && <GitSyncSettings />}
+            {activeTab === 'mcp-server' && <McpServerSettings />}
             {activeTab === 'shortcuts' && <KeyboardShortcuts />}
             {activeTab === 'advanced' && <AdvancedSettings />}
             {activeTab === 'about' && <AboutSection />}

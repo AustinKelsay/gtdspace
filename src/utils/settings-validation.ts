@@ -4,7 +4,7 @@
  * @created 2025-01-XX
  */
 
-import type { UserSettings, Theme, EditorMode } from '@/types';
+import type { UserSettings, Theme, EditorMode, McpServerLogLevel } from '@/types';
 
 /**
  * Valid theme values
@@ -50,6 +50,11 @@ const GIT_SYNC_HISTORY_RANGE = { min: 1, max: 20 } as const;
  * Minimum auto pull cadence (minutes)
  */
 const GIT_SYNC_AUTO_PULL_MIN = 1;
+
+/**
+ * Valid log levels accepted by the standalone MCP server.
+ */
+const VALID_MCP_LOG_LEVELS: readonly McpServerLogLevel[] = ['error', 'warn', 'info', 'debug', 'trace'] as const;
 
 /**
  * Shortcut value format matcher (e.g., mod+shift+p)
@@ -383,6 +388,13 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
     coercedSettings.restore_tabs = data.restore_tabs as boolean | null;
   }
 
+  if (data.mcp_server_read_only !== undefined && data.mcp_server_read_only !== null && typeof data.mcp_server_read_only !== 'boolean') {
+    recordError('mcp_server_read_only', 'must be a boolean or null', data.mcp_server_read_only, null, 'warning');
+    coercedSettings.mcp_server_read_only = null;
+  } else if (data.mcp_server_read_only !== undefined) {
+    coercedSettings.mcp_server_read_only = data.mcp_server_read_only as boolean | null;
+  }
+
   // Reject imported git_sync_encryption_key for security reasons
   if (data.git_sync_encryption_key !== undefined && data.git_sync_encryption_key !== null) {
     recordError(
@@ -406,6 +418,7 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
     'git_sync_author_email',
     'git_sync_last_push',
     'git_sync_last_pull',
+    'mcp_server_workspace_path',
   ];
 
   for (const field of optionalStringFields) {
@@ -460,6 +473,26 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
       } else {
         coercedSettings.git_sync_auto_pull_interval_minutes = value;
       }
+    }
+  }
+
+  if (data.mcp_server_log_level !== undefined) {
+    if (data.mcp_server_log_level === null) {
+      coercedSettings.mcp_server_log_level = null;
+    } else if (
+      typeof data.mcp_server_log_level !== 'string' ||
+      !VALID_MCP_LOG_LEVELS.includes(data.mcp_server_log_level as McpServerLogLevel)
+    ) {
+      recordError(
+        'mcp_server_log_level',
+        `must be one of: ${VALID_MCP_LOG_LEVELS.join(', ')}`,
+        data.mcp_server_log_level,
+        'info',
+        'fatal',
+      );
+      coercedSettings.mcp_server_log_level = 'info';
+    } else {
+      coercedSettings.mcp_server_log_level = data.mcp_server_log_level as McpServerLogLevel;
     }
   }
 

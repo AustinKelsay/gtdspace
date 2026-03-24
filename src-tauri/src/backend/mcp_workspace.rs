@@ -7,7 +7,9 @@ use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
 use rmcp::schemars;
 use rmcp::schemars::JsonSchema;
+use rmcp::schemars::transform::RecursiveTransform;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -89,6 +91,7 @@ pub struct RelationshipSummary {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceFingerprint {
     pub normalized_root_path: String,
     pub latest_modified_unix: u64,
@@ -109,6 +112,7 @@ pub struct ContextPackCache {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceInfo {
     pub workspace_root: String,
     pub read_only: bool,
@@ -119,6 +123,7 @@ pub struct WorkspaceInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceSearchMatch {
     pub file_path: String,
     pub file_name: String,
@@ -142,6 +147,7 @@ pub struct WorkspaceSearchResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceRefreshResult {
     pub workspace_info: WorkspaceInfo,
     pub invalidated_change_sets: usize,
@@ -228,6 +234,7 @@ pub struct WorkspaceListItemsRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceSearchRequest {
     pub query: String,
     #[serde(default = "default_search_limit")]
@@ -1629,6 +1636,20 @@ struct HorizonUpdateSeed {
 
 fn default_search_limit() -> usize {
     20
+}
+
+fn remove_unsupported_integer_formats(schema: &mut schemars::Schema) {
+    if let Some(object) = schema.as_object_mut() {
+        let should_remove = object
+            .get("format")
+            .and_then(Value::as_str)
+            .map(|format| format.starts_with("uint"))
+            .unwrap_or(false);
+
+        if should_remove {
+            object.remove("format");
+        }
+    }
 }
 
 fn resolve_workspace(cli_workspace: Option<String>) -> Result<PathBuf, String> {

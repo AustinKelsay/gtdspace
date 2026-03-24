@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{builder::PossibleValuesParser, Parser};
 
 #[derive(Debug, Parser)]
 #[command(name = "gtdspace-mcp", about = "GTD Space MCP stdio server")]
@@ -7,7 +7,10 @@ struct Args {
     workspace: Option<String>,
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     read_only: Option<bool>,
-    #[arg(long)]
+    #[arg(
+        long,
+        value_parser = PossibleValuesParser::new(["error", "warn", "info", "debug", "trace"])
+    )]
     log_level: Option<String>,
 }
 

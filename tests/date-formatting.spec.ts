@@ -10,7 +10,7 @@ import {
 describe('date-formatting helpers', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-03-24T15:30:00Z'));
+    vi.setSystemTime(new Date(2026, 2, 24, 12));
   });
 
   afterEach(() => {
@@ -31,8 +31,8 @@ describe('date-formatting helpers', () => {
   });
 
   it('keeps range checks inclusive of the end date', () => {
-    const start = new Date('2026-03-24T02:00:00Z');
-    const end = new Date('2026-03-31T23:59:00Z');
+    const start = new Date(2026, 2, 24, 2);
+    const end = new Date(2026, 2, 31, 23, 59);
 
     expect(isDateInRange('2026-03-24', start, end)).toBe(true);
     expect(isDateInRange('2026-03-31', start, end)).toBe(true);

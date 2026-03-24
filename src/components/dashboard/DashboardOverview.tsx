@@ -604,12 +604,19 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                         : 'border-muted-foreground/30 text-muted-foreground hover:bg-accent'
                     )}
                     onClick={() => setOnlyOverdue(v => !v)}
+                    aria-pressed={onlyOverdue}
                   >
                     Only overdue
                   </button>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Include actions</span>
-                    <Switch checked={includeActions} onCheckedChange={setIncludeActions} />
+                    <span id="upcoming-deadlines-include-actions" className="text-xs text-muted-foreground">
+                      Include actions
+                    </span>
+                    <Switch
+                      checked={includeActions}
+                      onCheckedChange={setIncludeActions}
+                      aria-labelledby="upcoming-deadlines-include-actions"
+                    />
                   </div>
                 </div>
               </div>

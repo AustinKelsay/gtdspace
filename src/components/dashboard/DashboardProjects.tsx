@@ -570,12 +570,13 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
               {sortOrder === 'asc' ? 'Asc' : 'Desc'}
             </Button>
 
-            <div className="flex rounded-md border bg-background p-1">
+            <div className="flex rounded-md border bg-background p-1" role="group" aria-label="View mode">
               <Button
                 variant={viewMode === 'grid' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('grid')}
                 className="px-3"
+                aria-pressed={viewMode === 'grid'}
               >
                 Grid
               </Button>
@@ -584,6 +585,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
                 size="sm"
                 onClick={() => setViewMode('list')}
                 className="px-3"
+                aria-pressed={viewMode === 'list'}
               >
                 List
               </Button>
@@ -592,6 +594,7 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
                 size="sm"
                 onClick={() => setViewMode('kanban')}
                 className="px-3"
+                aria-pressed={viewMode === 'kanban'}
               >
                 Kanban
               </Button>

@@ -24,7 +24,7 @@ const buildAction = (overrides: Partial<ActionItem>): ActionItem => ({
 describe('DashboardActions component', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+    vi.setSystemTime(new Date(2026, 0, 15, 12));
   });
 
   afterEach(() => {

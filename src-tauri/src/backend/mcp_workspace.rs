@@ -1667,25 +1667,27 @@ fn resolve_workspace(cli_workspace: Option<String>) -> Result<PathBuf, String> {
     }
 
     if let Some(value) = load_saved_settings() {
-        let candidates = [
-            value
-                .get("user_settings")
-                .and_then(|settings| settings.get("mcp_server_workspace_path"))
-                .and_then(|entry| entry.as_str())
-                .map(str::to_string),
-            value
-                .get("user_settings")
-                .and_then(|settings| settings.get("last_folder"))
-                .and_then(|entry| entry.as_str())
-                .map(str::to_string),
-            value
-                .get("user_settings")
-                .and_then(|settings| settings.get("default_space_path"))
-                .and_then(|entry| entry.as_str())
-                .map(str::to_string),
-        ];
+        let mcp_server_workspace_path = value
+            .get("user_settings")
+            .and_then(|settings| settings.get("mcp_server_workspace_path"))
+            .and_then(|entry| entry.as_str())
+            .map(str::to_string);
+        let last_folder = value
+            .get("user_settings")
+            .and_then(|settings| settings.get("last_folder"))
+            .and_then(|entry| entry.as_str())
+            .map(str::to_string);
+        let default_space_path = value
+            .get("user_settings")
+            .and_then(|settings| settings.get("default_space_path"))
+            .and_then(|entry| entry.as_str())
+            .map(str::to_string);
 
-        for candidate in candidates.into_iter().flatten() {
+        if let Some(candidate) = mcp_server_workspace_path {
+            return validate_workspace_candidate(Path::new(&candidate));
+        }
+
+        for candidate in [last_folder, default_space_path].into_iter().flatten() {
             if let Ok(path) = validate_workspace_candidate(Path::new(&candidate)) {
                 return Ok(path);
             }

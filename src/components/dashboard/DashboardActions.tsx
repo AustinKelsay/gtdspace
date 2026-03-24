@@ -342,7 +342,11 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
     }
 
     const interactiveAncestor = target.closest(INTERACTIVE_ELEMENT_SELECTOR);
-    return interactiveAncestor !== null && currentTarget.contains(interactiveAncestor);
+    return (
+      interactiveAncestor !== null &&
+      interactiveAncestor !== currentTarget &&
+      currentTarget.contains(interactiveAncestor)
+    );
   };
 
   // Use shared date formatting utility

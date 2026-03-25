@@ -13,7 +13,7 @@ use rmcp::{
 
 use crate::backend::mcp_workspace::{
     ActionCreateRequest, ActionRenameRequest, ActionUpdateRequest, ChangeSetRequest,
-    GtdWorkspaceService, HabitCreateRequest, HabitStatusUpdateRequest,
+    GtdWorkspaceService, HabitCreateRequest, HabitReplaceHistoryRequest, HabitStatusUpdateRequest,
     HabitWriteHistoryEntryRequest, HorizonPageCreateRequest, HorizonPageUpdateRequest,
     ProjectCreateRequest, ProjectRenameRequest, ProjectUpdateRequest, ReferenceNoteCreateRequest,
     ReferenceNoteUpdateRequest, WorkspaceListItemsRequest, WorkspacePathRequest,
@@ -235,6 +235,19 @@ impl GtdMcpServer {
     ) -> Result<Json<crate::backend::PlannedChange>, rmcp::ErrorData> {
         self.service
             .plan_habit_write_history_entry(request)
+            .map(Json)
+            .map_err(internal_error)
+    }
+
+    #[tool(
+        description = "Plan replacing a habit history section with a canonical normalized table."
+    )]
+    async fn habit_replace_history(
+        &self,
+        Parameters(request): Parameters<HabitReplaceHistoryRequest>,
+    ) -> Result<Json<crate::backend::PlannedChange>, rmcp::ErrorData> {
+        self.service
+            .plan_habit_replace_history(request)
             .map(Json)
             .map_err(internal_error)
     }

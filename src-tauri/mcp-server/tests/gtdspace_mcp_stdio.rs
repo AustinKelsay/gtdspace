@@ -402,3 +402,65 @@ async fn mcp_server_reads_and_writes_habit_history() -> Result<(), Box<dyn Error
     client.cancel().await?;
     Ok(())
 }
+
+#[tokio::test]
+async fn mcp_server_replaces_habit_history_with_canonical_table() -> Result<(), Box<dyn Error>> {
+    let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
+    let workspace_root = workspace.path().to_path_buf();
+    write_habit_fixture(&workspace_root)?;
+
+    let client = start_client(&workspace_root).await?;
+
+    let planned: PlannedChange = call_tool_typed(
+        &client,
+        "habit_replace_history",
+        Some(
+            json!({
+                "path": "Habits/Morning Run.md",
+                "rows": [
+                    {
+                        "date": "2026-03-23",
+                        "time": "7:45 AM",
+                        "status": "completed",
+                        "action": "Manual",
+                        "details": "Ran before work"
+                    },
+                    {
+                        "date": "2026-03-24",
+                        "time": "8:30 PM",
+                        "status": "todo",
+                        "action": "Backfill",
+                        "details": "Missed the run"
+                    }
+                ],
+                "updateCurrentStatusFromLatest": true
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+
+    let _: ChangeApplyResult = call_tool_typed(
+        &client,
+        "change_apply",
+        Some(
+            json!({
+                "changeSetId": planned.change_set.id
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+
+    let updated = fs::read_to_string(workspace_root.join("Habits/Morning Run.md"))?;
+    assert!(updated.contains("[!checkbox:habit-status:false]"));
+    assert!(updated.contains("| 2026-03-23 | 7:45 AM | Complete | Manual | Ran before work |"));
+    assert!(updated.contains("| 2026-03-24 | 8:30 PM | To Do | Backfill | Missed the run |"));
+
+    client.cancel().await?;
+    Ok(())
+}

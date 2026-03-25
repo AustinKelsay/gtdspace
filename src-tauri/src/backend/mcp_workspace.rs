@@ -405,6 +405,24 @@ pub struct HabitWriteHistoryEntryRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HabitHistoryRowInput {
+    pub date: String,
+    pub time: String,
+    pub status: String,
+    pub action: String,
+    pub details: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HabitReplaceHistoryRequest {
+    pub path: String,
+    pub rows: Vec<HabitHistoryRowInput>,
+    pub update_current_status_from_latest: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum HorizonPageType {
     Area,
@@ -553,6 +571,11 @@ enum ChangeOperation {
         path: String,
         entry: String,
         new_status: Option<String>,
+        expected_sha256: Option<String>,
+    },
+    ReplaceHabitHistory {
+        path: String,
+        content: String,
         expected_sha256: Option<String>,
     },
 }
@@ -1101,6 +1124,39 @@ impl GtdWorkspaceService {
         )
     }
 
+    pub fn plan_habit_replace_history(
+        &self,
+        request: HabitReplaceHistoryRequest,
+    ) -> Result<PlannedChange, String> {
+        self.reject_if_read_only()?;
+        let item = self.get_item(&request.path)?;
+        if item.item_type != GtdItemType::Habit {
+            return Err("habit_replace_history requires a habit path".to_string());
+        }
+
+        let current = self.read_markdown(&item.relative_path)?;
+        let rows = normalize_replacement_history_rows(request.rows)?;
+        let update_current_status = request.update_current_status_from_latest.unwrap_or(false);
+        let content = replace_habit_history_content(&current, &rows, update_current_status)?;
+
+        self.store_change_set(
+            "habit_replace_history",
+            format!("Replace history for habit '{}'", item.title),
+            vec![item.relative_path.clone()],
+            format!(
+                "Replace habit history\n- path: {}\n- rows: {}\n- update current status from latest: {}",
+                item.relative_path,
+                rows.len(),
+                update_current_status
+            ),
+            vec![ChangeOperation::ReplaceHabitHistory {
+                path: item.absolute_path.clone(),
+                content,
+                expected_sha256: Some(hash_bytes(current.as_bytes())),
+            }],
+        )
+    }
+
     pub fn plan_horizon_page_create(
         &self,
         request: HorizonPageCreateRequest,
@@ -1330,6 +1386,9 @@ impl GtdWorkspaceService {
                     new_status,
                     ..
                 } => apply_habit_history_entry(path, entry, new_status.as_deref()),
+                ChangeOperation::ReplaceHabitHistory { path, content, .. } => {
+                    save_file(path.clone(), content.clone()).map(|_| ())
+                }
             };
 
             if let Err(error) = apply_result {
@@ -1638,6 +1697,17 @@ impl GtdWorkspaceService {
                 }
                 Ok(())
             }
+            ChangeOperation::ReplaceHabitHistory {
+                path,
+                expected_sha256,
+                ..
+            } => {
+                let current_hash = hash_file_if_exists(path)?;
+                if &current_hash != expected_sha256 {
+                    return Err("Habit changed since planning".to_string());
+                }
+                Ok(())
+            }
         }
     }
 
@@ -1837,6 +1907,112 @@ fn apply_habit_history_entry(
     };
 
     save_file(path.to_string(), updated).map(|_| ())
+}
+
+fn normalize_replacement_history_rows(
+    rows: Vec<HabitHistoryRowInput>,
+) -> Result<Vec<(NaiveDateTime, HabitStatus, String, String)>, String> {
+    let mut normalized = rows
+        .into_iter()
+        .enumerate()
+        .map(|(index, row)| {
+            let action = row.action.trim().to_string();
+            if action.is_empty() {
+                return Err(format!("History row {} action cannot be empty", index + 1));
+            }
+
+            let timestamp = parse_history_timestamp(row.date.trim(), row.time.trim()).ok_or_else(|| {
+                format!(
+                    "Invalid history row {} date/time '{} {}'. Expected YYYY-MM-DD with either HH:MM or h:MM AM/PM",
+                    index + 1,
+                    row.date,
+                    row.time
+                )
+            })?;
+            let status = HabitStatus::from_input(&row.status)?;
+            Ok((
+                timestamp,
+                status,
+                action,
+                row.details.unwrap_or_default(),
+            ))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    normalized.sort_by_key(|(timestamp, status, action, details)| {
+        (
+            *timestamp,
+            status.marker_token().to_string(),
+            action.clone(),
+            details.clone(),
+        )
+    });
+
+    Ok(normalized)
+}
+
+fn render_canonical_history_table(rows: &[(NaiveDateTime, HabitStatus, String, String)]) -> String {
+    let mut lines = vec![
+        "## History".to_string(),
+        "*Track your habit completions below:*".to_string(),
+        String::new(),
+        "| Date | Time | Status | Action | Details |".to_string(),
+        "|------|------|--------|--------|---------|".to_string(),
+    ];
+
+    lines.extend(rows.iter().map(|(timestamp, status, action, details)| {
+        format_history_entry(*timestamp, *status, action, details)
+    }));
+
+    lines.join("\n")
+}
+
+fn replace_habit_history_content(
+    current: &str,
+    rows: &[(NaiveDateTime, HabitStatus, String, String)],
+    update_current_status_from_latest: bool,
+) -> Result<String, String> {
+    let canonical_history = render_canonical_history_table(rows);
+    let mut updated = replace_or_append_history_section(current, &canonical_history);
+
+    if update_current_status_from_latest {
+        if let Some((_, latest_status, _, _)) = rows.last() {
+            let parsed = parse_habit_state(&updated)?;
+            updated = apply_status_marker(&updated, *latest_status, parsed.status_format);
+        }
+    }
+
+    Ok(updated)
+}
+
+fn replace_or_append_history_section(content: &str, history_section: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+    let history_heading_idx = lines
+        .iter()
+        .position(|line| line.trim().eq_ignore_ascii_case("## history"));
+
+    match history_heading_idx {
+        Some(start) => {
+            let mut end = lines.len();
+            for (index, line) in lines.iter().enumerate().skip(start + 1) {
+                if line.trim_start().starts_with("## ") {
+                    end = index;
+                    break;
+                }
+            }
+
+            let prefix = lines[..start].join("\n").trim_end().to_string();
+            let suffix = lines[end..].join("\n").trim_start().to_string();
+
+            match (prefix.is_empty(), suffix.is_empty()) {
+                (true, true) => history_section.to_string(),
+                (true, false) => format!("{history_section}\n\n{suffix}"),
+                (false, true) => format!("{prefix}\n\n{history_section}"),
+                (false, false) => format!("{prefix}\n\n{history_section}\n\n{suffix}"),
+            }
+        }
+        None => format!("{}\n\n{}", content.trim_end(), history_section),
+    }
 }
 
 fn default_search_limit() -> usize {
@@ -3429,6 +3605,70 @@ mod tests {
             .map_err(|error| error.to_string())?;
         assert!(content.contains("[!checkbox:habit-status:true]"));
         assert!(content.contains("| 2026-03-23 | 7:45 AM | Complete | Manual | Ran before work |"));
+        Ok(())
+    }
+
+    #[test]
+    fn habit_replace_history_rewrites_canonical_table_and_updates_status() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        write_test_file(
+            workspace.path().join("Habits/Morning Run.md"),
+            r#"# Morning Run
+
+## Status
+[!checkbox:habit-status:false]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-20T10:00:00Z]
+
+## History
+This freeform block will be replaced.
+
+- **2026-03-21** at **7:30 AM**: Complete (Manual - Legacy)
+
+## Notes
+Still here
+"#,
+        )?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let planned = service.plan_habit_replace_history(HabitReplaceHistoryRequest {
+            path: "Habits/Morning Run.md".to_string(),
+            rows: vec![
+                HabitHistoryRowInput {
+                    date: "2026-03-24".to_string(),
+                    time: "8:30 PM".to_string(),
+                    status: "todo".to_string(),
+                    action: "Backfill".to_string(),
+                    details: Some("Missed the run".to_string()),
+                },
+                HabitHistoryRowInput {
+                    date: "2026-03-23".to_string(),
+                    time: "7:45 AM".to_string(),
+                    status: "complete".to_string(),
+                    action: "Manual".to_string(),
+                    details: Some("Ran before work".to_string()),
+                },
+            ],
+            update_current_status_from_latest: Some(true),
+        })?;
+
+        service.change_apply(ChangeSetRequest {
+            change_set_id: planned.change_set.id,
+        })?;
+
+        let content = fs::read_to_string(workspace.path().join("Habits/Morning Run.md"))
+            .map_err(|error| error.to_string())?;
+        assert!(content.contains("[!checkbox:habit-status:false]"));
+        assert!(content.contains("| Date | Time | Status | Action | Details |"));
+        assert!(content.contains("| 2026-03-23 | 7:45 AM | Complete | Manual | Ran before work |"));
+        assert!(content.contains("| 2026-03-24 | 8:30 PM | To Do | Backfill | Missed the run |"));
+        assert!(!content.contains("This freeform block will be replaced."));
+        assert!(content.contains("## Notes\nStill here"));
         Ok(())
     }
 

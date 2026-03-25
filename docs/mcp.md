@@ -67,7 +67,7 @@ Mutation planning tools:
 
 - `project_create`, `project_update`, `project_rename`
 - `action_create`, `action_update`, `action_rename`
-- `habit_create`, `habit_update_status`, `habit_write_history_entry`
+- `habit_create`, `habit_update_status`, `habit_write_history_entry`, `habit_replace_history`
 - `horizon_page_create`, `horizon_page_update`
 - `reference_note_create`, `reference_note_update`
 

@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use gtdspace_lib::backend::{
-    ChangeApplyResult, ContextPack, GtdItemSummary, PlannedChange, WorkspaceInfo,
-    WorkspaceRefreshResult, WorkspaceSearchResult,
+    ChangeApplyResult, ContextPack, GtdItemSummary, HabitHistoryResult, PlannedChange,
+    WorkspaceInfo, WorkspaceRefreshResult, WorkspaceSearchResult,
     normalize_workspace_path,
 };
 use gtdspace_lib::test_utils::{seed_test_workspace, write_test_file};
@@ -91,6 +91,31 @@ fn read_first_text_resource(
         ResourceContents::TextResourceContents { text, .. } => Ok(text),
         _ => Err("resource read returned non-text content".into()),
     }
+}
+
+fn write_habit_fixture(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
+    write_test_file(
+        workspace_root.join("Habits/Morning Run.md"),
+        r#"# Morning Run
+
+## Status
+[!checkbox:habit-status:false]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-20T10:00:00Z]
+
+## History
+*Track your habit completions below:*
+
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2026-03-21 | 7:30 AM | Complete | Manual | Ran 3 miles |
+"#,
+    )
+    .map_err(|error| -> Box<dyn Error> { error.into() })
 }
 
 #[tokio::test]
@@ -301,5 +326,79 @@ async fn mcp_server_uses_saved_defaults_when_flags_are_omitted() -> Result<(), B
     assert!(error.contains("read-only mode"));
     client.cancel().await?;
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn mcp_server_reads_and_writes_habit_history() -> Result<(), Box<dyn Error>> {
+    let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
+    let workspace_root = workspace.path().to_path_buf();
+    write_habit_fixture(&workspace_root)?;
+
+    let client = start_client(&workspace_root).await?;
+
+    let tools = client.list_all_tools().await?;
+    assert!(tools.iter().any(|tool| tool.name == "habit_get_history"));
+    assert!(tools
+        .iter()
+        .any(|tool| tool.name == "habit_write_history_entry"));
+
+    let history: HabitHistoryResult = call_tool_typed(
+        &client,
+        "habit_get_history",
+        Some(
+            json!({
+                "path": "Habits/Morning Run.md"
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+    assert_eq!(history.title, "Morning Run");
+    assert_eq!(history.rows.len(), 1);
+    assert_eq!(history.rows[0].action, "Manual");
+    assert_eq!(history.rows[0].details, "Ran 3 miles");
+
+    let planned: PlannedChange = call_tool_typed(
+        &client,
+        "habit_write_history_entry",
+        Some(
+            json!({
+                "path": "Habits/Morning Run.md",
+                "status": "completed",
+                "action": "Backfill",
+                "details": "Imported from journal",
+                "date": "2026-03-22",
+                "time": "8:15 PM",
+                "updateCurrentStatus": true
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+
+    let _: ChangeApplyResult = call_tool_typed(
+        &client,
+        "change_apply",
+        Some(
+            json!({
+                "changeSetId": planned.change_set.id
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+
+    let updated = fs::read_to_string(workspace_root.join("Habits/Morning Run.md"))?;
+    assert!(updated.contains("[!checkbox:habit-status:true]"));
+    assert!(updated.contains("| 2026-03-22 | 8:15 PM | Complete | Backfill | Imported from journal |"));
+
+    client.cancel().await?;
     Ok(())
 }

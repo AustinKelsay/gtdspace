@@ -3347,6 +3347,92 @@ mod tests {
     }
 
     #[test]
+    fn get_habit_history_returns_structured_rows() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        write_test_file(
+            workspace.path().join("Habits/Morning Run.md"),
+            r#"# Morning Run
+
+## Status
+[!checkbox:habit-status:true]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-20T10:00:00Z]
+
+## History
+*Track your habit completions below:*
+
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2026-03-21 | 7:30 AM | Complete | Manual | Ran 3 miles |
+| 2026-03-22 | 12:00 AM | To Do | Auto-Reset | New period |
+"#,
+        )?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let result = service.get_habit_history("Habits/Morning Run.md")?;
+        assert_eq!(result.title, "Morning Run");
+        assert_eq!(result.current_status.as_deref(), Some("completed"));
+        assert_eq!(result.frequency.as_deref(), Some("daily"));
+        assert_eq!(result.rows.len(), 2);
+        assert_eq!(result.rows[0].action, "Manual");
+        assert_eq!(result.rows[0].details, "Ran 3 miles");
+        assert_eq!(result.rows[1].status, "To Do");
+        Ok(())
+    }
+
+    #[test]
+    fn habit_write_history_entry_appends_and_can_update_status() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        write_test_file(
+            workspace.path().join("Habits/Morning Run.md"),
+            r#"# Morning Run
+
+## Status
+[!checkbox:habit-status:false]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-20T10:00:00Z]
+
+## History
+*Track your habit completions below:*
+
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+"#,
+        )?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let planned = service.plan_habit_write_history_entry(HabitWriteHistoryEntryRequest {
+            path: "Habits/Morning Run.md".to_string(),
+            status: "completed".to_string(),
+            action: "Manual".to_string(),
+            details: Some("Ran before work".to_string()),
+            date: Some("2026-03-23".to_string()),
+            time: Some("7:45 AM".to_string()),
+            update_current_status: Some(true),
+        })?;
+
+        service.change_apply(ChangeSetRequest {
+            change_set_id: planned.change_set.id,
+        })?;
+
+        let content = fs::read_to_string(workspace.path().join("Habits/Morning Run.md"))
+            .map_err(|error| error.to_string())?;
+        assert!(content.contains("[!checkbox:habit-status:true]"));
+        assert!(content.contains("| 2026-03-23 | 7:45 AM | Complete | Manual | Ran before work |"));
+        Ok(())
+    }
+
+    #[test]
     fn normalize_path_strips_windows_verbatim_prefix() {
         assert_eq!(
             normalize_path(r"\\?\C:\Temp\GTD Space\Projects\Alpha Project\README.md"),

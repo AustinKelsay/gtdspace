@@ -154,6 +154,16 @@ pub(crate) struct HistoryRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ParsedHistoryRow {
+    pub timestamp: NaiveDateTime,
+    pub date: String,
+    pub time: String,
+    pub status: String,
+    pub action: String,
+    pub details: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ParsedHabitState {
     pub status: HabitStatus,
     pub status_format: HabitStatusFormat,
@@ -161,7 +171,7 @@ pub(crate) struct ParsedHabitState {
     pub reset_anchor: Option<NaiveDateTime>,
 }
 
-fn parse_history_timestamp(date: &str, time: &str) -> Option<NaiveDateTime> {
+pub(crate) fn parse_history_timestamp(date: &str, time: &str) -> Option<NaiveDateTime> {
     let trimmed = time.trim();
     if trimmed.contains("AM") || trimmed.contains("PM") {
         let padded = if trimmed.chars().nth(1) == Some(':') {
@@ -202,6 +212,13 @@ fn parse_created_at(content: &str) -> Option<NaiveDateTime> {
 }
 
 fn parse_history_record_from_table(line: &str) -> Option<HistoryRecord> {
+    parse_history_row_from_table(line).map(|row| HistoryRecord {
+        timestamp: row.timestamp,
+        action: row.action,
+    })
+}
+
+fn parse_history_row_from_table(line: &str) -> Option<ParsedHistoryRow> {
     if !line.trim_start().starts_with('|') {
         return None;
     }
@@ -220,11 +237,23 @@ fn parse_history_record_from_table(line: &str) -> Option<HistoryRecord> {
         return None;
     }
 
-    let timestamp = parse_history_timestamp(parts.first()?, parts.get(1)?)?;
-    Some(HistoryRecord {
+    let date = parts.first()?.to_string();
+    let time = parts.get(1)?.to_string();
+    let timestamp = parse_history_timestamp(&date, &time)?;
+    Some(ParsedHistoryRow {
         timestamp,
+        date,
+        time,
+        status: parts
+            .get(2)
+            .map(|value| unescape_history_cell(value))
+            .unwrap_or_default(),
         action: parts
             .get(3)
+            .map(|value| unescape_history_cell(value))
+            .unwrap_or_default(),
+        details: parts
+            .get(4)
             .map(|value| unescape_history_cell(value))
             .unwrap_or_default(),
     })
@@ -314,6 +343,22 @@ pub(crate) fn parse_habit_state(content: &str) -> Result<ParsedHabitState, Strin
         frequency,
         reset_anchor,
     })
+}
+
+pub(crate) fn parse_history_rows(content: &str) -> Vec<ParsedHistoryRow> {
+    let Some(history_index) = content.lines().position(is_history_heading_line) else {
+        return Vec::new();
+    };
+
+    content
+        .lines()
+        .skip(history_index + 1)
+        .take_while(|line| {
+            let trimmed = line.trim();
+            trimmed.is_empty() || !trimmed.starts_with('#')
+        })
+        .filter_map(parse_history_row_from_table)
+        .collect()
 }
 
 pub(crate) fn format_history_entry(

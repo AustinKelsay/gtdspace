@@ -188,6 +188,24 @@ fn sync_git_sync_encryption_key(settings: &UserSettings) -> Result<(), String> {
     sync_git_sync_encryption_key_value(settings.git_sync_encryption_key.as_deref())
 }
 
+fn preserve_secure_settings(
+    mut settings: UserSettings,
+    existing_git_sync_encryption_key: Option<String>,
+) -> UserSettings {
+    let has_incoming_key = settings
+        .git_sync_encryption_key
+        .as_ref()
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false);
+
+    if !has_incoming_key {
+        settings.git_sync_encryption_key = existing_git_sync_encryption_key
+            .and_then(|value| (!value.trim().is_empty()).then_some(value));
+    }
+
+    settings
+}
+
 fn sync_git_sync_encryption_key_value(value: Option<&str>) -> Result<(), String> {
     let entry = keyring::Entry::new(SECURE_STORAGE_SERVICE, GIT_SYNC_ENCRYPTION_KEY_NAME)
         .map_err(|error| format!("Failed to access secure storage: {}", error))?;
@@ -568,13 +586,16 @@ fn save_settings_unlocked(app: &AppHandle, settings: &UserSettings) -> Result<St
     };
 
     // Save settings to store
-    match serde_json::to_value(settings) {
+    let previous_git_sync_encryption_key = load_git_sync_encryption_key();
+    let settings =
+        preserve_secure_settings(settings.clone(), previous_git_sync_encryption_key.clone());
+
+    match serde_json::to_value(&settings) {
         Ok(value) => {
             let previous_value = store.get("user_settings");
-            let previous_git_sync_encryption_key = load_git_sync_encryption_key();
             store.set("user_settings", value);
 
-            if let Err(error) = sync_git_sync_encryption_key(settings) {
+            if let Err(error) = sync_git_sync_encryption_key(&settings) {
                 restore_user_settings_value(&store, previous_value);
                 return Err(error);
             }
@@ -829,7 +850,7 @@ mod tests {
     use super::{
         deserialize_mcp_server_log_level, deserialize_mcp_server_read_only,
         deserialize_mcp_server_workspace_path, get_default_settings, merge_with_default_settings,
-        parse_user_settings_value,
+        parse_user_settings_value, preserve_secure_settings,
     };
     use serde::Deserialize;
 
@@ -901,5 +922,40 @@ mod tests {
         assert_eq!(settings.mcp_server_read_only, Some(true));
         assert_eq!(settings.mcp_server_log_level.as_deref(), Some("debug"));
         assert_eq!(settings.theme, "dark");
+    }
+
+    #[test]
+    fn serialized_settings_omit_git_sync_encryption_key() {
+        let mut settings = get_default_settings();
+        settings.git_sync_encryption_key = Some("super-secret".to_string());
+
+        let serialized = serde_json::to_value(&settings).expect("serialize settings");
+
+        assert!(serialized.get("git_sync_encryption_key").is_none());
+    }
+
+    #[test]
+    fn preserve_secure_settings_keeps_existing_git_sync_key_when_save_payload_omits_it() {
+        let settings = get_default_settings();
+
+        let preserved = preserve_secure_settings(settings, Some("existing-secret".to_string()));
+
+        assert_eq!(
+            preserved.git_sync_encryption_key.as_deref(),
+            Some("existing-secret")
+        );
+    }
+
+    #[test]
+    fn preserve_secure_settings_prefers_incoming_git_sync_key() {
+        let mut settings = get_default_settings();
+        settings.git_sync_encryption_key = Some("new-secret".to_string());
+
+        let preserved = preserve_secure_settings(settings, Some("existing-secret".to_string()));
+
+        assert_eq!(
+            preserved.git_sync_encryption_key.as_deref(),
+            Some("new-secret")
+        );
     }
 }

@@ -13,10 +13,11 @@ use rmcp::{
 
 use crate::backend::mcp_workspace::{
     ActionCreateRequest, ActionRenameRequest, ActionUpdateRequest, ChangeSetRequest,
-    GtdWorkspaceService, HabitCreateRequest, HabitStatusUpdateRequest, HorizonPageCreateRequest,
-    HorizonPageUpdateRequest, ProjectCreateRequest, ProjectRenameRequest, ProjectUpdateRequest,
-    ReferenceNoteCreateRequest, ReferenceNoteUpdateRequest, WorkspaceListItemsRequest,
-    WorkspacePathRequest, WorkspaceSearchRequest,
+    GtdWorkspaceService, HabitCreateRequest, HabitStatusUpdateRequest,
+    HabitWriteHistoryEntryRequest, HorizonPageCreateRequest, HorizonPageUpdateRequest,
+    ProjectCreateRequest, ProjectRenameRequest, ProjectUpdateRequest, ReferenceNoteCreateRequest,
+    ReferenceNoteUpdateRequest, WorkspaceListItemsRequest, WorkspacePathRequest,
+    WorkspaceSearchRequest,
 };
 
 fn internal_error<E: ToString>(error: E) -> rmcp::ErrorData {
@@ -126,6 +127,17 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
+    #[tool(description = "Return structured history rows for a habit file.")]
+    async fn habit_get_history(
+        &self,
+        Parameters(request): Parameters<WorkspacePathRequest>,
+    ) -> Result<Json<crate::backend::HabitHistoryResult>, rmcp::ErrorData> {
+        self.service
+            .get_habit_history(&request.path)
+            .map(Json)
+            .map_err(internal_error)
+    }
+
     #[tool(
         description = "Plan creation of a GTD project. Returns a dry-run change set that must be applied separately."
     )]
@@ -212,6 +224,17 @@ impl GtdMcpServer {
     ) -> Result<Json<crate::backend::PlannedChange>, rmcp::ErrorData> {
         self.service
             .plan_habit_status_update(request)
+            .map(Json)
+            .map_err(internal_error)
+    }
+
+    #[tool(description = "Plan appending a history entry to a GTD habit.")]
+    async fn habit_write_history_entry(
+        &self,
+        Parameters(request): Parameters<HabitWriteHistoryEntryRequest>,
+    ) -> Result<Json<crate::backend::PlannedChange>, rmcp::ErrorData> {
+        self.service
+            .plan_habit_write_history_entry(request)
             .map(Json)
             .map_err(internal_error)
     }

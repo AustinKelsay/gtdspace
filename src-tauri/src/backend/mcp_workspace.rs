@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, Timelike, Utc};
 use directories::ProjectDirs;
 use rmcp::schemars;
 use rmcp::schemars::transform::RecursiveTransform;
@@ -18,6 +18,10 @@ use crate::commands::filesystem::{
     create_directory, list_markdown_files, read_file, save_file, MarkdownFile,
 };
 use crate::commands::gtd_habits::update_habit_status;
+use crate::commands::gtd_habits_domain::{
+    apply_status_marker, format_history_entry, format_history_time, insert_history_entry,
+    parse_habit_state, parse_history_rows, parse_history_timestamp, HabitStatus,
+};
 use crate::commands::gtd_projects::{list_gtd_projects, rename_gtd_action, rename_gtd_project};
 use crate::commands::gtd_relationships::{find_habits_referencing, find_reverse_relationships};
 use crate::commands::search::{search_files, SearchFilters};
@@ -368,6 +372,39 @@ pub struct HabitStatusUpdateRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HabitHistoryRow {
+    pub date: String,
+    pub time: String,
+    pub status: String,
+    pub action: String,
+    pub details: String,
+    pub timestamp: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HabitHistoryResult {
+    pub relative_path: String,
+    pub title: String,
+    pub current_status: Option<String>,
+    pub frequency: Option<String>,
+    pub rows: Vec<HabitHistoryRow>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HabitWriteHistoryEntryRequest {
+    pub path: String,
+    pub status: String,
+    pub action: String,
+    pub details: Option<String>,
+    pub date: Option<String>,
+    pub time: Option<String>,
+    pub update_current_status: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum HorizonPageType {
     Area,
@@ -512,6 +549,12 @@ enum ChangeOperation {
         new_status: String,
         expected_sha256: Option<String>,
     },
+    WriteHabitHistoryEntry {
+        path: String,
+        entry: String,
+        new_status: Option<String>,
+        expected_sha256: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -616,6 +659,34 @@ impl GtdWorkspaceService {
     pub fn read_markdown(&self, path: &str) -> Result<String, String> {
         let absolute = self.resolve_workspace_file(path)?;
         read_file(absolute)
+    }
+
+    pub fn get_habit_history(&self, path: &str) -> Result<HabitHistoryResult, String> {
+        let item = self.get_item(path)?;
+        if item.item_type != GtdItemType::Habit {
+            return Err("habit_get_history requires a habit path".to_string());
+        }
+
+        let content = self.read_markdown(&item.relative_path)?;
+        let rows = parse_history_rows(&content)
+            .into_iter()
+            .map(|row| HabitHistoryRow {
+                date: row.date,
+                time: row.time,
+                status: row.status,
+                action: row.action,
+                details: row.details,
+                timestamp: Some(row.timestamp.format("%Y-%m-%dT%H:%M:%S").to_string()),
+            })
+            .collect();
+
+        Ok(HabitHistoryResult {
+            relative_path: item.relative_path,
+            title: item.title,
+            current_status: item.status,
+            frequency: item.frequency,
+            rows,
+        })
     }
 
     pub async fn search(
@@ -981,6 +1052,55 @@ impl GtdWorkspaceService {
         )
     }
 
+    pub fn plan_habit_write_history_entry(
+        &self,
+        request: HabitWriteHistoryEntryRequest,
+    ) -> Result<PlannedChange, String> {
+        self.reject_if_read_only()?;
+        let item = self.get_item(&request.path)?;
+        if item.item_type != GtdItemType::Habit {
+            return Err("habit_write_history_entry requires a habit path".to_string());
+        }
+
+        let action = request.action.trim();
+        if action.is_empty() {
+            return Err("Habit history action cannot be empty".to_string());
+        }
+
+        let status = HabitStatus::from_input(&request.status)?;
+        let timestamp =
+            resolve_history_entry_timestamp(request.date.as_deref(), request.time.as_deref())?;
+        let details = request.details.unwrap_or_default();
+        let entry = format_history_entry(timestamp, status, action, &details);
+        let current = self.read_markdown(&item.relative_path)?;
+        let update_current_status = request.update_current_status.unwrap_or(false);
+        let new_status = if update_current_status {
+            Some(status.marker_token().to_string())
+        } else {
+            None
+        };
+
+        self.store_change_set(
+            "habit_write_history_entry",
+            format!("Append history entry to habit '{}'", item.title),
+            vec![item.relative_path.clone()],
+            format!(
+                "Append habit history entry\n- path: {}\n- date: {}\n- time: {}\n- status: {}\n- action: {}",
+                item.relative_path,
+                timestamp.format("%Y-%m-%d"),
+                format_history_time(timestamp),
+                status.history_label(),
+                action
+            ),
+            vec![ChangeOperation::WriteHabitHistoryEntry {
+                path: item.absolute_path.clone(),
+                entry,
+                new_status,
+                expected_sha256: Some(hash_bytes(current.as_bytes())),
+            }],
+        )
+    }
+
     pub fn plan_horizon_page_create(
         &self,
         request: HorizonPageCreateRequest,
@@ -1204,6 +1324,12 @@ impl GtdWorkspaceService {
                 ChangeOperation::UpdateHabitStatus {
                     path, new_status, ..
                 } => update_habit_status(path.clone(), new_status.clone()).map(|_| ()),
+                ChangeOperation::WriteHabitHistoryEntry {
+                    path,
+                    entry,
+                    new_status,
+                    ..
+                } => apply_habit_history_entry(path, entry, new_status.as_deref()),
             };
 
             if let Err(error) = apply_result {
@@ -1501,6 +1627,17 @@ impl GtdWorkspaceService {
                 }
                 Ok(())
             }
+            ChangeOperation::WriteHabitHistoryEntry {
+                path,
+                expected_sha256,
+                ..
+            } => {
+                let current_hash = hash_file_if_exists(path)?;
+                if &current_hash != expected_sha256 {
+                    return Err("Habit changed since planning".to_string());
+                }
+                Ok(())
+            }
         }
     }
 
@@ -1658,6 +1795,48 @@ struct HorizonUpdateSeed {
     general_references: Vec<String>,
     created_date_time: String,
     trailing_content: Option<String>,
+}
+
+fn resolve_history_entry_timestamp(
+    date: Option<&str>,
+    time: Option<&str>,
+) -> Result<NaiveDateTime, String> {
+    let now = Local::now().naive_local();
+    match (date.map(str::trim), time.map(str::trim)) {
+        (None, None) => Ok(now),
+        (Some(date), None) => {
+            let parsed_date = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+                .map_err(|_| format!("Invalid history date '{}'. Expected YYYY-MM-DD", date))?;
+            parsed_date
+                .and_hms_opt(now.hour(), now.minute(), 0)
+                .ok_or_else(|| "Invalid history timestamp".to_string())
+        }
+        (None, Some(_)) => Err("History time requires a date".to_string()),
+        (Some(date), Some(time)) => parse_history_timestamp(date, time).ok_or_else(|| {
+            format!(
+                "Invalid history date/time '{} {}'. Expected YYYY-MM-DD with either HH:MM or h:MM AM/PM",
+                date, time
+            )
+        }),
+    }
+}
+
+fn apply_habit_history_entry(
+    path: &str,
+    entry: &str,
+    new_status: Option<&str>,
+) -> Result<(), String> {
+    let content = read_file(path.to_string())?;
+    let updated = if let Some(status) = new_status {
+        let parsed = parse_habit_state(&content)?;
+        let next_status = HabitStatus::from_input(status)?;
+        let with_status = apply_status_marker(&content, next_status, parsed.status_format);
+        insert_history_entry(&with_status, entry)?
+    } else {
+        insert_history_entry(&content, entry)?
+    };
+
+    save_file(path.to_string(), updated).map(|_| ())
 }
 
 fn default_search_limit() -> usize {

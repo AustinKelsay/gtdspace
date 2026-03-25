@@ -397,12 +397,14 @@ export function useGTDWorkspaceSidebar({
         return current;
       }
 
-      const directoryExists = await safeInvoke<boolean>(
-        'check_directory_exists',
-        { path: normalizedKey },
-        null
-      );
-      if (directoryExists === false) {
+      const directoryExists = await withErrorHandling(async () => {
+        return safeInvoke<boolean>(
+          'check_directory_exists',
+          { path: normalizedKey },
+          null
+        );
+      }, 'Failed to check section directory', 'workspace-sidebar');
+      if (directoryExists !== true) {
         return current || [];
       }
 

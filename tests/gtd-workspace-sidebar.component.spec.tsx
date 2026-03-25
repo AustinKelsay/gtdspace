@@ -170,6 +170,10 @@ describe('GTDWorkspaceSidebar component', () => {
 
     safeInvokeMock.mockImplementation(
       async (command: string, args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
+        if (command === 'check_directory_exists') {
+          return true;
+        }
+
         if (command === 'list_project_actions' && args?.projectPath === activeProject.path) {
           return projectActions;
         }
@@ -231,6 +235,10 @@ describe('GTDWorkspaceSidebar component', () => {
   it('shows cross-section search results for projects, actions, and section files', async () => {
     safeInvokeMock.mockImplementation(
       async (command: string, args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
+        if (command === 'check_directory_exists') {
+          return true;
+        }
+
         if (command === 'list_project_actions' && args?.projectPath === activeProject.path) {
           return projectActions;
         }
@@ -287,6 +295,10 @@ describe('GTDWorkspaceSidebar component', () => {
 
     safeInvokeMock.mockImplementation(
       async (command: string, args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
+        if (command === 'check_directory_exists') {
+          return true;
+        }
+
         if (command === 'list_project_actions' && args?.projectPath === activeProject.path) {
           return projectActions;
         }
@@ -389,58 +401,67 @@ describe('GTDWorkspaceSidebar component', () => {
     });
   });
 
-  it('skips stale alias section reloads when the reported directory no longer exists', async () => {
-    safeInvokeMock.mockImplementation(
-      async (command: string, args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
-        if (command === 'check_directory_exists') {
-          return args?.path !== `${rootPath}/Purpose and Principles`;
-        }
-
-        if (command === 'list_project_actions' && args?.projectPath === activeProject.path) {
-          return projectActions;
-        }
-
-        if (command === 'list_markdown_files') {
-          switch (args?.path) {
-            case `${rootPath}/Habits`:
-            case `${rootPath}/Areas of Focus`:
-            case `${rootPath}/Goals`:
-            case `${rootPath}/Vision`:
-            case `${rootPath}/Purpose & Principles`:
-            case `${rootPath}/Someday Maybe`:
-            case `${rootPath}/Cabinet`:
-              return [];
-            default:
-              return fallback ?? [];
+  it.each([
+    { label: 'false', result: false },
+    { label: 'null', result: null },
+  ])(
+    'skips stale alias section reloads when the reported directory check returns $label',
+    async ({ result }) => {
+      safeInvokeMock.mockImplementation(
+        async (command: string, args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
+          if (command === 'check_directory_exists') {
+            if (args?.path === `${rootPath}/Purpose and Principles`) {
+              return result;
+            }
+            return true;
           }
+
+          if (command === 'list_project_actions' && args?.projectPath === activeProject.path) {
+            return projectActions;
+          }
+
+          if (command === 'list_markdown_files') {
+            switch (args?.path) {
+              case `${rootPath}/Habits`:
+              case `${rootPath}/Areas of Focus`:
+              case `${rootPath}/Goals`:
+              case `${rootPath}/Vision`:
+              case `${rootPath}/Purpose & Principles`:
+              case `${rootPath}/Someday Maybe`:
+              case `${rootPath}/Cabinet`:
+                return [];
+              default:
+                return fallback ?? [];
+            }
+          }
+
+          if (command === 'read_file') return '# README';
+          if (command === 'save_file') return 'ok';
+          return fallback ?? null;
         }
-
-        if (command === 'read_file') return '# README';
-        if (command === 'save_file') return 'ok';
-        return fallback ?? null;
-      }
-    );
-
-    renderSidebar();
-
-    expect(await screen.findByText('Project Alpha')).toBeInTheDocument();
-
-    act(() => {
-      emitMetadataChange({
-        filePath: `${rootPath}/Purpose and Principles/Focus.md`,
-        fileName: 'Focus.md',
-        content: '# Focus',
-        metadata: { title: 'Focus' } as never,
-        changedFields: { title: 'Focus' } as never,
-      });
-    });
-
-    await waitFor(() => {
-      const aliasListCalls = (safeInvokeMock as Mock).mock.calls.filter(
-        ([command, args]) =>
-          command === 'list_markdown_files' && args?.path === `${rootPath}/Purpose and Principles`
       );
-      expect(aliasListCalls).toHaveLength(0);
-    });
-  });
+
+      renderSidebar();
+
+      expect(await screen.findByText('Project Alpha')).toBeInTheDocument();
+
+      act(() => {
+        emitMetadataChange({
+          filePath: `${rootPath}/Purpose and Principles/Focus.md`,
+          fileName: 'Focus.md',
+          content: '# Focus',
+          metadata: { title: 'Focus' } as never,
+          changedFields: { title: 'Focus' } as never,
+        });
+      });
+
+      await waitFor(() => {
+        const aliasListCalls = (safeInvokeMock as Mock).mock.calls.filter(
+          ([command, args]) =>
+            command === 'list_markdown_files' && args?.path === `${rootPath}/Purpose and Principles`
+        );
+        expect(aliasListCalls).toHaveLength(0);
+      });
+    }
+  );
 });

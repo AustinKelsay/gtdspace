@@ -19,6 +19,11 @@ fn load_git_sync_encryption_key() -> Option<String> {
     None
 }
 
+#[cfg(test)]
+fn load_git_sync_encryption_key_for_save() -> Result<Option<String>, String> {
+    Ok(None)
+}
+
 fn default_settings_with_secure_key() -> UserSettings {
     let mut settings = get_default_settings();
     settings.git_sync_encryption_key = load_git_sync_encryption_key();
@@ -255,6 +260,21 @@ fn load_git_sync_encryption_key() -> Option<String> {
             log::error!("Failed to access git sync secure storage entry: {}", error);
             None
         }
+    }
+}
+
+#[cfg(not(test))]
+fn load_git_sync_encryption_key_for_save() -> Result<Option<String>, String> {
+    let entry = keyring::Entry::new(SECURE_STORAGE_SERVICE, GIT_SYNC_ENCRYPTION_KEY_NAME)
+        .map_err(|error| format!("Failed to access git sync secure storage entry: {}", error))?;
+
+    match entry.get_password() {
+        Ok(password) => Ok(Some(password)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(error) => Err(format!(
+            "Failed to load git sync encryption key from secure storage: {}",
+            error
+        )),
     }
 }
 
@@ -586,7 +606,7 @@ fn save_settings_unlocked(app: &AppHandle, settings: &UserSettings) -> Result<St
     };
 
     // Save settings to store
-    let previous_git_sync_encryption_key = load_git_sync_encryption_key();
+    let previous_git_sync_encryption_key = load_git_sync_encryption_key_for_save()?;
     let settings =
         preserve_secure_settings(settings.clone(), previous_git_sync_encryption_key.clone());
 

@@ -146,17 +146,17 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
   onDeleteAction
 }) => {
   // Debug logger gated in non-production
-  const debug = (...args: unknown[]) => {
+  const debug = React.useCallback((...args: unknown[]) => {
     if (import.meta.env.MODE !== 'production') {
       console.debug(...args);
     }
-  };
+  }, []);
   React.useEffect(() => {
     if (actions.length > 0) {
       debug('[DashboardActions] actions length:', actions.length);
       debug('[DashboardActions] sample action:', { id: actions[0]?.id, path: actions[0]?.path });
     }
-  }, [actions]);
+  }, [actions, debug]);
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>(['in-progress', 'waiting']);
@@ -291,7 +291,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
       debug('[DashboardActions] selected total:', newSet.size);
       return newSet;
     });
-  }, []);
+  }, [debug]);
 
   // Select all visible actions
   const selectAllVisible = useCallback(() => {
@@ -307,7 +307,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
     if (selectedActions.size > 0) {
       debug('[DashboardActions] bulk actions visible, selected:', selectedActions.size);
     }
-  }, [selectedActions.size]);
+  }, [debug, selectedActions.size]);
 
   // Clear all filters
   const clearFilters = useCallback(() => {
@@ -339,7 +339,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
     target: EventTarget | null,
     currentTarget: EventTarget | null
   ) => {
-    if (!(target instanceof HTMLElement) || !(currentTarget instanceof HTMLElement)) {
+    if (!(target instanceof Element) || !(currentTarget instanceof Element)) {
       return false;
     }
 
@@ -474,15 +474,17 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                         onClick={() => {
                           if (onBulkUpdate) {
                             const selectedActionIds = Array.from(selectedActions);
-                            const selectedActionPaths = selectedActionIds
+                            const selectedActionEntries = selectedActionIds
                               .map(id => {
                                 const action = actions.find(a => a.id === id);
                                 debug('[DashboardActions] bulk map action:', { id, path: action?.path });
-                                return action?.path;
+                                return action?.path ? { id, path: action.path } : null;
                               })
-                              .filter((path): path is string => Boolean(path));
-                            debug('[DashboardActions] bulk update begin:', { count: selectedActionIds.length, status: status.value });
-                            onBulkUpdate(selectedActionIds, { status: status.value }, selectedActionPaths);
+                              .filter((entry): entry is { id: string; path: string } => Boolean(entry));
+                            const selectedActionIdsFiltered = selectedActionEntries.map(entry => entry.id);
+                            const selectedActionPaths = selectedActionEntries.map(entry => entry.path);
+                            debug('[DashboardActions] bulk update begin:', { count: selectedActionIdsFiltered.length, status: status.value });
+                            onBulkUpdate(selectedActionIdsFiltered, { status: status.value }, selectedActionPaths);
                             clearSelection();
                           }
                         }}

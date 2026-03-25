@@ -1,22 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { validateAndCoerceSettings } from '@/utils/settings-validation';
 
+const baseSettings = {
+  theme: 'dark',
+  font_size: 14,
+  tab_size: 2,
+  word_wrap: true,
+  editor_mode: 'split',
+  font_family: 'inter',
+  line_height: 1.5,
+  keybindings: {
+    save: 'mod+s',
+    open: 'mod+o',
+    commandPalette: 'mod+k',
+    newNote: 'mod+shift+n',
+  },
+};
+
 describe('settings validation for MCP server defaults', () => {
   it('accepts persisted MCP server defaults when they are valid', () => {
     const result = validateAndCoerceSettings({
-      theme: 'dark',
-      font_size: 14,
-      tab_size: 2,
-      word_wrap: true,
-      editor_mode: 'split',
-      font_family: 'inter',
-      line_height: 1.5,
-      keybindings: {
-        save: 'mod+s',
-        open: 'mod+o',
-        commandPalette: 'mod+k',
-        newNote: 'mod+shift+n',
-      },
+      ...baseSettings,
       mcp_server_workspace_path: '/Users/me/GTD Space',
       mcp_server_read_only: true,
       mcp_server_log_level: 'debug',
@@ -31,19 +35,7 @@ describe('settings validation for MCP server defaults', () => {
 
   it('rejects invalid MCP server log levels and coerces them to info', () => {
     const result = validateAndCoerceSettings({
-      theme: 'dark',
-      font_size: 14,
-      tab_size: 2,
-      word_wrap: true,
-      editor_mode: 'split',
-      font_family: 'inter',
-      line_height: 1.5,
-      keybindings: {
-        save: 'mod+s',
-        open: 'mod+o',
-        commandPalette: 'mod+k',
-        newNote: 'mod+shift+n',
-      },
+      ...baseSettings,
       mcp_server_log_level: 'loud',
     });
 
@@ -61,19 +53,7 @@ describe('settings validation for MCP server defaults', () => {
 
   it('coerces supported boolean-like read-only values', () => {
     const result = validateAndCoerceSettings({
-      theme: 'dark',
-      font_size: 14,
-      tab_size: 2,
-      word_wrap: true,
-      editor_mode: 'split',
-      font_family: 'inter',
-      line_height: 1.5,
-      keybindings: {
-        save: 'mod+s',
-        open: 'mod+o',
-        commandPalette: 'mod+k',
-        newNote: 'mod+shift+n',
-      },
+      ...baseSettings,
       mcp_server_read_only: 'yes',
     });
 
@@ -84,19 +64,7 @@ describe('settings validation for MCP server defaults', () => {
 
   it('rejects unrecognized read-only values as fatal validation errors', () => {
     const result = validateAndCoerceSettings({
-      theme: 'dark',
-      font_size: 14,
-      tab_size: 2,
-      word_wrap: true,
-      editor_mode: 'split',
-      font_family: 'inter',
-      line_height: 1.5,
-      keybindings: {
-        save: 'mod+s',
-        open: 'mod+o',
-        commandPalette: 'mod+k',
-        newNote: 'mod+shift+n',
-      },
+      ...baseSettings,
       mcp_server_read_only: 'sometimes',
     });
 

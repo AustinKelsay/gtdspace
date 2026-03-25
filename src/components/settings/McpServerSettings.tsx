@@ -150,10 +150,12 @@ const getWorkspaceAncestors = (value: string): string[] => {
   return ancestors;
 };
 
-const getWorkspaceResolutionLabel = (source: 'override' | 'last-folder' | 'default-space' | 'platform-default' | 'unavailable') => {
+const getWorkspaceResolutionLabel = (source: 'override' | 'resolved' | 'last-folder' | 'default-space' | 'platform-default' | 'unavailable') => {
   switch (source) {
     case 'override':
       return 'MCP workspace override';
+    case 'resolved':
+      return 'Resolved GTD workspace ancestor';
     case 'last-folder':
       return 'Last opened workspace';
     case 'default-space':
@@ -328,7 +330,7 @@ export const McpServerSettings: React.FC = () => {
 
   const [workspaceResolution, setWorkspaceResolution] = React.useState<{
     path: string | null;
-    source: 'override' | 'last-folder' | 'default-space' | 'platform-default' | 'unavailable';
+    source: 'override' | 'resolved' | 'last-folder' | 'default-space' | 'platform-default' | 'unavailable';
   }>({ path: null, source: 'unavailable' });
 
   React.useEffect(() => {
@@ -341,21 +343,24 @@ export const McpServerSettings: React.FC = () => {
         setWorkspaceResolution({ path: workspaceOverride, source: 'override' });
         setIsCheckingWorkspace(true);
         setValidationError(null);
-        const isValid = await isValidWorkspaceCandidate(workspaceOverride, invokeWithHandling);
+        const resolvedPath = await isValidWorkspaceCandidate(workspaceOverride, invokeWithHandling);
 
         if (!isActive || workspaceValidationRequestRef.current !== requestId) {
           return;
         }
 
-        if (isValid === null) {
+        if (resolvedPath === null) {
           setResolvedWorkspaceIsValid(null);
           setValidationError(null);
           setIsCheckingWorkspace(false);
           return;
         }
 
-        setResolvedWorkspaceIsValid(Boolean(isValid));
-        setValidationError(isValid ? null : 'Workspace path is not a valid GTD space');
+        if (resolvedPath) {
+          setWorkspaceResolution({ path: resolvedPath, source: 'resolved' });
+        }
+        setResolvedWorkspaceIsValid(Boolean(resolvedPath));
+        setValidationError(resolvedPath ? null : 'Workspace path is not a valid GTD space');
         setIsCheckingWorkspace(false);
         return;
       }

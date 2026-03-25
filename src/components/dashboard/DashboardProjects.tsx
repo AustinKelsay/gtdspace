@@ -797,7 +797,16 @@ export const DashboardProjects: React.FC<DashboardProjectsProps> = ({
                       <div 
                         key={project.path}
                         className="cursor-pointer p-4 transition-colors hover:bg-accent"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => onSelectProject?.(project)}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') {
+                            return;
+                          }
+                          event.preventDefault();
+                          onSelectProject?.(project);
+                        }}
                       >
                         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                           <div className="min-w-0 flex-1 space-y-1">

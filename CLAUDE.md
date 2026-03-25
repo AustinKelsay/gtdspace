@@ -39,7 +39,7 @@ Do not commit or ask for review until the relevant local checks pass.
   ```bash
   npm run type-check
   npm run lint
-  cd src-tauri && cargo fmt && cargo check
+  cd src-tauri && cargo fmt --check && cargo clippy -- -D warnings
   ```
 - If you touched MCP server, Rust backend settings, or path-resolution logic, also run:
   ```bash

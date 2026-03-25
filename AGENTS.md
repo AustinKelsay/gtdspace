@@ -23,7 +23,7 @@ Run the relevant local checks before every commit, not just before PR merge.
 - Baseline checks for any code change:
   - `npm run type-check`
   - `npm run lint`
-  - `cd src-tauri && cargo fmt && cargo check`
+  - `cd src-tauri && cargo fmt --check && cargo clippy -- -D warnings`
 - When changing MCP server, Rust settings parsing, workspace resolution, or path handling:
   - `cargo test --manifest-path src-tauri/mcp-server/Cargo.toml --test gtdspace_mcp_stdio -- --nocapture`
   - `cargo test --manifest-path src-tauri/Cargo.toml parse_user_settings_value_accepts_partial_saved_settings -- --nocapture`

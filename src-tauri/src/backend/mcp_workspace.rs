@@ -1407,17 +1407,26 @@ impl GtdWorkspaceService {
         } else {
             absolute.clone()
         };
-        let parent_check = normalized_absolute
-            .parent()
-            .map(|parent| {
-                let normalized_parent = if parent.exists() {
-                    fs::canonicalize(parent).unwrap_or_else(|_| parent.to_path_buf())
-                } else {
-                    parent.to_path_buf()
-                };
-                path_is_within_workspace(&normalized_parent, &canonical_root)
-            })
-            .unwrap_or(false);
+        let parent_check = {
+            let mut current = normalized_absolute.as_path();
+            let mut deepest_existing = None;
+
+            while let Some(parent) = current.parent() {
+                if parent.exists() {
+                    deepest_existing = Some(parent);
+                    break;
+                }
+                current = parent;
+            }
+
+            deepest_existing
+                .map(|ancestor| {
+                    let canonicalized_deepest_existing =
+                        fs::canonicalize(ancestor).unwrap_or_else(|_| ancestor.to_path_buf());
+                    path_is_within_workspace(&canonicalized_deepest_existing, &canonical_root)
+                })
+                .unwrap_or(false)
+        };
         if normalized_absolute.exists() {
             if !path_is_within_workspace(&normalized_absolute, &canonical_root) {
                 return Err("Path must stay inside the GTD workspace".to_string());

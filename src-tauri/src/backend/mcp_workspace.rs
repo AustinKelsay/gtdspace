@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::env;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -1408,10 +1409,17 @@ impl GtdWorkspaceService {
         };
         let parent_check = normalized_absolute
             .parent()
-            .map(|parent| parent.starts_with(&canonical_root))
+            .map(|parent| {
+                let normalized_parent = if parent.exists() {
+                    fs::canonicalize(parent).unwrap_or_else(|_| parent.to_path_buf())
+                } else {
+                    parent.to_path_buf()
+                };
+                path_is_within_workspace(&normalized_parent, &canonical_root)
+            })
             .unwrap_or(false);
         if normalized_absolute.exists() {
-            if !normalized_absolute.starts_with(&canonical_root) {
+            if !path_is_within_workspace(&normalized_absolute, &canonical_root) {
                 return Err("Path must stay inside the GTD workspace".to_string());
             }
         } else if !parent_check {
@@ -1705,6 +1713,36 @@ fn project_dirs() -> Result<ProjectDirs, String> {
 }
 
 fn settings_file_path() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    if let Ok(appdata) = env::var("APPDATA") {
+        return Some(
+            PathBuf::from(appdata)
+                .join("com.gtdspace.app")
+                .join("config")
+                .join(SETTINGS_FILE_NAME),
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    if let Ok(config_home) = env::var("XDG_CONFIG_HOME") {
+        return Some(
+            PathBuf::from(config_home)
+                .join("com.gtdspace.app")
+                .join(SETTINGS_FILE_NAME),
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    if let Ok(home) = env::var("HOME") {
+        return Some(
+            PathBuf::from(home)
+                .join("Library")
+                .join("Application Support")
+                .join("com.gtdspace.app")
+                .join(SETTINGS_FILE_NAME),
+        );
+    }
+
     project_dirs()
         .ok()
         .map(|dirs| dirs.config_dir().join(SETTINGS_FILE_NAME))
@@ -2211,6 +2249,12 @@ pub fn normalize_workspace_path<P: AsRef<Path>>(path: P) -> String {
 
 fn normalize_path<P: AsRef<Path>>(path: P) -> String {
     normalize_workspace_path(path)
+}
+
+fn path_is_within_workspace(path: &Path, root: &Path) -> bool {
+    let normalized_root = normalize_path(root).trim_end_matches('/').to_string();
+    let normalized_path = normalize_path(path);
+    normalized_path == normalized_root || normalized_path.starts_with(&(normalized_root + "/"))
 }
 
 fn normalize_relative_input(path: &str) -> String {

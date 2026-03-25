@@ -389,8 +389,30 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
   }
 
   if (data.mcp_server_read_only !== undefined && data.mcp_server_read_only !== null && typeof data.mcp_server_read_only !== 'boolean') {
-    recordError('mcp_server_read_only', 'must be a boolean or null', data.mcp_server_read_only, null, 'warning');
-    coercedSettings.mcp_server_read_only = null;
+    const rawValue = data.mcp_server_read_only;
+    let normalizedValue: boolean | null = null;
+
+    if (typeof rawValue === 'string') {
+      const normalized = rawValue.trim().toLowerCase();
+      if (['true', 'yes', '1'].includes(normalized)) {
+        normalizedValue = true;
+      } else if (['false', 'no', '0'].includes(normalized)) {
+        normalizedValue = false;
+      }
+    } else if (typeof rawValue === 'number') {
+      if (rawValue === 1) {
+        normalizedValue = true;
+      } else if (rawValue === 0) {
+        normalizedValue = false;
+      }
+    }
+
+    if (normalizedValue === null) {
+      recordError('mcp_server_read_only', 'must be a boolean or a supported boolean-like value', rawValue, null, 'fatal');
+      coercedSettings.mcp_server_read_only = null;
+    } else {
+      coercedSettings.mcp_server_read_only = normalizedValue;
+    }
   } else if (data.mcp_server_read_only !== undefined) {
     coercedSettings.mcp_server_read_only = data.mcp_server_read_only as boolean | null;
   }
@@ -477,22 +499,26 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
   }
 
   if (data.mcp_server_log_level !== undefined) {
+    const normalizedLogLevel = typeof data.mcp_server_log_level === 'string'
+      ? data.mcp_server_log_level.trim().toLowerCase()
+      : data.mcp_server_log_level;
+
     if (data.mcp_server_log_level === null) {
       coercedSettings.mcp_server_log_level = null;
     } else if (
-      typeof data.mcp_server_log_level !== 'string' ||
-      !VALID_MCP_LOG_LEVELS.includes(data.mcp_server_log_level as McpServerLogLevel)
+      typeof normalizedLogLevel !== 'string' ||
+      !VALID_MCP_LOG_LEVELS.includes(normalizedLogLevel as McpServerLogLevel)
     ) {
       recordError(
         'mcp_server_log_level',
         `must be one of: ${VALID_MCP_LOG_LEVELS.join(', ')}`,
-        data.mcp_server_log_level,
+        normalizedLogLevel,
         'info',
         'fatal',
       );
       coercedSettings.mcp_server_log_level = 'info';
     } else {
-      coercedSettings.mcp_server_log_level = data.mcp_server_log_level as McpServerLogLevel;
+      coercedSettings.mcp_server_log_level = normalizedLogLevel as McpServerLogLevel;
     }
   }
 

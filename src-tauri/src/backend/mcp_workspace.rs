@@ -2254,6 +2254,10 @@ fn normalize_path<P: AsRef<Path>>(path: P) -> String {
 fn path_is_within_workspace(path: &Path, root: &Path) -> bool {
     let normalized_root = normalize_path(root).trim_end_matches('/').to_string();
     let normalized_path = normalize_path(path);
+    #[cfg(target_os = "windows")]
+    let normalized_root = normalized_root.to_lowercase();
+    #[cfg(target_os = "windows")]
+    let normalized_path = normalized_path.to_lowercase();
     normalized_path == normalized_root || normalized_path.starts_with(&(normalized_root + "/"))
 }
 

@@ -187,7 +187,7 @@ const isValidWorkspaceCandidate = async (
     }
 
     if (isValid) {
-      return true;
+      return candidate;
     }
   }
 
@@ -354,7 +354,7 @@ export const McpServerSettings: React.FC = () => {
           return;
         }
 
-        setResolvedWorkspaceIsValid(isValid);
+        setResolvedWorkspaceIsValid(Boolean(isValid));
         setValidationError(isValid ? null : 'Workspace path is not a valid GTD space');
         setIsCheckingWorkspace(false);
         return;
@@ -386,7 +386,7 @@ export const McpServerSettings: React.FC = () => {
         }
 
         if (isValid) {
-          setWorkspaceResolution(candidate);
+          setWorkspaceResolution({ ...candidate, path: isValid });
           setResolvedWorkspaceIsValid(true);
           setValidationError(null);
           setIsCheckingWorkspace(false);

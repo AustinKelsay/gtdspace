@@ -59,7 +59,7 @@ describe('settings validation for MCP server defaults', () => {
     );
   });
 
-  it('treats non-boolean read-only values as warnings and clears the field', () => {
+  it('coerces supported boolean-like read-only values', () => {
     const result = validateAndCoerceSettings({
       theme: 'dark',
       font_size: 14,
@@ -78,12 +78,35 @@ describe('settings validation for MCP server defaults', () => {
     });
 
     expect(result.isValid).toBe(true);
+    expect(result.coercedSettings.mcp_server_read_only).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('rejects unrecognized read-only values as fatal validation errors', () => {
+    const result = validateAndCoerceSettings({
+      theme: 'dark',
+      font_size: 14,
+      tab_size: 2,
+      word_wrap: true,
+      editor_mode: 'split',
+      font_family: 'inter',
+      line_height: 1.5,
+      keybindings: {
+        save: 'mod+s',
+        open: 'mod+o',
+        commandPalette: 'mod+k',
+        newNote: 'mod+shift+n',
+      },
+      mcp_server_read_only: 'sometimes',
+    });
+
+    expect(result.isValid).toBe(false);
     expect(result.coercedSettings.mcp_server_read_only).toBeNull();
     expect(result.errors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           field: 'mcp_server_read_only',
-          severity: 'warning',
+          severity: 'fatal',
         }),
       ]),
     );

@@ -16,6 +16,23 @@ Author React 18 components with TypeScript, two-space indentation, and semicolon
 
 Vitest with React Testing Library underpins unit and component coverage. Place specs in `/tests` with the `*.test.ts` or `*.test.tsx` suffix. Run suites through `npm run vitest` (watch) or `npm run test` (CI modes). Before opening a PR, pair automated tests with `npm run lint` and `npm run type-check`, and spot-check new UI through `npm run tauri:dev`.
 
+## Pre-Commit Checklist
+
+Run the relevant local checks before every commit, not just before PR merge.
+
+- Baseline checks for any code change:
+  - `npm run type-check`
+  - `npm run lint`
+  - `cd src-tauri && cargo fmt && cargo check`
+- When changing MCP server, Rust settings parsing, workspace resolution, or path handling:
+  - `cargo test --manifest-path src-tauri/mcp-server/Cargo.toml --test gtdspace_mcp_stdio -- --nocapture`
+  - `cargo test --manifest-path src-tauri/Cargo.toml parse_user_settings_value_accepts_partial_saved_settings -- --nocapture`
+- When changing frontend settings validation or MCP settings UI:
+  - `npx vitest run tests/settings-validation.spec.ts`
+- When changing dashboard actions, overview, or projects:
+  - `npx vitest run tests/dashboard-actions.component.spec.tsx tests/dashboard-projects.component.spec.tsx tests/date-formatting.spec.ts`
+- If `cargo fmt` rewrites any Rust files, review the diff and rerun the affected tests/checks before committing.
+
 ## Commit & Pull Request Guidelines
 
 Write imperative, scope-focused commit messages referencing issues when applicable, e.g., `feat: add GTD calendar week view (#123)`. Pull requests should outline motivation, include screenshots for UI-facing updates, note test coverage, and link issues. Confirm linting, type-checks, and relevant Vitest suites pass, and update `docs/` when behavior or workflows change.

@@ -361,6 +361,50 @@ pub(crate) fn parse_history_rows(content: &str) -> Vec<ParsedHistoryRow> {
         .collect()
 }
 
+pub(crate) fn parse_history_rows_strict(content: &str) -> Result<Vec<ParsedHistoryRow>, String> {
+    let Some(history_index) = content.lines().position(is_history_heading_line) else {
+        return Ok(Vec::new());
+    };
+
+    for line in content.lines().skip(history_index + 1) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.starts_with('#') {
+            break;
+        }
+        if trimmed.starts_with("*Track your habit completions")
+            || trimmed.starts_with("*Track your habit")
+        {
+            continue;
+        }
+
+        if trimmed.starts_with('|') {
+            if parse_history_row_from_table(line).is_some() {
+                continue;
+            }
+
+            let parts: Vec<String> = trimmed
+                .trim_matches('|')
+                .split('|')
+                .map(|part| part.trim().to_string())
+                .collect();
+            if parts
+                .first()
+                .is_some_and(|cell| cell.eq_ignore_ascii_case("Date"))
+                || parts.first().is_some_and(|cell| cell.starts_with("---"))
+            {
+                continue;
+            }
+        }
+
+        return Err(format!("Unsupported habit history row format: {}", trimmed));
+    }
+
+    Ok(parse_history_rows(content))
+}
+
 pub(crate) fn format_history_entry(
     timestamp: NaiveDateTime,
     status: HabitStatus,

@@ -20,7 +20,8 @@ use crate::commands::filesystem::{
 use crate::commands::gtd_habits::update_habit_status;
 use crate::commands::gtd_habits_domain::{
     apply_status_marker, format_history_entry, format_history_time, insert_history_entry,
-    parse_habit_state, parse_history_rows, parse_history_timestamp, HabitStatus,
+    parse_habit_state, parse_history_rows_strict, parse_history_timestamp, HabitStatus,
+    DEFAULT_HISTORY_TEMPLATE,
 };
 use crate::commands::gtd_projects::{list_gtd_projects, rename_gtd_action, rename_gtd_project};
 use crate::commands::gtd_relationships::{find_habits_referencing, find_reverse_relationships};
@@ -691,7 +692,13 @@ impl GtdWorkspaceService {
         }
 
         let content = self.read_markdown(&item.relative_path)?;
-        let rows = parse_history_rows(&content)
+        let rows = parse_history_rows_strict(&content)
+            .map_err(|error| {
+                format!(
+                    "Failed to parse habit history for '{}': {}",
+                    item.relative_path, error
+                )
+            })?
             .into_iter()
             .map(|row| HabitHistoryRow {
                 date: row.date,
@@ -2993,7 +3000,7 @@ fn build_habit_markdown(input: HabitBuildInput) -> Result<String, String> {
     };
     Ok(format!(
         "# {title}\n\n## Status\n[!checkbox:habit-status:false]\n\n## Frequency\n[!singleselect:habit-frequency:{frequency}]{focus}\
-\n## Projects References\n[!projects-references:{projects}]\n\n## Areas References\n[!areas-references:{areas}]\n\n## Goals References\n[!goals-references:{goals}]\n\n## Vision References\n[!vision-references:{vision}]\n\n## Purpose & Principles References\n[!purpose-references:{purpose}]\n\n## Created\n[!datetime:created_date_time:{created}]\n\n## History\n| Date | Action | Source | Details |\n| --- | --- | --- | --- |\n",
+\n## Projects References\n[!projects-references:{projects}]\n\n## Areas References\n[!areas-references:{areas}]\n\n## Goals References\n[!goals-references:{goals}]\n\n## Vision References\n[!vision-references:{vision}]\n\n## Purpose & Principles References\n[!purpose-references:{purpose}]\n\n## Created\n[!datetime:created_date_time:{created}]\n\n## History\n{history}\n",
         title = input.title,
         frequency = input.frequency,
         focus = focus_section,
@@ -3002,7 +3009,8 @@ fn build_habit_markdown(input: HabitBuildInput) -> Result<String, String> {
         goals = encode_reference_array(&input.goals),
         vision = encode_reference_array(&input.vision),
         purpose = encode_reference_array(&input.purpose),
-        created = input.created_date_time
+        created = input.created_date_time,
+        history = DEFAULT_HISTORY_TEMPLATE
     ))
 }
 
@@ -3558,6 +3566,74 @@ mod tests {
         assert_eq!(result.rows[0].action, "Manual");
         assert_eq!(result.rows[0].details, "Ran 3 miles");
         assert_eq!(result.rows[1].status, "To Do");
+        Ok(())
+    }
+
+    #[test]
+    fn plan_habit_create_seeds_canonical_history_that_habit_get_history_accepts(
+    ) -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let planned = service.plan_habit_create(HabitCreateRequest {
+            name: "Morning Run".to_string(),
+            frequency: "daily".to_string(),
+            focus_time: None,
+            projects: vec![],
+            areas: vec![],
+            goals: vec![],
+            vision: vec![],
+            purpose: vec![],
+        })?;
+
+        service.change_apply(ChangeSetRequest {
+            change_set_id: planned.change_set.id,
+        })?;
+
+        let content = service.read_markdown("Habits/Morning Run.md")?;
+        assert!(content.contains("| Date | Time | Status | Action | Details |"));
+
+        let parsed_rows = parse_history_rows_strict(&content)?;
+        assert!(parsed_rows.is_empty());
+
+        let history = service.get_habit_history("Habits/Morning Run.md")?;
+        assert!(history.rows.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn get_habit_history_fails_fast_for_unsupported_legacy_history_rows() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        write_test_file(
+            workspace.path().join("Habits/Legacy Habit.md"),
+            r#"# Legacy Habit
+
+## Status
+[!checkbox:habit-status:false]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-20T10:00:00Z]
+
+## History
+| Date | Action | Source | Details |
+| --- | --- | --- | --- |
+| 2026-03-21 | Complete | Manual | Legacy row |
+"#,
+        )?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let content = service.read_markdown("Habits/Legacy Habit.md")?;
+        assert!(parse_history_rows_strict(&content).is_err());
+
+        let error = service
+            .get_habit_history("Habits/Legacy Habit.md")
+            .unwrap_err();
+        assert!(error.contains("Failed to parse habit history"));
         Ok(())
     }
 

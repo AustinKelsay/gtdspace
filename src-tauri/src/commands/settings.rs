@@ -169,7 +169,17 @@ fn normalize_mcp_server_settings(mut settings: UserSettings) -> UserSettings {
 }
 
 pub(crate) fn parse_user_settings_value(value: &Value) -> Result<UserSettings, serde_json::Error> {
-    let mut settings = serde_json::from_value::<UserSettings>(value.clone())?;
+    let mut merged_value = serde_json::to_value(get_default_settings())?;
+
+    if let (Value::Object(defaults), Value::Object(provided)) = (&mut merged_value, value) {
+        for (key, entry) in provided {
+            defaults.insert(key.clone(), entry.clone());
+        }
+    } else {
+        merged_value = value.clone();
+    }
+
+    let mut settings = serde_json::from_value::<UserSettings>(merged_value)?;
     settings = merge_with_default_settings(settings);
     Ok(normalize_mcp_server_settings(settings))
 }
@@ -819,6 +829,7 @@ mod tests {
     use super::{
         deserialize_mcp_server_log_level, deserialize_mcp_server_read_only,
         deserialize_mcp_server_workspace_path, get_default_settings, merge_with_default_settings,
+        parse_user_settings_value,
     };
     use serde::Deserialize;
 
@@ -872,5 +883,20 @@ mod tests {
         assert_eq!(probe.workspace_path, None);
         assert_eq!(probe.read_only, Some(false));
         assert_eq!(probe.log_level.as_deref(), Some("info"));
+    }
+
+    #[test]
+    fn parse_user_settings_value_accepts_partial_saved_settings() {
+        let settings = parse_user_settings_value(&serde_json::json!({
+            "mcp_server_workspace_path": " /tmp/workspace ",
+            "mcp_server_read_only": "yes",
+            "mcp_server_log_level": "debug"
+        }))
+        .expect("parse partial settings");
+
+        assert_eq!(settings.mcp_server_workspace_path.as_deref(), Some("/tmp/workspace"));
+        assert_eq!(settings.mcp_server_read_only, Some(true));
+        assert_eq!(settings.mcp_server_log_level.as_deref(), Some("debug"));
+        assert_eq!(settings.theme, "dark");
     }
 }

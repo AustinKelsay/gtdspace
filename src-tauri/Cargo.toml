@@ -57,7 +57,7 @@ rand = "0.10"
 aes-gcm = { version = "0.10.3", features = ["aes", "stream"] }
 pbkdf2 = "0.12"
 flate2 = "1.1"
-tar = "0.4.36"
+tar = "0.4.45"
 walkdir = "2.5"
 keyring = "2.3"
 

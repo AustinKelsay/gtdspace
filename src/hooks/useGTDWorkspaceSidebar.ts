@@ -397,6 +397,15 @@ export function useGTDWorkspaceSidebar({
         return current;
       }
 
+      const directoryExists = await safeInvoke<boolean>(
+        'check_directory_exists',
+        { path: normalizedKey },
+        null
+      );
+      if (directoryExists === false) {
+        return current || [];
+      }
+
       if (loadingSectionsRef.current.has(normalizedKey)) {
         return current || [];
       }

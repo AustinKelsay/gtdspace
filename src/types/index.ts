@@ -324,6 +324,8 @@ export interface FileChangeEvent {
 
 // === SETTINGS TYPES ===
 
+export type McpServerLogLevel = 'error' | 'warn' | 'info' | 'debug' | 'trace';
+
 /**
  * User settings structure for persistence
  */
@@ -384,6 +386,12 @@ export interface UserSettings {
   git_sync_last_pull?: string | null;
   /** Optional automatic pull interval */
   git_sync_auto_pull_interval_minutes?: number | null;
+  /** Optional dedicated workspace path for the standalone MCP server */
+  mcp_server_workspace_path?: string | null;
+  /** Whether the standalone MCP server should default to read-only mode */
+  mcp_server_read_only?: boolean | null;
+  /** Default log level used by the standalone MCP server */
+  mcp_server_log_level?: McpServerLogLevel | null;
 }
 
 /**

@@ -10,6 +10,8 @@ The newest GTD refactor also introduced explicit domain helpers behind the comma
 
 The MCP work adds a second backend surface that reuses the same GTD business rules without going through Tauri invoke handlers. `src-tauri/src/backend/mcp_workspace.rs` owns the shared workspace indexing, context-pack generation, and dry-run/apply flow, while `src-tauri/src/mcp_server.rs` exposes that layer as a standalone stdio MCP server for local-model clients.
 
+The desktop Settings UI now also has a dedicated MCP Server page. That page is intentionally light on knobs: it documents the exposed resources/tools, surfaces the few persisted launch defaults (`mcp_server_workspace_path`, `mcp_server_read_only`, `mcp_server_log_level`), and lets the standalone `gtdspace-mcp` process inherit those defaults whenever callers omit the equivalent CLI flags.
+
 ## Command Conventions
 
 The app uses these patterns consistently:

@@ -65,6 +65,9 @@ export const useSettings = () => {
     git_sync_last_push: null,
     git_sync_last_pull: null,
     git_sync_auto_pull_interval_minutes: null,
+    mcp_server_workspace_path: null,
+    mcp_server_read_only: false,
+    mcp_server_log_level: 'info',
   });
   
   const [isLoading, setIsLoading] = useState(true);

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import DashboardActions from '@/components/dashboard/DashboardActions';
 import type { ActionItem } from '@/hooks/useActionsData';
@@ -22,6 +22,16 @@ const buildAction = (overrides: Partial<ActionItem>): ActionItem => ({
 });
 
 describe('DashboardActions component', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 15, 12));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
   const actions: ActionItem[] = [
     buildAction({
       id: '/space/projects/alpha/next-step.md',
@@ -60,9 +70,9 @@ describe('DashboardActions component', () => {
   it('applies the default status filter to show only in-progress and waiting actions', () => {
     render(<DashboardActions actions={actions} projects={projects} />);
 
-    expect(screen.getByText('Alpha Next Step')).toBeInTheDocument();
-    expect(screen.getByText('Waiting Task')).toBeInTheDocument();
-    expect(screen.queryByText('Completed Cleanup')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Alpha Next Step').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Waiting Task').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Completed Cleanup')).toHaveLength(0);
     expect(screen.getByText('2 actions')).toBeInTheDocument();
   });
 
@@ -76,10 +86,16 @@ describe('DashboardActions component', () => {
       target: { value: 'Waiting' },
     });
 
-    expect(screen.getByText('Waiting Task')).toBeInTheDocument();
-    expect(screen.queryByText('Alpha Next Step')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Waiting Task').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Alpha Next Step')).toHaveLength(0);
 
-    fireEvent.click(screen.getByText('Waiting Task'));
+    const waitingCard = screen
+      .getAllByText('Waiting Task')
+      .map((element) => element.closest('[role="button"]'))
+      .find((element): element is HTMLElement => element instanceof HTMLElement);
+
+    expect(waitingCard).toBeTruthy();
+    fireEvent.click(waitingCard!);
     expect(onSelectAction).toHaveBeenCalledTimes(1);
     expect(onSelectAction.mock.calls[0][0]).toMatchObject({
       id: '/space/projects/beta/waiting-task.md',
@@ -95,5 +111,48 @@ describe('DashboardActions component', () => {
     });
 
     expect(screen.getByText('No actions match your filters')).toBeInTheDocument();
+  });
+
+  it('does not mark actions due today as overdue', () => {
+    render(
+      <DashboardActions
+        actions={[
+          buildAction({
+            id: '/space/projects/alpha/due-today.md',
+            name: 'Due Today',
+            path: '/space/projects/alpha/due-today.md',
+            projectName: 'Alpha',
+            projectPath: '/space/projects/alpha',
+            dueDate: '2026-01-15',
+          }),
+        ]}
+        projects={projects}
+      />
+    );
+
+    expect(screen.getAllByText('Due Today').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Today').length).toBeGreaterThan(0);
+    expect(screen.queryByText('1 overdue')).not.toBeInTheDocument();
+  });
+
+  it('does not count completed overdue actions in the overdue summary', () => {
+    render(
+      <DashboardActions
+        actions={[
+          buildAction({
+            id: '/space/projects/gamma/finished-overdue.md',
+            name: 'Finished Overdue',
+            path: '/space/projects/gamma/finished-overdue.md',
+            projectName: 'Gamma',
+            projectPath: '/space/projects/gamma',
+            status: 'completed',
+            dueDate: '2026-01-10',
+          }),
+        ]}
+        projects={projects}
+      />
+    );
+
+    expect(screen.queryByText('1 overdue')).not.toBeInTheDocument();
   });
 });

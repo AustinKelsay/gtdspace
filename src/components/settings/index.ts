@@ -10,5 +10,6 @@ export { EditorSettings } from './EditorSettings';
 export { WorkspaceSettings } from './WorkspaceSettings';
 export { KeyboardShortcuts } from './KeyboardShortcuts';
 export { KeyboardShortcutsModal } from './KeyboardShortcutsModal';
+export { McpServerSettings } from './McpServerSettings';
 
 export type { SettingsManagerProps } from './SettingsManager';

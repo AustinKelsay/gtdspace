@@ -7,7 +7,12 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { readFileText } from './useFileManager';
 import { toISOStringFromEpoch } from '@/utils/time';
-import { parseLocalDate } from '@/utils/date-formatting';
+import {
+  isDateInRange,
+  isDateOverdue,
+  isDateToday,
+  startOfLocalDay,
+} from '@/utils/date-formatting';
 import type { GTDActionStatus, GTDProject, MarkdownFile } from '@/types';
 import { createScopedLogger } from '@/utils/logger';
 import { emitContentSaved } from '@/utils/content-event-bus';
@@ -66,21 +71,15 @@ interface UseActionsDataReturn {
  */
 const analyzeDueDate = (dueDateStr: string | undefined) => {
   if (!dueDateStr) return { overdue: false, dueToday: false, dueThisWeek: false };
-
-  const dueDate = parseLocalDate(dueDateStr);
-  if (isNaN(dueDate.getTime())) return { overdue: false, dueToday: false, dueThisWeek: false };
   
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  const today = startOfLocalDay(new Date());
   const weekFromNow = new Date(today);
   weekFromNow.setDate(weekFromNow.getDate() + 7);
   
   return {
-    overdue: dueDate < today,
-    dueToday: dueDate >= today && dueDate < tomorrow,
-    dueThisWeek: dueDate >= today && dueDate < weekFromNow
+    overdue: isDateOverdue(dueDateStr, today),
+    dueToday: isDateToday(dueDateStr, today),
+    dueThisWeek: isDateInRange(dueDateStr, today, weekFromNow)
   };
 };
 

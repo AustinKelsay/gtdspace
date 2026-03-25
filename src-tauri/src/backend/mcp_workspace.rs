@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::env;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -6,8 +7,10 @@ use std::sync::{Arc, Mutex};
 use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
 use rmcp::schemars;
+use rmcp::schemars::transform::RecursiveTransform;
 use rmcp::schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -30,6 +33,8 @@ const CONTEXT_PACK_VERSION: u32 = 1;
 const SETTINGS_FILE_NAME: &str = "settings.json";
 const CONTEXT_CACHE_DIR: &str = "mcp-context";
 const MAX_CONTEXT_PACK_RETRIES: usize = 5;
+const DEFAULT_MCP_SERVER_LOG_LEVEL: &str = "info";
+const VALID_MCP_SERVER_LOG_LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
 
 pub(crate) const GTD_SPEC_DOC: &str = include_str!("../../../spec/gtd-spec.md");
 pub(crate) const MARKDOWN_SCHEMA_DOC: &str = include_str!("../../../spec/02-markdown-schema.md");
@@ -89,6 +94,7 @@ pub struct RelationshipSummary {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceFingerprint {
     pub normalized_root_path: String,
     pub latest_modified_unix: u64,
@@ -109,6 +115,7 @@ pub struct ContextPackCache {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceInfo {
     pub workspace_root: String,
     pub read_only: bool,
@@ -119,6 +126,14 @@ pub struct WorkspaceInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct McpServerLaunchSettings {
+    pub read_only: bool,
+    pub log_level: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceSearchMatch {
     pub file_path: String,
     pub file_name: String,
@@ -142,6 +157,7 @@ pub struct WorkspaceSearchResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceRefreshResult {
     pub workspace_info: WorkspaceInfo,
     pub invalidated_change_sets: usize,
@@ -228,6 +244,7 @@ pub struct WorkspaceListItemsRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceSearchRequest {
     pub query: String,
     #[serde(default = "default_search_limit")]
@@ -1390,12 +1407,28 @@ impl GtdWorkspaceService {
         } else {
             absolute.clone()
         };
-        let parent_check = normalized_absolute
-            .parent()
-            .map(|parent| parent.starts_with(&canonical_root))
-            .unwrap_or(false);
+        let parent_check = {
+            let mut current = normalized_absolute.as_path();
+            let mut deepest_existing = None;
+
+            while let Some(parent) = current.parent() {
+                if parent.exists() {
+                    deepest_existing = Some(parent);
+                    break;
+                }
+                current = parent;
+            }
+
+            deepest_existing
+                .map(|ancestor| {
+                    let canonicalized_deepest_existing =
+                        fs::canonicalize(ancestor).unwrap_or_else(|_| ancestor.to_path_buf());
+                    path_is_within_workspace(&canonicalized_deepest_existing, &canonical_root)
+                })
+                .unwrap_or(false)
+        };
         if normalized_absolute.exists() {
-            if !normalized_absolute.starts_with(&canonical_root) {
+            if !path_is_within_workspace(&normalized_absolute, &canonical_root) {
                 return Err("Path must stay inside the GTD workspace".to_string());
             }
         } else if !parent_check {
@@ -1631,32 +1664,36 @@ fn default_search_limit() -> usize {
     20
 }
 
+fn remove_unsupported_integer_formats(schema: &mut schemars::Schema) {
+    if let Some(object) = schema.as_object_mut() {
+        let should_remove = object
+            .get("format")
+            .and_then(Value::as_str)
+            .map(|format| format.starts_with("uint"))
+            .unwrap_or(false);
+
+        if should_remove {
+            object.remove("format");
+        }
+    }
+}
+
 fn resolve_workspace(cli_workspace: Option<String>) -> Result<PathBuf, String> {
     if let Some(path) = cli_workspace {
         return validate_workspace_candidate(Path::new(&path));
     }
 
-    if let Some(settings_path) = settings_file_path() {
-        if let Ok(contents) = fs::read_to_string(&settings_path) {
-            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&contents) {
-                let candidates = [
-                    value
-                        .get("user_settings")
-                        .and_then(|settings| settings.get("last_folder"))
-                        .and_then(|entry| entry.as_str())
-                        .map(str::to_string),
-                    value
-                        .get("user_settings")
-                        .and_then(|settings| settings.get("default_space_path"))
-                        .and_then(|entry| entry.as_str())
-                        .map(str::to_string),
-                ];
+    if let Some(settings) = load_saved_user_settings() {
+        if let Some(candidate) = settings.mcp_server_workspace_path {
+            return validate_workspace_candidate(Path::new(&candidate));
+        }
 
-                for candidate in candidates.into_iter().flatten() {
-                    if let Ok(path) = validate_workspace_candidate(Path::new(&candidate)) {
-                        return Ok(path);
-                    }
-                }
+        for candidate in [settings.last_folder, settings.default_space_path]
+            .into_iter()
+            .flatten()
+        {
+            if let Ok(path) = validate_workspace_candidate(Path::new(&candidate)) {
+                return Ok(path);
             }
         }
     }
@@ -1685,9 +1722,79 @@ fn project_dirs() -> Result<ProjectDirs, String> {
 }
 
 fn settings_file_path() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    if let Ok(appdata) = env::var("APPDATA") {
+        return Some(
+            PathBuf::from(appdata)
+                .join("com.gtdspace.app")
+                .join("config")
+                .join(SETTINGS_FILE_NAME),
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    if let Ok(config_home) = env::var("XDG_CONFIG_HOME") {
+        return Some(
+            PathBuf::from(config_home)
+                .join("com.gtdspace.app")
+                .join(SETTINGS_FILE_NAME),
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    if let Ok(home) = env::var("HOME") {
+        return Some(
+            PathBuf::from(home)
+                .join("Library")
+                .join("Application Support")
+                .join("com.gtdspace.app")
+                .join(SETTINGS_FILE_NAME),
+        );
+    }
+
     project_dirs()
         .ok()
         .map(|dirs| dirs.config_dir().join(SETTINGS_FILE_NAME))
+}
+
+fn load_saved_settings() -> Option<Value> {
+    let settings_path = settings_file_path()?;
+    let contents = fs::read_to_string(settings_path).ok()?;
+    serde_json::from_str::<Value>(&contents).ok()
+}
+
+fn load_saved_user_settings() -> Option<crate::commands::settings::UserSettings> {
+    let settings = load_saved_settings()?;
+    let user_settings = settings.get("user_settings")?;
+    crate::commands::settings::parse_user_settings_value(user_settings).ok()
+}
+
+fn sanitize_mcp_server_log_level(value: Option<&str>) -> String {
+    let normalized = value
+        .unwrap_or(DEFAULT_MCP_SERVER_LOG_LEVEL)
+        .trim()
+        .to_ascii_lowercase();
+    if VALID_MCP_SERVER_LOG_LEVELS.contains(&normalized.as_str()) {
+        normalized
+    } else {
+        DEFAULT_MCP_SERVER_LOG_LEVEL.to_string()
+    }
+}
+
+pub fn load_mcp_server_launch_settings() -> McpServerLaunchSettings {
+    let user_settings = load_saved_user_settings();
+
+    McpServerLaunchSettings {
+        read_only: user_settings
+            .as_ref()
+            .and_then(|settings| settings.mcp_server_read_only)
+            .unwrap_or(false),
+        log_level: sanitize_mcp_server_log_level(
+            user_settings
+                .as_ref()
+                .and_then(|settings| settings.mcp_server_log_level.as_deref()),
+        ),
+    }
 }
 
 fn snapshot_matches_state(state: &ServiceState, fingerprint: &WorkspaceFingerprint) -> bool {
@@ -2151,6 +2258,16 @@ pub fn normalize_workspace_path<P: AsRef<Path>>(path: P) -> String {
 
 fn normalize_path<P: AsRef<Path>>(path: P) -> String {
     normalize_workspace_path(path)
+}
+
+fn path_is_within_workspace(path: &Path, root: &Path) -> bool {
+    let normalized_root = normalize_path(root).trim_end_matches('/').to_string();
+    let normalized_path = normalize_path(path);
+    #[cfg(target_os = "windows")]
+    let normalized_root = normalized_root.to_lowercase();
+    #[cfg(target_os = "windows")]
+    let normalized_path = normalized_path.to_lowercase();
+    normalized_path == normalized_root || normalized_path.starts_with(&(normalized_root + "/"))
 }
 
 fn normalize_relative_input(path: &str) -> String {

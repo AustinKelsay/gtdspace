@@ -1,7 +1,8 @@
 //! Settings persistence and secure storage commands.
 
 use once_cell::sync::Lazy;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use tauri::AppHandle;
 use tauri_plugin_store::StoreBuilder;
@@ -9,6 +10,8 @@ use tokio::sync::Mutex as TokioMutex;
 
 const SECURE_STORAGE_SERVICE: &str = "com.gtdspace.app";
 const GIT_SYNC_ENCRYPTION_KEY_NAME: &str = "git_sync_encryption_key";
+const DEFAULT_MCP_SERVER_LOG_LEVEL: &str = "info";
+const VALID_MCP_SERVER_LOG_LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
 static SETTINGS_LOCK: Lazy<TokioMutex<()>> = Lazy::new(|| TokioMutex::new(()));
 
 #[cfg(test)]
@@ -20,6 +23,165 @@ fn default_settings_with_secure_key() -> UserSettings {
     let mut settings = get_default_settings();
     settings.git_sync_encryption_key = load_git_sync_encryption_key();
     settings
+}
+
+fn merge_with_default_settings(mut settings: UserSettings) -> UserSettings {
+    let defaults = get_default_settings();
+
+    settings.last_folder = settings.last_folder.or(defaults.last_folder);
+    settings.window_width = settings.window_width.or(defaults.window_width);
+    settings.window_height = settings.window_height.or(defaults.window_height);
+    settings.max_tabs = settings.max_tabs.or(defaults.max_tabs);
+    settings.restore_tabs = settings.restore_tabs.or(defaults.restore_tabs);
+    settings.auto_initialize = settings.auto_initialize.or(defaults.auto_initialize);
+    settings.seed_example_content = settings
+        .seed_example_content
+        .or(defaults.seed_example_content);
+    settings.default_space_path = settings.default_space_path.or(defaults.default_space_path);
+    settings.git_sync_enabled = settings.git_sync_enabled.or(defaults.git_sync_enabled);
+    settings.git_sync_repo_path = settings.git_sync_repo_path.or(defaults.git_sync_repo_path);
+    settings.git_sync_workspace_path = settings
+        .git_sync_workspace_path
+        .or(defaults.git_sync_workspace_path);
+    settings.git_sync_remote_url = settings
+        .git_sync_remote_url
+        .or(defaults.git_sync_remote_url);
+    settings.git_sync_branch = settings.git_sync_branch.or(defaults.git_sync_branch);
+    settings.git_sync_keep_history = settings
+        .git_sync_keep_history
+        .or(defaults.git_sync_keep_history);
+    settings.git_sync_author_name = settings
+        .git_sync_author_name
+        .or(defaults.git_sync_author_name);
+    settings.git_sync_author_email = settings
+        .git_sync_author_email
+        .or(defaults.git_sync_author_email);
+    settings.git_sync_last_push = settings.git_sync_last_push.or(defaults.git_sync_last_push);
+    settings.git_sync_last_pull = settings.git_sync_last_pull.or(defaults.git_sync_last_pull);
+    settings.git_sync_auto_pull_interval_minutes = settings
+        .git_sync_auto_pull_interval_minutes
+        .or(defaults.git_sync_auto_pull_interval_minutes);
+    settings.mcp_server_workspace_path = settings
+        .mcp_server_workspace_path
+        .or(defaults.mcp_server_workspace_path);
+    settings.mcp_server_read_only = settings
+        .mcp_server_read_only
+        .or(defaults.mcp_server_read_only);
+    settings.mcp_server_log_level = settings
+        .mcp_server_log_level
+        .or(defaults.mcp_server_log_level);
+
+    settings
+}
+
+fn sanitize_mcp_server_log_level(value: Option<&str>) -> String {
+    let normalized = value
+        .unwrap_or(DEFAULT_MCP_SERVER_LOG_LEVEL)
+        .trim()
+        .to_ascii_lowercase();
+    if VALID_MCP_SERVER_LOG_LEVELS.contains(&normalized.as_str()) {
+        normalized
+    } else {
+        DEFAULT_MCP_SERVER_LOG_LEVEL.to_string()
+    }
+}
+
+fn normalize_mcp_server_workspace_path(value: Option<String>) -> Option<String> {
+    value.and_then(|path| {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+fn coerce_mcp_server_read_only(value: &Value) -> Option<bool> {
+    match value {
+        Value::Bool(boolean) => Some(*boolean),
+        Value::Number(number) => {
+            if number.as_i64() == Some(0) || number.as_u64() == Some(0) {
+                Some(false)
+            } else if number.as_i64() == Some(1) || number.as_u64() == Some(1) {
+                Some(true)
+            } else {
+                None
+            }
+        }
+        Value::String(string) => {
+            let normalized = string.trim().to_ascii_lowercase();
+            match normalized.as_str() {
+                "true" | "1" | "yes" | "y" | "on" => Some(true),
+                "false" | "0" | "no" | "n" | "off" => Some(false),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn deserialize_mcp_server_workspace_path<'de, D>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    Ok(match value {
+        None | Some(Value::Null) => None,
+        Some(Value::String(path)) => normalize_mcp_server_workspace_path(Some(path)),
+        Some(_) => None,
+    })
+}
+
+fn deserialize_mcp_server_read_only<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    Ok(match value {
+        None | Some(Value::Null) => None,
+        Some(raw) => Some(coerce_mcp_server_read_only(&raw).unwrap_or(false)),
+    })
+}
+
+fn deserialize_mcp_server_log_level<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    Ok(match value {
+        None | Some(Value::Null) => None,
+        Some(Value::String(level)) => Some(sanitize_mcp_server_log_level(Some(&level))),
+        Some(_) => Some(DEFAULT_MCP_SERVER_LOG_LEVEL.to_string()),
+    })
+}
+
+fn normalize_mcp_server_settings(mut settings: UserSettings) -> UserSettings {
+    settings.mcp_server_workspace_path =
+        normalize_mcp_server_workspace_path(settings.mcp_server_workspace_path);
+    settings.mcp_server_read_only = Some(settings.mcp_server_read_only.unwrap_or(false));
+    settings.mcp_server_log_level = Some(sanitize_mcp_server_log_level(
+        settings.mcp_server_log_level.as_deref(),
+    ));
+    settings
+}
+
+pub(crate) fn parse_user_settings_value(value: &Value) -> Result<UserSettings, serde_json::Error> {
+    let mut merged_value = serde_json::to_value(get_default_settings())?;
+
+    if let (Value::Object(defaults), Value::Object(provided)) = (&mut merged_value, value) {
+        for (key, entry) in provided {
+            defaults.insert(key.clone(), entry.clone());
+        }
+    } else {
+        merged_value = value.clone();
+    }
+
+    let mut settings = serde_json::from_value::<UserSettings>(merged_value)?;
+    settings = merge_with_default_settings(settings);
+    Ok(normalize_mcp_server_settings(settings))
 }
 
 fn sync_git_sync_encryption_key(settings: &UserSettings) -> Result<(), String> {
@@ -143,6 +305,15 @@ pub struct UserSettings {
     pub git_sync_last_pull: Option<String>,
     /// Optional automatic pull cadence
     pub git_sync_auto_pull_interval_minutes: Option<u32>,
+    /// Optional dedicated workspace path for the standalone MCP server
+    #[serde(default, deserialize_with = "deserialize_mcp_server_workspace_path")]
+    pub mcp_server_workspace_path: Option<String>,
+    /// Whether the standalone MCP server should default to read-only mode
+    #[serde(default, deserialize_with = "deserialize_mcp_server_read_only")]
+    pub mcp_server_read_only: Option<bool>,
+    /// Default log level used by the standalone MCP server
+    #[serde(default, deserialize_with = "deserialize_mcp_server_log_level")]
+    pub mcp_server_log_level: Option<String>,
 }
 
 impl std::fmt::Debug for UserSettings {
@@ -169,6 +340,9 @@ impl std::fmt::Debug for UserSettings {
             .field("git_sync_workspace_path", &self.git_sync_workspace_path)
             .field("git_sync_remote_url", &self.git_sync_remote_url)
             .field("git_sync_branch", &self.git_sync_branch)
+            .field("mcp_server_workspace_path", &self.mcp_server_workspace_path)
+            .field("mcp_server_read_only", &self.mcp_server_read_only)
+            .field("mcp_server_log_level", &self.mcp_server_log_level)
             .field(
                 "git_sync_encryption_key",
                 &self
@@ -318,7 +492,7 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
             }
 
             // Now deserialize without the encryption key field (it will be re-attached via legacy_encryption_key)
-            match serde_json::from_value::<UserSettings>(value_to_deserialize) {
+            match parse_user_settings_value(&value_to_deserialize) {
                 Ok(mut s) => {
                     s.git_sync_encryption_key =
                         legacy_encryption_key.or_else(load_git_sync_encryption_key);
@@ -442,6 +616,7 @@ where
 #[tauri::command]
 pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<String, String> {
     let _guard = SETTINGS_LOCK.lock().await;
+    let settings = normalize_mcp_server_settings(settings);
     save_settings_unlocked(&app, &settings)
 }
 
@@ -643,5 +818,88 @@ pub fn get_default_settings() -> UserSettings {
         git_sync_last_push: None,
         git_sync_last_pull: None,
         git_sync_auto_pull_interval_minutes: None,
+        mcp_server_workspace_path: None,
+        mcp_server_read_only: Some(false),
+        mcp_server_log_level: Some(DEFAULT_MCP_SERVER_LOG_LEVEL.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        deserialize_mcp_server_log_level, deserialize_mcp_server_read_only,
+        deserialize_mcp_server_workspace_path, get_default_settings, merge_with_default_settings,
+        parse_user_settings_value,
+    };
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct McpFieldDeserializationProbe {
+        #[serde(default, deserialize_with = "deserialize_mcp_server_workspace_path")]
+        workspace_path: Option<String>,
+        #[serde(default, deserialize_with = "deserialize_mcp_server_read_only")]
+        read_only: Option<bool>,
+        #[serde(default, deserialize_with = "deserialize_mcp_server_log_level")]
+        log_level: Option<String>,
+    }
+
+    #[test]
+    fn merge_with_default_settings_backfills_optional_mcp_fields() {
+        let mut settings = get_default_settings();
+        settings.mcp_server_workspace_path = None;
+        settings.mcp_server_read_only = None;
+        settings.mcp_server_log_level = None;
+
+        let merged = merge_with_default_settings(settings);
+
+        assert_eq!(merged.mcp_server_workspace_path, None);
+        assert_eq!(merged.mcp_server_read_only, Some(false));
+        assert_eq!(merged.mcp_server_log_level.as_deref(), Some("info"));
+    }
+
+    #[test]
+    fn mcp_field_deserializers_coerce_invalid_values_without_failing() {
+        let probe: McpFieldDeserializationProbe = serde_json::from_value(serde_json::json!({
+            "workspace_path": "   /tmp/workspace   ",
+            "read_only": "yes",
+            "log_level": "TRACE"
+        }))
+        .expect("deserialize probe");
+
+        assert_eq!(probe.workspace_path.as_deref(), Some("/tmp/workspace"));
+        assert_eq!(probe.read_only, Some(true));
+        assert_eq!(probe.log_level.as_deref(), Some("trace"));
+    }
+
+    #[test]
+    fn mcp_field_deserializers_fall_back_for_unparsable_values() {
+        let probe: McpFieldDeserializationProbe = serde_json::from_value(serde_json::json!({
+            "workspace_path": "   ",
+            "read_only": "sometimes",
+            "log_level": "verbose"
+        }))
+        .expect("deserialize probe");
+
+        assert_eq!(probe.workspace_path, None);
+        assert_eq!(probe.read_only, Some(false));
+        assert_eq!(probe.log_level.as_deref(), Some("info"));
+    }
+
+    #[test]
+    fn parse_user_settings_value_accepts_partial_saved_settings() {
+        let settings = parse_user_settings_value(&serde_json::json!({
+            "mcp_server_workspace_path": " /tmp/workspace ",
+            "mcp_server_read_only": "yes",
+            "mcp_server_log_level": "debug"
+        }))
+        .expect("parse partial settings");
+
+        assert_eq!(
+            settings.mcp_server_workspace_path.as_deref(),
+            Some("/tmp/workspace")
+        );
+        assert_eq!(settings.mcp_server_read_only, Some(true));
+        assert_eq!(settings.mcp_server_log_level.as_deref(), Some("debug"));
+        assert_eq!(settings.theme, "dark");
     }
 }

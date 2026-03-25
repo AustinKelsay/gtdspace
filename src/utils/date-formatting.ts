@@ -21,17 +21,35 @@ export const parseLocalDate = (dateString: string): Date => {
   return new Date(dateString);
 };
 
+export const startOfLocalDay = (date: Date): Date =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+export const isDateOverdue = (dateString?: string | null, referenceDate: Date = new Date()): boolean => {
+  if (!dateString) return false;
+
+  const date = parseLocalDate(dateString);
+  if (isNaN(date.getTime())) return false;
+
+  return startOfLocalDay(date) < startOfLocalDay(referenceDate);
+};
+
+export const isDateToday = (dateString?: string | null, referenceDate: Date = new Date()): boolean => {
+  if (!dateString) return false;
+
+  const date = parseLocalDate(dateString);
+  if (isNaN(date.getTime())) return false;
+
+  return startOfLocalDay(date).getTime() === startOfLocalDay(referenceDate).getTime();
+};
+
 export const formatRelativeDate = (dateString?: string | null): string | null => {
   if (!dateString) return null;
   
   const date = parseLocalDate(dateString);
   if (isNaN(date.getTime())) return null;
   
-  const now = new Date();
-  
-  // Reset times to start of day (midnight) for accurate day comparison
-  const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const nowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const nowStart = startOfLocalDay(new Date());
+  const dateStart = startOfLocalDay(date);
   const diffDays = Math.floor((dateStart.getTime() - nowStart.getTime()) / (1000 * 60 * 60 * 24));
   
   // Return relative formatting
@@ -57,11 +75,8 @@ export const formatCompactDate = (dateString?: string | null): string | null => 
   const date = parseLocalDate(dateString);
   if (isNaN(date.getTime())) return null;
   
-  const now = new Date();
-  
-  // Reset times to start of day for accurate day comparison
-  const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const nowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const nowStart = startOfLocalDay(new Date());
+  const dateStart = startOfLocalDay(date);
   const diffDays = Math.floor((dateStart.getTime() - nowStart.getTime()) / (1000 * 60 * 60 * 24));
   
   if (diffDays === 0) return 'Today';
@@ -82,11 +97,8 @@ export const formatRelativeTime = (timeString?: string): string => {
   const date = parseLocalDate(timeString);
   if (isNaN(date.getTime())) return 'Never';
   
-  const now = new Date();
-  
-  // Reset times to start of day for accurate day comparison
-  const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const nowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const nowStart = startOfLocalDay(new Date());
+  const dateStart = startOfLocalDay(date);
   const diffDays = Math.floor((nowStart.getTime() - dateStart.getTime()) / (1000 * 60 * 60 * 24));
   
   if (diffDays === 0) return 'Today';
@@ -114,10 +126,9 @@ export const isDateInRange = (dateString: string, startDate: Date, endDate: Date
   const date = parseLocalDate(dateString);
   if (isNaN(date.getTime())) return false;
   
-  // Reset all dates to start of day
-  const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const rangeStart = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-  const rangeEnd = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+  const dateStart = startOfLocalDay(date);
+  const rangeStart = startOfLocalDay(startDate);
+  const rangeEnd = startOfLocalDay(endDate);
   
   return dateStart >= rangeStart && dateStart <= rangeEnd;
 };

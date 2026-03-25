@@ -6,11 +6,12 @@ Settings are split between normal persisted preferences and sensitive values tha
 
 ## What Settings Control
 
-The current settings surface covers four broad areas:
+The current settings surface covers five broad areas:
 
 - Appearance: theme, font family, font size, line height
 - Editor behavior: tab size, word wrap, editor mode, keybindings
 - Workspace behavior: `last_folder`, `max_tabs`, `restore_tabs`, auto-initialize, seed example content, default workspace path
+- MCP server launch defaults: `mcp_server_workspace_path`, `mcp_server_read_only`, `mcp_server_log_level`
 - Optional integrations: git sync preferences and related metadata
 
 Google Calendar configuration uses its own command surface and secure storage flow rather than living entirely inside normal settings.
@@ -47,6 +48,7 @@ At startup, settings influence several important flows:
 - editor mode selection
 - workspace recovery via `last_folder`
 - default-space initialization when no valid workspace is saved
+- standalone MCP server workspace resolution and launch defaults when callers omit CLI flags
 - git sync and settings UI defaults
 
 This means settings are part of application boot, not just a passive preferences screen.
@@ -71,6 +73,9 @@ Important fields include:
 - `auto_initialize`
 - `seed_example_content`
 - `default_space_path`
+- `mcp_server_workspace_path`
+- `mcp_server_read_only`
+- `mcp_server_log_level`
 - git sync fields such as `git_sync_enabled`, `git_sync_repo_path`, `git_sync_remote_url`, `git_sync_branch`, and sync timestamps
 
 ## UI Structure
@@ -82,6 +87,7 @@ The settings UI is organized under `src/components/settings/` and includes:
 - workspace settings
 - GTD settings
 - git sync settings
+- MCP server settings
 - Google Calendar settings
 - advanced settings
 - keyboard shortcut management

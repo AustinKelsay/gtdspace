@@ -2,7 +2,7 @@
  * @fileoverview Dashboard Actions Tab - Comprehensive actions list with filtering
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -68,7 +68,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import type { ActionItem } from '@/hooks/useActionsData';
-import { formatRelativeDate, parseLocalDate } from '@/utils/date-formatting';
+import { formatRelativeDate, isDateOverdue, parseLocalDate } from '@/utils/date-formatting';
 
 // Use ActionItem from hook to prevent drift
 
@@ -109,6 +109,21 @@ const EFFORT_SHORT: Record<string, string> = {
   'extra-large': 'XL'
 };
 
+const isFinishedAction = (status: string) => status === 'completed' || status === 'cancelled';
+
+const INTERACTIVE_ELEMENT_SELECTOR = [
+  'button',
+  'a',
+  'input',
+  'select',
+  'textarea',
+  '[role="button"]',
+  '[role="menuitem"]',
+  '[role="checkbox"]',
+  '[data-radix-dropdown-menu-content]',
+  '[data-radix-dropdown-menu-trigger]',
+].join(', ');
+
 // Sort options
 const SORT_OPTIONS = [
   { value: 'name', label: 'Name' },
@@ -131,17 +146,17 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
   onDeleteAction
 }) => {
   // Debug logger gated in non-production
-  const debug = (...args: unknown[]) => {
+  const debug = React.useCallback((...args: unknown[]) => {
     if (import.meta.env.MODE !== 'production') {
       console.debug(...args);
     }
-  };
+  }, []);
   React.useEffect(() => {
     if (actions.length > 0) {
       debug('[DashboardActions] actions length:', actions.length);
       debug('[DashboardActions] sample action:', { id: actions[0]?.id, path: actions[0]?.path });
     }
-  }, [actions]);
+  }, [actions, debug]);
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>(['in-progress', 'waiting']);
@@ -155,6 +170,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
   const [selectedActions, setSelectedActions] = useState<Set<string>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ActionItem | null>(null);
+  const sortOrderLabel = sortOrder === 'asc' ? 'Ascending' : 'Descending';
 
   // Filter actions
   const filteredActions = useMemo(() => {
@@ -275,7 +291,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
       debug('[DashboardActions] selected total:', newSet.size);
       return newSet;
     });
-  }, []);
+  }, [debug]);
 
   // Select all visible actions
   const selectAllVisible = useCallback(() => {
@@ -286,6 +302,12 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
   const clearSelection = useCallback(() => {
     setSelectedActions(new Set());
   }, []);
+
+  useEffect(() => {
+    if (selectedActions.size > 0) {
+      debug('[DashboardActions] bulk actions visible, selected:', selectedActions.size);
+    }
+  }, [debug, selectedActions.size]);
 
   // Clear all filters
   const clearFilters = useCallback(() => {
@@ -311,6 +333,26 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
     const option = EFFORT_OPTIONS.find(opt => opt.value === effort);
     if (!option) return effort;
     return option.label;
+  };
+
+  const shouldIgnoreCardActivation = (
+    target: EventTarget | null,
+    currentTarget: EventTarget | null
+  ) => {
+    if (!(target instanceof Element) || !(currentTarget instanceof Element)) {
+      return false;
+    }
+
+    if (target === currentTarget) {
+      return false;
+    }
+
+    const interactiveAncestor = target.closest(INTERACTIVE_ELEMENT_SELECTOR);
+    return (
+      interactiveAncestor !== null &&
+      interactiveAncestor !== currentTarget &&
+      currentTarget.contains(interactiveAncestor)
+    );
   };
 
   // Use shared date formatting utility
@@ -341,8 +383,8 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
     }, {} as Record<string, number>);
     
     const overdue = filteredActions.filter(a => {
-      if (!a.dueDate) return false;
-      return parseLocalDate(a.dueDate) < new Date();
+      if (!a.dueDate || isFinishedAction(a.status)) return false;
+      return isDateOverdue(a.dueDate);
     }).length;
 
     return { total, byStatus, overdue };
@@ -353,8 +395,8 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
       {/* Header with filters */}
       <div className="flex flex-col gap-4">
         {/* Search and main controls */}
-        <div className="flex gap-2">
-          <div className="flex-1 relative">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search actions, projects, or contexts..."
@@ -363,95 +405,99 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
               className="pl-9"
             />
           </div>
-          
-          <Button
-            variant="outline"
-            onClick={() => setShowFilters(!showFilters)}
-            className={cn(activeFilterCount > 0 && "border-primary")}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-            {activeFilterCount > 0 && (
-              <Badge variant="secondary" className="ml-2">
-                {activeFilterCount}
-              </Badge>
-            )}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowFilters(!showFilters)}
+              className={cn(activeFilterCount > 0 && "border-primary")}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Filters
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <ArrowUpDown className="h-4 w-4 mr-2" />
-                Sort
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[200px]">
-              <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {SORT_OPTIONS.map(option => (
-                <DropdownMenuItem
-                  key={option.value}
-                  onClick={() => setSortBy(option.value)}
-                  className={cn(sortBy === option.value && "bg-accent")}
-                >
-                  {option.label}
-                  {sortBy === option.value && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="ml-auto h-4 w-4 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                      }}
-                    >
-                      {sortOrder === 'asc' ? '↑' : '↓'}
-                    </Button>
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {selectedActions.size > 0 && (
-            <>
-              {import.meta.env.MODE !== 'production' ? console.debug('[DashboardActions] bulk actions visible, selected:', selectedActions.size) : null}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline">
-                    <MoreHorizontal className="h-4 w-4 mr-2" />
-                    Bulk Actions ({selectedActions.size})
-                  </Button>
-                </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuLabel>Update Status</DropdownMenuLabel>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <ArrowUpDown className="h-4 w-4 mr-2" />
+                  Sort
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[200px]">
+                <DropdownMenuLabel>Sort by</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {STATUS_OPTIONS.map(status => (
+                {SORT_OPTIONS.map(option => (
                   <DropdownMenuItem
-                    key={status.value}
-                    onClick={() => {
-                      if (onBulkUpdate) {
-                        // Get the selected action IDs and their paths
-                        const selectedActionIds = Array.from(selectedActions);
-                        const selectedActionPaths = selectedActionIds.map(id => {
-                          const action = filteredActions.find(a => a.id === id);
-                          debug('[DashboardActions] bulk map action:', { id, path: action?.path });
-                          return action?.path || id;
-                        });
-                        debug('[DashboardActions] bulk update begin:', { count: selectedActionIds.length, status: status.value });
-                        onBulkUpdate(selectedActionIds, { status: status.value }, selectedActionPaths);
-                        clearSelection();
-                      }
-                    }}
+                    key={option.value}
+                    onClick={() => setSortBy(option.value)}
+                    className={cn(sortBy === option.value && "bg-accent")}
                   >
-                    <status.icon className={cn("h-4 w-4 mr-2", status.color)} />
-                    {status.label}
+                    {option.label}
+                    {sortBy === option.value && (
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {sortOrderLabel}
+                      </span>
+                    )}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            </>
-          )}
+
+            <Button
+              variant="outline"
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              aria-label={`Toggle sort order. Current order: ${sortOrderLabel}`}
+              title={`Current sort order: ${sortOrderLabel}`}
+            >
+              {sortOrder === 'asc' ? 'Asc' : 'Desc'}
+            </Button>
+
+            {selectedActions.size > 0 && (
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline">
+                      <MoreHorizontal className="h-4 w-4 mr-2" />
+                      Bulk Actions ({selectedActions.size})
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuLabel>Update Status</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {STATUS_OPTIONS.map(status => (
+                      <DropdownMenuItem
+                        key={status.value}
+                        onClick={() => {
+                          if (onBulkUpdate) {
+                            const selectedActionIds = Array.from(selectedActions);
+                            const selectedActionEntries = selectedActionIds
+                              .map(id => {
+                                const action = actions.find(a => a.id === id);
+                                debug('[DashboardActions] bulk map action:', { id, path: action?.path });
+                                return action?.path ? { id, path: action.path } : null;
+                              })
+                              .filter((entry): entry is { id: string; path: string } => Boolean(entry));
+                            const selectedActionIdsFiltered = selectedActionEntries.map(entry => entry.id);
+                            const selectedActionPaths = selectedActionEntries.map(entry => entry.path);
+                            debug('[DashboardActions] bulk update begin:', { count: selectedActionIdsFiltered.length, status: status.value });
+                            onBulkUpdate(selectedActionIdsFiltered, { status: status.value }, selectedActionPaths);
+                            clearSelection();
+                          }
+                        }}
+                      >
+                        <status.icon className={cn("h-4 w-4 mr-2", status.color)} />
+                        {status.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Filter panel */}
@@ -648,7 +694,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
         )}
 
         {/* Stats bar */}
-        <div className="flex gap-4 text-sm">
+        <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <Badge variant="outline">{stats.total} actions</Badge>
           </div>
@@ -684,167 +730,325 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
               {actions.length === 0 ? 'No actions found' : 'No actions match your filters'}
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[40px]">
-                    <input
-                      type="checkbox"
-                      checked={selectedActions.size === filteredActions.length && filteredActions.length > 0}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          selectAllVisible();
-                        } else {
-                          clearSelection();
-                        }
-                      }}
-                      className="rounded"
-                    />
-                  </TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Project</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Effort</TableHead>
-                  <TableHead>Due</TableHead>
-                  <TableHead>Focus</TableHead>
-                  <TableHead>Contexts</TableHead>
-                  <TableHead className="w-[40px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              <div className="space-y-3 p-3 lg:hidden">
                 {filteredActions.map((action) => {
                   const statusDisplay = getStatusDisplay(action.status);
                   const StatusIcon = statusDisplay.icon;
-                  const isOverdue = action.dueDate && parseLocalDate(action.dueDate) < new Date();
-                  
+                  const isOverdue = !isFinishedAction(action.status) && isDateOverdue(action.dueDate);
+
                   return (
-                    <TableRow 
+                    <Card
                       key={action.id}
                       className={cn(
-                        "cursor-pointer hover:bg-accent",
-                        selectedActions.has(action.id) && "bg-accent"
+                        "border-border/70 shadow-none transition-colors hover:bg-accent/30",
+                        selectedActions.has(action.id) && "bg-accent/30"
                       )}
-                      onClick={() => onSelectAction?.(action)}
                     >
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selectedActions.has(action.id)}
-                          onChange={() => toggleActionSelection(action.id)}
-                          className="rounded"
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {action.references && action.references.length > 0 && (
-                            <FileText className="h-3 w-3 text-muted-foreground" />
-                          )}
-                          {action.name}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <FolderOpen className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm">{action.projectName}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" className="h-auto p-1">
-                              <StatusIcon className={cn("h-4 w-4 mr-1", statusDisplay.color)} />
-                              <span className="text-xs">{action.status}</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
-                            {STATUS_OPTIONS.map(status => (
-                              <DropdownMenuItem
-                                key={status.value}
-                                onClick={() => onUpdateStatus?.(action.id, status.value)}
+                      <CardContent
+                        className="space-y-3 p-4"
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          if (shouldIgnoreCardActivation(event.target, event.currentTarget)) {
+                            return;
+                          }
+                          onSelectAction?.(action);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') {
+                            return;
+                          }
+                          if (shouldIgnoreCardActivation(event.target, event.currentTarget)) {
+                            return;
+                          }
+                          event.preventDefault();
+                          onSelectAction?.(action);
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedActions.has(action.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={() => toggleActionSelection(action.id)}
+                              className="mt-1 rounded"
+                              aria-label={`Select ${action.name}`}
+                            />
+                            <div className="min-w-0 space-y-1">
+                              <div className="flex items-center gap-2">
+                                {action.references && action.references.length > 0 && (
+                                  <FileText className="h-3 w-3 text-muted-foreground" />
+                                )}
+                                <p className="truncate font-medium">{action.name}</p>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <FolderOpen className="h-3.5 w-3.5" />
+                                <span className="truncate">{action.projectName}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                aria-label={`More actions for ${action.name}`}
                               >
-                                <status.icon className={cn("h-4 w-4 mr-2", status.color)} />
-                                {status.label}
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenuItem onClick={() => onSelectAction?.(action)}>
+                                Open
                               </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                      <TableCell>
-                        {action.effort && (
-                          <Badge
-                            variant="outline"
-                            title={getEffortDisplay(action.effort)}
-                            className="h-5 px-2 text-[11px] leading-none font-medium whitespace-nowrap rounded-full border-muted-foreground/30 text-muted-foreground"
-                          >
-                            {EFFORT_SHORT[action.effort] ?? action.effort}
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {action.dueDate && (
-                          <div className={cn(
-                            "flex items-center gap-1 text-xs",
-                            isOverdue && "text-destructive"
-                          )}>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => setDeleteTarget(action)}
+                              >
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="outline" size="sm" className="h-8 rounded-full px-3">
+                                <StatusIcon className={cn("h-4 w-4 mr-2", statusDisplay.color)} />
+                                <span className="text-xs">{action.status}</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
+                              {STATUS_OPTIONS.map(status => (
+                                <DropdownMenuItem
+                                  key={status.value}
+                                  onClick={() => onUpdateStatus?.(action.id, status.value)}
+                                >
+                                  <status.icon className={cn("h-4 w-4 mr-2", status.color)} />
+                                  {status.label}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
+                          {action.effort && (
+                            <Badge
+                              variant="outline"
+                              title={getEffortDisplay(action.effort)}
+                              className="h-8 rounded-full border-muted-foreground/20 px-3 text-xs font-medium text-muted-foreground"
+                            >
+                              {EFFORT_SHORT[action.effort] ?? action.effort}
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                          <div className="flex items-center gap-2">
                             <Calendar className="h-3 w-3" />
-                            {formatDate(action.dueDate)}
+                            <span className={cn(isOverdue && "text-destructive")}>
+                              {action.dueDate ? formatDate(action.dueDate) : 'No due date'}
+                            </span>
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {action.focusDate && (
-                          <div className="flex items-center gap-1 text-xs">
+                          <div className="flex items-center gap-2">
                             <Zap className="h-3 w-3" />
-                            {formatDate(action.focusDate)}
+                            <span>{action.focusDate ? formatDate(action.focusDate) : 'No focus date'}</span>
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
+                        </div>
+
                         {action.contexts && action.contexts.length > 0 && (
-                          <div className="flex gap-1">
-                            {action.contexts.slice(0, 2).map(context => (
+                          <div className="flex flex-wrap gap-1.5">
+                            {action.contexts.slice(0, 3).map(context => (
                               <Badge key={context} variant="secondary" className="text-xs">
-                                <Tag className="h-2 w-2 mr-1" />
+                                <Tag className="mr-1 h-2.5 w-2.5" />
                                 {context}
                               </Badge>
                             ))}
-                            {action.contexts.length > 2 && (
+                            {action.contexts.length > 3 && (
                               <Badge variant="secondary" className="text-xs">
-                                +{action.contexts.length - 2}
+                                +{action.contexts.length - 3}
                               </Badge>
                             )}
                           </div>
                         )}
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => onSelectAction?.(action)}>
-                              Open
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onSelectAction?.(action)}>
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              className="text-destructive"
-                              onClick={() => setDeleteTarget(action)}
-                            >
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
+                      </CardContent>
+                    </Card>
                   );
                 })}
-              </TableBody>
-            </Table>
+              </div>
+
+              <div className="hidden overflow-x-auto lg:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[40px]">
+                        <input
+                          type="checkbox"
+                          checked={selectedActions.size === filteredActions.length && filteredActions.length > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              selectAllVisible();
+                            } else {
+                              clearSelection();
+                            }
+                          }}
+                          className="rounded"
+                          aria-label="Select all actions"
+                        />
+                      </TableHead>
+                      <TableHead>Action</TableHead>
+                      <TableHead>Project</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Effort</TableHead>
+                      <TableHead>Due</TableHead>
+                      <TableHead>Focus</TableHead>
+                      <TableHead>Contexts</TableHead>
+                      <TableHead className="w-[40px]"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredActions.map((action) => {
+                      const statusDisplay = getStatusDisplay(action.status);
+                      const StatusIcon = statusDisplay.icon;
+                      const isOverdue = !isFinishedAction(action.status) && isDateOverdue(action.dueDate);
+
+                      return (
+                        <TableRow
+                          key={action.id}
+                          className={cn(
+                            "cursor-pointer hover:bg-accent",
+                            selectedActions.has(action.id) && "bg-accent"
+                          )}
+                          onClick={() => onSelectAction?.(action)}
+                        >
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedActions.has(action.id)}
+                              onChange={() => toggleActionSelection(action.id)}
+                              className="rounded"
+                              aria-label={`Select action ${action.name}`}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              {action.references && action.references.length > 0 && (
+                                <FileText className="h-3 w-3 text-muted-foreground" />
+                              )}
+                              {action.name}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <FolderOpen className="h-3 w-3 text-muted-foreground" />
+                              <span className="text-sm">{action.projectName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="sm" className="h-auto p-1">
+                                  <StatusIcon className={cn("h-4 w-4 mr-1", statusDisplay.color)} />
+                                  <span className="text-xs">{action.status}</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
+                                {STATUS_OPTIONS.map(status => (
+                                  <DropdownMenuItem
+                                    key={status.value}
+                                    onClick={() => onUpdateStatus?.(action.id, status.value)}
+                                  >
+                                    <status.icon className={cn("h-4 w-4 mr-2", status.color)} />
+                                    {status.label}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                          <TableCell>
+                            {action.effort && (
+                              <Badge
+                                variant="outline"
+                                title={getEffortDisplay(action.effort)}
+                                className="h-5 whitespace-nowrap rounded-full border-muted-foreground/30 px-2 text-[11px] font-medium leading-none text-muted-foreground"
+                              >
+                                {EFFORT_SHORT[action.effort] ?? action.effort}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {action.dueDate && (
+                              <div className={cn(
+                                "flex items-center gap-1 text-xs",
+                                isOverdue && "text-destructive"
+                              )}>
+                                <Calendar className="h-3 w-3" />
+                                {formatDate(action.dueDate)}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {action.focusDate && (
+                              <div className="flex items-center gap-1 text-xs">
+                                <Zap className="h-3 w-3" />
+                                {formatDate(action.focusDate)}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {action.contexts && action.contexts.length > 0 && (
+                              <div className="flex gap-1">
+                                {action.contexts.slice(0, 2).map(context => (
+                                  <Badge key={context} variant="secondary" className="text-xs">
+                                    <Tag className="h-2 w-2 mr-1" />
+                                    {context}
+                                  </Badge>
+                                ))}
+                                {action.contexts.length > 2 && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    +{action.contexts.length - 2}
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  aria-label={`More actions for ${action.name}`}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenuItem onClick={() => onSelectAction?.(action)}>
+                                  Open
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={() => setDeleteTarget(action)}
+                                >
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

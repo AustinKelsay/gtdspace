@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use gtdspace_lib::backend::{
@@ -17,6 +17,26 @@ use rmcp::{
 use serde::de::DeserializeOwned;
 use serde_json::{json, Map, Value};
 
+fn mcp_settings_dir(root: &Path) -> PathBuf {
+    if cfg!(target_os = "macos") {
+        root.join("Library/Application Support/com.gtdspace.app")
+    } else if cfg!(target_os = "windows") {
+        root.join("AppData/Roaming/com.gtdspace.app/config")
+    } else {
+        root.join(".config/com.gtdspace.app")
+    }
+}
+
+fn write_saved_mcp_settings(home_root: &Path, settings: Value) -> Result<(), Box<dyn Error>> {
+    let settings_dir = mcp_settings_dir(home_root);
+    fs::create_dir_all(&settings_dir)?;
+    fs::write(
+        settings_dir.join("settings.json"),
+        serde_json::to_vec_pretty(&json!({ "user_settings": settings }))?,
+    )?;
+    Ok(())
+}
+
 async fn start_client(
     workspace: &Path,
 ) -> Result<rmcp::service::RunningService<rmcp::RoleClient, ()>, Box<dyn Error>> {
@@ -29,6 +49,22 @@ async fn start_client(
         }),
     )?;
 
+    Ok(().serve(transport).await?)
+}
+
+async fn start_client_from_saved_defaults(
+    home_root: &Path,
+) -> Result<rmcp::service::RunningService<rmcp::RoleClient, ()>, Box<dyn Error>> {
+    let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_gtdspace-mcp"));
+    command.env("HOME", home_root);
+
+    if cfg!(target_os = "windows") {
+        command.env("APPDATA", home_root.join("AppData/Roaming"));
+    } else if cfg!(target_os = "linux") {
+        command.env("XDG_CONFIG_HOME", home_root.join(".config"));
+    }
+
+    let transport = TokioChildProcess::new(command.configure(|_cmd| {}))?;
     Ok(().serve(transport).await?)
 }
 
@@ -214,5 +250,56 @@ async fn mcp_server_fails_fast_for_invalid_workspace() -> Result<(), Box<dyn Err
         .await?;
 
     assert!(!status.success());
+    Ok(())
+}
+
+#[tokio::test]
+async fn mcp_server_uses_saved_defaults_when_flags_are_omitted() -> Result<(), Box<dyn Error>> {
+    let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
+    let workspace_root = workspace.path().to_path_buf();
+    let canonical_workspace_root = fs::canonicalize(&workspace_root)?;
+    let fake_home = tempfile::tempdir()?;
+
+    write_saved_mcp_settings(
+        fake_home.path(),
+        json!({
+            "mcp_server_workspace_path": workspace_root,
+            "mcp_server_read_only": true,
+            "mcp_server_log_level": "debug"
+        }),
+    )?;
+
+    let client = start_client_from_saved_defaults(fake_home.path()).await?;
+
+    let info: WorkspaceInfo = call_tool_typed(&client, "workspace_info", None).await?;
+    assert_eq!(info.workspace_root, normalize_workspace_path(&canonical_workspace_root));
+    assert!(info.read_only);
+
+    let error = call_tool_typed::<PlannedChange>(
+        &client,
+        "project_create",
+        Some(
+            json!({
+                "name": "Gamma Project",
+                "description": "Should stay read only.",
+                "status": "in-progress",
+                "areas": [],
+                "goals": [],
+                "vision": [],
+                "purpose": [],
+                "generalReferences": []
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await
+    .unwrap_err()
+    .to_string();
+
+    assert!(error.contains("read-only mode"));
+    client.cancel().await?;
+
     Ok(())
 }

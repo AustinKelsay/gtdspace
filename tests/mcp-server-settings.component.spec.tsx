@@ -117,7 +117,7 @@ describe('McpServerSettings component', () => {
 
     await screen.findByText('Valid GTD workspace');
     expect(screen.getByText('/spaces/work')).toBeInTheDocument();
-    expect(screen.getByText('MCP workspace override')).toBeInTheDocument();
+    expect(screen.getByText('Resolved GTD workspace ancestor')).toBeInTheDocument();
     expect(
       screen.getByText((content) =>
         content.includes('npm run mcp:dev -- --workspace "/spaces/work" --read-only --log-level debug')

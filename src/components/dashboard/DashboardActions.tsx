@@ -474,11 +474,13 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                         onClick={() => {
                           if (onBulkUpdate) {
                             const selectedActionIds = Array.from(selectedActions);
-                            const selectedActionPaths = selectedActionIds.map(id => {
-                              const action = actions.find(a => a.id === id);
-                              debug('[DashboardActions] bulk map action:', { id, path: action?.path });
-                              return action?.path || id;
-                            });
+                            const selectedActionPaths = selectedActionIds
+                              .map(id => {
+                                const action = actions.find(a => a.id === id);
+                                debug('[DashboardActions] bulk map action:', { id, path: action?.path });
+                                return action?.path;
+                              })
+                              .filter((path): path is string => Boolean(path));
                             debug('[DashboardActions] bulk update begin:', { count: selectedActionIds.length, status: status.value });
                             onBulkUpdate(selectedActionIds, { status: status.value }, selectedActionPaths);
                             clearSelection();
@@ -796,7 +798,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                               <DropdownMenuItem onClick={() => onSelectAction?.(action)}>
                                 Open
                               </DropdownMenuItem>
@@ -1024,7 +1026,7 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
+                              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                                 <DropdownMenuItem onClick={() => onSelectAction?.(action)}>
                                   Open
                                 </DropdownMenuItem>

@@ -894,7 +894,10 @@ mod tests {
         }))
         .expect("parse partial settings");
 
-        assert_eq!(settings.mcp_server_workspace_path.as_deref(), Some("/tmp/workspace"));
+        assert_eq!(
+            settings.mcp_server_workspace_path.as_deref(),
+            Some("/tmp/workspace")
+        );
         assert_eq!(settings.mcp_server_read_only, Some(true));
         assert_eq!(settings.mcp_server_log_level.as_deref(), Some("debug"));
         assert_eq!(settings.theme, "dark");

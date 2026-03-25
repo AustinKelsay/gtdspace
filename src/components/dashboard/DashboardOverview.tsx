@@ -342,7 +342,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         <div className="mb-4 flex flex-col gap-4 rounded-xl border border-border/70 bg-card/70 p-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h2 className="text-xl font-semibold sm:text-2xl">
-              {gtdSpace.root_path.split('/').pop() || 'GTD Workspace'}
+              {gtdSpace.root_path.split(/[\\/]/).filter(Boolean).pop() || 'GTD Workspace'}
             </h2>
             <p className="mt-1 break-all text-sm text-muted-foreground">{gtdSpace.root_path}</p>
           </div>
@@ -631,7 +631,20 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                       <div
                         key={item.id}
                         className="cursor-pointer rounded-lg border border-border/70 p-3 transition-colors hover:bg-accent/30"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => item.type === 'action' ? onSelectAction?.(item.id) : onSelectProject?.(item.id)}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') {
+                            return;
+                          }
+                          event.preventDefault();
+                          if (item.type === 'action') {
+                            onSelectAction?.(item.id);
+                          } else {
+                            onSelectProject?.(item.id);
+                          }
+                        }}
                       >
                         <div className="mb-1 flex items-center justify-between gap-3">
                           <span className="flex items-center gap-2 truncate text-sm font-medium">

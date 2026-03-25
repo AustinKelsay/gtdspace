@@ -285,14 +285,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const upcomingItems = React.useMemo(() => {
     const now = new Date();
     const weekFromNow = getDateFromNow(7);
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
     const upcomingProjects = projects
       .filter(p => {
         if (!p.dueDate || p.status === 'completed' || p.status === 'cancelled') return false;
         if (onlyOverdue) {
-          const due = parseLocalDate(p.dueDate);
-          return !isNaN(due.getTime()) && due < today;
+          return isDateOverdue(p.dueDate);
         }
         return isDateInRange(p.dueDate, now, weekFromNow);
       })
@@ -310,8 +308,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         if (!a.dueDate) return false;
         if (a.status === 'completed' || a.status === 'cancelled') return false;
         if (onlyOverdue) {
-          const due = parseLocalDate(a.dueDate);
-          return !isNaN(due.getTime()) && due < today;
+          return isDateOverdue(a.dueDate);
         }
         return isDateInRange(a.dueDate, now, weekFromNow);
       })

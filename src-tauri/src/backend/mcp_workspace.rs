@@ -1666,28 +1666,15 @@ fn resolve_workspace(cli_workspace: Option<String>) -> Result<PathBuf, String> {
         return validate_workspace_candidate(Path::new(&path));
     }
 
-    if let Some(value) = load_saved_settings() {
-        let mcp_server_workspace_path = value
-            .get("user_settings")
-            .and_then(|settings| settings.get("mcp_server_workspace_path"))
-            .and_then(|entry| entry.as_str())
-            .map(str::to_string);
-        let last_folder = value
-            .get("user_settings")
-            .and_then(|settings| settings.get("last_folder"))
-            .and_then(|entry| entry.as_str())
-            .map(str::to_string);
-        let default_space_path = value
-            .get("user_settings")
-            .and_then(|settings| settings.get("default_space_path"))
-            .and_then(|entry| entry.as_str())
-            .map(str::to_string);
-
-        if let Some(candidate) = mcp_server_workspace_path {
+    if let Some(settings) = load_saved_user_settings() {
+        if let Some(candidate) = settings.mcp_server_workspace_path {
             return validate_workspace_candidate(Path::new(&candidate));
         }
 
-        for candidate in [last_folder, default_space_path].into_iter().flatten() {
+        for candidate in [settings.last_folder, settings.default_space_path]
+            .into_iter()
+            .flatten()
+        {
             if let Ok(path) = validate_workspace_candidate(Path::new(&candidate)) {
                 return Ok(path);
             }
@@ -1729,6 +1716,12 @@ fn load_saved_settings() -> Option<Value> {
     serde_json::from_str::<Value>(&contents).ok()
 }
 
+fn load_saved_user_settings() -> Option<crate::commands::settings::UserSettings> {
+    let settings = load_saved_settings()?;
+    let user_settings = settings.get("user_settings")?;
+    crate::commands::settings::parse_user_settings_value(user_settings).ok()
+}
+
 fn sanitize_mcp_server_log_level(value: Option<&str>) -> String {
     let normalized = value
         .unwrap_or(DEFAULT_MCP_SERVER_LOG_LEVEL)
@@ -1742,20 +1735,17 @@ fn sanitize_mcp_server_log_level(value: Option<&str>) -> String {
 }
 
 pub fn load_mcp_server_launch_settings() -> McpServerLaunchSettings {
-    let settings = load_saved_settings();
-    let user_settings = settings
-        .as_ref()
-        .and_then(|value| value.get("user_settings"));
+    let user_settings = load_saved_user_settings();
 
     McpServerLaunchSettings {
         read_only: user_settings
-            .and_then(|settings| settings.get("mcp_server_read_only"))
-            .and_then(|entry| entry.as_bool())
+            .as_ref()
+            .and_then(|settings| settings.mcp_server_read_only)
             .unwrap_or(false),
         log_level: sanitize_mcp_server_log_level(
             user_settings
-                .and_then(|settings| settings.get("mcp_server_log_level"))
-                .and_then(|entry| entry.as_str()),
+                .as_ref()
+                .and_then(|settings| settings.mcp_server_log_level.as_deref()),
         ),
     }
 }

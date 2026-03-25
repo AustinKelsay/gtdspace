@@ -165,6 +165,35 @@ const getWorkspaceResolutionLabel = (source: 'override' | 'last-folder' | 'defau
   }
 };
 
+type InvokeWithHandling = <T>(
+  command: string,
+  args?: Record<string, unknown>,
+  options?: { errorMessage?: string }
+) => Promise<T | null>;
+
+const isValidWorkspaceCandidate = async (
+  path: string,
+  invokeWithHandling: InvokeWithHandling
+) => {
+  for (const candidate of getWorkspaceAncestors(path)) {
+    const isValid = await invokeWithHandling<boolean>(
+      'check_is_gtd_space',
+      { path: candidate },
+      { errorMessage: 'Failed to validate the MCP workspace path.' }
+    );
+
+    if (isValid === null) {
+      return null;
+    }
+
+    if (isValid) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 const DetailCard: React.FC<{
   label: string;
   value: string;
@@ -278,21 +307,29 @@ export const McpServerSettings: React.FC = () => {
   const defaultLogLevel = settings.mcp_server_log_level ?? 'info';
   const readOnlyDefault = settings.mcp_server_read_only ?? false;
 
-  const workspaceResolution = React.useMemo(() => {
-    if (workspaceOverride) {
-      return { path: workspaceOverride, source: 'override' as const };
-    }
-    if (settings.last_folder) {
-      return { path: settings.last_folder, source: 'last-folder' as const };
-    }
-    if (settings.default_space_path) {
-      return { path: settings.default_space_path, source: 'default-space' as const };
-    }
-    if (platformDefaultPath) {
-      return { path: platformDefaultPath, source: 'platform-default' as const };
-    }
-    return { path: null, source: 'unavailable' as const };
-  }, [platformDefaultPath, settings.default_space_path, settings.last_folder, workspaceOverride]);
+  const fallbackWorkspaceCandidates = React.useMemo(
+    () => [
+      settings.last_folder?.trim() || null,
+      settings.default_space_path?.trim() || null,
+      platformDefaultPath?.trim() || null,
+    ]
+      .filter((path): path is string => Boolean(path))
+      .map((path) => {
+        if (path === settings.last_folder?.trim()) {
+          return { path, source: 'last-folder' as const };
+        }
+        if (path === settings.default_space_path?.trim()) {
+          return { path, source: 'default-space' as const };
+        }
+        return { path, source: 'platform-default' as const };
+      }),
+    [platformDefaultPath, settings.default_space_path, settings.last_folder]
+  );
+
+  const [workspaceResolution, setWorkspaceResolution] = React.useState<{
+    path: string | null;
+    source: 'override' | 'last-folder' | 'default-space' | 'platform-default' | 'unavailable';
+  }>({ path: null, source: 'unavailable' });
 
   React.useEffect(() => {
     const requestId = workspaceValidationRequestRef.current + 1;
@@ -300,24 +337,11 @@ export const McpServerSettings: React.FC = () => {
     let isActive = true;
 
     const validateWorkspace = async () => {
-      const path = workspaceResolution.path;
-
-      if (!path) {
-        setIsCheckingWorkspace(false);
-        setResolvedWorkspaceIsValid(null);
+      if (workspaceOverride) {
+        setWorkspaceResolution({ path: workspaceOverride, source: 'override' });
+        setIsCheckingWorkspace(true);
         setValidationError(null);
-        return;
-      }
-
-      setIsCheckingWorkspace(true);
-      setValidationError(null);
-
-      for (const candidate of getWorkspaceAncestors(path)) {
-        const isValid = await invokeWithHandling<boolean>(
-          'check_is_gtd_space',
-          { path: candidate },
-          { errorMessage: 'Failed to validate the MCP workspace path.' }
-        );
+        const isValid = await isValidWorkspaceCandidate(workspaceOverride, invokeWithHandling);
 
         if (!isActive || workspaceValidationRequestRef.current !== requestId) {
           return;
@@ -330,7 +354,39 @@ export const McpServerSettings: React.FC = () => {
           return;
         }
 
+        setResolvedWorkspaceIsValid(isValid);
+        setValidationError(isValid ? null : 'Workspace path is not a valid GTD space');
+        setIsCheckingWorkspace(false);
+        return;
+      }
+
+      if (fallbackWorkspaceCandidates.length === 0) {
+        setWorkspaceResolution({ path: null, source: 'unavailable' });
+        setIsCheckingWorkspace(false);
+        setResolvedWorkspaceIsValid(null);
+        setValidationError(null);
+        return;
+      }
+
+      setIsCheckingWorkspace(true);
+      setValidationError(null);
+
+      for (const candidate of fallbackWorkspaceCandidates) {
+        const isValid = await isValidWorkspaceCandidate(candidate.path, invokeWithHandling);
+        if (!isActive || workspaceValidationRequestRef.current !== requestId) {
+          return;
+        }
+
+        if (isValid === null) {
+          setWorkspaceResolution({ path: null, source: 'unavailable' });
+          setResolvedWorkspaceIsValid(null);
+          setValidationError(null);
+          setIsCheckingWorkspace(false);
+          return;
+        }
+
         if (isValid) {
+          setWorkspaceResolution(candidate);
           setResolvedWorkspaceIsValid(true);
           setValidationError(null);
           setIsCheckingWorkspace(false);
@@ -338,6 +394,7 @@ export const McpServerSettings: React.FC = () => {
         }
       }
 
+      setWorkspaceResolution({ path: null, source: 'unavailable' });
       setResolvedWorkspaceIsValid(false);
       setValidationError('Workspace path is not a valid GTD space');
       setIsCheckingWorkspace(false);
@@ -348,7 +405,7 @@ export const McpServerSettings: React.FC = () => {
     return () => {
       isActive = false;
     };
-  }, [invokeWithHandling, workspaceResolution.path]);
+  }, [fallbackWorkspaceCandidates, invokeWithHandling, workspaceOverride]);
 
   const persistWorkspaceOverride = React.useCallback(async (nextValue: string) => {
     await updateSettings({

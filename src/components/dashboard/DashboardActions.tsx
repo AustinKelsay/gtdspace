@@ -2,7 +2,7 @@
  * @fileoverview Dashboard Actions Tab - Comprehensive actions list with filtering
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -303,6 +303,12 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
     setSelectedActions(new Set());
   }, []);
 
+  useEffect(() => {
+    if (selectedActions.size > 0) {
+      debug('[DashboardActions] bulk actions visible, selected:', selectedActions.size);
+    }
+  }, [selectedActions.size]);
+
   // Clear all filters
   const clearFilters = useCallback(() => {
     setSearchQuery('');
@@ -452,7 +458,6 @@ export const DashboardActions: React.FC<DashboardActionsProps> = ({
 
             {selectedActions.size > 0 && (
               <>
-                {import.meta.env.MODE !== 'production' ? console.debug('[DashboardActions] bulk actions visible, selected:', selectedActions.size) : null}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline">

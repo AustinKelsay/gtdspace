@@ -168,6 +168,12 @@ fn normalize_mcp_server_settings(mut settings: UserSettings) -> UserSettings {
     settings
 }
 
+pub(crate) fn parse_user_settings_value(value: &Value) -> Result<UserSettings, serde_json::Error> {
+    let mut settings = serde_json::from_value::<UserSettings>(value.clone())?;
+    settings = merge_with_default_settings(settings);
+    Ok(normalize_mcp_server_settings(settings))
+}
+
 fn sync_git_sync_encryption_key(settings: &UserSettings) -> Result<(), String> {
     sync_git_sync_encryption_key_value(settings.git_sync_encryption_key.as_deref())
 }
@@ -476,10 +482,8 @@ fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
             }
 
             // Now deserialize without the encryption key field (it will be re-attached via legacy_encryption_key)
-            match serde_json::from_value::<UserSettings>(value_to_deserialize) {
+            match parse_user_settings_value(&value_to_deserialize) {
                 Ok(mut s) => {
-                    s = merge_with_default_settings(s);
-                    s = normalize_mcp_server_settings(s);
                     s.git_sync_encryption_key =
                         legacy_encryption_key.or_else(load_git_sync_encryption_key);
                     log::info!("Loaded existing settings");

@@ -71,6 +71,11 @@ Mutation planning tools:
 - `horizon_page_create`, `horizon_page_update`
 - `reference_note_create`, `reference_note_update`
 
+Path notes:
+
+- `action_create.projectPath` must point to an existing GTD project directory such as `Projects/Alpha Project` or the project README such as `Projects/Alpha Project/README.md`.
+- The server rejects unknown project paths instead of creating new folders implicitly.
+
 Change-set lifecycle tools:
 
 - `change_apply`

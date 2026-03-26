@@ -311,6 +311,7 @@ pub struct ProjectRenameRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionCreateRequest {
+    /// Workspace-relative path to an existing GTD project directory or project README.
     pub project_path: String,
     pub name: String,
     pub status: Option<String>,
@@ -912,7 +913,7 @@ impl GtdWorkspaceService {
         request: ActionCreateRequest,
     ) -> Result<PlannedChange, String> {
         self.reject_if_read_only()?;
-        let project_dir = PathBuf::from(self.resolve_workspace_file(&request.project_path)?);
+        let project_dir = self.resolve_existing_project_directory(&request.project_path)?;
         let file_name = format!("{}.md", sanitize_markdown_file_stem(&request.name));
         let action_path = project_dir.join(file_name);
         if action_path.exists() {
@@ -1627,6 +1628,48 @@ impl GtdWorkspaceService {
             return Err("Path must stay inside the GTD workspace".to_string());
         }
         Ok(normalize_path(&absolute))
+    }
+
+    fn resolve_existing_project_directory(&self, project_path: &str) -> Result<PathBuf, String> {
+        let absolute = PathBuf::from(self.resolve_workspace_file(project_path)?);
+        let normalized_input = normalize_relative_input(project_path);
+
+        if absolute.is_file() {
+            let absolute_path = normalize_path(&absolute);
+            let relative_path =
+                normalize_absolute_to_relative(&self.workspace_root, &absolute_path);
+            let item = self.get_item(&relative_path)?;
+            if item.item_type != GtdItemType::Project {
+                return Err(format!(
+                    "action_create requires a GTD project path, got {}",
+                    item.relative_path
+                ));
+            }
+            return absolute.parent().map(Path::to_path_buf).ok_or_else(|| {
+                format!(
+                    "Project README path has no parent directory: {}",
+                    relative_path
+                )
+            });
+        }
+
+        if absolute.is_dir() {
+            let Some(readme_path) = resolve_project_readme_in_directory(&absolute) else {
+                return Err(format!("Project not found: {}", normalized_input));
+            };
+            let readme_path = normalize_path(&readme_path);
+            let relative_path = normalize_absolute_to_relative(&self.workspace_root, &readme_path);
+            let item = self.get_item(&relative_path)?;
+            if item.item_type != GtdItemType::Project {
+                return Err(format!(
+                    "action_create requires a GTD project path, got {}",
+                    item.relative_path
+                ));
+            }
+            return Ok(absolute);
+        }
+
+        Err(format!("Project not found: {}", normalized_input))
     }
 
     fn reject_if_read_only(&self) -> Result<(), String> {
@@ -2938,6 +2981,20 @@ fn project_directory_from_readme(readme_path: &str) -> Result<String, String> {
     Ok(normalize_path(parent))
 }
 
+fn resolve_project_readme_in_directory(project_dir: &Path) -> Option<PathBuf> {
+    let md_path = project_dir.join("README.md");
+    if md_path.exists() {
+        return Some(md_path);
+    }
+
+    let markdown_path = project_dir.join("README.markdown");
+    if markdown_path.exists() {
+        return Some(markdown_path);
+    }
+
+    None
+}
+
 fn build_project_markdown(input: ProjectBuildInput) -> String {
     let mut content = generate_project_readme_with_refs(ProjectReadmeParams {
         name: &input.title,
@@ -3504,6 +3561,56 @@ mod tests {
             .resolve_workspace_file("Projects/../../outside.md")
             .unwrap_err();
         assert!(error.contains("inside the GTD workspace"));
+        Ok(())
+    }
+
+    #[test]
+    fn plan_action_create_rejects_unknown_project_path() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let error = service
+            .plan_action_create(ActionCreateRequest {
+                project_path: "visible".to_string(),
+                name: "Add search function in nav".to_string(),
+                status: Some("waiting".to_string()),
+                focus_date: None,
+                due_date: None,
+                effort: None,
+                contexts: vec![],
+                notes: None,
+                general_references: vec![],
+            })
+            .unwrap_err();
+
+        assert!(error.contains("Project not found: visible"));
+        Ok(())
+    }
+
+    #[test]
+    fn plan_action_create_accepts_project_readme_path() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let planned = service.plan_action_create(ActionCreateRequest {
+            project_path: "Projects/Alpha Project/README.md".to_string(),
+            name: "Review nav search".to_string(),
+            status: Some("waiting".to_string()),
+            focus_date: None,
+            due_date: None,
+            effort: None,
+            contexts: vec![],
+            notes: None,
+            general_references: vec![],
+        })?;
+
+        assert!(planned
+            .change_set
+            .affected_paths
+            .iter()
+            .any(|path| path.ends_with("Projects/Alpha Project/Review nav search.md")));
         Ok(())
     }
 

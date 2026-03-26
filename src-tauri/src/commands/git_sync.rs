@@ -147,6 +147,13 @@ fn parse_backup_filename_timestamp(file_name: &str) -> Option<DateTime<Utc>> {
     Some(dt_with_millis.and_utc())
 }
 
+fn backup_timestamp_to_iso(entry: &BackupEntry) -> Option<String> {
+    entry
+        .parsed_timestamp
+        .map(|dt| dt.to_rfc3339())
+        .or_else(|| system_time_to_iso(entry.modified))
+}
+
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GitSyncPreviewResponse {
@@ -366,9 +373,7 @@ pub fn compute_git_status(
         last_push: settings.git_sync_last_push.clone(),
         last_pull: settings.git_sync_last_pull.clone(),
         latest_backup_file: latest_backup.as_ref().map(|entry| entry.file_name.clone()),
-        latest_backup_at: latest_backup
-            .as_ref()
-            .and_then(|entry| system_time_to_iso(entry.modified)),
+        latest_backup_at: latest_backup.as_ref().and_then(backup_timestamp_to_iso),
         has_pending_commits,
         has_remote,
         message,
@@ -1180,6 +1185,8 @@ pub fn perform_git_pull(
 
     restore_workspace(&config.workspace_path, &decrypted_archive)?;
 
+    let latest_backup_timestamp = backup_timestamp_to_iso(&latest_backup);
+
     Ok(GitOperationResultPayload {
         success: true,
         message: if force {
@@ -1188,7 +1195,7 @@ pub fn perform_git_pull(
             "Workspace restored from encrypted backup".to_string()
         },
         backup_file: Some(latest_backup.file_name),
-        timestamp: system_time_to_iso(latest_backup.modified),
+        timestamp: latest_backup_timestamp,
         pushed: false,
         details: Some(json!({
             "workspacePath": config.workspace_path,

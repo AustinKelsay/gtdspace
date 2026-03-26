@@ -769,7 +769,10 @@ describe('App integration workflows', () => {
       expect(mocks.tabManager.reloadTabFromDisk).toHaveBeenCalledWith('tab-clean');
     });
     await waitFor(() => {
-      expect(mocks.showFileReloaded).toHaveBeenCalledWith('Notes.md');
+      expect(mocks.showFileReloaded).toHaveBeenCalledWith(
+        'Notes.md',
+        '/mock/workspace/Notes.md',
+      );
     });
     expect(mocks.showFileModified).not.toHaveBeenCalled();
   });

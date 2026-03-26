@@ -395,14 +395,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 cursor-default"
+                                <span
+                                    className="inline-flex h-8 w-8 items-center justify-center p-0"
                                     aria-label="Dark mode"
                                 >
                                     <Moon className="h-4 w-4" />
-                                </Button>
+                                </span>
                             </TooltipTrigger>
                             <TooltipContent>
                                 <p>Dark Mode</p>

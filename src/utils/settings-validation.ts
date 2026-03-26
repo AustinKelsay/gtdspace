@@ -139,12 +139,11 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
     recordWarning('theme', `missing, defaulting to ${DEFAULT_SETTINGS.theme}`, data.theme, DEFAULT_SETTINGS.theme);
     coercedSettings.theme = DEFAULT_SETTINGS.theme;
   } else if (typeof data.theme !== 'string' || !VALID_THEMES.includes(data.theme as Theme)) {
-    recordError(
+    recordWarning(
       'theme',
       `must be one of: ${VALID_THEMES.join(', ')}`,
       data.theme,
       DEFAULT_SETTINGS.theme,
-      'fatal',
     );
     coercedSettings.theme = DEFAULT_SETTINGS.theme;
   } else {

@@ -119,7 +119,6 @@ export const App: React.FC = () => {
   const { state: fileState, selectFolder, loadFolder } = useFileManager();
   const {
     settings,
-    setTheme,
     setLastFolder,
     isLoading: isLoadingSettings,
   } = useSettings();
@@ -249,10 +248,6 @@ export const App: React.FC = () => {
     window.dispatchEvent(new Event("theme-changed"));
     setThemeKey((prev) => prev + 1); // Force React re-render
   }, []);
-
-  const toggleTheme = async () => {
-    // No-op: dark mode only
-  };
 
   // === INTEGRATED FILE OPERATIONS ===
 
@@ -1060,7 +1055,6 @@ export const App: React.FC = () => {
           hasCurrentFileUnsavedChanges={activeTab?.hasUnsavedChanges || false}
           hasAnyUnsavedChanges={hasUnsavedChanges}
           tabCount={tabState.openTabs.length}
-          theme={settings.theme}
           isGTDSpace={isGTDSpace}
           onSaveActiveFile={async () => {
             if (activeTab) {
@@ -1071,7 +1065,6 @@ export const App: React.FC = () => {
             await saveAllTabs();
           }}
           onOpenSettings={() => setShowSettings(true)}
-          onToggleTheme={toggleTheme}
           onOpenCalendar={
             isGTDSpace
               ? () => {

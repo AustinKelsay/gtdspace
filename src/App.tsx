@@ -25,6 +25,7 @@ import {
   GTDInitDialog,
 } from "@/components/gtd";
 import { useToast } from "@/hooks/useToast";
+import { useToast as useUiToast } from "@/hooks/use-toast";
 import { EnhancedTextEditor } from "@/components/editor/EnhancedTextEditor";
 import { ActionPage } from "@/components/gtd/ActionPage";
 import ProjectPage from "@/components/gtd/ProjectPage";
@@ -54,7 +55,14 @@ import { useErrorHandler } from "@/hooks/useErrorHandler";
 import { useGTDSpace } from "@/hooks/useGTDSpace";
 import { ErrorBoundary } from "@/components/error-handling";
 import { Toaster } from "@/components/ui/toaster";
-import type { Theme, MarkdownFile, EditorMode, GTDProject } from "@/types";
+import { GitSyncDiffReviewDialog } from "@/components/git-sync/GitSyncDiffReviewDialog";
+import type {
+  Theme,
+  MarkdownFile,
+  EditorMode,
+  GTDProject,
+  GitSyncPreviewResponse,
+} from "@/types";
 import "./styles/globals.css";
 import { onContentSaved } from "@/utils/content-event-bus";
 import {
@@ -206,7 +214,8 @@ export const App: React.FC = () => {
 
   // === TOAST NOTIFICATIONS ===
 
-  const { showFileModified, showFileDeleted, showFileCreated, showWarning } = useToast();
+  const { showFileModified, showFileReloaded, showFileDeleted, showFileCreated, showWarning } = useToast();
+  const { toast } = useUiToast();
 
   const [themeKey, setThemeKey] = React.useState(0); // Force re-render on theme change
 
@@ -371,12 +380,19 @@ export const App: React.FC = () => {
         );
         if (modifiedTab) {
           if (!modifiedTab.hasUnsavedChanges) {
-            // Offer to reload content from disk when there are no local edits
-            showFileModified(latestEvent.file_name, {
-              onReload: () => {
-                void reloadTabFromDisk(modifiedTab.id);
-              },
-            });
+            void (async () => {
+              const reloaded = await reloadTabFromDisk(modifiedTab.id);
+              if (reloaded) {
+                showFileReloaded(latestEvent.file_name);
+                return;
+              }
+
+              showFileModified(latestEvent.file_name, {
+                onReload: () => {
+                  void reloadTabFromDisk(modifiedTab.id);
+                },
+              });
+            })();
           } else {
             // For tabs with unsaved changes, just notify without auto-reload
             showFileModified(latestEvent.file_name);
@@ -394,6 +410,7 @@ export const App: React.FC = () => {
     showFileCreated,
     showFileDeleted,
     showFileModified,
+    showFileReloaded,
     reloadTabFromDisk,
   ]);
 
@@ -457,16 +474,44 @@ export const App: React.FC = () => {
   });
   const {
     status: gitSyncStatus,
+    isPreviewing: gitSyncPreviewing,
     isPushing: gitSyncPushing,
     isPulling: gitSyncPulling,
     operation: gitSyncOperation,
+    previewPush: gitSyncPreviewPush,
     push: gitSyncPush,
     pull: gitSyncPull,
   } = gitSync;
   const currentSpaceRoot = gtdSpace?.root_path;
+  const [gitSyncPreview, setGitSyncPreview] = React.useState<GitSyncPreviewResponse | null>(null);
+  const [isGitSyncReviewOpen, setIsGitSyncReviewOpen] = React.useState(false);
 
   const handleGitPush = React.useCallback(async () => {
-    await gitSyncPush();
+    const saveSucceeded = await saveAllTabs();
+    if (!saveSucceeded) {
+      toast({
+        title: 'Could not prepare backup review',
+        description: 'Save all open tabs before reviewing the encrypted backup.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const preview = await gitSyncPreviewPush();
+    if (!preview) {
+      return;
+    }
+
+    setGitSyncPreview(preview);
+    setIsGitSyncReviewOpen(true);
+  }, [gitSyncPreviewPush, saveAllTabs, toast]);
+
+  const handleConfirmGitPush = React.useCallback(async () => {
+    const success = await gitSyncPush();
+    if (success) {
+      setIsGitSyncReviewOpen(false);
+      setGitSyncPreview(null);
+    }
   }, [gitSyncPush]);
 
   const handleGitPull = React.useCallback(async () => {
@@ -1068,7 +1113,7 @@ export const App: React.FC = () => {
           onOpenKeyboardShortcuts={() => openModal("keyboardShortcuts")}
           gitSyncEnabled={gitSyncStatus.enabled}
           gitSyncStatus={gitSyncStatus}
-          gitSyncBusy={gitSyncPushing || gitSyncPulling}
+          gitSyncBusy={gitSyncPreviewing || gitSyncPushing || gitSyncPulling}
           gitSyncOperation={gitSyncOperation}
           onGitPush={handleGitPush}
           onGitPull={handleGitPull}
@@ -1635,6 +1680,8 @@ export const App: React.FC = () => {
             switchWorkspace={switchWorkspace}
             checkGTDSpace={checkGTDSpace}
             loadProjects={loadProjects}
+            onGitBackupReview={handleGitPush}
+            gitBackupReviewBusy={gitSyncPreviewing || gitSyncPushing}
           />
         </div>
       )}
@@ -1653,6 +1700,19 @@ export const App: React.FC = () => {
       <KeyboardShortcutsReferenceLazy
         isOpen={isModalOpen("keyboardShortcuts")}
         onClose={closeModal}
+      />
+
+      <GitSyncDiffReviewDialog
+        open={isGitSyncReviewOpen}
+        onOpenChange={(open) => {
+          setIsGitSyncReviewOpen(open);
+          if (!open) {
+            setGitSyncPreview(null);
+          }
+        }}
+        preview={gitSyncPreview}
+        isConfirming={gitSyncPushing}
+        onConfirm={handleConfirmGitPush}
       />
 
       {/* GTD Initialization Dialog */}

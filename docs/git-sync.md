@@ -22,9 +22,19 @@ Open **Settings → Git Sync & Backups** and configure:
 
 ## Daily Workflow
 
-1. **Push** – Use the cloud-upload icon in the header (or Settings card) after making changes on one Mac. This adds a new encrypted snapshot, commits it, and optionally pushes to GitHub.
+1. **Review + Push** – Use the cloud-upload icon in the header (or Settings card) after making changes on one Mac. GTD Space first saves open tabs, shows an exact diff against the latest local encrypted backup, and only encrypts/commits after you confirm.
 2. **Pull** – On another machine, click the cloud-download icon. The app fetches latest backups, decrypts, and replaces the local workspace.
 3. **Status** – Hover the shield indicator in the header to see the latest backup timestamp or read detailed status inside Settings.
+
+## Diff Review
+
+Before every manual push, GTD Space opens a review dialog that compares your current workspace against the latest encrypted backup already stored in the local backup repo.
+
+- **Text files** show line-level diffs.
+- **Binary files** show exact metadata such as path, size, MIME guess, and SHA-256 fingerprints.
+- **First backup** shows the full file inventory as additions because there is no earlier local snapshot yet.
+
+The review is based on the latest **local** encrypted backup, not necessarily the latest remote state.
 
 ## Tips
 

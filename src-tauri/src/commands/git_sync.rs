@@ -9,11 +9,13 @@ use aes_gcm::{
 use chrono::{DateTime, Utc};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use log::{debug, info, warn};
+use mime_guess::MimeGuess;
 use pbkdf2::pbkdf2_hmac;
 use rand::RngExt;
 use serde::Serialize;
 use serde_json::json;
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
+use similar::{ChangeTag, TextDiff};
 use std::ffi::OsStr;
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
@@ -35,6 +37,10 @@ const MIN_KEEP_HISTORY: usize = 1;
 const MAX_KEEP_HISTORY: usize = 20;
 const PLAINTEXT_CHUNK_SIZE: usize = 64 * 1024;
 const TAG_SIZE: usize = 16;
+const PREVIEW_MAX_CHANGED_FILES: usize = 500;
+const PREVIEW_MAX_TEXT_BYTES_PER_SIDE: usize = 200 * 1024;
+const PREVIEW_MAX_TOTAL_PAYLOAD_BYTES: usize = 2 * 1024 * 1024;
+const STREAM_HASH_THRESHOLD_BYTES: u64 = 100 * 1024 * 1024;
 #[cfg(not(test))]
 const SECURE_STORAGE_SERVICE: &str = "com.gtdspace.app";
 #[cfg(not(test))]
@@ -119,6 +125,111 @@ struct BackupEntry {
     file_name: String,
     modified: SystemTime,
     _size: u64,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitSyncPreviewResponse {
+    pub has_baseline: bool,
+    pub baseline_backup_file: Option<String>,
+    pub baseline_timestamp: Option<String>,
+    pub summary: GitSyncPreviewSummary,
+    pub entries: Vec<GitSyncDiffEntry>,
+    pub truncated: bool,
+    pub warnings: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GitSyncPreviewSummary {
+    pub total_entries: usize,
+    pub added: usize,
+    pub modified: usize,
+    pub deleted: usize,
+    pub renamed: usize,
+    pub unchanged_excluded: usize,
+    pub text_diffs: usize,
+    pub binary_diffs: usize,
+    pub before_bytes: Option<u64>,
+    pub after_bytes: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitSyncDiffEntry {
+    pub id: String,
+    pub path: String,
+    pub change_type: String,
+    pub kind: String,
+    pub old_path: Option<String>,
+    pub is_truncated: Option<bool>,
+    pub text: Option<GitSyncTextDiff>,
+    pub binary: Option<GitSyncBinaryDiff>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitSyncTextDiff {
+    pub before_hash: Option<String>,
+    pub after_hash: Option<String>,
+    pub before_bytes: u64,
+    pub after_bytes: u64,
+    pub hunks: Vec<GitSyncTextHunk>,
+    pub line_stats: GitSyncLineStats,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitSyncTextHunk {
+    pub old_start: usize,
+    pub old_lines: usize,
+    pub new_start: usize,
+    pub new_lines: usize,
+    pub lines: Vec<GitSyncDiffLine>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitSyncDiffLine {
+    pub kind: String,
+    pub old_line_number: Option<usize>,
+    pub new_line_number: Option<usize>,
+    pub content: String,
+}
+
+#[derive(Debug, Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GitSyncLineStats {
+    pub added: usize,
+    pub removed: usize,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitSyncBinaryDiff {
+    pub before_hash: Option<String>,
+    pub after_hash: Option<String>,
+    pub before_bytes: Option<u64>,
+    pub after_bytes: Option<u64>,
+    pub mime: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ManifestEntry {
+    relative_path: String,
+    size: u64,
+    hash: String,
+    is_text: bool,
+    text: Option<String>,
+    mime: Option<String>,
+}
+
+#[derive(Debug)]
+struct PreviewComputation {
+    summary: GitSyncPreviewSummary,
+    entries: Vec<GitSyncDiffEntry>,
+    truncated: bool,
+    warnings: Vec<String>,
 }
 
 pub fn compute_git_status(
@@ -372,6 +483,59 @@ fn verify_only_encrypted_files_staged(repo_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+pub fn preview_git_push(config: GitSyncConfig) -> Result<GitSyncPreviewResponse, String> {
+    let backups_dir = config.repo_path.join("backups");
+    if !config.repo_path.exists() {
+        return Err("Git sync repository does not exist".to_string());
+    }
+
+    let latest_backup = list_backups(&backups_dir)?.into_iter().next();
+    let current_manifest = build_workspace_manifest(&config.workspace_path)?;
+
+    let (has_baseline, baseline_backup_file, baseline_timestamp, baseline_manifest) =
+        if let Some(backup) = latest_backup {
+            let backup_path = backups_dir.join(&backup.file_name);
+            let temp_decrypt_dir = TempDirBuilder::new()
+                .prefix("gtdspace-preview-decrypt-")
+                .tempdir()
+                .map_err(|e| format!("Failed to prepare temporary decrypt directory: {}", e))?;
+            let decrypted_archive = temp_decrypt_dir.path().join("workspace.tar.gz");
+            decrypt_file_to_path(&config.encryption_key, &backup_path, &decrypted_archive)?;
+
+            let temp_extract_dir = TempDirBuilder::new()
+                .prefix("gtdspace-preview-baseline-")
+                .tempdir()
+                .map_err(|e| format!("Failed to prepare temporary baseline directory: {}", e))?;
+            extract_archive_to_dir(&decrypted_archive, temp_extract_dir.path())?;
+
+            (
+                true,
+                Some(backup.file_name),
+                system_time_to_iso(backup.modified),
+                build_workspace_manifest(temp_extract_dir.path())?,
+            )
+        } else {
+            (false, None, None, Vec::new())
+        };
+
+    let PreviewComputation {
+        summary,
+        entries,
+        truncated,
+        warnings,
+    } = compare_manifests(&baseline_manifest, &current_manifest);
+
+    Ok(GitSyncPreviewResponse {
+        has_baseline,
+        baseline_backup_file,
+        baseline_timestamp,
+        summary,
+        entries,
+        truncated,
+        warnings: (!warnings.is_empty()).then_some(warnings),
+    })
+}
+
 pub fn perform_git_push(
     config: GitSyncConfig,
     force: bool,
@@ -483,6 +647,441 @@ pub fn perform_git_push(
             "force": force,
         })),
     })
+}
+
+fn build_workspace_manifest(root: &Path) -> Result<Vec<ManifestEntry>, String> {
+    let mut entries = Vec::new();
+
+    for entry in WalkDir::new(root).into_iter() {
+        let entry = entry.map_err(|e| format!("Failed to walk workspace: {}", e))?;
+        let path = entry.path();
+        if path == root {
+            continue;
+        }
+
+        let relative = path
+            .strip_prefix(root)
+            .map_err(|e| format!("Failed to determine relative path: {}", e))?;
+
+        if should_skip_path(relative) {
+            continue;
+        }
+
+        if !entry.file_type().is_file() {
+            continue;
+        }
+
+        let metadata = entry
+            .metadata()
+            .map_err(|e| format!("Failed to read metadata for {}: {}", path.display(), e))?;
+        let relative_path = relative.to_string_lossy().replace('\\', "/");
+        let mime = guess_mime(&relative_path);
+        let size = metadata.len();
+
+        let (hash, is_text, text) = if size > STREAM_HASH_THRESHOLD_BYTES {
+            (hash_file_streaming(path)?, false, None)
+        } else {
+            let bytes = fs::read(path)
+                .map_err(|e| format!("Failed to read workspace file {}: {}", path.display(), e))?;
+            let hash = hash_bytes(&bytes);
+            let text = classify_text(&bytes);
+            let is_text = text.is_some();
+            (hash, is_text, text)
+        };
+
+        entries.push(ManifestEntry {
+            relative_path,
+            size,
+            hash,
+            is_text,
+            text,
+            mime,
+        });
+    }
+
+    entries.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    Ok(entries)
+}
+
+fn compare_manifests(before: &[ManifestEntry], after: &[ManifestEntry]) -> PreviewComputation {
+    let before_map: std::collections::HashMap<String, &ManifestEntry> = before
+        .iter()
+        .map(|entry| (entry.relative_path.clone(), entry))
+        .collect();
+    let after_map: std::collections::HashMap<String, &ManifestEntry> = after
+        .iter()
+        .map(|entry| (entry.relative_path.clone(), entry))
+        .collect();
+
+    let mut all_paths: Vec<String> = before_map.keys().chain(after_map.keys()).cloned().collect();
+    all_paths.sort();
+    all_paths.dedup();
+
+    let mut summary = GitSyncPreviewSummary::default();
+    let before_total_bytes = before.iter().map(|entry| entry.size).sum::<u64>();
+    let after_total_bytes = after.iter().map(|entry| entry.size).sum::<u64>();
+    summary.before_bytes = Some(before_total_bytes);
+    summary.after_bytes = Some(after_total_bytes);
+
+    let mut modified_entries = Vec::new();
+    let mut deleted_entries = Vec::new();
+    let mut added_entries = Vec::new();
+    let mut unchanged_excluded = 0usize;
+
+    for path in &all_paths {
+        match (before_map.get(path), after_map.get(path)) {
+            (Some(left), Some(right)) => {
+                if left.hash == right.hash {
+                    unchanged_excluded += 1;
+                } else {
+                    modified_entries.push(build_diff_entry(Some(left), Some(right), "modified"));
+                }
+            }
+            (Some(left), None) => deleted_entries.push((*left).clone()),
+            (None, Some(right)) => added_entries.push((*right).clone()),
+            (None, None) => {}
+        }
+    }
+
+    let mut rename_entries = Vec::new();
+    let mut remaining_deleted = Vec::new();
+    let mut remaining_added = Vec::new();
+
+    let mut deleted_by_hash: std::collections::HashMap<&str, Vec<&ManifestEntry>> =
+        std::collections::HashMap::new();
+    let mut added_by_hash: std::collections::HashMap<&str, Vec<&ManifestEntry>> =
+        std::collections::HashMap::new();
+
+    for entry in &deleted_entries {
+        deleted_by_hash
+            .entry(entry.hash.as_str())
+            .or_default()
+            .push(entry);
+    }
+    for entry in &added_entries {
+        added_by_hash
+            .entry(entry.hash.as_str())
+            .or_default()
+            .push(entry);
+    }
+
+    let mut consumed_deleted = std::collections::HashSet::new();
+    let mut consumed_added = std::collections::HashSet::new();
+
+    for (hash, deleted) in &deleted_by_hash {
+        if let Some(added) = added_by_hash.get(hash) {
+            if deleted.len() == 1 && added.len() == 1 {
+                let left = deleted[0];
+                let right = added[0];
+                consumed_deleted.insert(left.relative_path.clone());
+                consumed_added.insert(right.relative_path.clone());
+                rename_entries.push(build_diff_entry(Some(left), Some(right), "renamed"));
+            }
+        }
+    }
+
+    for entry in deleted_entries {
+        if !consumed_deleted.contains(&entry.relative_path) {
+            remaining_deleted.push(entry);
+        }
+    }
+    for entry in added_entries {
+        if !consumed_added.contains(&entry.relative_path) {
+            remaining_added.push(entry);
+        }
+    }
+
+    rename_entries.sort_by(|a, b| a.path.cmp(&b.path));
+    modified_entries.sort_by(|a, b| a.path.cmp(&b.path));
+    remaining_added.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    remaining_deleted.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+
+    let mut entries = Vec::new();
+    entries.extend(rename_entries);
+    entries.extend(modified_entries);
+    entries.extend(
+        remaining_added
+            .iter()
+            .map(|entry| build_diff_entry(None, Some(entry), "added")),
+    );
+    entries.extend(
+        remaining_deleted
+            .iter()
+            .map(|entry| build_diff_entry(Some(entry), None, "deleted")),
+    );
+
+    summary.total_entries = entries.len();
+    summary.unchanged_excluded = unchanged_excluded;
+    summary.renamed = entries
+        .iter()
+        .filter(|entry| entry.change_type == "renamed")
+        .count();
+    summary.modified = entries
+        .iter()
+        .filter(|entry| entry.change_type == "modified")
+        .count();
+    summary.added = entries
+        .iter()
+        .filter(|entry| entry.change_type == "added")
+        .count();
+    summary.deleted = entries
+        .iter()
+        .filter(|entry| entry.change_type == "deleted")
+        .count();
+    summary.text_diffs = entries.iter().filter(|entry| entry.kind == "text").count();
+    summary.binary_diffs = entries
+        .iter()
+        .filter(|entry| entry.kind == "binary")
+        .count();
+
+    let mut warnings = Vec::new();
+    let mut truncated = false;
+
+    if entries.len() > PREVIEW_MAX_CHANGED_FILES {
+        entries.truncate(PREVIEW_MAX_CHANGED_FILES);
+        truncated = true;
+        warnings.push(format!(
+            "Preview limited to the first {} changed files.",
+            PREVIEW_MAX_CHANGED_FILES
+        ));
+    }
+
+    let mut payload_bytes = 0usize;
+    for entry in &mut entries {
+        payload_bytes = payload_bytes.saturating_add(estimate_entry_payload_bytes(entry));
+        if payload_bytes > PREVIEW_MAX_TOTAL_PAYLOAD_BYTES && !entry.is_truncated.unwrap_or(false) {
+            entry.is_truncated = Some(true);
+            entry.text = None;
+            entry.binary = entry.binary.take();
+            truncated = true;
+        }
+    }
+
+    if truncated && !warnings.iter().any(|warning| warning.contains("truncated")) {
+        warnings
+            .push("Preview contains truncated entries to keep the diff responsive.".to_string());
+    }
+
+    PreviewComputation {
+        summary,
+        entries,
+        truncated,
+        warnings,
+    }
+}
+
+fn build_diff_entry(
+    before: Option<&ManifestEntry>,
+    after: Option<&ManifestEntry>,
+    change_type: &str,
+) -> GitSyncDiffEntry {
+    let path = after
+        .map(|entry| entry.relative_path.clone())
+        .or_else(|| before.map(|entry| entry.relative_path.clone()))
+        .unwrap_or_default();
+    let old_path = (change_type == "renamed").then(|| {
+        before
+            .map(|entry| entry.relative_path.clone())
+            .unwrap_or_default()
+    });
+
+    let effective_entry = after
+        .or(before)
+        .expect("diff entry requires at least one side");
+    let kind = if before.map(|entry| entry.is_text).unwrap_or(false)
+        || after.map(|entry| entry.is_text).unwrap_or(false)
+    {
+        "text"
+    } else {
+        "binary"
+    };
+
+    let mut entry = GitSyncDiffEntry {
+        id: format!("{}:{}", change_type, path),
+        path,
+        change_type: change_type.to_string(),
+        kind: kind.to_string(),
+        old_path,
+        is_truncated: None,
+        text: None,
+        binary: None,
+    };
+
+    if kind == "text" {
+        let before_bytes = before.map(|item| item.size).unwrap_or(0);
+        let after_bytes = after.map(|item| item.size).unwrap_or(0);
+        let before_text = before.and_then(|item| item.text.as_deref()).unwrap_or("");
+        let after_text = after.and_then(|item| item.text.as_deref()).unwrap_or("");
+
+        let should_truncate = before_bytes as usize > PREVIEW_MAX_TEXT_BYTES_PER_SIDE
+            || after_bytes as usize > PREVIEW_MAX_TEXT_BYTES_PER_SIDE;
+
+        if should_truncate {
+            entry.is_truncated = Some(true);
+        } else {
+            entry.text = Some(build_text_diff(before, after, before_text, after_text));
+        }
+    } else {
+        entry.binary = Some(GitSyncBinaryDiff {
+            before_hash: before.map(|item| item.hash.clone()),
+            after_hash: after.map(|item| item.hash.clone()),
+            before_bytes: before.map(|item| item.size),
+            after_bytes: after.map(|item| item.size),
+            mime: after
+                .and_then(|item| item.mime.clone())
+                .or_else(|| before.and_then(|item| item.mime.clone()))
+                .or_else(|| effective_entry.mime.clone()),
+        });
+    }
+
+    entry
+}
+
+fn build_text_diff(
+    before: Option<&ManifestEntry>,
+    after: Option<&ManifestEntry>,
+    before_text: &str,
+    after_text: &str,
+) -> GitSyncTextDiff {
+    let diff = TextDiff::from_lines(before_text, after_text);
+    let mut line_stats = GitSyncLineStats::default();
+    let mut hunks = Vec::new();
+
+    for group in diff.grouped_ops(3) {
+        let mut lines = Vec::new();
+        let mut old_start = 0usize;
+        let mut old_lines = 0usize;
+        let mut new_start = 0usize;
+        let mut new_lines = 0usize;
+        let mut first = true;
+
+        for op in group {
+            if first {
+                old_start = op.old_range().start + 1;
+                old_lines = op.old_range().len();
+                new_start = op.new_range().start + 1;
+                new_lines = op.new_range().len();
+                first = false;
+            } else {
+                old_lines += op.old_range().len();
+                new_lines += op.new_range().len();
+            }
+
+            for change in diff.iter_changes(&op) {
+                let kind = match change.tag() {
+                    ChangeTag::Delete => {
+                        line_stats.removed += 1;
+                        "remove"
+                    }
+                    ChangeTag::Insert => {
+                        line_stats.added += 1;
+                        "add"
+                    }
+                    ChangeTag::Equal => "context",
+                };
+                lines.push(GitSyncDiffLine {
+                    kind: kind.to_string(),
+                    old_line_number: change.old_index().map(|index| index + 1),
+                    new_line_number: change.new_index().map(|index| index + 1),
+                    content: sanitize_diff_line_content(change.as_str().unwrap_or("")),
+                });
+            }
+        }
+
+        hunks.push(GitSyncTextHunk {
+            old_start,
+            old_lines,
+            new_start,
+            new_lines,
+            lines,
+        });
+    }
+
+    GitSyncTextDiff {
+        before_hash: before.map(|entry| entry.hash.clone()),
+        after_hash: after.map(|entry| entry.hash.clone()),
+        before_bytes: before.map(|entry| entry.size).unwrap_or(0),
+        after_bytes: after.map(|entry| entry.size).unwrap_or(0),
+        hunks,
+        line_stats,
+    }
+}
+
+fn sanitize_diff_line_content(value: &str) -> String {
+    value
+        .trim_end_matches('\n')
+        .trim_end_matches('\r')
+        .to_string()
+}
+
+fn classify_text(bytes: &[u8]) -> Option<String> {
+    if bytes.contains(&0) {
+        return None;
+    }
+
+    String::from_utf8(bytes.to_vec()).ok()
+}
+
+fn hash_bytes(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    encode_hex(&hasher.finalize())
+}
+
+fn hash_file_streaming(path: &Path) -> Result<String, String> {
+    let file = File::open(path)
+        .map_err(|e| format!("Failed to open file for hashing {}: {}", path.display(), e))?;
+    let mut reader = BufReader::new(file);
+    let mut hasher = Sha256::new();
+    let mut buffer = vec![0u8; PLAINTEXT_CHUNK_SIZE];
+
+    loop {
+        let bytes_read = reader
+            .read(&mut buffer)
+            .map_err(|e| format!("Failed to hash file {}: {}", path.display(), e))?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+
+    Ok(encode_hex(&hasher.finalize()))
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        use std::fmt::Write as _;
+        let _ = write!(&mut output, "{:02x}", byte);
+    }
+    output
+}
+
+fn guess_mime(path: &str) -> Option<String> {
+    MimeGuess::from_path(path)
+        .first_raw()
+        .map(std::string::ToString::to_string)
+}
+
+fn estimate_entry_payload_bytes(entry: &GitSyncDiffEntry) -> usize {
+    let mut total = entry.id.len() + entry.path.len() + entry.change_type.len() + entry.kind.len();
+    if let Some(old_path) = &entry.old_path {
+        total += old_path.len();
+    }
+    if let Some(text) = &entry.text {
+        total += text
+            .hunks
+            .iter()
+            .flat_map(|hunk| hunk.lines.iter())
+            .map(|line| line.content.len() + line.kind.len() + 16)
+            .sum::<usize>();
+    }
+    if let Some(binary) = &entry.binary {
+        total += binary.before_hash.as_deref().unwrap_or("").len();
+        total += binary.after_hash.as_deref().unwrap_or("").len();
+        total += binary.mime.as_deref().unwrap_or("").len();
+    }
+    total
 }
 
 pub fn perform_git_pull(
@@ -936,17 +1535,7 @@ fn restore_workspace(workspace: &Path, archive_path: &Path) -> Result<(), String
         .tempdir_in(&workspace_parent)
         .map_err(|e| format!("Failed to create temporary restore directory: {}", e))?;
 
-    let archive_file = File::open(archive_path).map_err(|e| {
-        format!(
-            "Failed to open decrypted archive {}: {}",
-            archive_path.display(),
-            e
-        )
-    })?;
-    let decoder = GzDecoder::new(archive_file);
-    let mut tar = Archive::new(decoder);
-    tar.unpack(temp_dir.path())
-        .map_err(|e| format!("Failed to unpack archive: {}", e))?;
+    extract_archive_to_dir(archive_path, temp_dir.path())?;
 
     #[allow(deprecated)]
     let temp_restore_path = temp_dir.into_path();
@@ -1004,6 +1593,20 @@ fn restore_workspace(workspace: &Path, archive_path: &Path) -> Result<(), String
             ))
         }
     }
+}
+
+fn extract_archive_to_dir(archive_path: &Path, output_dir: &Path) -> Result<(), String> {
+    let archive_file = File::open(archive_path).map_err(|e| {
+        format!(
+            "Failed to open decrypted archive {}: {}",
+            archive_path.display(),
+            e
+        )
+    })?;
+    let decoder = GzDecoder::new(archive_file);
+    let mut tar = Archive::new(decoder);
+    tar.unpack(output_dir)
+        .map_err(|e| format!("Failed to unpack archive: {}", e))
 }
 
 fn list_backups(backups_dir: &Path) -> Result<Vec<BackupEntry>, String> {
@@ -1371,6 +1974,107 @@ mod tests {
 
         let git_log = run_git_command(&repo_path, ["log", "--oneline"]).expect("git log");
         assert!(git_log.contains("sync: backup"));
+    }
+
+    #[test]
+    fn preview_git_push_without_baseline_marks_all_files_as_added() {
+        let dir = tempdir().expect("tempdir");
+        let workspace_path = dir.path().join("workspace");
+        let repo_path = dir.path().join("repo");
+        fs::create_dir_all(&workspace_path).expect("create workspace");
+        fs::create_dir_all(&repo_path).expect("create repo");
+
+        write_workspace_file(
+            &workspace_path,
+            "Projects/Alpha/README.md",
+            "# Alpha\nHello",
+        );
+        write_workspace_file(&workspace_path, "assets/logo.bin", "\0PNG");
+
+        let preview = preview_git_push(build_test_config(repo_path, workspace_path, 5))
+            .expect("preview push");
+
+        assert!(!preview.has_baseline);
+        assert_eq!(preview.summary.added, 2);
+        assert_eq!(preview.summary.total_entries, 2);
+        assert!(preview
+            .entries
+            .iter()
+            .all(|entry| entry.change_type == "added"));
+    }
+
+    #[test]
+    fn preview_git_push_returns_text_diff_against_latest_backup() {
+        let dir = tempdir().expect("tempdir");
+        let workspace_path = dir.path().join("workspace");
+        let repo_path = dir.path().join("repo");
+        fs::create_dir_all(&workspace_path).expect("create workspace");
+        fs::create_dir_all(&repo_path).expect("create repo");
+
+        write_workspace_file(
+            &workspace_path,
+            "Projects/Alpha/README.md",
+            "# Alpha\nOriginal",
+        );
+        let config = build_test_config(repo_path.clone(), workspace_path.clone(), 5);
+        perform_git_push(config.clone(), false).expect("create baseline backup");
+
+        write_workspace_file(
+            &workspace_path,
+            "Projects/Alpha/README.md",
+            "# Alpha\nUpdated",
+        );
+        write_workspace_file(&workspace_path, ".git/ignored.txt", "skip me");
+        write_workspace_file(&workspace_path, ".gtdsync/ignored.json", "{}");
+
+        let preview = preview_git_push(config).expect("preview push");
+        assert!(preview.has_baseline);
+        assert_eq!(preview.summary.modified, 1);
+        assert_eq!(preview.summary.total_entries, 1);
+
+        let entry = preview.entries.first().expect("modified entry");
+        assert_eq!(entry.path, "Projects/Alpha/README.md");
+        assert_eq!(entry.change_type, "modified");
+        assert_eq!(entry.kind, "text");
+        assert_eq!(
+            entry.text.as_ref().map(|diff| diff.line_stats.added),
+            Some(1)
+        );
+        assert_eq!(
+            entry.text.as_ref().map(|diff| diff.line_stats.removed),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn preview_git_push_detects_exact_rename_when_hashes_match() {
+        let dir = tempdir().expect("tempdir");
+        let workspace_path = dir.path().join("workspace");
+        let repo_path = dir.path().join("repo");
+        fs::create_dir_all(&workspace_path).expect("create workspace");
+        fs::create_dir_all(&repo_path).expect("create repo");
+
+        write_workspace_file(
+            &workspace_path,
+            "Projects/Alpha/README.md",
+            "# Alpha\nStable",
+        );
+        let config = build_test_config(repo_path.clone(), workspace_path.clone(), 5);
+        perform_git_push(config.clone(), false).expect("create baseline backup");
+
+        fs::rename(
+            workspace_path.join("Projects/Alpha/README.md"),
+            workspace_path.join("Projects/Alpha/Renamed.md"),
+        )
+        .expect("rename file");
+
+        let preview = preview_git_push(config).expect("preview push");
+        assert_eq!(preview.summary.renamed, 1);
+        assert_eq!(preview.summary.total_entries, 1);
+        let entry = preview.entries.first().expect("rename entry");
+        assert_eq!(entry.change_type, "renamed");
+        assert_eq!(entry.old_path.as_deref(), Some("Projects/Alpha/README.md"));
+        assert_eq!(entry.path, "Projects/Alpha/Renamed.md");
     }
 
     #[test]

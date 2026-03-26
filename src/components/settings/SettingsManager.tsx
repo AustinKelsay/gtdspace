@@ -42,6 +42,10 @@ export interface SettingsManagerProps extends BaseComponentProps {
   checkGTDSpace?: (path: string) => Promise<boolean>;
   /** Function to load projects from a GTD space */
   loadProjects?: (spacePath: string) => Promise<GTDProject[]>;
+  /** Trigger the shared git backup review flow */
+  onGitBackupReview?: () => Promise<void>;
+  /** Whether the shared git backup review flow is currently loading */
+  gitBackupReviewBusy?: boolean;
 }
 
 type TabId =
@@ -63,6 +67,8 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
   switchWorkspace,
   checkGTDSpace,
   loadProjects,
+  onGitBackupReview,
+  gitBackupReviewBusy,
   className = '',
   ...props
 }) => {
@@ -160,7 +166,12 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
               />
             )}
             {activeTab === 'google-calendar' && <GoogleCalendarSettings />}
-            {activeTab === 'git-sync' && <GitSyncSettings />}
+            {activeTab === 'git-sync' && (
+              <GitSyncSettings
+                onPushBackup={onGitBackupReview}
+                isPushBackupBusy={gitBackupReviewBusy}
+              />
+            )}
             {activeTab === 'mcp-server' && <McpServerSettings />}
             {activeTab === 'shortcuts' && <KeyboardShortcuts />}
             {activeTab === 'advanced' && <AdvancedSettings />}

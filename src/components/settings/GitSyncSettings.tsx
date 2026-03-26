@@ -51,7 +51,15 @@ const FieldLabel: React.FC<{ label: string; help: React.ReactNode; id?: string }
 
 const SECURE_STORE_FAILURE_TOKEN = '__SECURE_STORE_WRITE_FAILED__';
 
-export const GitSyncSettings: React.FC = () => {
+export interface GitSyncSettingsProps {
+  onPushBackup?: () => Promise<void>;
+  isPushBackupBusy?: boolean;
+}
+
+export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
+  onPushBackup,
+  isPushBackupBusy = false,
+}) => {
   const { settings, updateSettings } = useSettings();
   const { toast } = useToast();
   const [encryptionKeyInput, setEncryptionKeyInput] = React.useState('');
@@ -70,6 +78,7 @@ export const GitSyncSettings: React.FC = () => {
     push: pushGitBackup,
     pull: pullGitBackup,
     isPushing: gitPushing,
+    isPreviewing,
     isPulling: gitPulling,
   } = useGitSync({ settings, workspacePath: gitWorkspaceOverride, autoRefresh: false });
 
@@ -392,11 +401,11 @@ export const GitSyncSettings: React.FC = () => {
         <div className="flex flex-wrap items-center gap-3 mt-6">
           <Button
             variant="secondary"
-            onClick={() => pushGitBackup(false)}
-            disabled={!gitEnabled || !gitStatus.configured || gitPushing}
+            onClick={() => void onPushBackup?.()}
+            disabled={!gitEnabled || !gitStatus.configured || gitPushing || isPreviewing || isPushBackupBusy || !onPushBackup}
           >
             <CloudUpload className="h-4 w-4 mr-2" />
-            {gitPushing ? 'Pushing…' : 'Push Backup'}
+            {gitPushing ? 'Pushing…' : isPreviewing || isPushBackupBusy ? 'Reviewing…' : 'Push Backup'}
           </Button>
           <Button
             variant="destructive"

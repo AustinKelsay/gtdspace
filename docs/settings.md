@@ -78,6 +78,12 @@ Important fields include:
 - `mcp_server_log_level`
 - git sync fields such as `git_sync_enabled`, `git_sync_repo_path`, `git_sync_remote_url`, `git_sync_branch`, and sync timestamps
 
+Git sync behavior now includes a mandatory manual push review step:
+
+- the app saves open tabs before generating the review
+- the review compares the current workspace against the latest local encrypted backup
+- confirmation is required before `git_sync_push` mutates the backup repo
+
 ## UI Structure
 
 The settings UI is organized under `src/components/settings/` and includes:

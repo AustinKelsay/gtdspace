@@ -29,7 +29,7 @@ import type {
   SidebarSectionFileMetadata,
 } from '@/components/gtd/sidebar/types';
 import type { FileOperationResult, GTDProject, GTDSpace, MarkdownFile } from '@/types';
-import { norm } from '@/utils/path';
+import { norm, isUnder } from '@/utils/path';
 
 type UseGTDWorkspaceSidebarResult = {
   gtdSpace: GTDSpace | null;
@@ -400,7 +400,9 @@ export function useGTDWorkspaceSidebar({
           return false;
         }
 
-        return buildSectionPathCandidates(rootPath, candidate).includes(normalizedPath);
+        return buildSectionPathCandidates(rootPath, candidate).some((candidatePath) =>
+          isUnder(norm(normalizedPath), norm(candidatePath))
+        );
       });
 
       if (!section) {
@@ -481,12 +483,19 @@ export function useGTDWorkspaceSidebar({
           return current || [];
         }
 
-        setSectionFiles((prev) => ({
-          ...prev,
-          [normalizedKey]: sortedFiles,
-        }));
+        setSectionFiles((prev) => {
+          const next = { ...prev };
+          if (normalizedKey !== requestedKey) {
+            delete next[requestedKey];
+          }
+          next[normalizedKey] = sortedFiles;
+          return next;
+        });
         setLoadedSections((prev) => {
           const next = new Set(prev);
+          if (normalizedKey !== requestedKey) {
+            next.delete(requestedKey);
+          }
           next.add(normalizedKey);
           return next;
         });

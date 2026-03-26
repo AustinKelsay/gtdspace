@@ -40,7 +40,6 @@ const TAG_SIZE: usize = 16;
 const PREVIEW_MAX_CHANGED_FILES: usize = 500;
 const PREVIEW_MAX_TEXT_BYTES_PER_SIDE: usize = 200 * 1024;
 const PREVIEW_MAX_TOTAL_PAYLOAD_BYTES: usize = 2 * 1024 * 1024;
-const STREAM_HASH_THRESHOLD_BYTES: u64 = 100 * 1024 * 1024;
 #[cfg(not(test))]
 const SECURE_STORAGE_SERVICE: &str = "com.gtdspace.app";
 #[cfg(not(test))]
@@ -125,6 +124,27 @@ struct BackupEntry {
     file_name: String,
     modified: SystemTime,
     _size: u64,
+    /// Timestamp parsed from the filename (e.g. `backup-YYYYMMDDTHHMMSSmmm.tar.gz.enc`).
+    /// Falls back to `None` when the filename doesn't match the expected pattern.
+    parsed_timestamp: Option<DateTime<Utc>>,
+}
+
+/// Try to extract the embedded timestamp from a backup filename.
+/// Expected pattern: `backup-YYYYMMDDTHHMMSSmmm.tar.gz.enc`
+fn parse_backup_filename_timestamp(file_name: &str) -> Option<DateTime<Utc>> {
+    let stem = file_name.strip_prefix("backup-")?;
+    let slug = stem.strip_suffix(".tar.gz.enc")?;
+    // slug should be like "20260325T143012456" (17 chars)
+    if slug.len() < 15 {
+        return None;
+    }
+    // Parse "YYYYMMDDTHHMMSSmmm" – the 'T' is at index 8
+    let datetime_str = &slug[..15]; // "YYYYMMDDTHHMMSS"
+    let millis_str = if slug.len() > 15 { &slug[15..] } else { "0" };
+    let millis: u32 = millis_str.parse().ok()?;
+    let dt = chrono::NaiveDateTime::parse_from_str(datetime_str, "%Y%m%dT%H%M%S").ok()?;
+    let dt_with_millis = dt + chrono::Duration::milliseconds(millis as i64);
+    Some(dt_with_millis.and_utc())
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -508,10 +528,14 @@ pub fn preview_git_push(config: GitSyncConfig) -> Result<GitSyncPreviewResponse,
                 .map_err(|e| format!("Failed to prepare temporary baseline directory: {}", e))?;
             extract_archive_to_dir(&decrypted_archive, temp_extract_dir.path())?;
 
+            let baseline_ts = backup
+                .parsed_timestamp
+                .map(|dt| dt.to_rfc3339())
+                .or_else(|| system_time_to_iso(backup.modified));
             (
                 true,
                 Some(backup.file_name),
-                system_time_to_iso(backup.modified),
+                baseline_ts,
                 build_workspace_manifest(temp_extract_dir.path())?,
             )
         } else {
@@ -678,8 +702,10 @@ fn build_workspace_manifest(root: &Path) -> Result<Vec<ManifestEntry>, String> {
         let mime = guess_mime(&relative_path);
         let size = metadata.len();
 
-        let (hash, is_text, text) = if size > STREAM_HASH_THRESHOLD_BYTES {
-            (hash_file_streaming(path)?, false, None)
+        let (hash, is_text, text) = if size as usize > PREVIEW_MAX_TEXT_BYTES_PER_SIDE {
+            let (hash, sample) = hash_file_with_sample(path, PREVIEW_MAX_TEXT_BYTES_PER_SIDE)?;
+            let is_text = classify_text(&sample).is_some();
+            (hash, is_text, None)
         } else {
             let bytes = fs::read(path)
                 .map_err(|e| format!("Failed to read workspace file {}: {}", path.display(), e))?;
@@ -835,7 +861,9 @@ fn compare_manifests(before: &[ManifestEntry], after: &[ManifestEntry]) -> Previ
         .count();
 
     let mut warnings = Vec::new();
-    let mut truncated = false;
+    let mut truncated = entries
+        .iter()
+        .any(|entry| entry.is_truncated.unwrap_or(false));
 
     if entries.len() > PREVIEW_MAX_CHANGED_FILES {
         entries.truncate(PREVIEW_MAX_CHANGED_FILES);
@@ -848,13 +876,30 @@ fn compare_manifests(before: &[ManifestEntry], after: &[ManifestEntry]) -> Previ
 
     let mut payload_bytes = 0usize;
     for entry in &mut entries {
-        payload_bytes = payload_bytes.saturating_add(estimate_entry_payload_bytes(entry));
-        if payload_bytes > PREVIEW_MAX_TOTAL_PAYLOAD_BYTES && !entry.is_truncated.unwrap_or(false) {
+        let mut entry_bytes = estimate_entry_payload_bytes(entry);
+        if payload_bytes.saturating_add(entry_bytes) > PREVIEW_MAX_TOTAL_PAYLOAD_BYTES
+            && !entry.is_truncated.unwrap_or(false)
+        {
             entry.is_truncated = Some(true);
             entry.text = None;
             entry.binary = entry.binary.take();
             truncated = true;
+            entry_bytes = estimate_entry_payload_bytes(entry);
         }
+
+        if entry.is_truncated.unwrap_or(false) {
+            truncated = true;
+            entry_bytes = 0;
+        }
+
+        payload_bytes = payload_bytes.saturating_add(entry_bytes);
+    }
+
+    if entries
+        .iter()
+        .any(|entry| entry.is_truncated.unwrap_or(false))
+    {
+        truncated = true;
     }
 
     if truncated && !warnings.iter().any(|warning| warning.contains("truncated")) {
@@ -1028,11 +1073,12 @@ fn hash_bytes(bytes: &[u8]) -> String {
     encode_hex(&hasher.finalize())
 }
 
-fn hash_file_streaming(path: &Path) -> Result<String, String> {
+fn hash_file_with_sample(path: &Path, sample_limit: usize) -> Result<(String, Vec<u8>), String> {
     let file = File::open(path)
         .map_err(|e| format!("Failed to open file for hashing {}: {}", path.display(), e))?;
     let mut reader = BufReader::new(file);
     let mut hasher = Sha256::new();
+    let mut sample = Vec::with_capacity(sample_limit.min(PLAINTEXT_CHUNK_SIZE));
     let mut buffer = vec![0u8; PLAINTEXT_CHUNK_SIZE];
 
     loop {
@@ -1043,9 +1089,14 @@ fn hash_file_streaming(path: &Path) -> Result<String, String> {
             break;
         }
         hasher.update(&buffer[..bytes_read]);
+        if sample.len() < sample_limit {
+            let remaining = sample_limit - sample.len();
+            let sample_bytes = remaining.min(bytes_read);
+            sample.extend_from_slice(&buffer[..sample_bytes]);
+        }
     }
 
-    Ok(encode_hex(&hasher.finalize()))
+    Ok((encode_hex(&hasher.finalize()), sample))
 }
 
 fn encode_hex(bytes: &[u8]) -> String {
@@ -1628,17 +1679,27 @@ fn list_backups(backups_dir: &Path) -> Result<Vec<BackupEntry>, String> {
             .metadata()
             .map_err(|e| format!("Failed to read metadata for {}: {}", path.display(), e))?;
         let modified = metadata.modified().unwrap_or_else(|_| SystemTime::now());
+        let file_name = path
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "backup.enc".to_string());
+        let parsed_timestamp = parse_backup_filename_timestamp(&file_name);
         entries.push(BackupEntry {
-            file_name: path
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "backup.enc".to_string()),
+            file_name,
             modified,
             _size: metadata.len(),
+            parsed_timestamp,
         });
     }
 
-    entries.sort_by(|a, b| b.modified.cmp(&a.modified));
+    // Sort by parsed filename timestamp (descending), falling back to fs mtime
+    entries.sort_by(|a, b| {
+        let ts_a = a.parsed_timestamp.map(|dt| dt.timestamp_millis())
+            .unwrap_or_else(|| a.modified.duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0));
+        let ts_b = b.parsed_timestamp.map(|dt| dt.timestamp_millis())
+            .unwrap_or_else(|| b.modified.duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0));
+        ts_b.cmp(&ts_a)
+    });
     Ok(entries)
 }
 

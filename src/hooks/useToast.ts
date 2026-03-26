@@ -1,5 +1,6 @@
 import React, { useCallback, useRef } from 'react';
 import { useToast as useShadcnToast } from '@/hooks/use-toast';
+import { norm } from '@/utils/path';
 
 // Store for deduplication
 const recentToasts = new Map<string, number>();
@@ -173,7 +174,8 @@ export function useToast() {
   );
 
   const showFileReloaded = useCallback((fileName: string) => {
-    const key = `file-reloaded:${fileName}`;
+    const normalized = norm(fileName) ?? fileName;
+    const key = `file-reloaded:${normalized}`;
     if (!shouldShowToast(key)) return;
 
     toast({

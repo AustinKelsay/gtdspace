@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { useToast } from '@/hooks/use-toast';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
 import type {
   UserSettings,
   GitSyncStatus,
@@ -67,6 +68,7 @@ export const useGitSync = ({
   const [isPulling, setIsPulling] = useState(false);
   const [operation, setOperation] = useState<'push' | 'pull' | null>(null);
   const { toast } = useToast();
+  const { withErrorHandling } = useErrorHandler();
 
   const refreshStatus = useCallback(async () => {
     if (!settings.git_sync_enabled) {
@@ -163,28 +165,30 @@ export const useGitSync = ({
 
     setIsPreviewing(true);
     try {
-      const result = await safeInvoke<GitSyncPreviewResponse>(
-        'git_sync_preview_push',
-        { workspace_override: workspacePath ?? null },
-        null,
-      );
+      const result = await withErrorHandling(
+        async () => {
+          const preview = await safeInvoke<GitSyncPreviewResponse>(
+            'git_sync_preview_push',
+            { workspace_override: workspacePath ?? null },
+            null,
+          );
 
-      if (!result) {
-        throw new Error('Git push preview is not available in this environment.');
-      }
+          if (!preview) {
+            throw new Error('Git push preview is not available in this environment.');
+          }
+
+          return preview;
+        },
+        'Backup review failed',
+        'git-sync',
+      );
+      if (!result) return null;
 
       return result;
-    } catch (error) {
-      toast({
-        title: 'Backup review failed',
-        description: formatError(error),
-        variant: 'destructive',
-      });
-      return null;
     } finally {
       setIsPreviewing(false);
     }
-  }, [settings.git_sync_enabled, workspacePath, toast]);
+  }, [settings.git_sync_enabled, workspacePath, toast, withErrorHandling]);
 
   const push = useCallback(async (force = false) => {
     if (!settings.git_sync_enabled) {

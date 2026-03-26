@@ -54,11 +54,13 @@ const SECURE_STORE_FAILURE_TOKEN = '__SECURE_STORE_WRITE_FAILED__';
 export interface GitSyncSettingsProps {
   onPushBackup?: () => Promise<void>;
   isPushBackupBusy?: boolean;
+  onForcePushBackup?: () => Promise<void>;
 }
 
 export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
   onPushBackup,
   isPushBackupBusy = false,
+  onForcePushBackup,
 }) => {
   const { settings, updateSettings } = useSettings();
   const { toast } = useToast();
@@ -78,11 +80,14 @@ export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
     push: pushGitBackup,
     pull: pullGitBackup,
     isPushing: gitPushing,
-    isPreviewing,
     isPulling: gitPulling,
   } = useGitSync({ settings, workspacePath: gitWorkspaceOverride, autoRefresh: false });
 
   const gitEnabled = settings.git_sync_enabled ?? false;
+  const handlePushBackup = React.useMemo(
+    () => onPushBackup ?? (async () => { await pushGitBackup(false); }),
+    [onPushBackup, pushGitBackup]
+  );
   const [hasEncryptionKey, setHasEncryptionKey] = React.useState(false);
   const [showForcePushDialog, setShowForcePushDialog] = React.useState(false);
   const [showForcePullDialog, setShowForcePullDialog] = React.useState(false);
@@ -226,7 +231,7 @@ export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground">
-              Use any git repo (like GitHub) to shuttle encrypted snapshots between devices. Push when you finish on one Mac, pull when you switch to another.
+              Use any git repo (like GitHub) to shuttle encrypted snapshots between devices. Push when you finish on one device, pull when you switch to another.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -401,16 +406,16 @@ export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
         <div className="flex flex-wrap items-center gap-3 mt-6">
           <Button
             variant="secondary"
-            onClick={() => void onPushBackup?.()}
-            disabled={!gitEnabled || !gitStatus.configured || gitPushing || isPreviewing || isPushBackupBusy || !onPushBackup}
+            onClick={() => void handlePushBackup()}
+            disabled={!gitEnabled || !gitStatus.configured || gitPushing || isPushBackupBusy}
           >
             <CloudUpload className="h-4 w-4 mr-2" />
-            {gitPushing ? 'Pushing…' : isPreviewing || isPushBackupBusy ? 'Reviewing…' : 'Push Backup'}
+            {gitPushing ? 'Pushing…' : isPushBackupBusy ? 'Reviewing…' : 'Push Backup'}
           </Button>
           <Button
             variant="destructive"
             onClick={() => setShowForcePushDialog(true)}
-            disabled={!gitEnabled || !gitStatus.configured || gitPushing || !gitStatus.hasRemote}
+            disabled={!gitEnabled || !gitStatus.configured || gitPushing || isPushBackupBusy || !gitStatus.hasRemote}
           >
             <AlertTriangle className="h-4 w-4 mr-2" />
             Force Push
@@ -418,7 +423,7 @@ export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
           <Button
             variant="outline"
             onClick={() => pullGitBackup(false)}
-            disabled={!gitEnabled || !gitStatus.configured || gitPulling}
+            disabled={!gitEnabled || !gitStatus.configured || gitPulling || isPushBackupBusy}
           >
             <CloudDownload className="h-4 w-4 mr-2" />
             {gitPulling ? 'Pulling…' : 'Pull & Restore'}
@@ -426,7 +431,7 @@ export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
           <Button
             variant="destructive"
             onClick={() => setShowForcePullDialog(true)}
-            disabled={!gitEnabled || !gitStatus.configured || gitPulling || !gitStatus.hasRemote}
+            disabled={!gitEnabled || !gitStatus.configured || gitPulling || isPushBackupBusy || !gitStatus.hasRemote}
           >
             <AlertTriangle className="h-4 w-4 mr-2" />
             Force Pull
@@ -469,7 +474,11 @@ export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
               <AlertDialogAction
                 onClick={async () => {
                   setShowForcePushDialog(false);
-                  await pushGitBackup(true);
+                  if (onForcePushBackup) {
+                    await onForcePushBackup();
+                  } else {
+                    await pushGitBackup(true);
+                  }
                 }}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >

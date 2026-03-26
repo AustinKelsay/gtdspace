@@ -505,6 +505,14 @@ describe('GTDWorkspaceSidebar component', () => {
 
     expect(await screen.findByText('Project Alpha')).toBeInTheDocument();
 
+    const countCanonicalListCalls = () =>
+      (safeInvokeMock as Mock).mock.calls.filter(
+        ([command, args]) =>
+          command === 'list_markdown_files' && args?.path === `${rootPath}/Purpose & Principles`
+      ).length;
+
+    const canonicalCallCountBeforeMetadataChange = countCanonicalListCalls();
+
     act(() => {
       emitMetadataChange({
         filePath: `${rootPath}/Purpose and Principles/Focus.md`,
@@ -516,11 +524,7 @@ describe('GTDWorkspaceSidebar component', () => {
     });
 
     await waitFor(() => {
-      const canonicalListCalls = (safeInvokeMock as Mock).mock.calls.filter(
-        ([command, args]) =>
-          command === 'list_markdown_files' && args?.path === `${rootPath}/Purpose & Principles`
-      );
-      expect(canonicalListCalls.length).toBeGreaterThanOrEqual(2);
+      expect(countCanonicalListCalls()).toBeGreaterThan(canonicalCallCountBeforeMetadataChange);
     });
 
     const aliasListCalls = (safeInvokeMock as Mock).mock.calls.filter(

@@ -73,7 +73,7 @@ const mocks = vi.hoisted(() => {
     },
     settings: {
       settings: {
-        theme: 'light',
+        theme: 'dark',
         editor_mode: 'edit',
         last_folder: '',
         default_space_path: null,

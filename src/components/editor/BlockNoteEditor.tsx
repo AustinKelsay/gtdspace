@@ -511,7 +511,7 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
       <div className={`w-full ${className} ${darkMode ? 'dark' : ''}`}>
         <BlockNoteView
           editor={editor}
-          theme={darkMode ? "dark" : "light"}
+          theme="dark"
           editable={!readOnly}
           data-theming-css-variables={false}
         />

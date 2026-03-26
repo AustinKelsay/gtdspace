@@ -1694,10 +1694,24 @@ fn list_backups(backups_dir: &Path) -> Result<Vec<BackupEntry>, String> {
 
     // Sort by parsed filename timestamp (descending), falling back to fs mtime
     entries.sort_by(|a, b| {
-        let ts_a = a.parsed_timestamp.map(|dt| dt.timestamp_millis())
-            .unwrap_or_else(|| a.modified.duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0));
-        let ts_b = b.parsed_timestamp.map(|dt| dt.timestamp_millis())
-            .unwrap_or_else(|| b.modified.duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0));
+        let ts_a = a
+            .parsed_timestamp
+            .map(|dt| dt.timestamp_millis())
+            .unwrap_or_else(|| {
+                a.modified
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(0)
+            });
+        let ts_b = b
+            .parsed_timestamp
+            .map(|dt| dt.timestamp_millis())
+            .unwrap_or_else(|| {
+                b.modified
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(0)
+            });
         ts_b.cmp(&ts_a)
     });
     Ok(entries)

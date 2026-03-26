@@ -6,24 +6,18 @@
  */
 
 import React from 'react';
-import { Moon, Sun, Monitor, Type, AlignLeft, Palette } from 'lucide-react';
+import { Moon, Type, AlignLeft, Palette } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useSettings } from '@/hooks/useSettings';
-import type { Theme, EditorMode } from '@/types';
+import type { EditorMode } from '@/types';
 
 /**
  * Editor settings component for customizing editor preferences
  */
 export const EditorSettings: React.FC = () => {
   const { settings, updateSettings } = useSettings();
-
-  const themes: { value: Theme; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { value: 'light', label: 'Light', icon: Sun },
-    { value: 'dark', label: 'Dark', icon: Moon },
-    { value: 'auto', label: 'System', icon: Monitor },
-  ];
 
   const editorModes: { value: EditorMode; label: string }[] = [
     { value: 'source', label: 'Source Only' },
@@ -39,25 +33,15 @@ export const EditorSettings: React.FC = () => {
       <div>
         <h3 className="text-lg font-semibold mb-4">Editor Settings</h3>
         
-        {/* Theme Selection */}
+        {/* Theme - Dark Mode Only */}
         <Card className="p-4 mb-4">
           <div className="flex items-center gap-2 mb-3">
             <Palette className="h-4 w-4 text-muted-foreground" />
             <Label className="text-base font-medium">Theme</Label>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {themes.map(({ value, label, icon: Icon }) => (
-              <Button
-                key={value}
-                variant={settings.theme === value ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => updateSettings({ theme: value })}
-                className="justify-start"
-              >
-                <Icon className="h-4 w-4 mr-2" />
-                {label}
-              </Button>
-            ))}
+          <div className="flex items-center gap-2 p-2 rounded bg-muted/30">
+            <Moon className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Dark</span>
           </div>
         </Card>
 

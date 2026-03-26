@@ -20,7 +20,7 @@ vi.mock('@/utils/safe-invoke', () => ({
 vi.mock('@/hooks/useSettings', () => ({
   useSettings: () => ({
     settings: {
-      theme: 'light',
+      theme: 'dark',
       editor_mode: 'edit',
       last_folder: '',
     },

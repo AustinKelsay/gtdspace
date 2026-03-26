@@ -415,10 +415,14 @@ export function useGTDWorkspaceSidebar({
         : candidatePaths;
 
       for (const candidatePath of orderedPaths) {
-        const exists = await safeInvoke<boolean>(
-          'check_directory_exists',
-          { path: candidatePath },
-          false
+        const exists = await withErrorHandling(
+          async () =>
+            safeInvoke<boolean>(
+              'check_directory_exists',
+              { path: candidatePath },
+              false
+            ),
+          'Failed to verify section directory'
         );
         if (exists === true) {
           return candidatePath;
@@ -427,7 +431,7 @@ export function useGTDWorkspaceSidebar({
 
       return normalizedPath;
     },
-    [rootPath]
+    [rootPath, withErrorHandling]
   );
 
   const loadSectionFiles = React.useCallback(

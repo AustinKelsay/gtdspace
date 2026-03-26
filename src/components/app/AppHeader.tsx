@@ -398,26 +398,21 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                         </Tooltip>
                     </TooltipProvider>
 
-                    {/* Theme Toggle */}
+                    {/* Dark Mode Indicator */}
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={onToggleTheme}
-                                    className="h-8 w-8 p-0"
-                                    aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+                                    className="h-8 w-8 p-0 cursor-default"
+                                    aria-label="Dark mode"
                                 >
-                                    {theme === 'dark' ? (
-                                        <Sun className="h-4 w-4" />
-                                    ) : (
-                                        <Moon className="h-4 w-4" />
-                                    )}
+                                    <Moon className="h-4 w-4" />
                                 </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                                <p>Toggle Theme ({theme === 'dark' ? 'Light' : 'Dark'} Mode)</p>
+                                <p>Dark Mode</p>
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>

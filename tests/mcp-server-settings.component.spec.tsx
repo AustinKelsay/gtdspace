@@ -31,7 +31,7 @@ vi.mock('@/utils/tauri-ready', () => ({
 import McpServerSettings from '@/components/settings/McpServerSettings';
 
 const buildSettings = (overrides: Partial<UserSettings> = {}): UserSettings => ({
-  theme: 'light',
+  theme: 'dark',
   font_size: 14,
   tab_size: 2,
   word_wrap: true,

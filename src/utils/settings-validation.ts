@@ -9,7 +9,7 @@ import type { UserSettings, Theme, EditorMode, McpServerLogLevel } from '@/types
 /**
  * Valid theme values
  */
-const VALID_THEMES: readonly Theme[] = ['light', 'dark', 'auto'] as const;
+const VALID_THEMES: readonly Theme[] = ['dark'] as const;
 
 /**
  * Valid font size values (in pixels)

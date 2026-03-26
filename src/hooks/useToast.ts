@@ -173,8 +173,8 @@ export function useToast() {
     [toast, shouldShowToast]
   );
 
-  const showFileReloaded = useCallback((fileName: string) => {
-    const normalized = norm(fileName) ?? fileName;
+  const showFileReloaded = useCallback((fileName: string, filePath?: string) => {
+    const normalized = norm(filePath ?? fileName) ?? filePath ?? fileName;
     const key = `file-reloaded:${normalized}`;
     if (!shouldShowToast(key)) return;
 

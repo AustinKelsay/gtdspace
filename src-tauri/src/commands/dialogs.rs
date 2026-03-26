@@ -44,6 +44,29 @@ fn redact_path(path: &str) -> String {
         .unwrap_or_else(|| "<redacted>".to_string())
 }
 
+fn resolve_file_location_target(path: &str) -> Result<PathBuf, String> {
+    let path_buf = PathBuf::from(path);
+    if !path_buf.exists() {
+        return Err(format!("Path does not exist: {}", redact_path(path)));
+    }
+
+    if path_buf.is_dir() {
+        return Ok(path_buf);
+    }
+
+    if path_buf.is_file() {
+        return path_buf
+            .parent()
+            .map(PathBuf::from)
+            .ok_or_else(|| format!("Could not get parent directory of: {}", redact_path(path)));
+    }
+
+    Err(format!(
+        "Path is neither a file nor directory: {}",
+        redact_path(path)
+    ))
+}
+
 /// Open folder selection dialog and return selected path
 ///
 /// Uses Tauri's dialog API to present a native folder selection dialog
@@ -200,26 +223,11 @@ pub fn open_folder_in_explorer(path: String) -> Result<String, String> {
 pub fn open_file_location(file_path: String) -> Result<String, String> {
     log::info!("Opening file location: {}", redact_path(&file_path));
 
-    // Get the parent directory of the file
-    let path_buf = PathBuf::from(&file_path);
-    if !path_buf.exists() {
-        return Err(format!("File does not exist: {}", redact_path(&file_path)));
-    }
-    if !path_buf.is_file() {
-        return Err(format!("Not a file: {}", redact_path(&file_path)));
-    }
-
-    // Get the parent directory
-    let parent_dir = path_buf.parent().ok_or_else(|| {
-        format!(
-            "Could not get parent directory of: {}",
-            redact_path(&file_path)
-        )
-    })?;
+    let location_target = resolve_file_location_target(&file_path)?;
 
     // Open the folder and select the file based on the operating system
     if cfg!(target_os = "linux") {
-        open_in_linux_file_manager(parent_dir.as_os_str()).map_err(|e| {
+        open_in_linux_file_manager(location_target.as_os_str()).map_err(|e| {
             log::error!("Failed to open file location: {}", e);
             format!(
                 "Failed to open file location for {}: {}",
@@ -272,5 +280,37 @@ pub fn open_file_location(file_path: String) -> Result<String, String> {
             log::error!("Failed to open file location: {}", e);
             Err(format!("Failed to open file location: {}", e))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_file_location_target;
+    use std::fs;
+
+    #[test]
+    fn resolve_file_location_target_returns_parent_for_files() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let project_dir = temp_dir.path().join("Projects").join("Alpha");
+        fs::create_dir_all(&project_dir).expect("create project dir");
+        let file_path = project_dir.join("README.md");
+        fs::write(&file_path, "# Alpha").expect("write readme");
+
+        let resolved = resolve_file_location_target(file_path.to_str().expect("utf-8 path"))
+            .expect("resolve file target");
+
+        assert_eq!(resolved, project_dir);
+    }
+
+    #[test]
+    fn resolve_file_location_target_accepts_directories() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let project_dir = temp_dir.path().join("Projects").join("Alpha");
+        fs::create_dir_all(&project_dir).expect("create project dir");
+
+        let resolved = resolve_file_location_target(project_dir.to_str().expect("utf-8 path"))
+            .expect("resolve directory target");
+
+        assert_eq!(resolved, project_dir);
     }
 }

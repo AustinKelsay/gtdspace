@@ -124,12 +124,14 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                       filteredProjectCount={sidebar.filteredProjects.length}
                       activeProjects={sidebar.activeProjects}
                       completedProjects={sidebar.completedProjects}
+                      cancelledProjects={sidebar.cancelledProjects}
                       projectActions={sidebar.projectActions}
                       projectMetadata={sidebar.projectMetadata}
                       actionMetadata={sidebar.actionMetadata}
                       actionStatuses={sidebar.actionStatuses}
                       expandedProjects={sidebar.expandedProjects}
                       completedProjectsExpanded={sidebar.completedProjectsExpanded}
+                      cancelledProjectsExpanded={sidebar.cancelledProjectsExpanded}
                       expandedCompletedActions={sidebar.expandedCompletedActions}
                       activeFilePath={activeFilePath}
                       onToggleSection={() => sidebar.toggleSection('projects')}
@@ -141,6 +143,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                         sidebar.setShowActionDialog(true);
                       }}
                       onToggleCompletedProjects={sidebar.setCompletedProjectsExpanded}
+                      onToggleCancelledProjects={sidebar.setCancelledProjectsExpanded}
                       onToggleCompletedActions={sidebar.toggleCompletedActions}
                       onOpenAction={handleOpenAction}
                       onOpenProjectFolder={sidebar.handleOpenFileLocation}

@@ -119,7 +119,6 @@ export const App: React.FC = () => {
   const { state: fileState, selectFolder, loadFolder } = useFileManager();
   const {
     settings,
-    setTheme,
     setLastFolder,
     isLoading: isLoadingSettings,
   } = useSettings();
@@ -217,8 +216,6 @@ export const App: React.FC = () => {
   const { showFileModified, showFileReloaded, showFileDeleted, showFileCreated, showWarning } = useToast();
   const { toast } = useUiToast();
 
-  const [themeKey, setThemeKey] = React.useState(0); // Force re-render on theme change
-
   // === MODAL MANAGEMENT ===
 
   const { isModalOpen, openModal, closeModal } = useModalManager();
@@ -237,42 +234,16 @@ export const App: React.FC = () => {
 
   // === THEME MANAGEMENT ===
 
-  const applyTheme = React.useCallback((theme: Theme) => {
+  const applyTheme = React.useCallback((_theme: Theme) => {
     const root = document.documentElement;
 
-    // Remove any existing theme classes first
-    root.classList.remove("dark", "light");
+    // Always dark mode
+    root.classList.remove("light");
+    root.classList.add("dark");
+    root.style.colorScheme = "dark";
 
-    if (theme === "dark") {
-      root.classList.add("dark");
-      root.style.colorScheme = "dark";
-    } else if (theme === "light") {
-      root.classList.add("light");
-      root.style.colorScheme = "light";
-    } else {
-      // Auto theme - detect system preference
-      const prefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      ).matches;
-      if (prefersDark) {
-        root.classList.add("dark");
-        root.style.colorScheme = "dark";
-      } else {
-        root.classList.add("light");
-        root.style.colorScheme = "light";
-      }
-    }
-
-    // Force a re-render of affected components
     window.dispatchEvent(new Event("theme-changed"));
-    setThemeKey((prev) => prev + 1); // Force React re-render
   }, []);
-
-  const toggleTheme = async () => {
-    const newTheme: Theme = settings.theme === "dark" ? "light" : "dark";
-    await setTheme(newTheme);
-    // Theme will be applied automatically by the useEffect watching settings.theme
-  };
 
   // === INTEGRATED FILE OPERATIONS ===
 
@@ -383,7 +354,7 @@ export const App: React.FC = () => {
             void (async () => {
               const reloaded = await reloadTabFromDisk(modifiedTab.id);
               if (reloaded) {
-                showFileReloaded(latestEvent.file_name);
+                showFileReloaded(latestEvent.file_name, latestEvent.file_path);
                 return;
               }
 
@@ -499,6 +470,14 @@ export const App: React.FC = () => {
 
     const preview = await gitSyncPreviewPush();
     if (!preview) {
+      return;
+    }
+
+    if (preview.summary?.totalEntries === 0) {
+      toast({
+        title: 'Nothing to push',
+        description: 'Your workspace matches the latest backup — no changes detected.',
+      });
       return;
     }
 
@@ -1060,10 +1039,7 @@ export const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <GoogleCalendarAutoSyncManager />
-      <div
-        key={themeKey}
-        className="flex flex-col h-screen bg-background text-foreground"
-      >
+      <div className="flex flex-col h-screen bg-background text-foreground">
         <Toaster />
 
         {/* Header */}
@@ -1072,7 +1048,6 @@ export const App: React.FC = () => {
           hasCurrentFileUnsavedChanges={activeTab?.hasUnsavedChanges || false}
           hasAnyUnsavedChanges={hasUnsavedChanges}
           tabCount={tabState.openTabs.length}
-          theme={settings.theme}
           isGTDSpace={isGTDSpace}
           onSaveActiveFile={async () => {
             if (activeTab) {
@@ -1083,7 +1058,6 @@ export const App: React.FC = () => {
             await saveAllTabs();
           }}
           onOpenSettings={() => setShowSettings(true)}
-          onToggleTheme={toggleTheme}
           onOpenCalendar={
             isGTDSpace
               ? () => {
@@ -1681,7 +1655,7 @@ export const App: React.FC = () => {
             checkGTDSpace={checkGTDSpace}
             loadProjects={loadProjects}
             onGitBackupReview={handleGitPush}
-            gitBackupReviewBusy={gitSyncPreviewing || gitSyncPushing}
+            gitBackupReviewBusy={gitSyncPreviewing || gitSyncPushing || gitSyncPulling}
           />
         </div>
       )}

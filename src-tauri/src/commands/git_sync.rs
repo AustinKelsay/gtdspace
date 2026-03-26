@@ -124,6 +124,34 @@ struct BackupEntry {
     file_name: String,
     modified: SystemTime,
     _size: u64,
+    /// Timestamp parsed from the filename (e.g. `backup-YYYYMMDDTHHMMSSmmm.tar.gz.enc`).
+    /// Falls back to `None` when the filename doesn't match the expected pattern.
+    parsed_timestamp: Option<DateTime<Utc>>,
+}
+
+/// Try to extract the embedded timestamp from a backup filename.
+/// Expected pattern: `backup-YYYYMMDDTHHMMSSmmm.tar.gz.enc`
+fn parse_backup_filename_timestamp(file_name: &str) -> Option<DateTime<Utc>> {
+    let stem = file_name.strip_prefix("backup-")?;
+    let slug = stem.strip_suffix(".tar.gz.enc")?;
+    // slug should be like "20260325T143012456" (17 chars)
+    if slug.len() < 15 {
+        return None;
+    }
+    // Parse "YYYYMMDDTHHMMSSmmm" – the 'T' is at index 8
+    let datetime_str = &slug[..15]; // "YYYYMMDDTHHMMSS"
+    let millis_str = if slug.len() > 15 { &slug[15..] } else { "0" };
+    let millis: u32 = millis_str.parse().ok()?;
+    let dt = chrono::NaiveDateTime::parse_from_str(datetime_str, "%Y%m%dT%H%M%S").ok()?;
+    let dt_with_millis = dt + chrono::Duration::milliseconds(millis as i64);
+    Some(dt_with_millis.and_utc())
+}
+
+fn backup_timestamp_to_iso(entry: &BackupEntry) -> Option<String> {
+    entry
+        .parsed_timestamp
+        .map(|dt| dt.to_rfc3339())
+        .or_else(|| system_time_to_iso(entry.modified))
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -345,9 +373,7 @@ pub fn compute_git_status(
         last_push: settings.git_sync_last_push.clone(),
         last_pull: settings.git_sync_last_pull.clone(),
         latest_backup_file: latest_backup.as_ref().map(|entry| entry.file_name.clone()),
-        latest_backup_at: latest_backup
-            .as_ref()
-            .and_then(|entry| system_time_to_iso(entry.modified)),
+        latest_backup_at: latest_backup.as_ref().and_then(backup_timestamp_to_iso),
         has_pending_commits,
         has_remote,
         message,
@@ -507,10 +533,11 @@ pub fn preview_git_push(config: GitSyncConfig) -> Result<GitSyncPreviewResponse,
                 .map_err(|e| format!("Failed to prepare temporary baseline directory: {}", e))?;
             extract_archive_to_dir(&decrypted_archive, temp_extract_dir.path())?;
 
+            let baseline_ts = backup_timestamp_to_iso(&backup);
             (
                 true,
                 Some(backup.file_name),
-                system_time_to_iso(backup.modified),
+                baseline_ts,
                 build_workspace_manifest(temp_extract_dir.path())?,
             )
         } else {
@@ -1155,6 +1182,8 @@ pub fn perform_git_pull(
 
     restore_workspace(&config.workspace_path, &decrypted_archive)?;
 
+    let latest_backup_timestamp = backup_timestamp_to_iso(&latest_backup);
+
     Ok(GitOperationResultPayload {
         success: true,
         message: if force {
@@ -1163,7 +1192,7 @@ pub fn perform_git_pull(
             "Workspace restored from encrypted backup".to_string()
         },
         backup_file: Some(latest_backup.file_name),
-        timestamp: system_time_to_iso(latest_backup.modified),
+        timestamp: latest_backup_timestamp,
         pushed: false,
         details: Some(json!({
             "workspacePath": config.workspace_path,
@@ -1654,17 +1683,41 @@ fn list_backups(backups_dir: &Path) -> Result<Vec<BackupEntry>, String> {
             .metadata()
             .map_err(|e| format!("Failed to read metadata for {}: {}", path.display(), e))?;
         let modified = metadata.modified().unwrap_or_else(|_| SystemTime::now());
+        let file_name = path
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "backup.enc".to_string());
+        let parsed_timestamp = parse_backup_filename_timestamp(&file_name);
         entries.push(BackupEntry {
-            file_name: path
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "backup.enc".to_string()),
+            file_name,
             modified,
             _size: metadata.len(),
+            parsed_timestamp,
         });
     }
 
-    entries.sort_by(|a, b| b.modified.cmp(&a.modified));
+    // Sort by parsed filename timestamp (descending), falling back to fs mtime
+    entries.sort_by(|a, b| {
+        let ts_a = a
+            .parsed_timestamp
+            .map(|dt| dt.timestamp_millis())
+            .unwrap_or_else(|| {
+                a.modified
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(0)
+            });
+        let ts_b = b
+            .parsed_timestamp
+            .map(|dt| dt.timestamp_millis())
+            .unwrap_or_else(|| {
+                b.modified
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(0)
+            });
+        ts_b.cmp(&ts_a)
+    });
     Ok(entries)
 }
 

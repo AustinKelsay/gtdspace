@@ -34,26 +34,41 @@ npm run release:major  # 0.1.0 → 1.0.0 with git tag
 ## Pre-Commit Gate
 
 Do not commit or ask for review until the relevant local checks pass.
+Do not push if you made additional edits after the last successful run; rerun the relevant checks first.
 
 - Always run after code changes:
+
   ```bash
   npm run type-check
   npm run lint
   cd src-tauri && cargo fmt --check && cargo clippy -- -D warnings
   ```
+
+- If you touched `src/App.tsx`, file watcher handling, reload toasts, or integration flows, also run:
+
+  ```bash
+  npx vitest run tests/app.integration.spec.tsx
+  ```
+
 - If you touched MCP server, Rust backend settings, or path-resolution logic, also run:
+
   ```bash
   cargo test --manifest-path src-tauri/mcp-server/Cargo.toml --test gtdspace_mcp_stdio -- --nocapture
   cargo test --manifest-path src-tauri/Cargo.toml parse_user_settings_value_accepts_partial_saved_settings -- --nocapture
   ```
+
 - If you touched frontend settings validation or MCP settings UI, also run:
+
   ```bash
   npx vitest run tests/settings-validation.spec.ts
   ```
+
 - If you touched dashboard actions, overview, or projects, also run:
+
   ```bash
   npx vitest run tests/dashboard-actions.component.spec.tsx tests/dashboard-projects.component.spec.tsx tests/date-formatting.spec.ts
   ```
+
 - If `cargo fmt` changes files, rerun the affected checks before committing.
 - Treat CI-only failures caused by missing local verification as avoidable regressions.
 

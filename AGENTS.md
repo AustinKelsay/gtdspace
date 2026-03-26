@@ -19,11 +19,14 @@ Vitest with React Testing Library underpins unit and component coverage. Place s
 ## Pre-Commit Checklist
 
 Run the relevant local checks before every commit, not just before PR merge.
+Run the relevant local checks again before every push if you changed code after the last successful run.
 
 - Baseline checks for any code change:
   - `npm run type-check`
   - `npm run lint`
   - `cd src-tauri && cargo fmt --check && cargo clippy -- -D warnings`
+- When changing `src/App.tsx`, file watcher handling, reload toasts, or integration flows:
+  - `npx vitest run tests/app.integration.spec.tsx`
 - When changing MCP server, Rust settings parsing, workspace resolution, or path handling:
   - `cargo test --manifest-path src-tauri/mcp-server/Cargo.toml --test gtdspace_mcp_stdio -- --nocapture`
   - `cargo test --manifest-path src-tauri/Cargo.toml parse_user_settings_value_accepts_partial_saved_settings -- --nocapture`
@@ -32,6 +35,7 @@ Run the relevant local checks before every commit, not just before PR merge.
 - When changing dashboard actions, overview, or projects:
   - `npx vitest run tests/dashboard-actions.component.spec.tsx tests/dashboard-projects.component.spec.tsx tests/date-formatting.spec.ts`
 - If `cargo fmt` rewrites any Rust files, review the diff and rerun the affected tests/checks before committing.
+- Do not push if any required local check for the touched area has not been rerun after the latest edits.
 
 ## Commit & Pull Request Guidelines
 

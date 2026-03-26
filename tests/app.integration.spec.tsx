@@ -73,7 +73,7 @@ const mocks = vi.hoisted(() => {
     },
     settings: {
       settings: {
-        theme: 'light',
+        theme: 'dark',
         editor_mode: 'edit',
         last_folder: '',
         default_space_path: null,
@@ -398,7 +398,7 @@ describe('App integration workflows', () => {
     mocks.fileWatcher.state.recentEvents = [];
     mocks.fileWatcher.startWatching.mockResolvedValue(undefined);
 
-    mocks.settings.settings.theme = 'light';
+    mocks.settings.settings.theme = 'dark';
     mocks.settings.settings.last_folder = '';
     mocks.settings.isLoading = false;
     mocks.settings.setTheme.mockResolvedValue(undefined);
@@ -769,7 +769,10 @@ describe('App integration workflows', () => {
       expect(mocks.tabManager.reloadTabFromDisk).toHaveBeenCalledWith('tab-clean');
     });
     await waitFor(() => {
-      expect(mocks.showFileReloaded).toHaveBeenCalledWith('Notes.md');
+      expect(mocks.showFileReloaded).toHaveBeenCalledWith(
+        'Notes.md',
+        '/mock/workspace/Notes.md',
+      );
     });
     expect(mocks.showFileModified).not.toHaveBeenCalled();
   });

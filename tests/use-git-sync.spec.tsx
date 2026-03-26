@@ -19,7 +19,7 @@ import { useGitSync } from '@/hooks/useGitSync';
 import type { UserSettings } from '@/types';
 
 const baseSettings: UserSettings = {
-  theme: 'light',
+  theme: 'dark',
   font_size: 14,
   tab_size: 2,
   word_wrap: true,

@@ -24,7 +24,7 @@ export interface PermissionStatus {
 /**
  * Theme options for the application
  */
-export type Theme = 'light' | 'dark' | 'auto';
+export type Theme = 'dark';
 
 /**
  * Application state for Phase 0
@@ -330,7 +330,7 @@ export type McpServerLogLevel = 'error' | 'warn' | 'info' | 'debug' | 'trace';
  * User settings structure for persistence
  */
 export interface UserSettings {
-  /** Theme preference: 'light', 'dark', or 'auto' */
+  /** Theme preference: dark mode only */
   theme: Theme;
   /** Editor font size in pixels */
   font_size: number;

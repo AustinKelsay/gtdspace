@@ -51,7 +51,7 @@ export const useFileManager = () => {
   
   const [state, setState] = useState<FileManagerState>({
     // Base app state
-    theme: settings.theme as 'light' | 'dark' | 'auto',
+    theme: 'dark' as const,
     isReady: true,
     isLoading: false,
     error: null,

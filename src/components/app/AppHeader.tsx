@@ -10,7 +10,6 @@ import {
     Save,
     Settings,
     Target,
-    Sun,
     Moon,
     Calendar,
     LayoutDashboard,
@@ -22,7 +21,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Theme, GitSyncStatus } from '@/types';
+import type { GitSyncStatus } from '@/types';
 import { formatRelativeTimeShort } from '@/utils/time';
 
 /**
@@ -37,8 +36,6 @@ export interface AppHeaderProps {
     hasAnyUnsavedChanges: boolean;
     /** Number of open tabs */
     tabCount: number;
-    /** Current theme */
-    theme: Theme;
     /** Whether the current folder is a GTD space */
     isGTDSpace: boolean;
     /** Callback to save the active file */
@@ -47,8 +44,6 @@ export interface AppHeaderProps {
     onSaveAllFiles: () => Promise<void>;
     /** Callback to open settings */
     onOpenSettings: () => void;
-    /** Callback to toggle theme */
-    onToggleTheme: () => Promise<void>;
     /** Callback to open calendar view (optional) */
     onOpenCalendar?: () => void;
     /** Callback to open GTD dashboard (optional) */
@@ -73,7 +68,7 @@ export interface AppHeaderProps {
  * Application header component
  * 
  * Displays the current file name, save status, and provides quick access
- * to save operations, settings, and theme toggle functionality.
+ * to save operations and application controls.
  * 
  * @param props - Component props
  * @returns Header JSX element
@@ -83,12 +78,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     hasCurrentFileUnsavedChanges,
     hasAnyUnsavedChanges,
     tabCount,
-    theme,
     isGTDSpace,
     onSaveActiveFile,
     onSaveAllFiles,
     onOpenSettings,
-    onToggleTheme,
     onOpenCalendar,
     onOpenDashboard,
     onOpenKeyboardShortcuts,
@@ -398,26 +391,20 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                         </Tooltip>
                     </TooltipProvider>
 
-                    {/* Theme Toggle */}
+                    {/* Dark Mode Indicator */}
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={onToggleTheme}
-                                    className="h-8 w-8 p-0"
-                                    aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+                                <span
+                                    className="inline-flex h-8 w-8 items-center justify-center p-0"
+                                    role="img"
+                                    aria-label="Dark mode: enabled"
                                 >
-                                    {theme === 'dark' ? (
-                                        <Sun className="h-4 w-4" />
-                                    ) : (
-                                        <Moon className="h-4 w-4" />
-                                    )}
-                                </Button>
+                                    <Moon className="h-4 w-4" aria-hidden="true" />
+                                </span>
                             </TooltipTrigger>
                             <TooltipContent>
-                                <p>Toggle Theme ({theme === 'dark' ? 'Light' : 'Dark'} Mode)</p>
+                                <p>Dark Mode</p>
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>

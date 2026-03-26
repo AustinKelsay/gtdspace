@@ -9,7 +9,7 @@ import type { UserSettings, Theme, EditorMode, McpServerLogLevel } from '@/types
 /**
  * Valid theme values
  */
-const VALID_THEMES: readonly Theme[] = ['light', 'dark', 'auto'] as const;
+const VALID_THEMES: readonly Theme[] = ['dark'] as const;
 
 /**
  * Valid font size values (in pixels)
@@ -139,12 +139,11 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
     recordWarning('theme', `missing, defaulting to ${DEFAULT_SETTINGS.theme}`, data.theme, DEFAULT_SETTINGS.theme);
     coercedSettings.theme = DEFAULT_SETTINGS.theme;
   } else if (typeof data.theme !== 'string' || !VALID_THEMES.includes(data.theme as Theme)) {
-    recordError(
+    recordWarning(
       'theme',
       `must be one of: ${VALID_THEMES.join(', ')}`,
       data.theme,
       DEFAULT_SETTINGS.theme,
-      'fatal',
     );
     coercedSettings.theme = DEFAULT_SETTINGS.theme;
   } else {

@@ -52,8 +52,6 @@ export interface BlockNoteEditorProps {
   content: string;
   /** Callback when content changes */
   onChange: (content: string) => void;
-  /** Dark mode theme */
-  darkMode?: boolean;
   /** Read-only mode */
   readOnly?: boolean;
   /** Auto-focus on mount */
@@ -77,7 +75,6 @@ export interface BlockNoteEditorProps {
 export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
   content,
   onChange,
-  darkMode = false,
   readOnly = false,
   className = '',
   filePath,
@@ -508,10 +505,10 @@ export const BlockNoteEditor: React.FC<BlockNoteEditorProps> = ({
 
   return (
     <FilePathProvider filePath={filePath}>
-      <div className={`w-full ${className} ${darkMode ? 'dark' : ''}`}>
+      <div className={`w-full dark ${className}`}>
         <BlockNoteView
           editor={editor}
-          theme={darkMode ? "dark" : "light"}
+          theme="dark"
           editable={!readOnly}
           data-theming-css-variables={false}
         />

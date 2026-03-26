@@ -5,7 +5,7 @@
  * @phase 2 - Block-based WYSIWYG editor with BlockNote
  */
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Card } from '@/components/ui/card';
 import { BlockNoteEditor } from './BlockNoteEditor';
 import type { TextEditorProps } from '@/types';
@@ -31,34 +31,6 @@ export const EnhancedTextEditor: React.FC<TextEditorProps & { frame?: 'card' | '
 }) => {
   // === LOCAL STATE ===
 
-  const [isDarkMode, setIsDarkMode] = useState(false);
-
-  // === EFFECTS ===
-
-  /**
-   * Detect system theme
-   */
-  useEffect(() => {
-    const handleThemeChange = () => {
-      const isDark = document.documentElement.classList.contains('dark');
-      setIsDarkMode(isDark);
-    };
-
-    // Initial detection
-    handleThemeChange();
-
-    // Listen for theme changes
-    const observer = new MutationObserver(handleThemeChange);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class']
-    });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-
   // === MAIN LAYOUT ===
 
   const EditorShell = frame === 'card' ? Card : 'div';
@@ -69,7 +41,6 @@ export const EnhancedTextEditor: React.FC<TextEditorProps & { frame?: 'card' | '
         <BlockNoteEditor
           content={content}
           onChange={onChange}
-          darkMode={isDarkMode}
           readOnly={readOnly}
           autoFocus={autoFocus}
           filePath={filePath}

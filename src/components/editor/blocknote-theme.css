@@ -1,4 +1,4 @@
-/* BlockNote Theme Integration with shadcn/ui */
+/* BlockNote Theme Integration with shadcn/ui - Dark Mode Only */
 
 /* Override BlockNote's default CSS variables with our app's theme */
 .bn-container {
@@ -13,25 +13,12 @@
   --bn-colors-selected-background: rgb(var(--secondary));
   --bn-colors-selected-text: rgb(var(--secondary-foreground));
   --bn-colors-disabled-text: rgb(var(--muted-foreground));
-  --bn-colors-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --bn-colors-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   --bn-colors-border: rgb(var(--border));
   --bn-colors-side-menu: rgb(var(--muted-foreground));
   --bn-colors-side-menu-hover: rgb(var(--foreground));
   --bn-colors-highlight-colors-gray-background: rgb(var(--muted));
   --bn-colors-highlight-colors-gray-text: rgb(var(--muted-foreground));
-  --bn-colors-highlight-colors-blue-background: rgba(59, 130, 246, 0.15);
-  --bn-colors-highlight-colors-blue-text: rgb(59, 130, 246);
-  --bn-colors-highlight-colors-purple-background: rgba(147, 51, 234, 0.15);
-  --bn-colors-highlight-colors-purple-text: rgb(147, 51, 234);
-  --bn-colors-highlight-colors-red-background: rgba(239, 68, 68, 0.15);
-  --bn-colors-highlight-colors-red-text: rgb(239, 68, 68);
-  --bn-colors-highlight-colors-yellow-background: rgba(245, 158, 11, 0.15);
-  --bn-colors-highlight-colors-yellow-text: rgb(245, 158, 11);
-}
-
-/* Dark mode specific overrides */
-.dark .bn-container {
-  --bn-colors-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   --bn-colors-highlight-colors-blue-background: rgba(59, 130, 246, 0.2);
   --bn-colors-highlight-colors-blue-text: rgb(96, 165, 250);
   --bn-colors-highlight-colors-purple-background: rgba(147, 51, 234, 0.2);
@@ -42,16 +29,9 @@
   --bn-colors-highlight-colors-yellow-text: rgb(251, 191, 36);
 }
 
-/* Ensure dark mode background consistency */
-.dark .bn-editor,
-.dark .bn-container,
-.dark .bn-block-outer {
-  background-color: rgb(var(--background)) !important;
-}
-
 /* Editor container styles */
 .bn-editor {
-  background: transparent !important;
+  background: rgb(var(--background)) !important;
   color: rgb(var(--foreground)) !important;
   font-family: inherit;
   height: 100%;
@@ -60,7 +40,7 @@
 }
 
 .bn-container {
-  background: transparent !important;
+  background: rgb(var(--background)) !important;
   color: rgb(var(--foreground)) !important;
   min-height: 100%;
   padding-bottom: 2rem; /* Add some bottom padding for better scrolling experience */
@@ -69,6 +49,10 @@
   overflow-x: visible;
   /* Prevent layout recalculation during typing */
   will-change: scroll-position;
+}
+
+.bn-block-outer {
+  background: rgb(var(--background)) !important;
 }
 
 /* Ensure the BlockNote editor wrapper allows proper layout */
@@ -153,7 +137,7 @@
 
 /* Links */
 .bn-inline-content a {
-  color: rgb(59, 130, 246);
+  color: rgb(96, 165, 250);
   text-decoration: underline;
   text-underline-offset: 2px;
   transition: opacity 0.2s;
@@ -161,10 +145,6 @@
 
 .bn-inline-content a:hover {
   opacity: 0.8;
-}
-
-.dark .bn-inline-content a {
-  color: rgb(96, 165, 250);
 }
 
 /* Lists - Ensure they don't interfere with our custom blocks */
@@ -186,18 +166,12 @@
 
 /* Code blocks */
 .bn-block-content pre {
-  background: rgb(var(--muted) / 0.3) !important;
+  background: rgb(var(--muted) / 0.8) !important;
   border: 1px solid rgb(var(--border));
   border-radius: 0.5rem;
   padding: 0.75rem;
   overflow-x: auto;
   margin: 0.5rem 0;
-}
-
-/* Light mode specific code block styling */
-:not(.dark) .bn-block-content pre {
-  background: rgba(0, 0, 0, 0.03) !important;
-  border-color: rgba(0, 0, 0, 0.1);
 }
 
 .bn-block-content pre code {
@@ -209,31 +183,16 @@
     "Courier New", monospace;
 }
 
-.dark .bn-block-content pre {
-  background: rgb(var(--muted) / 0.8) !important;
-}
-
 /* Inline code */
 .bn-inline-content code {
-  background: rgba(0, 0, 0, 0.06);
+  background: rgb(var(--muted) / 0.8);
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
   font-size: 0.875em;
   color: rgb(var(--foreground));
   font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
     "Courier New", monospace;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-/* Light mode specific inline code */
-:not(.dark) .bn-inline-content code {
-  background: rgba(0, 0, 0, 0.06);
-  border-color: rgba(0, 0, 0, 0.08);
-}
-
-.dark .bn-inline-content code {
-  background: rgb(var(--muted) / 0.8);
-  border-color: rgb(var(--border));
+  border: 1px solid rgb(var(--border));
 }
 
 /* Blockquotes */
@@ -265,12 +224,12 @@
 }
 
 .bn-block-content th {
-  background: rgb(var(--muted) / 0.5);
+  background: rgb(var(--muted) / 0.8);
   font-weight: 600;
   font-size: 0.875rem;
   text-transform: uppercase;
   letter-spacing: 0.025em;
-  color: rgb(var(--muted-foreground));
+  color: rgb(var(--foreground) / 0.9);
 }
 
 .bn-block-content td {
@@ -279,12 +238,12 @@
 
 /* Zebra striping for better readability */
 .bn-block-content tbody tr:nth-child(even) {
-  background: rgb(var(--muted) / 0.15);
+  background: rgb(var(--muted) / 0.2);
 }
 
 /* Hover effect on rows */
 .bn-block-content tbody tr:hover {
-  background: rgb(var(--accent) / 0.25);
+  background: rgb(var(--accent) / 0.35);
 }
 
 /* First column (Date) - slightly bolder */
@@ -298,22 +257,17 @@
   font-weight: 500;
 }
 
-/*
- * Restore legacy ‘complete’ selectors and improve light-mode status color contrast
- * Add td[data-status="complete"] and .status-complete alongside existing completed/todo rules for back-compat.
- * Change light-mode green to rgb(21 128 61) and amber to rgb(180 83 9) (green-700/amber-700) to raise contrast from 2.28/2.15 up to 5.02 for WCAG 4.5:1 compliance.
- */
 /* Color coding for status values - using data attributes and classes */
 .bn-block-content td[data-status="complete"],
 .bn-block-content td.status-complete,
 .bn-block-content td[data-status="completed"],
 .bn-block-content td.status-completed {
-  color: rgb(21 128 61); /* Changed from rgb(34 197 94) for WCAG 4.5:1 compliance */
+  color: rgb(74 222 128);
 }
 
 .bn-block-content td[data-status="todo"],
 .bn-block-content td.status-todo {
-  color: rgb(180 83 9); /* Changed from rgb(245 158 11) for WCAG 4.5:1 compliance */
+  color: rgb(251 191 36);
 }
 
 /* Action column styling */
@@ -321,30 +275,6 @@
   font-size: 0.875rem;
   font-style: italic;
   color: rgb(var(--muted-foreground));
-}
-
-/* Dark mode table enhancements */
-.dark .bn-block-content th {
-  background: rgb(var(--muted) / 0.8);
-  color: rgb(var(--foreground) / 0.9);
-}
-
-.dark .bn-block-content tbody tr:nth-child(even) {
-  background: rgb(var(--muted) / 0.2);
-}
-
-.dark .bn-block-content tbody tr:hover {
-  background: rgb(var(--accent) / 0.35);
-}
-
-.dark .bn-block-content td[data-status="completed"],
-.dark .bn-block-content td.status-completed {
-  color: rgb(74 222 128);
-}
-
-.dark .bn-block-content td[data-status="todo"],
-.dark .bn-block-content td.status-todo {
-  color: rgb(251 191 36);
 }
 
 /* Responsive table - scroll on small screens */
@@ -364,12 +294,8 @@
   background: rgb(var(--card)) !important;
   border: 1px solid rgb(var(--border)) !important;
   border-radius: 0.5rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  padding: 0.25rem;
-}
-
-.dark .bn-slash-menu {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  padding: 0.25rem;
 }
 
 .bn-slash-menu-item {
@@ -394,12 +320,8 @@
   background: rgb(var(--card)) !important;
   border: 1px solid rgb(var(--border)) !important;
   border-radius: 0.5rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  padding: 0.25rem;
-}
-
-.dark .bn-toolbar {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  padding: 0.25rem;
 }
 
 .bn-toolbar-button {
@@ -437,12 +359,8 @@
 
 /* Selection */
 .bn-block.bn-is-selected .bn-block-content {
-  background: rgba(59, 130, 246, 0.08) !important;
-  border-radius: 0.375rem;
-}
-
-.dark .bn-block.bn-is-selected .bn-block-content {
   background: rgb(var(--accent) / 0.3) !important;
+  border-radius: 0.375rem;
 }
 
 /* Text selection */
@@ -536,11 +454,6 @@ no longer clipped. Additionally, ensure node wrappers don't hide child effects.
 /* Add our own shadows where needed */
 .bn-slash-menu,
 .bn-toolbar {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
-}
-
-.dark .bn-slash-menu,
-.dark .bn-toolbar {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
 }
 
@@ -569,21 +482,10 @@ no longer clipped. Additionally, ensure node wrappers don't hide child effects.
 .bn-code-block {
   margin: 1rem 0;
   position: relative;
-  background: rgba(0, 0, 0, 0.03) !important;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgb(var(--muted) / 0.8) !important;
+  border: 1px solid rgb(var(--border));
   border-radius: 0.5rem;
   overflow: hidden;
-}
-
-/* Light mode specific */
-:not(.dark) .bn-code-block {
-  background: rgba(0, 0, 0, 0.03) !important;
-  border-color: rgba(0, 0, 0, 0.1);
-}
-
-.dark .bn-code-block {
-  background: rgb(var(--muted) / 0.8) !important;
-  border-color: rgb(var(--border));
 }
 
 /* Code block header with language indicator */
@@ -624,92 +526,45 @@ no longer clipped. Additionally, ensure node wrappers don't hide child effects.
   padding: 0;
 }
 
-/* Match syntax highlighting from globals.css */
-.dark .bn-code-block .hljs-comment,
-.dark .bn-code-block .hljs-quote {
+/* Syntax highlighting in BlockNote code blocks */
+.bn-code-block .hljs-comment,
+.bn-code-block .hljs-quote {
   color: #8b949e;
   font-style: italic;
 }
 
-.dark .bn-code-block .hljs-keyword,
-.dark .bn-code-block .hljs-selector-tag,
-.dark .bn-code-block .hljs-literal,
-.dark .bn-code-block .hljs-section,
-.dark .bn-code-block .hljs-doctag,
-.dark .bn-code-block .hljs-name,
-.dark .bn-code-block .hljs-strong {
+.bn-code-block .hljs-keyword,
+.bn-code-block .hljs-selector-tag,
+.bn-code-block .hljs-literal,
+.bn-code-block .hljs-section,
+.bn-code-block .hljs-doctag,
+.bn-code-block .hljs-name,
+.bn-code-block .hljs-strong {
   color: #ff7b72;
   font-weight: 600;
 }
 
-.dark .bn-code-block .hljs-string,
-.dark .bn-code-block .hljs-regexp {
+.bn-code-block .hljs-string,
+.bn-code-block .hljs-regexp {
   color: #a5d6ff;
 }
 
-.dark .bn-code-block .hljs-number,
-.dark .bn-code-block .hljs-built_in,
-.dark .bn-code-block .hljs-builtin-name {
+.bn-code-block .hljs-number,
+.bn-code-block .hljs-built_in,
+.bn-code-block .hljs-builtin-name {
   color: #79c0ff;
 }
 
-.dark .bn-code-block .hljs-function .hljs-title,
-.dark .bn-code-block .hljs-title,
-.dark .bn-code-block .hljs-class .hljs-title {
+.bn-code-block .hljs-function .hljs-title,
+.bn-code-block .hljs-title,
+.bn-code-block .hljs-class .hljs-title {
   color: #d2a8ff;
   font-weight: 600;
 }
 
-.dark .bn-code-block .hljs-variable,
-.dark .bn-code-block .hljs-template-variable,
-.dark .bn-code-block .hljs-template-tag,
-.dark .bn-code-block .hljs-addition {
+.bn-code-block .hljs-variable,
+.bn-code-block .hljs-template-variable,
+.bn-code-block .hljs-template-tag,
+.bn-code-block .hljs-addition {
   color: #7ee787;
-}
-
-/* Light mode syntax highlighting - more visible colors */
-:not(.dark) .bn-code-block .hljs {
-  color: #24292e;
-}
-
-:not(.dark) .bn-code-block .hljs-comment,
-:not(.dark) .bn-code-block .hljs-quote {
-  color: #6a737d;
-  font-style: italic;
-}
-
-:not(.dark) .bn-code-block .hljs-keyword,
-:not(.dark) .bn-code-block .hljs-selector-tag,
-:not(.dark) .bn-code-block .hljs-literal,
-:not(.dark) .bn-code-block .hljs-section,
-:not(.dark) .bn-code-block .hljs-doctag,
-:not(.dark) .bn-code-block .hljs-name,
-:not(.dark) .bn-code-block .hljs-strong {
-  color: #d73a49;
-  font-weight: 600;
-}
-
-:not(.dark) .bn-code-block .hljs-string,
-:not(.dark) .bn-code-block .hljs-regexp {
-  color: #032f62;
-}
-
-:not(.dark) .bn-code-block .hljs-number,
-:not(.dark) .bn-code-block .hljs-built_in,
-:not(.dark) .bn-code-block .hljs-builtin-name {
-  color: #005cc5;
-}
-
-:not(.dark) .bn-code-block .hljs-function .hljs-title,
-:not(.dark) .bn-code-block .hljs-title,
-:not(.dark) .bn-code-block .hljs-class .hljs-title {
-  color: #6f42c1;
-  font-weight: 600;
-}
-
-:not(.dark) .bn-code-block .hljs-variable,
-:not(.dark) .bn-code-block .hljs-template-variable,
-:not(.dark) .bn-code-block .hljs-template-tag,
-:not(.dark) .bn-code-block .hljs-addition {
-  color: #22863a;
 }

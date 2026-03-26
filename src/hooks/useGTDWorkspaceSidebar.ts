@@ -123,6 +123,35 @@ function getCombinedSectionPathVariants(
   return sectionIds.flatMap((sectionId) => getSectionPathVariants(sectionId, rootPath));
 }
 
+function inferSectionContextFromPath(
+  normalizedPath: string
+): { root: string | null; section: (typeof GTD_SECTIONS)[number] } | null {
+  for (const section of GTD_SECTIONS) {
+    if (section.id === 'calendar' || section.id === 'projects') {
+      continue;
+    }
+
+    const candidateNames = Array.from(new Set([section.path, ...(section.aliases ?? [])]));
+    for (const candidateName of candidateNames) {
+      const marker = `/${candidateName}`;
+      const markerIndex = normalizedPath.lastIndexOf(marker);
+      if (markerIndex < 0) {
+        continue;
+      }
+
+      const nextChar = normalizedPath[markerIndex + marker.length];
+      if (nextChar !== undefined && nextChar !== '/') {
+        continue;
+      }
+
+      const inferredRoot = normalizedPath.slice(0, markerIndex) || null;
+      return { root: inferredRoot, section };
+    }
+  }
+
+  return null;
+}
+
 export function useGTDWorkspaceSidebar({
   currentFolder,
   onFolderSelect,
@@ -399,25 +428,26 @@ export function useGTDWorkspaceSidebar({
   const resolveExistingSectionPath = React.useCallback(
     async (sectionPath: string): Promise<string> => {
       const normalizedPath = normalizePath(sectionPath) ?? sectionPath.replace(/\\/g, '/');
-      if (!rootPath) {
+      const sectionFromRoot = rootPath
+        ? GTD_SECTIONS.find((candidate) => {
+            if (candidate.id === 'calendar' || candidate.id === 'projects') {
+              return false;
+            }
+
+            return buildSectionPathCandidates(rootPath, candidate).some((candidatePath) =>
+              isUnder(norm(normalizedPath), norm(candidatePath))
+            );
+          })
+        : null;
+      const inferredContext = inferSectionContextFromPath(normalizedPath);
+      const section = sectionFromRoot ?? inferredContext?.section;
+      const candidateRoot = rootPath ?? inferredContext?.root;
+
+      if (!section || !candidateRoot) {
         return normalizedPath;
       }
 
-      const section = GTD_SECTIONS.find((candidate) => {
-        if (candidate.id === 'calendar' || candidate.id === 'projects') {
-          return false;
-        }
-
-        return buildSectionPathCandidates(rootPath, candidate).some((candidatePath) =>
-          isUnder(norm(normalizedPath), norm(candidatePath))
-        );
-      });
-
-      if (!section) {
-        return normalizedPath;
-      }
-
-      const candidatePaths = buildSectionPathCandidates(rootPath, section);
+      const candidatePaths = buildSectionPathCandidates(candidateRoot, section);
       const orderedPaths = candidatePaths.includes(normalizedPath)
         ? [normalizedPath, ...candidatePaths.filter((candidate) => candidate !== normalizedPath)]
         : candidatePaths;

@@ -480,6 +480,59 @@ describe('GTDWorkspaceSidebar component', () => {
     }
   );
 
+  it('resolves stale alias section reloads even before the workspace root is hydrated', async () => {
+    safeInvokeMock.mockImplementation(
+      async (command: string, args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
+        if (command === 'check_directory_exists') {
+          if (args?.path === `${rootPath}/Purpose and Principles`) {
+            return false;
+          }
+          if (args?.path === `${rootPath}/Purpose & Principles`) {
+            return true;
+          }
+          return false;
+        }
+
+        if (command === 'list_markdown_files') {
+          if (args?.path === `${rootPath}/Purpose & Principles`) {
+            return [markdownFile(`${rootPath}/Purpose & Principles/Focus.md`, 'Focus.md')];
+          }
+          return fallback ?? [];
+        }
+
+        if (command === 'read_file') return '# README';
+        if (command === 'save_file') return 'ok';
+        return fallback ?? null;
+      }
+    );
+
+    render(<GTDWorkspaceSidebar currentFolder={null} {...baseProps} />);
+
+    act(() => {
+      emitMetadataChange({
+        filePath: `${rootPath}/Purpose and Principles/Focus.md`,
+        fileName: 'Focus.md',
+        content: '# Focus',
+        metadata: { title: 'Focus' } as never,
+        changedFields: { title: 'Focus' } as never,
+      });
+    });
+
+    await waitFor(() => {
+      const canonicalListCalls = (safeInvokeMock as Mock).mock.calls.filter(
+        ([command, args]) =>
+          command === 'list_markdown_files' && args?.path === `${rootPath}/Purpose & Principles`
+      );
+      expect(canonicalListCalls.length).toBeGreaterThan(0);
+    });
+
+    const aliasListCalls = (safeInvokeMock as Mock).mock.calls.filter(
+      ([command, args]) =>
+        command === 'list_markdown_files' && args?.path === `${rootPath}/Purpose and Principles`
+    );
+    expect(aliasListCalls).toHaveLength(0);
+  });
+
   it('resolves stale alias section reloads back to the canonical folder', async () => {
     safeInvokeMock.mockImplementation(
       async (command: string, args?: { path?: string; projectPath?: string }, fallback?: unknown) => {

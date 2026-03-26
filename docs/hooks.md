@@ -55,11 +55,24 @@ These hooks connect the UI to broader runtime services:
 
 - `useFileWatcher`: subscribes to backend file watcher events
 - `useGlobalSearch`: runs repo/workspace search
-- `useGitSync`: wraps encrypted git backup/sync operations
+- `useGitSync`: wraps encrypted git backup/sync operations, including the read-only pre-push diff preview
 - `useKeyboardShortcuts`: registers application shortcuts
 - `useModalManager`: centralizes modal open/close state
 - `useErrorHandler`: normalizes async error handling patterns
 - `useToast` / `use-toast`: local toast helpers
+
+For external file changes, the current runtime split is:
+
+- `useFileWatcher` emits backend watcher events into the frontend
+- `App` decides how to react to those events at the shell level
+- `useTabManager` provides the safe reload primitive for open tabs
+- `useToast` surfaces the user-facing notifications
+
+The current UX contract is intentional:
+
+- externally modified clean tabs auto-reload from disk
+- externally modified dirty tabs do not auto-reload
+- deleted files still close open tabs
 
 ## Hooks With Narrow Or Transitional Roles
 

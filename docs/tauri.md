@@ -101,6 +101,7 @@ The current command surface falls into these groups:
 ### Git Sync Commands
 
 - `git_sync_status`
+- `git_sync_preview_push`
 - `git_sync_push`
 - `git_sync_pull`
 

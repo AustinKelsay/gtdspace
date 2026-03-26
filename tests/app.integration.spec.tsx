@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
     safeInvoke: vi.fn(),
     waitForTauriReady: vi.fn(),
     showFileModified: vi.fn(),
+    showFileReloaded: vi.fn(),
     showFileDeleted: vi.fn(),
     showFileCreated: vi.fn(),
     showWarning: vi.fn(),
@@ -97,10 +98,12 @@ const mocks = vi.hoisted(() => {
         hasRemote: false,
         message: 'disabled',
       },
+      isPreviewing: false,
       isPushing: false,
       isPulling: false,
       operation: null as 'push' | 'pull' | null,
       refreshStatus: vi.fn(),
+      previewPush: vi.fn(),
       push: vi.fn(),
       pull: vi.fn(),
     },
@@ -144,9 +147,16 @@ vi.mock('@/utils/safe-invoke', () => ({
 vi.mock('@/hooks/useToast', () => ({
   useToast: () => ({
     showFileModified: mocks.showFileModified,
+    showFileReloaded: mocks.showFileReloaded,
     showFileDeleted: mocks.showFileDeleted,
     showFileCreated: mocks.showFileCreated,
     showWarning: mocks.showWarning,
+  }),
+}));
+
+vi.mock('@/hooks/use-toast', () => ({
+  useToast: () => ({
+    toast: vi.fn(),
   }),
 }));
 
@@ -218,10 +228,12 @@ vi.mock('@/components/app', () => ({
   AppHeader: ({
     onSaveActiveFile,
     onSaveAllFiles,
+    onGitPush,
     onGitPull,
   }: {
     onSaveActiveFile: () => Promise<void>;
     onSaveAllFiles: () => Promise<void>;
+    onGitPush?: () => Promise<void>;
     onGitPull?: () => Promise<void>;
   }) => (
     <div data-testid="app-header">
@@ -231,6 +243,9 @@ vi.mock('@/components/app', () => ({
       </button>
       <button type="button" onClick={() => void onSaveAllFiles()}>
         Save All (Header)
+      </button>
+      <button type="button" onClick={() => void onGitPush?.()}>
+        Git Push (Header)
       </button>
       <button type="button" onClick={() => void onGitPull?.()}>
         Git Pull (Header)
@@ -315,6 +330,27 @@ vi.mock('@/components/lazy', () => ({
   KeyboardShortcutsReferenceLazy: () => null,
 }));
 
+vi.mock('@/components/git-sync/GitSyncDiffReviewDialog', () => ({
+  GitSyncDiffReviewDialog: ({
+    open,
+    preview,
+    onConfirm,
+  }: {
+    open: boolean;
+    preview: { summary?: { totalEntries?: number } } | null;
+    onConfirm: () => Promise<void>;
+  }) => (
+    open ? (
+      <div data-testid="git-sync-review">
+        Review {preview?.summary?.totalEntries ?? 0}
+        <button type="button" onClick={() => void onConfirm()}>
+          Confirm Git Push
+        </button>
+      </div>
+    ) : null
+  ),
+}));
+
 import App from '@/App';
 
 const getKeyboardHandlers = () => {
@@ -355,7 +391,7 @@ describe('App integration workflows', () => {
     mocks.tabManager.openTab.mockResolvedValue('tab-1');
     mocks.tabManager.activateTab.mockResolvedValue(undefined);
     mocks.tabManager.closeTab.mockResolvedValue(undefined);
-    mocks.tabManager.reloadTabFromDisk.mockResolvedValue(undefined);
+    mocks.tabManager.reloadTabFromDisk.mockResolvedValue(false);
     mocks.tabManager.saveTab.mockResolvedValue(false);
     mocks.tabManager.saveAllTabs.mockResolvedValue(undefined);
 
@@ -367,6 +403,19 @@ describe('App integration workflows', () => {
     mocks.settings.isLoading = false;
     mocks.settings.setTheme.mockResolvedValue(undefined);
     mocks.settings.setLastFolder.mockResolvedValue(undefined);
+
+    mocks.gitSync.status = {
+      enabled: false,
+      configured: false,
+      encryptionConfigured: false,
+      hasPendingCommits: false,
+      hasRemote: false,
+      message: 'disabled',
+    };
+    mocks.gitSync.isPreviewing = false;
+    mocks.gitSync.isPushing = false;
+    mocks.gitSync.isPulling = false;
+    mocks.gitSync.operation = null;
 
     mocks.gtdSpace.gtdSpace = null;
     mocks.gtdSpace.isLoading = false;
@@ -533,6 +582,57 @@ describe('App integration workflows', () => {
     });
   });
 
+  it('saves all tabs before opening the git backup review and confirms push from the review dialog', async () => {
+    mocks.settings.settings.git_sync_enabled = true;
+    mocks.gitSync.status = {
+      enabled: true,
+      configured: true,
+      encryptionConfigured: true,
+      hasPendingCommits: false,
+      hasRemote: true,
+      message: null,
+    };
+    mocks.tabManager.saveAllTabs.mockResolvedValue(true);
+    mocks.gitSync.previewPush.mockResolvedValue({
+      hasBaseline: true,
+      baselineBackupFile: 'backup-1.tar.gz.enc',
+      baselineTimestamp: '2026-03-25T12:00:00Z',
+      summary: {
+        totalEntries: 1,
+        added: 0,
+        modified: 1,
+        deleted: 0,
+        renamed: 0,
+        unchangedExcluded: 0,
+        textDiffs: 1,
+        binaryDiffs: 0,
+        beforeBytes: 10,
+        afterBytes: 12,
+      },
+      entries: [],
+      truncated: false,
+      warnings: null,
+    });
+    mocks.gitSync.push.mockResolvedValue(true);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Git Push (Header)' }));
+
+    await waitFor(() => {
+      expect(mocks.tabManager.saveAllTabs).toHaveBeenCalledTimes(1);
+      expect(mocks.gitSync.previewPush).toHaveBeenCalledTimes(1);
+    });
+
+    expect(await screen.findByTestId('git-sync-review')).toHaveTextContent('Review 1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Git Push' }));
+
+    await waitFor(() => {
+      expect(mocks.gitSync.push).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('recovers a corrupted last_folder subfolder path and initializes the workspace from root', async () => {
     mocks.settings.settings.last_folder = '/mock/workspace/Projects';
     mocks.gtdSpace.checkGTDSpace.mockResolvedValue(true);
@@ -642,7 +742,7 @@ describe('App integration workflows', () => {
     expect(screen.queryByTestId('project-page')).not.toBeInTheDocument();
   });
 
-  it('offers reload action for externally modified clean tabs', async () => {
+  it('auto-reloads externally modified clean tabs and shows a passive toast', async () => {
     mocks.fileManager.state.currentFolder = '/mock/workspace';
     mocks.tabManager.tabState.openTabs = [
       {
@@ -661,24 +761,17 @@ describe('App integration workflows', () => {
         event_type: 'modified',
       },
     ];
+    mocks.tabManager.reloadTabFromDisk.mockResolvedValue(true);
 
     render(<App />);
 
     await waitFor(() => {
-      expect(mocks.showFileModified).toHaveBeenCalledTimes(1);
+      expect(mocks.tabManager.reloadTabFromDisk).toHaveBeenCalledWith('tab-clean');
     });
-
-    const call = mocks.showFileModified.mock.calls[0];
-    expect(call?.[0]).toBe('Notes.md');
-    expect(call?.[1]).toMatchObject({
-      onReload: expect.any(Function),
+    await waitFor(() => {
+      expect(mocks.showFileReloaded).toHaveBeenCalledWith('Notes.md');
     });
-
-    await act(async () => {
-      await call?.[1]?.onReload();
-    });
-
-    expect(mocks.tabManager.reloadTabFromDisk).toHaveBeenCalledWith('tab-clean');
+    expect(mocks.showFileModified).not.toHaveBeenCalled();
   });
 
   it('shows modified warning without reload action for dirty tabs', async () => {
@@ -711,6 +804,76 @@ describe('App integration workflows', () => {
     expect(call?.[0]).toBe('Notes.md');
     expect(call).toHaveLength(1);
     expect(mocks.tabManager.reloadTabFromDisk).not.toHaveBeenCalled();
+    expect(mocks.showFileReloaded).not.toHaveBeenCalled();
+  });
+
+  it('falls back to modified warning with reload action when clean-tab auto-reload fails', async () => {
+    mocks.fileManager.state.currentFolder = '/mock/workspace';
+    mocks.tabManager.tabState.openTabs = [
+      {
+        id: 'tab-clean-fallback',
+        file: { path: '/mock/workspace/Notes.md', name: 'Notes.md' },
+        filePath: '/mock/workspace/Notes.md',
+        content: '# Notes',
+        hasUnsavedChanges: false,
+      },
+    ];
+    mocks.fileWatcher.state.recentEvents = [
+      {
+        timestamp: 1700000202,
+        file_path: '/mock/workspace/Notes.md',
+        file_name: 'Notes.md',
+        event_type: 'modified',
+      },
+    ];
+    mocks.tabManager.reloadTabFromDisk.mockResolvedValue(false);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(mocks.tabManager.reloadTabFromDisk).toHaveBeenCalledWith('tab-clean-fallback');
+    });
+    await waitFor(() => {
+      expect(mocks.showFileModified).toHaveBeenCalledTimes(1);
+    });
+
+    const call = mocks.showFileModified.mock.calls[0];
+    expect(call?.[0]).toBe('Notes.md');
+    expect(call?.[1]).toMatchObject({
+      onReload: expect.any(Function),
+    });
+    expect(mocks.showFileReloaded).not.toHaveBeenCalled();
+  });
+
+  it('ignores modified events for files that are not open in a tab', async () => {
+    mocks.fileManager.state.currentFolder = '/mock/workspace';
+    mocks.tabManager.tabState.openTabs = [
+      {
+        id: 'tab-other',
+        file: { path: '/mock/workspace/Other.md', name: 'Other.md' },
+        filePath: '/mock/workspace/Other.md',
+        content: '# Other',
+        hasUnsavedChanges: false,
+      },
+    ];
+    mocks.fileWatcher.state.recentEvents = [
+      {
+        timestamp: 1700000203,
+        file_path: '/mock/workspace/Notes.md',
+        file_name: 'Notes.md',
+        event_type: 'modified',
+      },
+    ];
+
+    render(<App />);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(mocks.tabManager.reloadTabFromDisk).not.toHaveBeenCalled();
+    expect(mocks.showFileModified).not.toHaveBeenCalled();
+    expect(mocks.showFileReloaded).not.toHaveBeenCalled();
   });
 
   it('reloads project data when a project markdown content-saved event fires', async () => {
@@ -818,6 +981,8 @@ describe('App integration workflows', () => {
     };
     mocks.fileManager.state.currentFolder = '/mock/workspace';
     mocks.gitSync.pull.mockResolvedValue(true);
+    mocks.gitSync.previewPush.mockResolvedValue(null);
+    mocks.gitSync.push.mockResolvedValue(true);
 
     render(<App />);
 

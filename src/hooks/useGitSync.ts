@@ -1,7 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { useToast } from '@/hooks/use-toast';
-import type { UserSettings, GitSyncStatus, GitOperationResult } from '@/types';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import type {
+  UserSettings,
+  GitSyncStatus,
+  GitOperationResult,
+  GitSyncPreviewResponse,
+} from '@/types';
 
 export interface UseGitSyncOptions {
   settings: UserSettings;
@@ -11,10 +17,12 @@ export interface UseGitSyncOptions {
 
 export interface UseGitSyncResult {
   status: GitSyncStatus;
+  isPreviewing: boolean;
   isPushing: boolean;
   isPulling: boolean;
   operation: 'push' | 'pull' | null;
   refreshStatus: () => Promise<void>;
+  previewPush: () => Promise<GitSyncPreviewResponse | null>;
   push: (force?: boolean) => Promise<boolean>;
   pull: (force?: boolean) => Promise<boolean>;
 }
@@ -55,10 +63,12 @@ export const useGitSync = ({
     lastPush: settings.git_sync_last_push,
     lastPull: settings.git_sync_last_pull,
   });
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
   const [operation, setOperation] = useState<'push' | 'pull' | null>(null);
   const { toast } = useToast();
+  const { withErrorHandling } = useErrorHandler();
 
   const refreshStatus = useCallback(async () => {
     if (!settings.git_sync_enabled) {
@@ -142,6 +152,43 @@ export const useGitSync = ({
     if (!autoRefresh) return;
     refreshStatus();
   }, [autoRefresh, refreshStatus]);
+
+  const previewPush = useCallback(async () => {
+    if (!settings.git_sync_enabled) {
+      toast({
+        title: 'Git sync disabled',
+        description: 'Enable git sync in Settings to review backups.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    setIsPreviewing(true);
+    try {
+      const result = await withErrorHandling(
+        async () => {
+          const preview = await safeInvoke<GitSyncPreviewResponse>(
+            'git_sync_preview_push',
+            { workspace_override: workspacePath ?? null },
+            null,
+          );
+
+          if (!preview) {
+            throw new Error('Git push preview is not available in this environment.');
+          }
+
+          return preview;
+        },
+        'Backup review failed',
+        'git-sync',
+      );
+      if (!result) return null;
+
+      return result;
+    } finally {
+      setIsPreviewing(false);
+    }
+  }, [settings.git_sync_enabled, workspacePath, toast, withErrorHandling]);
 
   const push = useCallback(async (force = false) => {
     if (!settings.git_sync_enabled) {
@@ -239,10 +286,12 @@ export const useGitSync = ({
 
   return {
     status,
+    isPreviewing,
     isPushing,
     isPulling,
     operation,
     refreshStatus,
+    previewPush,
     push,
     pull,
   };

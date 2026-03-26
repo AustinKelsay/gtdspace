@@ -464,4 +464,70 @@ describe('GTDWorkspaceSidebar component', () => {
       });
     }
   );
+
+  it('resolves stale alias section reloads back to the canonical folder', async () => {
+    safeInvokeMock.mockImplementation(
+      async (command: string, args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
+        if (command === 'check_directory_exists') {
+          if (args?.path === `${rootPath}/Purpose and Principles`) {
+            return false;
+          }
+          return true;
+        }
+
+        if (command === 'list_project_actions' && args?.projectPath === activeProject.path) {
+          return projectActions;
+        }
+
+        if (command === 'list_markdown_files') {
+          switch (args?.path) {
+            case `${rootPath}/Habits`:
+            case `${rootPath}/Areas of Focus`:
+            case `${rootPath}/Goals`:
+            case `${rootPath}/Vision`:
+            case `${rootPath}/Someday Maybe`:
+            case `${rootPath}/Cabinet`:
+              return [];
+            case `${rootPath}/Purpose & Principles`:
+              return [markdownFile(`${rootPath}/Purpose & Principles/Focus.md`, 'Focus.md')];
+            default:
+              return fallback ?? [];
+          }
+        }
+
+        if (command === 'read_file') return '# README';
+        if (command === 'save_file') return 'ok';
+        return fallback ?? null;
+      }
+    );
+
+    renderSidebar();
+
+    expect(await screen.findByText('Project Alpha')).toBeInTheDocument();
+
+    act(() => {
+      emitMetadataChange({
+        filePath: `${rootPath}/Purpose and Principles/Focus.md`,
+        fileName: 'Focus.md',
+        content: '# Focus',
+        metadata: { title: 'Focus' } as never,
+        changedFields: { title: 'Focus' } as never,
+      });
+    });
+
+    await waitFor(() => {
+      const canonicalListCalls = (safeInvokeMock as Mock).mock.calls.filter(
+        ([command, args]) =>
+          command === 'list_markdown_files' && args?.path === `${rootPath}/Purpose & Principles`
+      );
+      expect(canonicalListCalls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    const aliasListCalls = (safeInvokeMock as Mock).mock.calls.filter(
+      ([command, args]) =>
+        command === 'list_markdown_files' && args?.path === `${rootPath}/Purpose and Principles`
+    );
+
+    expect(aliasListCalls).toHaveLength(0);
+  });
 });

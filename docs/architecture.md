@@ -79,6 +79,7 @@ Several systems cut across the frontend and backend:
 - Content event bus: coordinates save, metadata, and rename-related refreshes
 - Tab runtime persistence: stores open tabs in localStorage, scopes restore to the active workspace, and keeps lightweight active-tab data available to editor blocks
 - File watcher: surfaces external file changes, though watcher event naming still has a known mismatch documented in the spec
+  Clean open tabs now auto-refresh from disk on external modification, while dirty tabs stay in-memory and warn instead of being overwritten.
 - Markdown migration: normalizes older marker formats during load and some save flows
 - Habit reset loop: runs on startup and on a timer while a workspace is open
 - Google Calendar sync: optional subsystem that fetches and caches events locally

@@ -172,6 +172,16 @@ export function useToast() {
     [toast, shouldShowToast]
   );
 
+  const showFileReloaded = useCallback((fileName: string) => {
+    const key = `file-reloaded:${fileName}`;
+    if (!shouldShowToast(key)) return;
+
+    toast({
+      title: 'Info',
+      description: `"${fileName}" was refreshed from disk`,
+    });
+  }, [toast, shouldShowToast]);
+
   /**
    * Show a file deleted notification
    */
@@ -207,6 +217,7 @@ export function useToast() {
     showLoading,
     dismiss,
     showFileModified,
+    showFileReloaded,
     showFileDeleted,
     showFileCreated,
   };

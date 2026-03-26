@@ -412,6 +412,77 @@ export interface GitOperationResult {
   details?: Record<string, unknown> | null;
 }
 
+export interface GitSyncLineStats {
+  added: number;
+  removed: number;
+}
+
+export interface GitSyncDiffLine {
+  kind: 'context' | 'add' | 'remove';
+  oldLineNumber?: number | null;
+  newLineNumber?: number | null;
+  content: string;
+}
+
+export interface GitSyncTextHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: GitSyncDiffLine[];
+}
+
+export interface GitSyncTextDiff {
+  beforeHash?: string | null;
+  afterHash?: string | null;
+  beforeBytes: number;
+  afterBytes: number;
+  hunks: GitSyncTextHunk[];
+  lineStats: GitSyncLineStats;
+}
+
+export interface GitSyncBinaryDiff {
+  beforeHash?: string | null;
+  afterHash?: string | null;
+  beforeBytes?: number | null;
+  afterBytes?: number | null;
+  mime?: string | null;
+}
+
+export interface GitSyncDiffEntry {
+  id: string;
+  path: string;
+  changeType: 'added' | 'modified' | 'deleted' | 'renamed';
+  kind: 'text' | 'binary' | 'directory';
+  oldPath?: string | null;
+  isTruncated?: boolean | null;
+  text?: GitSyncTextDiff | null;
+  binary?: GitSyncBinaryDiff | null;
+}
+
+export interface GitSyncPreviewSummary {
+  totalEntries: number;
+  added: number;
+  modified: number;
+  deleted: number;
+  renamed: number;
+  unchangedExcluded: number;
+  textDiffs: number;
+  binaryDiffs: number;
+  beforeBytes?: number | null;
+  afterBytes?: number | null;
+}
+
+export interface GitSyncPreviewResponse {
+  hasBaseline: boolean;
+  baselineBackupFile?: string | null;
+  baselineTimestamp?: string | null;
+  summary: GitSyncPreviewSummary;
+  entries: GitSyncDiffEntry[];
+  truncated: boolean;
+  warnings?: string[] | null;
+}
+
 /**
  * Status information about the git sync/backups subsystem
  */

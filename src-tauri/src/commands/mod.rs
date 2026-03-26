@@ -34,7 +34,7 @@ pub use filesystem::{
     rename_file, replace_in_file, save_file, FileOperationResult, MarkdownFile,
 };
 #[allow(unused_imports)]
-pub use git_commands::{git_sync_pull, git_sync_push, git_sync_status};
+pub use git_commands::{git_sync_preview_push, git_sync_pull, git_sync_push, git_sync_status};
 #[allow(unused_imports)]
 pub use google_calendar_commands::{
     google_calendar_connect, google_calendar_disconnect, google_calendar_disconnect_simple,

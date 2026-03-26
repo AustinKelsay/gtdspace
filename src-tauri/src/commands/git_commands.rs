@@ -8,7 +8,7 @@ use tokio::task;
 
 use super::git_sync::{
     build_git_sync_config, compute_git_status, perform_git_pull, perform_git_push,
-    GitOperationResultPayload, GitSyncStatusResponse,
+    preview_git_push, GitOperationResultPayload, GitSyncPreviewResponse, GitSyncStatusResponse,
 };
 use super::settings::{load_settings, update_settings};
 
@@ -52,6 +52,22 @@ pub async fn git_sync_push(
     }
 
     Ok(outcome)
+}
+
+/// Prepare a read-only diff preview for the next encrypted snapshot push
+#[tauri::command]
+pub async fn git_sync_preview_push(
+    app: AppHandle,
+    workspace_override: Option<String>,
+) -> Result<GitSyncPreviewResponse, String> {
+    let _guard = GIT_SYNC_METADATA_LOCK.lock().await;
+    let settings_snapshot = load_settings(app).await?;
+    task::spawn_blocking(move || {
+        let config = build_git_sync_config(&settings_snapshot, workspace_override)?;
+        preview_git_push(config)
+    })
+    .await
+    .map_err(|e| format!("Git push preview task failed: {}", e))?
 }
 
 /// Pull the latest encrypted snapshot and restore the workspace

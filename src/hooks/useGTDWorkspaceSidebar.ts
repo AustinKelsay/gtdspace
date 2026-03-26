@@ -388,11 +388,52 @@ export function useGTDWorkspaceSidebar({
     [resolveSectionLoadPath]
   );
 
+  const resolveExistingSectionPath = React.useCallback(
+    async (sectionPath: string): Promise<string> => {
+      const normalizedPath = normalizePath(sectionPath) ?? sectionPath.replace(/\\/g, '/');
+      if (!rootPath) {
+        return normalizedPath;
+      }
+
+      const section = GTD_SECTIONS.find((candidate) => {
+        if (candidate.id === 'calendar' || candidate.id === 'projects') {
+          return false;
+        }
+
+        return buildSectionPathCandidates(rootPath, candidate).includes(normalizedPath);
+      });
+
+      if (!section) {
+        return normalizedPath;
+      }
+
+      const candidatePaths = buildSectionPathCandidates(rootPath, section);
+      const orderedPaths = candidatePaths.includes(normalizedPath)
+        ? [normalizedPath, ...candidatePaths.filter((candidate) => candidate !== normalizedPath)]
+        : candidatePaths;
+
+      for (const candidatePath of orderedPaths) {
+        const exists = await safeInvoke<boolean>(
+          'check_directory_exists',
+          { path: candidatePath },
+          false
+        );
+        if (exists === true) {
+          return candidatePath;
+        }
+      }
+
+      return normalizedPath;
+    },
+    [rootPath]
+  );
+
   const loadSectionFiles = React.useCallback(
     async (sectionPath: string, force: boolean = false): Promise<MarkdownFile[]> => {
       const generationAtStart = workspaceGenerationRef.current;
-      const normalizedKey = normalizePath(sectionPath) ?? sectionPath.replace(/\\/g, '/');
-      const current = sectionFilesRef.current[normalizedKey];
+      const requestedKey = normalizePath(sectionPath) ?? sectionPath.replace(/\\/g, '/');
+      const normalizedKey = await resolveExistingSectionPath(sectionPath);
+      const current = sectionFilesRef.current[normalizedKey] ?? sectionFilesRef.current[requestedKey];
       if (!force && current) {
         return current;
       }
@@ -467,7 +508,7 @@ export function useGTDWorkspaceSidebar({
         });
       }
     },
-    [syncHorizonReadme, withErrorHandling]
+    [resolveExistingSectionPath, syncHorizonReadme, withErrorHandling]
   );
 
   const loadProjectActions = React.useCallback(async (projectPath: string) => {

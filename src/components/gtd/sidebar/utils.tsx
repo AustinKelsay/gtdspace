@@ -235,19 +235,34 @@ export const partitionProjectsByCompletion = ({
 }: {
   projects: GTDProject[];
   projectMetadata: Record<string, SidebarProjectMetadata>;
-}): [GTDProject[], GTDProject[]] => {
+}): {
+  active: GTDProject[];
+  completed: GTDProject[];
+  cancelled: GTDProject[];
+} => {
   const active: GTDProject[] = [];
   const completed: GTDProject[] = [];
+  const cancelled: GTDProject[] = [];
 
   projects.forEach((project) => {
     const projectKey = norm(project.path) ?? project.path;
     const status = normalizeStatus(
       projectMetadata[projectKey]?.status || project.status || 'in-progress'
     );
-    (status === 'completed' ? completed : active).push(project);
+    if (status === 'completed') {
+      completed.push(project);
+      return;
+    }
+
+    if (status === 'cancelled') {
+      cancelled.push(project);
+      return;
+    }
+
+    active.push(project);
   });
 
-  return [active, completed];
+  return { active, completed, cancelled };
 };
 
 export const getProjectDisplay = (

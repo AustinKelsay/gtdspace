@@ -533,10 +533,7 @@ pub fn preview_git_push(config: GitSyncConfig) -> Result<GitSyncPreviewResponse,
                 .map_err(|e| format!("Failed to prepare temporary baseline directory: {}", e))?;
             extract_archive_to_dir(&decrypted_archive, temp_extract_dir.path())?;
 
-            let baseline_ts = backup
-                .parsed_timestamp
-                .map(|dt| dt.to_rfc3339())
-                .or_else(|| system_time_to_iso(backup.modified));
+            let baseline_ts = backup_timestamp_to_iso(&backup);
             (
                 true,
                 Some(backup.file_name),

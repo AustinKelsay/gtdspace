@@ -21,20 +21,22 @@ export const AppearanceSettings: React.FC = () => {
       <div>
         <h3 className="text-lg font-semibold mb-1">Appearance</h3>
         <p className="text-sm text-muted-foreground mb-6">
-          Customize the visual appearance of GTD Space
+          GTD Space uses a fixed dark theme. Appearance customization is not available.
         </p>
 
         {/* Theme - Dark Mode Only */}
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-4">
             <Palette className="h-5 w-5 text-muted-foreground" />
-            <Label className="text-base font-semibold">Theme</Label>
+            <Label className="text-base font-semibold">Current Theme</Label>
           </div>
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+          <div className="flex items-center gap-3 rounded-lg border bg-muted/20 p-3">
             <Moon className="h-5 w-5 text-muted-foreground" />
             <div>
-              <span className="font-medium">Dark</span>
-              <p className="text-sm text-muted-foreground">Dark theme for reduced eye strain</p>
+              <span className="font-medium">Dark Theme</span>
+              <p className="text-sm text-muted-foreground">
+                The app always runs in dark mode for a consistent interface.
+              </p>
             </div>
           </div>
         </Card>

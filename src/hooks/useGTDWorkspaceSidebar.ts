@@ -45,6 +45,8 @@ type UseGTDWorkspaceSidebarResult = {
   expandedProjects: string[];
   completedProjectsExpanded: boolean;
   setCompletedProjectsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  cancelledProjectsExpanded: boolean;
+  setCancelledProjectsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   expandedCompletedActions: Set<string>;
   projectActions: Record<string, MarkdownFile[]>;
   actionStatuses: Record<string, string>;
@@ -70,6 +72,7 @@ type UseGTDWorkspaceSidebarResult = {
   filteredProjects: GTDProject[];
   activeProjects: GTDProject[];
   completedProjects: GTDProject[];
+  cancelledProjects: GTDProject[];
   isPathActive: (candidatePath?: string | null) => boolean;
   loadSectionFiles: (sectionPath: string, force?: boolean) => Promise<MarkdownFile[]>;
   loadProjectActions: (projectPath: string) => Promise<void>;
@@ -149,6 +152,7 @@ export function useGTDWorkspaceSidebar({
   const [expandedSections, setExpandedSections] = React.useState<string[]>(['projects', 'habits']);
   const [expandedProjects, setExpandedProjects] = React.useState<string[]>([]);
   const [completedProjectsExpanded, setCompletedProjectsExpanded] = React.useState(false);
+  const [cancelledProjectsExpanded, setCancelledProjectsExpanded] = React.useState(false);
   const [expandedCompletedActions, setExpandedCompletedActions] = React.useState<Set<string>>(
     new Set()
   );
@@ -362,10 +366,14 @@ export function useGTDWorkspaceSidebar({
       }
 
       for (const candidatePath of candidatePaths) {
-        const exists = await safeInvoke<boolean>(
-          'check_directory_exists',
-          { path: candidatePath },
-          false
+        const exists = await withErrorHandling(
+          async () =>
+            safeInvoke<boolean>(
+              'check_directory_exists',
+              { path: candidatePath },
+              false
+            ),
+          'Failed to verify section directory'
         );
         if (exists) {
           return candidatePath;
@@ -374,7 +382,7 @@ export function useGTDWorkspaceSidebar({
 
       return candidatePaths[0] ?? null;
     },
-    []
+    [withErrorHandling]
   );
 
   const resolveSectionLoadPaths = React.useCallback(
@@ -1430,7 +1438,7 @@ export function useGTDWorkspaceSidebar({
     ]
   );
 
-  const [activeProjects, completedProjects] = React.useMemo(
+  const { active: activeProjects, completed: completedProjects, cancelled: cancelledProjects } = React.useMemo(
     () =>
       partitionProjectsByCompletion({
         projects: filteredProjects,
@@ -1453,6 +1461,8 @@ export function useGTDWorkspaceSidebar({
     expandedProjects,
     completedProjectsExpanded,
     setCompletedProjectsExpanded,
+    cancelledProjectsExpanded,
+    setCancelledProjectsExpanded,
     expandedCompletedActions,
     projectActions,
     actionStatuses,
@@ -1478,6 +1488,7 @@ export function useGTDWorkspaceSidebar({
     filteredProjects,
     activeProjects,
     completedProjects,
+    cancelledProjects,
     isPathActive,
     loadSectionFiles,
     loadProjectActions,

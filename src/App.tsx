@@ -216,8 +216,6 @@ export const App: React.FC = () => {
   const { showFileModified, showFileReloaded, showFileDeleted, showFileCreated, showWarning } = useToast();
   const { toast } = useUiToast();
 
-  const [themeKey, setThemeKey] = React.useState(0); // Force re-render on theme change
-
   // === MODAL MANAGEMENT ===
 
   const { isModalOpen, openModal, closeModal } = useModalManager();
@@ -244,9 +242,7 @@ export const App: React.FC = () => {
     root.classList.add("dark");
     root.style.colorScheme = "dark";
 
-    // Force a re-render of affected components
     window.dispatchEvent(new Event("theme-changed"));
-    setThemeKey((prev) => prev + 1); // Force React re-render
   }, []);
 
   // === INTEGRATED FILE OPERATIONS ===
@@ -1043,10 +1039,7 @@ export const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <GoogleCalendarAutoSyncManager />
-      <div
-        key={themeKey}
-        className="flex flex-col h-screen bg-background text-foreground"
-      >
+      <div className="flex flex-col h-screen bg-background text-foreground">
         <Toaster />
 
         {/* Header */}

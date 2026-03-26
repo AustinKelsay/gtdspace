@@ -398,7 +398,7 @@ describe('App integration workflows', () => {
     mocks.fileWatcher.state.recentEvents = [];
     mocks.fileWatcher.startWatching.mockResolvedValue(undefined);
 
-    mocks.settings.settings.theme = 'light';
+    mocks.settings.settings.theme = 'dark';
     mocks.settings.settings.last_folder = '';
     mocks.settings.isLoading = false;
     mocks.settings.setTheme.mockResolvedValue(undefined);

@@ -91,6 +91,7 @@ export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
   const [hasEncryptionKey, setHasEncryptionKey] = React.useState(false);
   const [showForcePushDialog, setShowForcePushDialog] = React.useState(false);
   const [showForcePullDialog, setShowForcePullDialog] = React.useState(false);
+  const [isForcePushSubmitting, setIsForcePushSubmitting] = React.useState(false);
 
   // Check secure storage for encryption key on mount and when status refreshes
   React.useEffect(() => {
@@ -470,19 +471,41 @@ export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel disabled={isForcePushSubmitting}>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                onClick={async () => {
-                  setShowForcePushDialog(false);
-                  if (onForcePushBackup) {
-                    await onForcePushBackup();
-                  } else {
-                    await pushGitBackup(true);
+                onClick={async (event) => {
+                  event.preventDefault();
+                  if (isForcePushSubmitting) {
+                    return;
+                  }
+
+                  setIsForcePushSubmitting(true);
+                  try {
+                    if (onForcePushBackup) {
+                      await onForcePushBackup();
+                    } else {
+                      await pushGitBackup(true);
+                    }
+                    await refreshStatus();
+                    toast({
+                      title: 'Force push completed',
+                      description: 'Encrypted backup was force-pushed to the remote repository.',
+                    });
+                    setShowForcePushDialog(false);
+                  } catch (error) {
+                    toast({
+                      title: 'Force push failed',
+                      description: describeError(error),
+                      variant: 'destructive',
+                    });
+                  } finally {
+                    setIsForcePushSubmitting(false);
                   }
                 }}
+                disabled={isForcePushSubmitting}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                Force Push
+                {isForcePushSubmitting ? 'Force Pushing…' : 'Force Push'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

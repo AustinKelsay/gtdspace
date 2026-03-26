@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   Plus,
   Trash2,
+  XCircle,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -46,12 +47,14 @@ type SidebarProjectsSectionProps = {
   filteredProjectCount: number;
   activeProjects: GTDProject[];
   completedProjects: GTDProject[];
+  cancelledProjects: GTDProject[];
   projectActions: Record<string, MarkdownFile[]>;
   projectMetadata: Record<string, SidebarProjectMetadata>;
   actionMetadata: Record<string, SidebarActionMetadata>;
   actionStatuses: Record<string, string>;
   expandedProjects: string[];
   completedProjectsExpanded: boolean;
+  cancelledProjectsExpanded: boolean;
   expandedCompletedActions: Set<string>;
   activeFilePath?: string | null;
   onToggleSection: () => void;
@@ -60,6 +63,7 @@ type SidebarProjectsSectionProps = {
   onToggleProjectExpand: (project: GTDProject) => void | Promise<void>;
   onAddAction: (project: GTDProject) => void;
   onToggleCompletedProjects: (open: boolean) => void;
+  onToggleCancelledProjects: (open: boolean) => void;
   onToggleCompletedActions: (projectPath: string) => void;
   onOpenAction: (action: MarkdownFile, path: string) => void;
   onOpenProjectFolder: (path: string) => void | Promise<void>;
@@ -393,12 +397,14 @@ export function SidebarProjectsSection({
   filteredProjectCount,
   activeProjects,
   completedProjects,
+  cancelledProjects,
   projectActions,
   projectMetadata,
   actionMetadata,
   actionStatuses,
   expandedProjects,
   completedProjectsExpanded,
+  cancelledProjectsExpanded,
   expandedCompletedActions,
   activeFilePath,
   onToggleSection,
@@ -407,6 +413,7 @@ export function SidebarProjectsSection({
   onToggleProjectExpand,
   onAddAction,
   onToggleCompletedProjects,
+  onToggleCancelledProjects,
   onToggleCompletedActions,
   onOpenAction,
   onOpenProjectFolder,
@@ -518,6 +525,67 @@ export function SidebarProjectsSection({
                       {completedProjects.map((project) => (
                         <ProjectRow
                           key={`completed-${getProjectDisplay(project, projectMetadata).path}`}
+                          project={project}
+                          projectActions={(() => {
+                            const displayKey = norm(getProjectDisplay(project, projectMetadata).path) ?? project.path;
+                            const projectKey = norm(project.path) ?? project.path;
+                            return projectActions[displayKey] || projectActions[projectKey] || [];
+                          })()}
+                          projectMetadata={projectMetadata}
+                          actionMetadata={actionMetadata}
+                          actionStatuses={actionStatuses}
+                          expandedProjects={expandedProjects}
+                          expandedCompletedActions={expandedCompletedActions}
+                          activeFilePath={activeFilePath}
+                          isCompletedVariant
+                          onOpenProject={onOpenProject}
+                          onToggleProjectExpand={onToggleProjectExpand}
+                          onAddAction={onAddAction}
+                          onToggleCompletedActions={onToggleCompletedActions}
+                          onOpenAction={onOpenAction}
+                          onOpenProjectFolder={onOpenProjectFolder}
+                          onOpenFileLocation={onOpenFileLocation}
+                          onQueueDelete={onQueueDelete}
+                          isPathActive={isPathActive}
+                        />
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+
+              {cancelledProjects.length > 0 && (
+                <Collapsible
+                  open={cancelledProjectsExpanded}
+                  onOpenChange={onToggleCancelledProjects}
+                  data-sidebar-group="cancelled-projects"
+                >
+                  <div
+                    className={`group flex items-center justify-between px-1 py-0.5 mt-1 hover:bg-accent rounded-lg ${
+                      cancelledProjects.some((project) =>
+                        isPathDescendant(getProjectDisplay(project, projectMetadata).path, activeFilePath)
+                      ) &&
+                      !cancelledProjectsExpanded
+                        ? SIDEBAR_ACTIVE_ROW_CLASSES
+                        : ''
+                    }`}
+                  >
+                    <CollapsibleTrigger className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <ChevronRight className={`h-3 w-3 transition-transform ${cancelledProjectsExpanded ? 'rotate-90' : ''}`} />
+                        <XCircle className="h-3.5 w-3.5 text-rose-600" />
+                        <span className="truncate inline-block">Cancelled Projects</span>
+                        <Badge variant="secondary" className="ml-1 text-xs px-1 py-0 h-4">
+                          {cancelledProjects.length}
+                        </Badge>
+                      </div>
+                    </CollapsibleTrigger>
+                  </div>
+                  <CollapsibleContent>
+                    <div className="pl-2 pr-1 py-1 space-y-0.5">
+                      {cancelledProjects.map((project) => (
+                        <ProjectRow
+                          key={`cancelled-${getProjectDisplay(project, projectMetadata).path}`}
                           project={project}
                           projectActions={(() => {
                             const displayKey = norm(getProjectDisplay(project, projectMetadata).path) ?? project.path;

@@ -29,16 +29,9 @@
   --bn-colors-highlight-colors-yellow-text: rgb(251, 191, 36);
 }
 
-/* Dark mode background consistency */
-.bn-editor,
-.bn-container,
-.bn-block-outer {
-  background-color: rgb(var(--background)) !important;
-}
-
 /* Editor container styles */
 .bn-editor {
-  background: transparent !important;
+  background: rgb(var(--background)) !important;
   color: rgb(var(--foreground)) !important;
   font-family: inherit;
   height: 100%;
@@ -47,7 +40,7 @@
 }
 
 .bn-container {
-  background: transparent !important;
+  background: rgb(var(--background)) !important;
   color: rgb(var(--foreground)) !important;
   min-height: 100%;
   padding-bottom: 2rem; /* Add some bottom padding for better scrolling experience */
@@ -56,6 +49,10 @@
   overflow-x: visible;
   /* Prevent layout recalculation during typing */
   will-change: scroll-position;
+}
+
+.bn-block-outer {
+  background: rgb(var(--background)) !important;
 }
 
 /* Ensure the BlockNote editor wrapper allows proper layout */

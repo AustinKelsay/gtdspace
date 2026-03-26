@@ -59,11 +59,21 @@ const completedProject: GTDProject = {
   action_count: 0,
 };
 
+const cancelledProject: GTDProject = {
+  name: 'Project Cancelled',
+  description: 'Stopped work',
+  status: 'cancelled',
+  path: `${rootPath}/Projects/Project Cancelled`,
+  dueDate: undefined,
+  createdDateTime: '2026-02-10T10:00:00Z',
+  action_count: 0,
+};
+
 const gtdSpace: GTDSpace = {
   root_path: rootPath,
   is_initialized: true,
   isGTDSpace: true,
-  projects: [activeProject, completedProject],
+  projects: [activeProject, completedProject, cancelledProject],
   total_actions: 2,
 };
 
@@ -222,6 +232,8 @@ describe('GTDWorkspaceSidebar component', () => {
     expect(await screen.findByText('Project Alpha')).toBeInTheDocument();
     expect(await screen.findByText('Morning Run')).toBeInTheDocument();
     expect(screen.getByText('Completed Projects')).toBeInTheDocument();
+    expect(screen.getByText('Cancelled Projects')).toBeInTheDocument();
+    expect(screen.queryByText('Project Cancelled')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('Expand Project Alpha'));
 
@@ -230,6 +242,9 @@ describe('GTDWorkspaceSidebar component', () => {
 
     fireEvent.click(screen.getByText('Completed Projects'));
     expect(await screen.findByText('Project Done')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Cancelled Projects'));
+    expect(await screen.findByText('Project Cancelled')).toBeInTheDocument();
   });
 
   it('shows cross-section search results for projects, actions, and section files', async () => {

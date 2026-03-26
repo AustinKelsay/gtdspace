@@ -397,9 +397,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                             <TooltipTrigger asChild>
                                 <span
                                     className="inline-flex h-8 w-8 items-center justify-center p-0"
-                                    aria-label="Dark mode"
+                                    role="img"
+                                    aria-label="Dark mode: enabled"
                                 >
-                                    <Moon className="h-4 w-4" />
+                                    <Moon className="h-4 w-4" aria-hidden="true" />
                                 </span>
                             </TooltipTrigger>
                             <TooltipContent>

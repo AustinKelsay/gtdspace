@@ -29,7 +29,7 @@ import type {
   SidebarSectionFileMetadata,
 } from '@/components/gtd/sidebar/types';
 import type { FileOperationResult, GTDProject, GTDSpace, MarkdownFile } from '@/types';
-import { norm } from '@/utils/path';
+import { norm, isUnder } from '@/utils/path';
 
 type UseGTDWorkspaceSidebarResult = {
   gtdSpace: GTDSpace | null;
@@ -118,23 +118,6 @@ function getCombinedSectionPathVariants(
   rootPath?: string | null
 ): string[] {
   return sectionIds.flatMap((sectionId) => getSectionPathVariants(sectionId, rootPath));
-}
-
-function isUnderPath(path?: string | null, parent?: string | null): boolean {
-  const normalizedPath = norm(path);
-  const normalizedParent = norm(parent);
-  if (!normalizedPath || !normalizedParent) {
-    return false;
-  }
-
-  if (normalizedPath === normalizedParent) {
-    return true;
-  }
-
-  const parentWithSlash = normalizedParent.endsWith('/')
-    ? normalizedParent
-    : `${normalizedParent}/`;
-  return normalizedPath.startsWith(parentWithSlash);
 }
 
 export function useGTDWorkspaceSidebar({
@@ -418,7 +401,7 @@ export function useGTDWorkspaceSidebar({
         }
 
         return buildSectionPathCandidates(rootPath, candidate).some((candidatePath) =>
-          isUnderPath(normalizedPath, candidatePath)
+          isUnder(norm(normalizedPath), norm(candidatePath))
         );
       });
 

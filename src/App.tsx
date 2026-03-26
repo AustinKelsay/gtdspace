@@ -502,6 +502,14 @@ export const App: React.FC = () => {
       return;
     }
 
+    if (preview.summary?.totalEntries === 0) {
+      toast({
+        title: 'Nothing to push',
+        description: 'Your workspace matches the latest backup — no changes detected.',
+      });
+      return;
+    }
+
     setGitSyncPreview(preview);
     setIsGitSyncReviewOpen(true);
   }, [gitSyncPreviewPush, saveAllTabs, toast]);
@@ -1681,7 +1689,7 @@ export const App: React.FC = () => {
             checkGTDSpace={checkGTDSpace}
             loadProjects={loadProjects}
             onGitBackupReview={handleGitPush}
-            gitBackupReviewBusy={gitSyncPreviewing || gitSyncPushing}
+            gitBackupReviewBusy={gitSyncPreviewing || gitSyncPushing || gitSyncPulling}
           />
         </div>
       )}

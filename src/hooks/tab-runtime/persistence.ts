@@ -42,6 +42,17 @@ type LegacyPersistedTabSnapshot = {
 
 export type PersistedTabSnapshot = CanonicalPersistedTabSnapshot;
 
+function canonicalizeLegacySectionAlias(path?: string | null): string {
+  if (!path) {
+    return '';
+  }
+
+  return path.replace(
+    /(^|[/\\])Purpose and Principles(?=([/\\]|$))/g,
+    '$1Purpose & Principles',
+  );
+}
+
 function normalizeWorkspacePath(path?: string | null): string | null {
   const normalized = pathKey(path);
   return normalized || null;
@@ -50,7 +61,7 @@ function normalizeWorkspacePath(path?: string | null): string | null {
 function normalizeOpenTabs(snapshot: LegacyPersistedTabSnapshot): CanonicalPersistedTab[] {
   return (snapshot.openTabs ?? [])
     .map((tab): CanonicalPersistedTab | null => {
-      const filePath = tab.filePath ?? tab.path;
+      const filePath = canonicalizeLegacySectionAlias(tab.filePath ?? tab.path);
       if (!filePath) return null;
 
       return {
@@ -80,7 +91,7 @@ export function serializeTabState(
     maxTabs: state.maxTabs,
     openTabs: state.openTabs.map((tab) => ({
       id: tab.id,
-      filePath: tab.file.path,
+      filePath: canonicalizeLegacySectionAlias(tab.file.path),
       fileName: tab.file.name,
       hasUnsavedChanges: tab.hasUnsavedChanges,
       isActive: tab.id === state.activeTabId,
@@ -244,5 +255,5 @@ export function getPersistedActiveTabFilePath(workspacePath?: string | null): st
   const activeTab =
     snapshot.openTabs.find((tab) => tab.id === snapshot.activeTabId) ?? snapshot.openTabs[0];
 
-  return activeTab?.filePath ?? null;
+  return canonicalizeLegacySectionAlias(activeTab?.filePath) || null;
 }

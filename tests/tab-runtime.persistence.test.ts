@@ -153,4 +153,42 @@ describe('tab runtime persistence helpers', () => {
       isActive: true,
     });
   });
+
+  it('canonicalizes legacy purpose section aliases when restoring persisted tabs', async () => {
+    localStorage.setItem(
+      TAB_STORAGE_KEY,
+      JSON.stringify({
+        version: 2,
+        workspacePath: '/mock/workspace',
+        activeTabId: 'tab-1',
+        maxTabs: 5,
+        openTabs: [
+          {
+            id: 'tab-1',
+            filePath: '/mock/workspace/Purpose and Principles/Mission.md',
+            fileName: 'Mission.md',
+            hasUnsavedChanges: false,
+            isActive: true,
+          },
+        ],
+      }),
+    );
+
+    expect(getPersistedActiveTabFilePath('/mock/workspace')).toBe(
+      '/mock/workspace/Purpose & Principles/Mission.md',
+    );
+
+    const restored = await restoreTabStateFromStorage({
+      workspacePath: '/mock/workspace',
+      maxTabs: 5,
+      readFile: async (filePath) => `content for ${filePath}`,
+    });
+
+    expect(restored?.openTabs[0]?.file.path).toBe(
+      '/mock/workspace/Purpose & Principles/Mission.md',
+    );
+    expect(restored?.openTabs[0]?.originalContent).toBe(
+      'content for /mock/workspace/Purpose & Principles/Mission.md',
+    );
+  });
 });

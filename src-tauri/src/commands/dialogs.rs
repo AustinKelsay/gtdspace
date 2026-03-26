@@ -1,5 +1,6 @@
 //! Native dialog and file explorer commands.
 
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use tauri::AppHandle;
@@ -44,11 +45,18 @@ fn redact_path(path: &str) -> String {
         .unwrap_or_else(|| "<redacted>".to_string())
 }
 
-fn resolve_file_location_target(path: &str) -> Result<PathBuf, String> {
+fn resolve_existing_path(path: &str) -> Result<PathBuf, String> {
     let path_buf = PathBuf::from(path);
     if !path_buf.exists() {
         return Err(format!("Path does not exist: {}", redact_path(path)));
     }
+
+    fs::canonicalize(&path_buf)
+        .map_err(|error| format!("Failed to resolve path {}: {}", redact_path(path), error))
+}
+
+fn resolve_file_location_target(path: &str) -> Result<PathBuf, String> {
+    let path_buf = resolve_existing_path(path)?;
 
     if path_buf.is_dir() {
         return Ok(path_buf);
@@ -223,6 +231,7 @@ pub fn open_folder_in_explorer(path: String) -> Result<String, String> {
 pub fn open_file_location(file_path: String) -> Result<String, String> {
     log::info!("Opening file location: {}", redact_path(&file_path));
 
+    let resolved_path = resolve_existing_path(&file_path)?;
     let location_target = resolve_file_location_target(&file_path)?;
 
     // Open the folder and select the file based on the operating system
@@ -243,13 +252,21 @@ pub fn open_file_location(file_path: String) -> Result<String, String> {
     }
 
     let result = if cfg!(target_os = "windows") {
-        // On Windows, explorer can select a file with /select
-        Command::new("explorer")
-            .arg(format!("/select,{}", file_path))
-            .status()
+        if resolved_path.is_file() {
+            // On Windows, explorer can select a file with /select
+            Command::new("explorer")
+                .arg(format!("/select,{}", resolved_path.display()))
+                .status()
+        } else {
+            Command::new("explorer").arg(&resolved_path).status()
+        }
     } else if cfg!(target_os = "macos") {
-        // On macOS, we can use open -R to reveal the file
-        Command::new("open").arg("-R").arg(&file_path).status()
+        if resolved_path.is_file() {
+            // On macOS, open -R reveals the file in Finder.
+            Command::new("open").arg("-R").arg(&resolved_path).status()
+        } else {
+            Command::new("open").arg(&resolved_path).status()
+        }
     } else {
         return Err("Unsupported operating system".to_string());
     };
@@ -285,8 +302,23 @@ pub fn open_file_location(file_path: String) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_file_location_target;
+    use super::{resolve_existing_path, resolve_file_location_target};
     use std::fs;
+
+    #[test]
+    fn resolve_existing_path_returns_canonical_path_for_files() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let project_dir = temp_dir.path().join("Projects").join("Alpha");
+        fs::create_dir_all(&project_dir).expect("create project dir");
+        let file_path = project_dir.join("README.md");
+        fs::write(&file_path, "# Alpha").expect("write readme");
+
+        let canonical = fs::canonicalize(&file_path).expect("canonicalize file");
+        let resolved = resolve_existing_path(file_path.to_str().expect("utf-8 path"))
+            .expect("resolve existing path");
+
+        assert_eq!(resolved, canonical);
+    }
 
     #[test]
     fn resolve_file_location_target_returns_parent_for_files() {
@@ -296,10 +328,12 @@ mod tests {
         let file_path = project_dir.join("README.md");
         fs::write(&file_path, "# Alpha").expect("write readme");
 
+        let canonical_project_dir =
+            fs::canonicalize(&project_dir).expect("canonicalize project dir");
         let resolved = resolve_file_location_target(file_path.to_str().expect("utf-8 path"))
             .expect("resolve file target");
 
-        assert_eq!(resolved, project_dir);
+        assert_eq!(resolved, canonical_project_dir);
     }
 
     #[test]
@@ -308,9 +342,11 @@ mod tests {
         let project_dir = temp_dir.path().join("Projects").join("Alpha");
         fs::create_dir_all(&project_dir).expect("create project dir");
 
+        let canonical_project_dir =
+            fs::canonicalize(&project_dir).expect("canonicalize project dir");
         let resolved = resolve_file_location_target(project_dir.to_str().expect("utf-8 path"))
             .expect("resolve directory target");
 
-        assert_eq!(resolved, project_dir);
+        assert_eq!(resolved, canonical_project_dir);
     }
 }

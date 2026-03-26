@@ -82,6 +82,10 @@ export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
   } = useGitSync({ settings, workspacePath: gitWorkspaceOverride, autoRefresh: false });
 
   const gitEnabled = settings.git_sync_enabled ?? false;
+  const handlePushBackup = React.useMemo(
+    () => onPushBackup ?? (async () => { await pushGitBackup(false); }),
+    [onPushBackup, pushGitBackup]
+  );
   const [hasEncryptionKey, setHasEncryptionKey] = React.useState(false);
   const [showForcePushDialog, setShowForcePushDialog] = React.useState(false);
   const [showForcePullDialog, setShowForcePullDialog] = React.useState(false);
@@ -400,8 +404,8 @@ export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
         <div className="flex flex-wrap items-center gap-3 mt-6">
           <Button
             variant="secondary"
-            onClick={() => void onPushBackup?.()}
-            disabled={!gitEnabled || !gitStatus.configured || gitPushing || isPushBackupBusy || !onPushBackup}
+            onClick={() => void handlePushBackup()}
+            disabled={!gitEnabled || !gitStatus.configured || gitPushing || isPushBackupBusy}
           >
             <CloudUpload className="h-4 w-4 mr-2" />
             {gitPushing ? 'Pushing…' : isPushBackupBusy ? 'Reviewing…' : 'Push Backup'}

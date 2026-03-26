@@ -40,7 +40,6 @@ const TAG_SIZE: usize = 16;
 const PREVIEW_MAX_CHANGED_FILES: usize = 500;
 const PREVIEW_MAX_TEXT_BYTES_PER_SIDE: usize = 200 * 1024;
 const PREVIEW_MAX_TOTAL_PAYLOAD_BYTES: usize = 2 * 1024 * 1024;
-const STREAM_HASH_THRESHOLD_BYTES: u64 = 100 * 1024 * 1024;
 #[cfg(not(test))]
 const SECURE_STORAGE_SERVICE: &str = "com.gtdspace.app";
 #[cfg(not(test))]
@@ -678,13 +677,10 @@ fn build_workspace_manifest(root: &Path) -> Result<Vec<ManifestEntry>, String> {
         let mime = guess_mime(&relative_path);
         let size = metadata.len();
 
-        let (hash, is_text, text) = if size > STREAM_HASH_THRESHOLD_BYTES {
-            (hash_file_streaming(path)?, false, None)
-        } else if size as usize > PREVIEW_MAX_TEXT_BYTES_PER_SIDE {
-            let bytes = fs::read(path)
-                .map_err(|e| format!("Failed to read workspace file {}: {}", path.display(), e))?;
-            let hash = hash_bytes(&bytes);
-            (hash, false, None)
+        let (hash, is_text, text) = if size as usize > PREVIEW_MAX_TEXT_BYTES_PER_SIDE {
+            let (hash, sample) = hash_file_with_sample(path, PREVIEW_MAX_TEXT_BYTES_PER_SIDE)?;
+            let is_text = classify_text(&sample).is_some();
+            (hash, is_text, None)
         } else {
             let bytes = fs::read(path)
                 .map_err(|e| format!("Failed to read workspace file {}: {}", path.display(), e))?;
@@ -855,13 +851,23 @@ fn compare_manifests(before: &[ManifestEntry], after: &[ManifestEntry]) -> Previ
 
     let mut payload_bytes = 0usize;
     for entry in &mut entries {
-        payload_bytes = payload_bytes.saturating_add(estimate_entry_payload_bytes(entry));
-        if payload_bytes > PREVIEW_MAX_TOTAL_PAYLOAD_BYTES && !entry.is_truncated.unwrap_or(false) {
+        let mut entry_bytes = estimate_entry_payload_bytes(entry);
+        if payload_bytes.saturating_add(entry_bytes) > PREVIEW_MAX_TOTAL_PAYLOAD_BYTES
+            && !entry.is_truncated.unwrap_or(false)
+        {
             entry.is_truncated = Some(true);
             entry.text = None;
             entry.binary = entry.binary.take();
             truncated = true;
+            entry_bytes = estimate_entry_payload_bytes(entry);
         }
+
+        if entry.is_truncated.unwrap_or(false) {
+            truncated = true;
+            entry_bytes = 0;
+        }
+
+        payload_bytes = payload_bytes.saturating_add(entry_bytes);
     }
 
     if entries
@@ -1042,11 +1048,12 @@ fn hash_bytes(bytes: &[u8]) -> String {
     encode_hex(&hasher.finalize())
 }
 
-fn hash_file_streaming(path: &Path) -> Result<String, String> {
+fn hash_file_with_sample(path: &Path, sample_limit: usize) -> Result<(String, Vec<u8>), String> {
     let file = File::open(path)
         .map_err(|e| format!("Failed to open file for hashing {}: {}", path.display(), e))?;
     let mut reader = BufReader::new(file);
     let mut hasher = Sha256::new();
+    let mut sample = Vec::with_capacity(sample_limit.min(PLAINTEXT_CHUNK_SIZE));
     let mut buffer = vec![0u8; PLAINTEXT_CHUNK_SIZE];
 
     loop {
@@ -1057,9 +1064,14 @@ fn hash_file_streaming(path: &Path) -> Result<String, String> {
             break;
         }
         hasher.update(&buffer[..bytes_read]);
+        if sample.len() < sample_limit {
+            let remaining = sample_limit - sample.len();
+            let sample_bytes = remaining.min(bytes_read);
+            sample.extend_from_slice(&buffer[..sample_bytes]);
+        }
     }
 
-    Ok(encode_hex(&hasher.finalize()))
+    Ok((encode_hex(&hasher.finalize()), sample))
 }
 
 fn encode_hex(bytes: &[u8]) -> String {

@@ -97,7 +97,7 @@ describe('useGitSync', () => {
     });
   });
 
-  it('shows a destructive toast when preview generation fails', async () => {
+  it('surfaces the shared error toast when preview generation fails', async () => {
     safeInvokeMock.mockRejectedValue(new Error('preview exploded'));
 
     const { result } = renderHook(() =>
@@ -110,7 +110,7 @@ describe('useGitSync', () => {
     });
 
     expect(toastMock).toHaveBeenCalledWith({
-      title: 'Backup review failed',
+      title: 'Error',
       description: 'preview exploded',
       variant: 'destructive',
     });

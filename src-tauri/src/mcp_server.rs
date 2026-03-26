@@ -173,7 +173,9 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
-    #[tool(description = "Plan creation of a GTD action.")]
+    #[tool(
+        description = "Plan creation of a GTD action inside an existing project directory or project README."
+    )]
     async fn action_create(
         &self,
         Parameters(request): Parameters<ActionCreateRequest>,

@@ -404,6 +404,36 @@ async fn mcp_server_reads_and_writes_habit_history() -> Result<(), Box<dyn Error
 }
 
 #[tokio::test]
+async fn mcp_server_rejects_action_create_for_unknown_project_path() -> Result<(), Box<dyn Error>> {
+    let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
+    let workspace_root = workspace.path().to_path_buf();
+
+    let client = start_client(&workspace_root).await?;
+
+    let error = call_tool_typed::<PlannedChange>(
+        &client,
+        "action_create",
+        Some(
+            json!({
+                "projectPath": "visible",
+                "name": "Add search function in nav",
+                "status": "waiting"
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await
+    .unwrap_err()
+    .to_string();
+
+    assert!(error.contains("Project not found: visible"));
+    client.cancel().await?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn mcp_server_replaces_habit_history_with_canonical_table() -> Result<(), Box<dyn Error>> {
     let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
     let workspace_root = workspace.path().to_path_buf();

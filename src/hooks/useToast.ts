@@ -1,5 +1,6 @@
 import React, { useCallback, useRef } from 'react';
 import { useToast as useShadcnToast } from '@/hooks/use-toast';
+import { norm } from '@/utils/path';
 
 // Store for deduplication
 const recentToasts = new Map<string, number>();
@@ -172,6 +173,17 @@ export function useToast() {
     [toast, shouldShowToast]
   );
 
+  const showFileReloaded = useCallback((fileName: string) => {
+    const normalized = norm(fileName) ?? fileName;
+    const key = `file-reloaded:${normalized}`;
+    if (!shouldShowToast(key)) return;
+
+    toast({
+      title: 'Info',
+      description: `"${fileName}" was refreshed from disk`,
+    });
+  }, [toast, shouldShowToast]);
+
   /**
    * Show a file deleted notification
    */
@@ -207,6 +219,7 @@ export function useToast() {
     showLoading,
     dismiss,
     showFileModified,
+    showFileReloaded,
     showFileDeleted,
     showFileCreated,
   };

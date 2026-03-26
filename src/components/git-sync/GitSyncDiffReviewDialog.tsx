@@ -59,12 +59,12 @@ const describeEntry = (entry: GitSyncDiffEntry) => {
 const DiffBadge: React.FC<{ value: GitSyncDiffEntry['changeType'] }> = ({ value }) => {
   const className =
     value === 'added'
-      ? 'bg-emerald-100 text-emerald-900'
+      ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100'
       : value === 'deleted'
-        ? 'bg-red-100 text-red-900'
+        ? 'bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100'
         : value === 'renamed'
-          ? 'bg-amber-100 text-amber-900'
-          : 'bg-sky-100 text-sky-900';
+          ? 'bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100'
+          : 'bg-sky-100 text-sky-900 dark:bg-sky-900 dark:text-sky-100';
   return <Badge className={className}>{value}</Badge>;
 };
 
@@ -254,8 +254,8 @@ export const GitSyncDiffReviewDialog: React.FC<GitSyncDiffReviewDialogProps> = (
                                     key={`${selectedEntry.id}-${hunkIndex}-${lineIndex}`}
                                     className={cn(
                                       'grid grid-cols-[72px_72px_minmax(0,1fr)] gap-3 px-3 py-1 font-mono text-xs',
-                                      line.kind === 'add' && 'bg-emerald-50',
-                                      line.kind === 'remove' && 'bg-red-50',
+                                      line.kind === 'add' && 'bg-emerald-50 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100',
+                                      line.kind === 'remove' && 'bg-red-50 text-red-950 dark:bg-red-950 dark:text-red-100',
                                     )}
                                   >
                                     <span className="text-muted-foreground">{line.oldLineNumber ?? ''}</span>

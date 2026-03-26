@@ -78,7 +78,6 @@ export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
     push: pushGitBackup,
     pull: pullGitBackup,
     isPushing: gitPushing,
-    isPreviewing,
     isPulling: gitPulling,
   } = useGitSync({ settings, workspacePath: gitWorkspaceOverride, autoRefresh: false });
 
@@ -402,10 +401,10 @@ export const GitSyncSettings: React.FC<GitSyncSettingsProps> = ({
           <Button
             variant="secondary"
             onClick={() => void onPushBackup?.()}
-            disabled={!gitEnabled || !gitStatus.configured || gitPushing || isPreviewing || isPushBackupBusy || !onPushBackup}
+            disabled={!gitEnabled || !gitStatus.configured || gitPushing || isPushBackupBusy || !onPushBackup}
           >
             <CloudUpload className="h-4 w-4 mr-2" />
-            {gitPushing ? 'Pushing…' : isPreviewing || isPushBackupBusy ? 'Reviewing…' : 'Push Backup'}
+            {gitPushing ? 'Pushing…' : isPushBackupBusy ? 'Reviewing…' : 'Push Backup'}
           </Button>
           <Button
             variant="destructive"

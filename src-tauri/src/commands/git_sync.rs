@@ -680,6 +680,11 @@ fn build_workspace_manifest(root: &Path) -> Result<Vec<ManifestEntry>, String> {
 
         let (hash, is_text, text) = if size > STREAM_HASH_THRESHOLD_BYTES {
             (hash_file_streaming(path)?, false, None)
+        } else if size as usize > PREVIEW_MAX_TEXT_BYTES_PER_SIDE {
+            let bytes = fs::read(path)
+                .map_err(|e| format!("Failed to read workspace file {}: {}", path.display(), e))?;
+            let hash = hash_bytes(&bytes);
+            (hash, false, None)
         } else {
             let bytes = fs::read(path)
                 .map_err(|e| format!("Failed to read workspace file {}: {}", path.display(), e))?;
@@ -835,7 +840,9 @@ fn compare_manifests(before: &[ManifestEntry], after: &[ManifestEntry]) -> Previ
         .count();
 
     let mut warnings = Vec::new();
-    let mut truncated = false;
+    let mut truncated = entries
+        .iter()
+        .any(|entry| entry.is_truncated.unwrap_or(false));
 
     if entries.len() > PREVIEW_MAX_CHANGED_FILES {
         entries.truncate(PREVIEW_MAX_CHANGED_FILES);
@@ -855,6 +862,13 @@ fn compare_manifests(before: &[ManifestEntry], after: &[ManifestEntry]) -> Previ
             entry.binary = entry.binary.take();
             truncated = true;
         }
+    }
+
+    if entries
+        .iter()
+        .any(|entry| entry.is_truncated.unwrap_or(false))
+    {
+        truncated = true;
     }
 
     if truncated && !warnings.iter().any(|warning| warning.contains("truncated")) {

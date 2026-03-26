@@ -1,5 +1,15 @@
+export function canonicalizeLegacySectionAliases(path?: string | null): string | null | undefined {
+  if (path == null) {
+    return path;
+  }
+
+  return path
+    .replace(/\\/g, '/')
+    .replace(/(^|\/)Purpose and Principles(?=(\/|$))/gi, '$1Purpose & Principles');
+}
+
 export function norm(path?: string | null): string | null | undefined {
-  return path?.replace(/\\/g, '/');
+  return canonicalizeLegacySectionAliases(path);
 }
 
 /**

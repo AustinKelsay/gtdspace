@@ -5,7 +5,7 @@ use std::process::Stdio;
 
 use gtdspace_lib::backend::{
     ChangeApplyResult, ContextPack, GtdItemSummary, HabitHistoryResult, PlannedChange,
-    WorkspaceInfo, WorkspaceRefreshResult, WorkspaceSearchResult,
+    WorkspaceInfo, WorkspaceRefreshResult, WorkspaceSearchResult, gtdspace_server_version,
     normalize_workspace_path,
 };
 use gtdspace_lib::test_utils::{seed_test_workspace, write_test_file};
@@ -118,6 +118,28 @@ fn write_habit_fixture(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
     .map_err(|error| -> Box<dyn Error> { error.into() })
 }
 
+fn write_project_fixture(
+    workspace_root: &Path,
+    name: &str,
+    desired_outcome: &str,
+) -> Result<(), Box<dyn Error>> {
+    write_test_file(
+        workspace_root.join("Projects").join(name).join("README.md"),
+        &format!(
+            r#"# {name}
+
+[!singleselect:project-status:in-progress]
+[!datetime:created_date_time:2026-03-20T10:00:00Z]
+
+## Desired Outcome
+
+{desired_outcome}
+"#
+        ),
+    )
+    .map_err(|error| -> Box<dyn Error> { error.into() })
+}
+
 #[tokio::test]
 async fn mcp_server_exposes_resources_and_applies_project_change() -> Result<(), Box<dyn Error>> {
     let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
@@ -149,12 +171,14 @@ async fn mcp_server_exposes_resources_and_applies_project_change() -> Result<(),
         context_pack.workspace_root,
         normalize_workspace_path(&canonical_workspace_root)
     );
+    assert_eq!(context_pack.server_version, gtdspace_server_version());
     assert!(context_pack
         .items
         .iter()
         .any(|item| item.relative_path == "Projects/Alpha Project/README.md"));
 
     let info: WorkspaceInfo = call_tool_typed(&client, "workspace_info", None).await?;
+    assert_eq!(info.server_version, gtdspace_server_version());
     assert_eq!(info.context_pack_cache.source, "generated");
     assert_eq!(info.fingerprint.markdown_file_count, 2);
 
@@ -407,6 +431,7 @@ async fn mcp_server_reads_and_writes_habit_history() -> Result<(), Box<dyn Error
 async fn mcp_server_rejects_action_create_for_unknown_project_path() -> Result<(), Box<dyn Error>> {
     let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
     let workspace_root = workspace.path().to_path_buf();
+    write_project_fixture(&workspace_root, "Visibible", "Ship nav search and image flows.")?;
 
     let client = start_client(&workspace_root).await?;
 
@@ -415,7 +440,7 @@ async fn mcp_server_rejects_action_create_for_unknown_project_path() -> Result<(
         "action_create",
         Some(
             json!({
-                "projectPath": "visible",
+                "projectPath": "projects/visible",
                 "name": "Add search function in nav",
                 "status": "waiting"
             })
@@ -428,7 +453,54 @@ async fn mcp_server_rejects_action_create_for_unknown_project_path() -> Result<(
     .unwrap_err()
     .to_string();
 
-    assert!(error.contains("Project not found: visible"));
+    assert!(error.contains("Project not found: projects/visible"));
+    assert!(error.contains("workspace_list_items({\"itemType\":\"project\"})"));
+    assert!(error.contains("Projects/Visibible/README.md"));
+    client.cancel().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn mcp_server_only_writes_action_after_change_apply() -> Result<(), Box<dyn Error>> {
+    let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
+    let workspace_root = workspace.path().to_path_buf();
+    let action_path = workspace_root.join("Projects/Alpha Project/Add search function in nav.md");
+
+    let client = start_client(&workspace_root).await?;
+
+    let planned: PlannedChange = call_tool_typed(
+        &client,
+        "action_create",
+        Some(
+            json!({
+                "projectPath": "Projects/Alpha Project/README.md",
+                "name": "Add search function in nav",
+                "status": "waiting"
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+
+    assert!(!action_path.exists());
+
+    let _: ChangeApplyResult = call_tool_typed(
+        &client,
+        "change_apply",
+        Some(
+            json!({
+                "changeSetId": planned.change_set.id
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+
+    assert!(action_path.exists());
     client.cancel().await?;
     Ok(())
 }

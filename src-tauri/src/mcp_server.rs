@@ -139,7 +139,7 @@ impl GtdMcpServer {
     }
 
     #[tool(
-        description = "Plan creation of a GTD project. Returns a dry-run change set that must be applied separately."
+        description = "Dry-run only. Plan creation of a GTD project and return a change set. No files are written until change_apply is called with the returned changeSetId."
     )]
     async fn project_create(
         &self,
@@ -151,7 +151,9 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
-    #[tool(description = "Plan an update to a GTD project README.")]
+    #[tool(
+        description = "Dry-run only. Plan an update to a GTD project README and return a change set. No files are written until change_apply is called with the returned changeSetId."
+    )]
     async fn project_update(
         &self,
         Parameters(request): Parameters<ProjectUpdateRequest>,
@@ -162,7 +164,9 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
-    #[tool(description = "Plan a GTD project rename.")]
+    #[tool(
+        description = "Dry-run only. Plan a GTD project rename and return a change set. No files are written until change_apply is called with the returned changeSetId."
+    )]
     async fn project_rename(
         &self,
         Parameters(request): Parameters<ProjectRenameRequest>,
@@ -174,7 +178,7 @@ impl GtdMcpServer {
     }
 
     #[tool(
-        description = "Plan creation of a GTD action inside an existing project directory or project README."
+        description = "Dry-run only. Plan creation of a GTD action inside an existing project directory or project README and return a change set. No files are written until change_apply is called with the returned changeSetId."
     )]
     async fn action_create(
         &self,
@@ -186,7 +190,9 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
-    #[tool(description = "Plan an update to a GTD action file.")]
+    #[tool(
+        description = "Dry-run only. Plan an update to a GTD action file and return a change set. No files are written until change_apply is called with the returned changeSetId."
+    )]
     async fn action_update(
         &self,
         Parameters(request): Parameters<ActionUpdateRequest>,
@@ -197,7 +203,9 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
-    #[tool(description = "Plan a GTD action rename.")]
+    #[tool(
+        description = "Dry-run only. Plan a GTD action rename and return a change set. No files are written until change_apply is called with the returned changeSetId."
+    )]
     async fn action_rename(
         &self,
         Parameters(request): Parameters<ActionRenameRequest>,
@@ -208,7 +216,9 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
-    #[tool(description = "Plan creation of a GTD habit.")]
+    #[tool(
+        description = "Dry-run only. Plan creation of a GTD habit and return a change set. No files are written until change_apply is called with the returned changeSetId."
+    )]
     async fn habit_create(
         &self,
         Parameters(request): Parameters<HabitCreateRequest>,
@@ -219,7 +229,9 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
-    #[tool(description = "Plan a GTD habit status change.")]
+    #[tool(
+        description = "Dry-run only. Plan a GTD habit status change and return a change set. No files are written until change_apply is called with the returned changeSetId."
+    )]
     async fn habit_update_status(
         &self,
         Parameters(request): Parameters<HabitStatusUpdateRequest>,
@@ -230,7 +242,9 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
-    #[tool(description = "Plan appending a history entry to a GTD habit.")]
+    #[tool(
+        description = "Dry-run only. Plan appending a history entry to a GTD habit and return a change set. No files are written until change_apply is called with the returned changeSetId."
+    )]
     async fn habit_write_history_entry(
         &self,
         Parameters(request): Parameters<HabitWriteHistoryEntryRequest>,
@@ -242,7 +256,7 @@ impl GtdMcpServer {
     }
 
     #[tool(
-        description = "Plan replacing a habit history section with a canonical normalized table."
+        description = "Dry-run only. Plan replacing a habit history section with a canonical normalized table and return a change set. No files are written until change_apply is called with the returned changeSetId."
     )]
     async fn habit_replace_history(
         &self,
@@ -254,7 +268,9 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
-    #[tool(description = "Plan creation of an Area, Goal, Vision, or Purpose page.")]
+    #[tool(
+        description = "Dry-run only. Plan creation of an Area, Goal, Vision, or Purpose page and return a change set. No files are written until change_apply is called with the returned changeSetId."
+    )]
     async fn horizon_page_create(
         &self,
         Parameters(request): Parameters<HorizonPageCreateRequest>,
@@ -265,7 +281,9 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
-    #[tool(description = "Plan an update to an Area, Goal, Vision, or Purpose page.")]
+    #[tool(
+        description = "Dry-run only. Plan an update to an Area, Goal, Vision, or Purpose page and return a change set. No files are written until change_apply is called with the returned changeSetId."
+    )]
     async fn horizon_page_update(
         &self,
         Parameters(request): Parameters<HorizonPageUpdateRequest>,
@@ -276,7 +294,9 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
-    #[tool(description = "Plan creation of a Cabinet or Someday Maybe note.")]
+    #[tool(
+        description = "Dry-run only. Plan creation of a Cabinet or Someday Maybe note and return a change set. No files are written until change_apply is called with the returned changeSetId."
+    )]
     async fn reference_note_create(
         &self,
         Parameters(request): Parameters<ReferenceNoteCreateRequest>,
@@ -287,7 +307,9 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
-    #[tool(description = "Plan an update to a Cabinet or Someday Maybe note.")]
+    #[tool(
+        description = "Dry-run only. Plan an update to a Cabinet or Someday Maybe note and return a change set. No files are written until change_apply is called with the returned changeSetId."
+    )]
     async fn reference_note_update(
         &self,
         Parameters(request): Parameters<ReferenceNoteUpdateRequest>,
@@ -326,7 +348,7 @@ impl ServerHandler for GtdMcpServer {
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::default();
         info.instructions = Some(
-            "Use GTD semantic tools by default. All mutations require a dry-run tool call followed by change_apply."
+            "Use GTD semantic tools by default. If a project path is ambiguous, call workspace_list_items with itemType=project first. All mutations require a dry-run tool call followed by change_apply."
                 .to_string(),
         );
         info

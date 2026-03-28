@@ -123,6 +123,18 @@ describe('McpServerSettings component', () => {
         content.includes('npm run mcp:dev -- --workspace "/spaces/work" --read-only --log-level debug')
       )
     ).toBeInTheDocument();
+    expect(screen.getByText('Project Discovery')).toBeInTheDocument();
+    expect(
+      screen.getByText((content) =>
+        content.includes('workspace_list_items with itemType set to project')
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText('Version Surface')).toBeInTheDocument();
+    expect(
+      screen.getByText((content) =>
+        content.includes('workspace_info and the generated workspace context resources expose serverVersion')
+      )
+    ).toBeInTheDocument();
   });
 
   it('persists the workspace override on blur', async () => {

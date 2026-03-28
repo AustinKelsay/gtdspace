@@ -12,6 +12,7 @@ use rmcp::schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use strsim::jaro_winkler;
 use uuid::Uuid;
 
 use crate::commands::filesystem::{
@@ -122,6 +123,8 @@ pub struct ContextPackCache {
 #[serde(rename_all = "camelCase")]
 #[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceInfo {
+    #[serde(default = "default_server_version")]
+    pub server_version: String,
     pub workspace_root: String,
     pub read_only: bool,
     pub item_counts: BTreeMap<String, usize>,
@@ -187,6 +190,8 @@ pub struct MarkerDefinition {
 #[serde(rename_all = "camelCase")]
 pub struct ContextPack {
     pub version: u32,
+    #[serde(default = "default_server_version")]
+    pub server_version: String,
     pub generated_at: String,
     pub workspace_root: String,
     pub fingerprint: WorkspaceFingerprint,
@@ -624,6 +629,7 @@ impl GtdWorkspaceService {
         let snapshot = self.ensure_snapshot(false)?;
         let cache = self.ensure_context_pack(false)?;
         Ok(WorkspaceInfo {
+            server_version: default_server_version(),
             workspace_root: self.workspace_root(),
             read_only: self.read_only,
             item_counts: snapshot.item_counts.clone(),
@@ -648,6 +654,7 @@ impl GtdWorkspaceService {
         let cache = self.ensure_context_pack(true)?;
         Ok(WorkspaceRefreshResult {
             workspace_info: WorkspaceInfo {
+                server_version: default_server_version(),
                 workspace_root: self.workspace_root(),
                 read_only: self.read_only,
                 item_counts: snapshot.item_counts.clone(),
@@ -1655,7 +1662,7 @@ impl GtdWorkspaceService {
 
         if absolute.is_dir() {
             let Some(readme_path) = resolve_project_readme_in_directory(&absolute) else {
-                return Err(format!("Project not found: {}", normalized_input));
+                return Err(self.project_not_found_message(&normalized_input));
             };
             let readme_path = normalize_path(&readme_path);
             let relative_path = normalize_absolute_to_relative(&self.workspace_root, &readme_path);
@@ -1669,7 +1676,52 @@ impl GtdWorkspaceService {
             return Ok(absolute);
         }
 
-        Err(format!("Project not found: {}", normalized_input))
+        Err(self.project_not_found_message(&normalized_input))
+    }
+
+    fn project_not_found_message(&self, project_path: &str) -> String {
+        let mut message = format!(
+            "Project not found: {}. Use workspace_list_items({{\"itemType\":\"project\"}}) and pass a returned project relative path or README path.",
+            project_path
+        );
+        let suggestions = self.suggest_project_paths(project_path).unwrap_or_default();
+        if !suggestions.is_empty() {
+            message.push_str(" Closest matches: ");
+            message.push_str(&suggestions.join(", "));
+        }
+        message
+    }
+
+    fn suggest_project_paths(&self, project_path: &str) -> Result<Vec<String>, String> {
+        let normalized_input = normalize_similarity_key(project_path);
+        if normalized_input.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let snapshot = self.ensure_snapshot(false)?;
+        let mut scored = snapshot
+            .items
+            .iter()
+            .filter(|item| item.item_type == GtdItemType::Project)
+            .filter_map(|item| {
+                let score = project_similarity_keys(item)
+                    .into_iter()
+                    .map(|candidate| jaro_winkler(&normalized_input, &candidate))
+                    .fold(0.0, f64::max);
+                (score >= 0.84).then(|| (item.relative_path.clone(), score))
+            })
+            .collect::<Vec<_>>();
+
+        scored.sort_by(|left, right| {
+            right
+                .1
+                .partial_cmp(&left.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| left.0.cmp(&right.0))
+        });
+        scored.dedup_by(|left, right| left.0 == right.0);
+
+        Ok(scored.into_iter().take(3).map(|(path, _)| path).collect())
     }
 
     fn reject_if_read_only(&self) -> Result<(), String> {
@@ -2476,6 +2528,7 @@ fn parse_item_summary(
 fn build_context_pack(snapshot: WorkspaceSnapshot, workspace_root: String) -> ContextPack {
     ContextPack {
         version: CONTEXT_PACK_VERSION,
+        server_version: default_server_version(),
         generated_at: Utc::now().to_rfc3339(),
         workspace_root,
         fingerprint: snapshot.fingerprint,
@@ -2546,6 +2599,9 @@ fn build_context_pack(snapshot: WorkspaceSnapshot, workspace_root: String) -> Co
         operation_guidance: vec![
             "Prefer GTD semantic tools over raw file edits.".to_string(),
             "All write tools dry-run first and require change_apply.".to_string(),
+            "If a project path is unclear, call workspace_list_items({\"itemType\":\"project\"}) before action_create."
+                .to_string(),
+            "Planned changes do not modify files until change_apply succeeds.".to_string(),
             "Paths in tool requests should be workspace-relative unless otherwise noted."
                 .to_string(),
         ],
@@ -2556,6 +2612,7 @@ fn build_context_pack_markdown(pack: &ContextPack) -> String {
     let mut lines = vec![
         "# GTD Space Context Pack".to_string(),
         String::new(),
+        format!("- Server version: `{}`", pack.server_version),
         format!("- Workspace: `{}`", pack.workspace_root),
         format!("- Generated: `{}`", pack.generated_at),
         format!(
@@ -2679,6 +2736,14 @@ fn normalize_relative_input(path: &str) -> String {
     path.trim().trim_start_matches("./").replace('\\', "/")
 }
 
+pub fn gtdspace_server_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+fn default_server_version() -> String {
+    gtdspace_server_version().to_string()
+}
+
 fn normalize_absolute_to_relative(root: &Path, path: &str) -> String {
     let absolute = Path::new(path);
     if absolute.is_absolute() {
@@ -2724,6 +2789,33 @@ fn strip_markdown_extension(name: &str) -> String {
     } else {
         name.to_string()
     }
+}
+
+fn normalize_similarity_key(value: &str) -> String {
+    strip_markdown_extension(&normalize_relative_input(value))
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .collect()
+}
+
+fn strip_project_readme_suffix(path: &str) -> String {
+    path.strip_suffix("/README.md")
+        .or_else(|| path.strip_suffix("/README.markdown"))
+        .unwrap_or(path)
+        .to_string()
+}
+
+fn project_similarity_keys(item: &GtdItemSummary) -> Vec<String> {
+    let mut candidates = vec![
+        normalize_similarity_key(&item.relative_path),
+        normalize_similarity_key(&strip_project_readme_suffix(&item.relative_path)),
+        normalize_similarity_key(&item.title),
+    ];
+    candidates.retain(|candidate| !candidate.is_empty());
+    candidates.sort();
+    candidates.dedup();
+    candidates
 }
 
 fn sanitize_title(input: &str, fallback: &str) -> String {
@@ -3433,6 +3525,7 @@ mod tests {
     fn context_pack_markdown_contains_workspace_and_items() {
         let pack = ContextPack {
             version: 1,
+            server_version: "2.3.4".to_string(),
             generated_at: "2026-01-01T00:00:00Z".to_string(),
             workspace_root: "/tmp/workspace".to_string(),
             fingerprint: WorkspaceFingerprint {
@@ -3466,6 +3559,7 @@ mod tests {
         };
         let markdown = build_context_pack_markdown(&pack);
         assert!(markdown.contains("GTD Space Context Pack"));
+        assert!(markdown.contains("Server version"));
         assert!(markdown.contains("/tmp/workspace"));
         assert!(markdown.contains("Projects/Test/README.md"));
     }
@@ -3585,6 +3679,76 @@ mod tests {
             .unwrap_err();
 
         assert!(error.contains("Project not found: visible"));
+        assert!(error.contains("workspace_list_items({\"itemType\":\"project\"})"));
+        Ok(())
+    }
+
+    #[test]
+    fn plan_action_create_suggests_close_project_paths_for_typos() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        write_test_file(
+            workspace.path().join("Projects/Visibible/README.md"),
+            r#"# Visibible
+
+[!singleselect:project-status:in-progress]
+[!datetime:created_date_time:2026-03-21T10:00:00Z]
+
+## Desired Outcome
+
+Ship the visibible navigation updates.
+"#,
+        )?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let error = service
+            .plan_action_create(ActionCreateRequest {
+                project_path: "projects/visible".to_string(),
+                name: "Add search function in nav".to_string(),
+                status: Some("waiting".to_string()),
+                focus_date: None,
+                due_date: None,
+                effort: None,
+                contexts: vec![],
+                notes: None,
+                general_references: vec![],
+            })
+            .unwrap_err();
+
+        assert!(error.contains("Project not found: projects/visible"));
+        assert!(error.contains("Closest matches: Projects/Visibible/README.md"));
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_info_includes_server_version() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let info = service.workspace_info()?;
+        assert_eq!(info.server_version, gtdspace_server_version());
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_context_pack_includes_server_version_and_guidance() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let context_pack = service.workspace_context_pack()?;
+        assert_eq!(context_pack.pack.server_version, gtdspace_server_version());
+        assert!(context_pack
+            .pack
+            .operation_guidance
+            .iter()
+            .any(|entry| entry.contains("workspace_list_items({\"itemType\":\"project\"})")));
+        assert!(context_pack
+            .pack
+            .operation_guidance
+            .iter()
+            .any(|entry| entry.contains("do not modify files until change_apply")));
         Ok(())
     }
 

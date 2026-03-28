@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::env;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -39,6 +39,7 @@ const CONTEXT_PACK_VERSION: u32 = 1;
 const SETTINGS_FILE_NAME: &str = "settings.json";
 const CONTEXT_CACHE_DIR: &str = "mcp-context";
 const MAX_CONTEXT_PACK_RETRIES: usize = 5;
+const MAX_CHANGE_SET_TOMBSTONES: usize = 256;
 const DEFAULT_MCP_SERVER_LOG_LEVEL: &str = "info";
 const VALID_MCP_SERVER_LOG_LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
 
@@ -244,6 +245,8 @@ pub struct PlannedChange {
 pub struct ChangeApplyResult {
     pub change_set: ChangeSetSummary,
     pub workspace_info: WorkspaceInfo,
+    #[serde(default)]
+    pub replayed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
@@ -593,11 +596,39 @@ struct StoredChangeSet {
     operations: Vec<ChangeOperation>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TerminalChangeSetState {
+    Applied,
+    Discarded,
+    Invalidated,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TerminalChangeSetReason {
+    Applied,
+    Discarded,
+    InvalidatedByRefresh,
+    InvalidatedByRevalidation,
+    ApplyFailed,
+}
+
+#[derive(Debug, Clone)]
+struct StoredChangeSetTombstone {
+    summary: ChangeSetSummary,
+    state: TerminalChangeSetState,
+    reason: TerminalChangeSetReason,
+    apply_result: Option<ChangeApplyResult>,
+    message: Option<String>,
+}
+
 #[derive(Debug, Default)]
 struct ServiceState {
     snapshot: Option<WorkspaceSnapshot>,
     context_pack: Option<CachedContextPack>,
     change_sets: HashMap<String, StoredChangeSet>,
+    change_set_tombstones: HashMap<String, StoredChangeSetTombstone>,
+    change_set_tombstone_order: VecDeque<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -644,8 +675,28 @@ impl GtdWorkspaceService {
                 .state
                 .lock()
                 .map_err(|_| "Failed to lock workspace state".to_string())?;
-            let count = state.change_sets.len();
-            state.change_sets.clear();
+            let pending = std::mem::take(&mut state.change_sets);
+            let count = pending.len();
+            for (id, change) in pending {
+                let message = format!(
+                    "Change set '{}' was invalidated by workspace_refresh and can no longer be applied. Create a fresh plan before applying.",
+                    id
+                );
+                Self::record_change_set_tombstone(
+                    &mut state,
+                    id,
+                    StoredChangeSetTombstone {
+                        summary: Self::change_set_summary(
+                            &change.public,
+                            ChangeStatus::Invalidated,
+                        ),
+                        state: TerminalChangeSetState::Invalidated,
+                        reason: TerminalChangeSetReason::InvalidatedByRefresh,
+                        apply_result: None,
+                        message: Some(message),
+                    },
+                );
+            }
             state.snapshot = None;
             state.context_pack = None;
             count
@@ -1367,15 +1418,50 @@ impl GtdWorkspaceService {
                 .state
                 .lock()
                 .map_err(|_| "Failed to lock workspace state".to_string())?;
-            state
-                .change_sets
-                .get(&change_set_id)
-                .cloned()
-                .ok_or_else(|| format!("Unknown change set '{}'", change_set_id))?
+            if let Some(stored) = state.change_sets.get(&change_set_id).cloned() {
+                stored
+            } else if let Some(tombstone) = Self::lookup_terminal_change_set(&state, &change_set_id)
+            {
+                if tombstone.state == TerminalChangeSetState::Applied {
+                    if let Some(result) = Self::replayed_change_apply_result(&tombstone) {
+                        return Ok(result);
+                    }
+                }
+                return Err(Self::terminal_change_set_apply_error(&tombstone));
+            } else {
+                return Err(Self::unknown_change_set_message(&change_set_id));
+            }
         };
 
         for op in &stored.operations {
-            self.revalidate_operation(op)?;
+            if let Err(error) = self.revalidate_operation(op) {
+                let message = format!(
+                    "Change set '{}' is no longer valid because workspace files changed since planning: {} Create a fresh plan before applying.",
+                    change_set_id, error
+                );
+                let mut state = self
+                    .state
+                    .lock()
+                    .map_err(|_| "Failed to lock workspace state".to_string())?;
+                state.change_sets.remove(&change_set_id);
+                Self::record_change_set_tombstone(
+                    &mut state,
+                    change_set_id.clone(),
+                    StoredChangeSetTombstone {
+                        summary: Self::change_set_summary(
+                            &stored.public,
+                            ChangeStatus::Invalidated,
+                        ),
+                        state: TerminalChangeSetState::Invalidated,
+                        reason: TerminalChangeSetReason::InvalidatedByRevalidation,
+                        apply_result: None,
+                        message: Some(message.clone()),
+                    },
+                );
+                state.snapshot = None;
+                state.context_pack = None;
+                return Err(message);
+            }
         }
 
         for op in &stored.operations {
@@ -1407,11 +1493,29 @@ impl GtdWorkspaceService {
             };
 
             if let Err(error) = apply_result {
+                let retry_message = format!(
+                    "Change set '{}' previously failed during apply: {} Workspace state may be partially updated; run workspace_refresh before continuing and create a new plan.",
+                    change_set_id, error
+                );
                 let mut state = self
                     .state
                     .lock()
                     .map_err(|_| "Failed to lock workspace state".to_string())?;
                 state.change_sets.remove(&change_set_id);
+                Self::record_change_set_tombstone(
+                    &mut state,
+                    change_set_id.clone(),
+                    StoredChangeSetTombstone {
+                        summary: Self::change_set_summary(
+                            &stored.public,
+                            ChangeStatus::Invalidated,
+                        ),
+                        state: TerminalChangeSetState::Failed,
+                        reason: TerminalChangeSetReason::ApplyFailed,
+                        apply_result: None,
+                        message: Some(retry_message),
+                    },
+                );
                 state.snapshot = None;
                 state.context_pack = None;
                 return Err(format!(
@@ -1432,17 +1536,29 @@ impl GtdWorkspaceService {
         }
 
         let info = self.workspace_info()?;
-        Ok(ChangeApplyResult {
-            change_set: ChangeSetSummary {
-                id: stored.public.id,
-                tool_name: stored.public.tool_name,
-                summary: stored.public.summary,
-                status: ChangeStatus::Applied,
-                affected_paths: stored.public.affected_paths,
-                preview: stored.public.preview,
-            },
+        let result = ChangeApplyResult {
+            change_set: Self::change_set_summary(&stored.public, ChangeStatus::Applied),
             workspace_info: info,
-        })
+            replayed: false,
+        };
+        {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| "Failed to lock workspace state".to_string())?;
+            Self::record_change_set_tombstone(
+                &mut state,
+                change_set_id,
+                StoredChangeSetTombstone {
+                    summary: result.change_set.clone(),
+                    state: TerminalChangeSetState::Applied,
+                    reason: TerminalChangeSetReason::Applied,
+                    apply_result: Some(result.clone()),
+                    message: None,
+                },
+            );
+        }
+        Ok(result)
     }
 
     pub fn change_discard(&self, request: ChangeSetRequest) -> Result<ChangeSetSummary, String> {
@@ -1455,14 +1571,29 @@ impl GtdWorkspaceService {
             .remove(&request.change_set_id)
             .ok_or_else(|| format!("Unknown change set '{}'", request.change_set_id))?;
         change.public.status = ChangeStatus::Discarded;
-        Ok(ChangeSetSummary {
+        let summary = ChangeSetSummary {
             id: change.public.id,
             tool_name: change.public.tool_name,
             summary: change.public.summary,
             status: change.public.status,
             affected_paths: change.public.affected_paths,
             preview: change.public.preview,
-        })
+        };
+        Self::record_change_set_tombstone(
+            &mut state,
+            request.change_set_id,
+            StoredChangeSetTombstone {
+                summary: summary.clone(),
+                state: TerminalChangeSetState::Discarded,
+                reason: TerminalChangeSetReason::Discarded,
+                apply_result: None,
+                message: Some(format!(
+                    "Change set '{}' was discarded and can no longer be applied. Create a fresh plan if you still want to make this change.",
+                    summary.id
+                )),
+            },
+        );
+        Ok(summary)
     }
 
     fn ensure_snapshot(&self, force: bool) -> Result<WorkspaceSnapshot, String> {
@@ -1848,6 +1979,102 @@ impl GtdWorkspaceService {
         Ok(PlannedChange {
             change_set: summary,
         })
+    }
+
+    fn change_set_summary(change_set: &ChangeSet, status: ChangeStatus) -> ChangeSetSummary {
+        ChangeSetSummary {
+            id: change_set.id.clone(),
+            tool_name: change_set.tool_name.clone(),
+            summary: change_set.summary.clone(),
+            status,
+            affected_paths: change_set.affected_paths.clone(),
+            preview: change_set.preview.clone(),
+        }
+    }
+
+    fn record_change_set_tombstone(
+        state: &mut ServiceState,
+        id: String,
+        tombstone: StoredChangeSetTombstone,
+    ) {
+        if state.change_set_tombstones.contains_key(&id) {
+            state.change_set_tombstone_order = state
+                .change_set_tombstone_order
+                .drain(..)
+                .filter(|existing| existing != &id)
+                .collect::<VecDeque<_>>();
+        }
+
+        state.change_set_tombstones.insert(id.clone(), tombstone);
+        state.change_set_tombstone_order.push_back(id);
+
+        while state.change_set_tombstone_order.len() > MAX_CHANGE_SET_TOMBSTONES {
+            if let Some(oldest) = state.change_set_tombstone_order.pop_front() {
+                state.change_set_tombstones.remove(&oldest);
+            }
+        }
+    }
+
+    fn lookup_terminal_change_set(
+        state: &ServiceState,
+        change_set_id: &str,
+    ) -> Option<StoredChangeSetTombstone> {
+        state.change_set_tombstones.get(change_set_id).cloned()
+    }
+
+    fn replayed_change_apply_result(
+        tombstone: &StoredChangeSetTombstone,
+    ) -> Option<ChangeApplyResult> {
+        tombstone.apply_result.clone().map(|mut result| {
+            result.replayed = true;
+            result
+        })
+    }
+
+    fn unknown_change_set_message(change_set_id: &str) -> String {
+        format!(
+            "Unknown change set '{}'. It may belong to a different MCP server session, may have expired after restart, or may never have been created.",
+            change_set_id
+        )
+    }
+
+    fn terminal_change_set_apply_error(tombstone: &StoredChangeSetTombstone) -> String {
+        if let Some(message) = tombstone.message.as_deref() {
+            return message.to_string();
+        }
+
+        match (tombstone.state, tombstone.reason) {
+            (TerminalChangeSetState::Applied, TerminalChangeSetReason::Applied) => format!(
+                "Change set '{}' was already applied in this MCP server session.",
+                tombstone.summary.id
+            ),
+            (TerminalChangeSetState::Discarded, TerminalChangeSetReason::Discarded) => format!(
+                "Change set '{}' was discarded and can no longer be applied. Create a fresh plan if you still want to make this change.",
+                tombstone.summary.id
+            ),
+            (
+                TerminalChangeSetState::Invalidated,
+                TerminalChangeSetReason::InvalidatedByRefresh,
+            ) => format!(
+                "Change set '{}' was invalidated by workspace_refresh and can no longer be applied. Create a fresh plan before applying.",
+                tombstone.summary.id
+            ),
+            (
+                TerminalChangeSetState::Invalidated,
+                TerminalChangeSetReason::InvalidatedByRevalidation,
+            ) => format!(
+                "Change set '{}' is no longer valid because workspace files changed since planning. Create a fresh plan before applying.",
+                tombstone.summary.id
+            ),
+            (TerminalChangeSetState::Failed, TerminalChangeSetReason::ApplyFailed) => format!(
+                "Change set '{}' previously failed during apply. Workspace state may be partially updated; run workspace_refresh before continuing and create a new plan.",
+                tombstone.summary.id
+            ),
+            _ => format!(
+                "Change set '{}' is no longer pending and can no longer be applied.",
+                tombstone.summary.id
+            ),
+        }
     }
 }
 
@@ -3525,7 +3752,7 @@ mod tests {
     fn context_pack_markdown_contains_workspace_and_items() {
         let pack = ContextPack {
             version: 1,
-            server_version: "2.3.4".to_string(),
+            server_version: "2.3.6".to_string(),
             generated_at: "2026-01-01T00:00:00Z".to_string(),
             workspace_root: "/tmp/workspace".to_string(),
             fingerprint: WorkspaceFingerprint {
@@ -3589,7 +3816,7 @@ mod tests {
     }
 
     #[test]
-    fn workspace_refresh_invalidates_pending_change_sets() -> Result<(), String> {
+    fn change_apply_after_workspace_refresh_reports_refresh_invalidation() -> Result<(), String> {
         let workspace = seed_test_workspace()?;
         let service =
             GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
@@ -3608,12 +3835,13 @@ mod tests {
                 change_set_id: planned.change_set.id,
             })
             .unwrap_err();
-        assert!(error.contains("Unknown change set"));
+        assert!(error.contains("workspace_refresh"));
+        assert!(!error.contains("Unknown change set"));
         Ok(())
     }
 
     #[test]
-    fn change_apply_fails_if_file_changed_after_planning() -> Result<(), String> {
+    fn change_apply_after_revalidation_failure_reports_stale_plan_on_retry() -> Result<(), String> {
         let workspace = seed_test_workspace()?;
         let service =
             GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
@@ -3636,12 +3864,20 @@ mod tests {
         fs::write(&alpha_readme, format!("{existing}\nConcurrent edit.\n"))
             .map_err(|error| error.to_string())?;
 
+        let change_set_id = planned.change_set.id.clone();
         let error = service
             .change_apply(ChangeSetRequest {
-                change_set_id: planned.change_set.id,
+                change_set_id: change_set_id.clone(),
             })
             .unwrap_err();
         assert!(error.contains("changed since planning"));
+        assert!(error.contains("Create a fresh plan"));
+
+        let retry_error = service
+            .change_apply(ChangeSetRequest { change_set_id })
+            .unwrap_err();
+        assert!(retry_error.contains("changed since planning"));
+        assert!(!retry_error.contains("Unknown change set"));
         Ok(())
     }
 
@@ -3792,13 +4028,126 @@ Ship the visibible navigation updates.
         fs::create_dir_all(workspace.path().join("Projects/Renamed Project"))
             .map_err(|error| error.to_string())?;
 
+        let change_set_id = planned.change_set.id.clone();
+        let error = service
+            .change_apply(ChangeSetRequest {
+                change_set_id: change_set_id.clone(),
+            })
+            .unwrap_err();
+        assert!(error.contains("workspace_refresh"));
+
+        let retry_error = service
+            .change_apply(ChangeSetRequest { change_set_id })
+            .unwrap_err();
+        assert!(retry_error.contains("previously failed during apply"));
+        assert!(retry_error.contains("workspace_refresh"));
+        assert!(!retry_error.contains("Unknown change set"));
+        Ok(())
+    }
+
+    #[test]
+    fn change_apply_replays_applied_change_set_with_replayed_true() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let planned = service.plan_reference_note_create(ReferenceNoteCreateRequest {
+            section: ReferenceNoteSection::Cabinet,
+            title: "Inbox Reference".to_string(),
+            body: Some("Useful note.".to_string()),
+        })?;
+
+        let first = service.change_apply(ChangeSetRequest {
+            change_set_id: planned.change_set.id.clone(),
+        })?;
+        assert!(!first.replayed);
+
+        let note_path = workspace.path().join("Cabinet/Inbox Reference.md");
+        fs::write(
+            &note_path,
+            format!(
+                "{}\nReplay should not overwrite.\n",
+                fs::read_to_string(&note_path).map_err(|error| error.to_string())?
+            ),
+        )
+        .map_err(|error| error.to_string())?;
+
+        let replay = service.change_apply(ChangeSetRequest {
+            change_set_id: planned.change_set.id,
+        })?;
+        assert!(replay.replayed);
+        assert_eq!(replay.change_set.id, first.change_set.id);
+
+        let content = fs::read_to_string(&note_path).map_err(|error| error.to_string())?;
+        assert!(content.contains("Replay should not overwrite."));
+        Ok(())
+    }
+
+    #[test]
+    fn change_apply_after_discard_reports_discarded_state() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let planned = service.plan_reference_note_create(ReferenceNoteCreateRequest {
+            section: ReferenceNoteSection::Cabinet,
+            title: "Discard Me".to_string(),
+            body: Some("Temporary note.".to_string()),
+        })?;
+
+        let discarded = service.change_discard(ChangeSetRequest {
+            change_set_id: planned.change_set.id.clone(),
+        })?;
+        assert_eq!(discarded.status, ChangeStatus::Discarded);
+
         let error = service
             .change_apply(ChangeSetRequest {
                 change_set_id: planned.change_set.id,
             })
             .unwrap_err();
-        assert!(error.contains("workspace_refresh"));
+        assert!(error.contains("discarded"));
+        assert!(!error.contains("Unknown change set"));
         Ok(())
+    }
+
+    #[test]
+    fn unknown_change_set_message_mentions_session_or_restart() {
+        let error = GtdWorkspaceService::unknown_change_set_message("missing-id");
+        assert!(error.contains("different MCP server session"));
+        assert!(error.contains("expired after restart"));
+    }
+
+    #[test]
+    fn change_set_tombstones_are_bounded_and_oldest_entries_evict() {
+        let mut state = ServiceState::default();
+
+        for index in 0..=MAX_CHANGE_SET_TOMBSTONES {
+            let id = format!("change-set-{index}");
+            GtdWorkspaceService::record_change_set_tombstone(
+                &mut state,
+                id.clone(),
+                StoredChangeSetTombstone {
+                    summary: ChangeSetSummary {
+                        id,
+                        tool_name: "test".to_string(),
+                        summary: "Synthetic tombstone".to_string(),
+                        status: ChangeStatus::Discarded,
+                        affected_paths: vec![],
+                        preview: "Synthetic preview".to_string(),
+                    },
+                    state: TerminalChangeSetState::Discarded,
+                    reason: TerminalChangeSetReason::Discarded,
+                    apply_result: None,
+                    message: None,
+                },
+            );
+        }
+
+        assert_eq!(state.change_set_tombstones.len(), MAX_CHANGE_SET_TOMBSTONES);
+        assert!(!state.change_set_tombstones.contains_key("change-set-0"));
+        assert!(state
+            .change_set_tombstones
+            .contains_key(&format!("change-set-{}", MAX_CHANGE_SET_TOMBSTONES)));
     }
 
     #[test]

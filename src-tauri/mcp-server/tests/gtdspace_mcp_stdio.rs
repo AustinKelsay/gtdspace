@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use gtdspace_lib::backend::{
-    ChangeApplyResult, ContextPack, GtdItemSummary, HabitHistoryResult, PlannedChange,
-    WorkspaceInfo, WorkspaceRefreshResult, WorkspaceSearchResult, gtdspace_server_version,
-    normalize_workspace_path,
+    ChangeApplyResult, ChangeSetSummary, ContextPack, GtdItemSummary, HabitHistoryResult,
+    PlannedChange, WorkspaceInfo, WorkspaceRefreshResult, WorkspaceSearchResult,
+    gtdspace_server_version, normalize_workspace_path,
 };
 use gtdspace_lib::test_utils::{seed_test_workspace, write_test_file};
 use rmcp::{
@@ -501,6 +501,254 @@ async fn mcp_server_only_writes_action_after_change_apply() -> Result<(), Box<dy
     .await?;
 
     assert!(action_path.exists());
+    client.cancel().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn mcp_server_replays_applied_change_set_without_rewriting_files() -> Result<(), Box<dyn Error>> {
+    let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
+    let workspace_root = workspace.path().to_path_buf();
+    let action_path = workspace_root.join("Projects/Alpha Project/Add search function in nav.md");
+
+    let client = start_client(&workspace_root).await?;
+
+    let planned: PlannedChange = call_tool_typed(
+        &client,
+        "action_create",
+        Some(
+            json!({
+                "projectPath": "Projects/Alpha Project/README.md",
+                "name": "Add search function in nav",
+                "status": "waiting"
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+
+    let first: ChangeApplyResult = call_tool_typed(
+        &client,
+        "change_apply",
+        Some(
+            json!({
+                "changeSetId": planned.change_set.id.clone()
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+    assert!(!first.replayed);
+
+    let original = fs::read_to_string(&action_path)?;
+    fs::write(&action_path, format!("{original}\nManual edit after apply.\n"))?;
+
+    let replay: ChangeApplyResult = call_tool_typed(
+        &client,
+        "change_apply",
+        Some(
+            json!({
+                "changeSetId": planned.change_set.id
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+    assert!(replay.replayed);
+    assert_eq!(replay.change_set.id, first.change_set.id);
+
+    let after_replay = fs::read_to_string(&action_path)?;
+    assert!(after_replay.contains("Manual edit after apply."));
+
+    client.cancel().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn mcp_server_reports_refresh_invalidation_for_pending_change_sets() -> Result<(), Box<dyn Error>> {
+    let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
+    let workspace_root = workspace.path().to_path_buf();
+
+    let client = start_client(&workspace_root).await?;
+
+    let planned: PlannedChange = call_tool_typed(
+        &client,
+        "action_create",
+        Some(
+            json!({
+                "projectPath": "Projects/Alpha Project/README.md",
+                "name": "Add search function in nav",
+                "status": "waiting"
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+
+    let refreshed: WorkspaceRefreshResult =
+        call_tool_typed(&client, "workspace_refresh", None).await?;
+    assert_eq!(refreshed.invalidated_change_sets, 1);
+
+    let error = call_tool_typed::<ChangeApplyResult>(
+        &client,
+        "change_apply",
+        Some(
+            json!({
+                "changeSetId": planned.change_set.id
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("workspace_refresh"));
+    assert!(!error.contains("Unknown change set"));
+
+    client.cancel().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn mcp_server_reports_discarded_change_sets_on_apply() -> Result<(), Box<dyn Error>> {
+    let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
+    let workspace_root = workspace.path().to_path_buf();
+
+    let client = start_client(&workspace_root).await?;
+
+    let planned: PlannedChange = call_tool_typed(
+        &client,
+        "action_create",
+        Some(
+            json!({
+                "projectPath": "Projects/Alpha Project/README.md",
+                "name": "Add search function in nav",
+                "status": "waiting"
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+
+    let discarded: ChangeSetSummary = call_tool_typed(
+        &client,
+        "change_discard",
+        Some(
+            json!({
+                "changeSetId": planned.change_set.id.clone()
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+    assert_eq!(discarded.id, planned.change_set.id);
+
+    let error = call_tool_typed::<ChangeApplyResult>(
+        &client,
+        "change_apply",
+        Some(
+            json!({
+                "changeSetId": planned.change_set.id
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("discarded"));
+    assert!(!error.contains("Unknown change set"));
+
+    client.cancel().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn mcp_server_reports_stale_plan_errors_without_falling_back_to_unknown() -> Result<(), Box<dyn Error>> {
+    let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
+    let workspace_root = workspace.path().to_path_buf();
+    let project_readme = workspace_root.join("Projects/Alpha Project/README.md");
+
+    let client = start_client(&workspace_root).await?;
+
+    let planned: PlannedChange = call_tool_typed(
+        &client,
+        "project_update",
+        Some(
+            json!({
+                "path": "Projects/Alpha Project/README.md",
+                "title": "Alpha Project Updated",
+                "description": null,
+                "dueDate": null,
+                "status": null,
+                "areas": [],
+                "goals": [],
+                "vision": [],
+                "purpose": [],
+                "generalReferences": []
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+
+    let existing = fs::read_to_string(&project_readme)?;
+    fs::write(&project_readme, format!("{existing}\nConcurrent edit.\n"))?;
+
+    let first_error = call_tool_typed::<ChangeApplyResult>(
+        &client,
+        "change_apply",
+        Some(
+            json!({
+                "changeSetId": planned.change_set.id.clone()
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await
+    .unwrap_err()
+    .to_string();
+    assert!(first_error.contains("changed since planning"));
+    assert!(first_error.contains("Create a fresh plan"));
+
+    let retry_error = call_tool_typed::<ChangeApplyResult>(
+        &client,
+        "change_apply",
+        Some(
+            json!({
+                "changeSetId": planned.change_set.id
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await
+    .unwrap_err()
+    .to_string();
+    assert!(retry_error.contains("changed since planning"));
+    assert!(!retry_error.contains("Unknown change set"));
+
     client.cancel().await?;
     Ok(())
 }

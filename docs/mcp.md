@@ -96,6 +96,14 @@ Each mutating tool returns a structured `PlannedChange` with:
 
 To commit the change, call `change_apply` with the returned `change_set_id`.
 
+`change_apply` returns a `ChangeApplyResult` that now includes:
+
+- `changeSet`
+- `workspaceInfo`
+- `replayed`
+
+`replayed` is `false` on the first successful apply. It is `true` only when a client repeats `change_apply` with the same already-applied `change_set_id` in the same MCP server session and the server safely replays the original apply receipt without re-running writes.
+
 Typical action-create flow:
 
 1. Discover a valid project path:
@@ -133,6 +141,14 @@ Before writing, `change_apply` revalidates the target files using the expected f
 `workspace_refresh` also invalidates all pending change sets.
 
 If an apply step fails after a mutation has already started, the server invalidates its cached snapshot/context and returns an error telling the client to call `workspace_refresh` before continuing. V1 does not implement full multi-step rollback.
+
+## Change-Set Lifecycle
+
+- Change sets are session-scoped to the current `gtdspace-mcp` server process.
+- Repeating `change_apply` for an already-applied change set succeeds only within the same server session and returns the original apply receipt with `replayed: true`.
+- `workspace_refresh` invalidates all pending change sets. Those plans must be recreated before applying.
+- `change_discard` transitions a pending change set to a terminal discarded state. Discarded plans cannot be applied later.
+- If the MCP server restarts, previously planned change-set ids are not preserved and later apply attempts will be treated as unknown.
 
 ## Context Pack Caching
 

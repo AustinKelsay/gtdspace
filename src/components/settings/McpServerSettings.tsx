@@ -710,7 +710,7 @@ export const McpServerSettings: React.FC = () => {
           />
           <ToolChipSection
             title="Planning tools"
-            description="Project, action, habit, horizon, and reference-note mutations return planned changes before anything is written."
+            description="Project, action, habit, horizon, and reference-note mutations return planned changes before anything is written. Clients must call change_apply to commit them."
             items={PLANNING_TOOLS}
           />
           <ToolChipSection
@@ -731,7 +731,15 @@ export const McpServerSettings: React.FC = () => {
         <CardContent className="grid gap-4 md:grid-cols-2">
           <DetailCard
             label="Write Safety"
-            value="Mutating tools are dry-run first. Clients must call change_apply to commit the planned change set."
+            value="Mutating tools are dry-run first. Planned changes do not touch workspace files until change_apply succeeds."
+          />
+          <DetailCard
+            label="Project Discovery"
+            value="If a client is unsure which project path to use for action_create, call workspace_list_items with itemType set to project and reuse one of the returned paths."
+          />
+          <DetailCard
+            label="Version Surface"
+            value="workspace_info and the generated workspace context resources expose serverVersion so clients can identify the backend build they are connected to."
           />
           <DetailCard
             label="Refresh Behavior"

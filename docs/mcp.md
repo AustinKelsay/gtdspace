@@ -63,6 +63,8 @@ Read/query tools:
 - `workspace_read_markdown`
 - `habit_get_history`
 
+`workspace_info` now includes `serverVersion` so clients can confirm which GTD Space backend build they are connected to. The generated workspace context resource also includes the same `serverVersion` field.
+
 Mutation planning tools:
 
 - `project_create`, `project_update`, `project_rename`
@@ -93,6 +95,36 @@ Each mutating tool returns a structured `PlannedChange` with:
 - the semantic operation summary
 
 To commit the change, call `change_apply` with the returned `change_set_id`.
+
+Typical action-create flow:
+
+1. Discover a valid project path:
+
+   ```json
+   {"itemType":"project"}
+   ```
+
+   Call `workspace_list_items` with that payload and copy one of the returned project paths such as `Projects/Alpha Project/README.md`.
+
+2. Plan the action:
+
+   ```json
+   {
+     "projectPath": "Projects/Alpha Project/README.md",
+     "name": "Add search function in nav",
+     "status": "waiting"
+   }
+   ```
+
+   Call `action_create` with that payload. This only returns a planned change set. No file is written yet.
+
+3. Apply the plan:
+
+   ```json
+   {"changeSetId":"<returned change_set_id>"}
+   ```
+
+   Call `change_apply` with the returned `change_set_id` to actually write the markdown file.
 
 Before writing, `change_apply` revalidates the target files using the expected file hash captured during planning. If anything changed after the plan step, apply fails and the client must create a fresh plan.
 

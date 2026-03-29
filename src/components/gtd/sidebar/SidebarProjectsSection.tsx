@@ -208,7 +208,7 @@ function ProjectRow({
   const hasActiveDescendant = !isProjectActive && isPathDescendant(display.path, activeFilePath);
   const shouldHighlightProjectRow = isProjectActive || (hasActiveDescendant && !isExpanded);
   const dueDate = display.dueDate ? parseLocalDateString(display.dueDate) : null;
-  const { active: incompleteActions, completed: completedActions } = partitionActionsUtil(
+  const { open: openActions, completed: completedActions } = partitionActionsUtil(
     projectActions,
     {
       metadata: actionMetadata,
@@ -217,7 +217,7 @@ function ProjectRow({
       excludeReadme: true,
     }
   );
-  const displayedActionCount = incompleteActions.length + completedActions.length;
+  const displayedActionCount = openActions.length;
 
   return (
     <div>
@@ -327,13 +327,13 @@ function ProjectRow({
 
       {isExpanded && (
         <div className={`${isCompletedVariant ? 'pl-6 pr-2 py-1 space-y-0.5' : 'pl-8 py-0.5'}`}>
-          {incompleteActions.length === 0 && completedActions.length === 0 ? (
+          {openActions.length === 0 && completedActions.length === 0 ? (
             <div className="text-xs text-muted-foreground py-1 px-1">
               {isCompletedVariant ? 'No actions' : 'No actions yet'}
             </div>
           ) : (
             <>
-              {incompleteActions.map((action) => (
+              {openActions.map((action) => (
                 <ProjectActionRow
                   key={action.path}
                   action={action}

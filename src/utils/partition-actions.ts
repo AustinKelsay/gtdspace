@@ -13,16 +13,26 @@ export function partitionActions(
   items: MarkdownFile[],
   { metadata = {}, statuses = {}, normalize, excludeReadme = true }: PartitionOptions
 ) {
-  const active: MarkdownFile[] = [];
+  const open: MarkdownFile[] = [];
   const completed: MarkdownFile[] = [];
+  const cancelled: MarkdownFile[] = [];
 
   for (const action of items) {
     if (excludeReadme && action.name.toLowerCase().includes('readme')) continue;
     const raw = metadata[action.path]?.status ?? statuses[action.path] ?? 'in-progress';
     const st = normalize(raw);
-    (st === 'completed' ? completed : active).push(action);
+    if (st === 'completed') {
+      completed.push(action);
+      continue;
+    }
+
+    if (st === 'cancelled') {
+      cancelled.push(action);
+      continue;
+    }
+
+    open.push(action);
   }
 
-  return { active, completed };
+  return { open, completed, cancelled };
 }
-

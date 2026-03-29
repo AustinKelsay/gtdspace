@@ -585,11 +585,6 @@ export function useGTDWorkspaceSidebar({
         return;
       }
 
-      setProjectActions((prev) => ({
-        ...prev,
-        [normalizedKey]: files ?? [],
-      }));
-
       const statusResults = await Promise.all(
         (files ?? []).map(async (action) => {
           try {
@@ -615,10 +610,20 @@ export function useGTDWorkspaceSidebar({
         return;
       }
 
-      setActionStatuses((prev) => ({
-        ...prev,
-        ...Object.fromEntries(statusResults.map((result) => [result.path, result.status])),
-      }));
+      const nextStatuses = Object.fromEntries(
+        statusResults.map((result) => [result.path, result.status])
+      );
+
+      flushSync(() => {
+        setActionStatuses((prev) => ({
+          ...prev,
+          ...nextStatuses,
+        }));
+        setProjectActions((prev) => ({
+          ...prev,
+          [normalizedKey]: files ?? [],
+        }));
+      });
 
       setActionMetadata((prev) => {
         const next = { ...prev };

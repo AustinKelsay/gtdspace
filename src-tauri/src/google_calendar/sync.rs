@@ -145,15 +145,7 @@ impl CalendarSyncManager {
         &mut self,
     ) -> Result<Vec<GoogleCalendarEvent>, Box<dyn std::error::Error>> {
         if self.cached_events.is_none() {
-            let cache = tokio::task::spawn_blocking(load_google_calendar_cache)
-                .await
-                .map_err(|error| {
-                    std::io::Error::other(format!(
-                        "Failed to join Google Calendar cache load task: {}",
-                        error
-                    ))
-                })?
-                .map_err(std::io::Error::other)?;
+            let cache = load_cached_events_from_disk().await?;
             self.last_sync_time = cache.as_ref().map(|cache| cache.last_updated);
             self.cached_events = Some(cache.unwrap_or_else(empty_cached_events));
         }
@@ -182,7 +174,7 @@ impl CalendarSyncManager {
 
     #[allow(dead_code)]
     pub async fn load_cache(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let cache = load_google_calendar_cache().map_err(std::io::Error::other)?;
+        let cache = load_cached_events_from_disk().await?;
         self.last_sync_time = cache.as_ref().map(|cache| cache.last_updated);
         self.cached_events = Some(cache.unwrap_or_else(empty_cached_events));
 
@@ -207,4 +199,16 @@ fn empty_cached_events() -> CachedEvents {
         last_updated: DateTime::from_timestamp(0, 0)
             .expect("the Unix epoch should always be representable"),
     }
+}
+
+async fn load_cached_events_from_disk() -> Result<Option<CachedEvents>, std::io::Error> {
+    tokio::task::spawn_blocking(load_google_calendar_cache)
+        .await
+        .map_err(|error| {
+            std::io::Error::other(format!(
+                "Failed to join Google Calendar cache load task: {}",
+                error
+            ))
+        })?
+        .map_err(std::io::Error::other)
 }

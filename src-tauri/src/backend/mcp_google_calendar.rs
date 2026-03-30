@@ -49,14 +49,20 @@ pub struct GoogleCalendarListEventsRequest {
     pub max_results: Option<u32>,
 }
 
-pub fn google_calendar_events_resource() -> Result<GoogleCalendarMcpEnvelope, String> {
-    google_calendar_events_resource_from_cache(load_google_calendar_cache()?)
+pub async fn google_calendar_events_resource() -> Result<GoogleCalendarMcpEnvelope, String> {
+    google_calendar_events_resource_from_cache(load_google_calendar_cache_async().await?)
 }
 
-pub fn google_calendar_list_events(
+pub async fn google_calendar_list_events(
     request: GoogleCalendarListEventsRequest,
 ) -> Result<GoogleCalendarMcpEnvelope, String> {
-    google_calendar_list_events_from_cache(load_google_calendar_cache()?, request)
+    google_calendar_list_events_from_cache(load_google_calendar_cache_async().await?, request)
+}
+
+async fn load_google_calendar_cache_async() -> Result<Option<CachedEvents>, String> {
+    tokio::task::spawn_blocking(load_google_calendar_cache)
+        .await
+        .map_err(|error| format!("Failed to join Google Calendar cache load task: {}", error))?
 }
 
 fn google_calendar_events_resource_from_cache(

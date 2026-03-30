@@ -493,8 +493,7 @@ export function SidebarProjectsSection({
             <div className="text-sm text-muted-foreground py-2">No projects yet</div>
           ) : (
             <>
-              {activeProjects.map((project) => (
-                (() => {
+              {activeProjects.map((project) => {
                   const actionState = getProjectActionState(
                     project,
                     projectMetadata,
@@ -525,8 +524,7 @@ export function SidebarProjectsSection({
                       isPathActive={isPathActive}
                     />
                   );
-                })()
-              ))}
+                })}
 
               {completedProjects.length > 0 && (
                 <Collapsible
@@ -557,8 +555,7 @@ export function SidebarProjectsSection({
                   </div>
                   <CollapsibleContent>
                     <div className="pl-2 pr-1 py-1 space-y-0.5">
-                      {completedProjects.map((project) => (
-                        (() => {
+                      {completedProjects.map((project) => {
                           const actionState = getProjectActionState(
                             project,
                             projectMetadata,
@@ -590,8 +587,7 @@ export function SidebarProjectsSection({
                               isPathActive={isPathActive}
                             />
                           );
-                        })()
-                      ))}
+                        })}
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
@@ -626,8 +622,7 @@ export function SidebarProjectsSection({
                   </div>
                   <CollapsibleContent>
                     <div className="pl-2 pr-1 py-1 space-y-0.5">
-                      {cancelledProjects.map((project) => (
-                        (() => {
+                      {cancelledProjects.map((project) => {
                           const actionState = getProjectActionState(
                             project,
                             projectMetadata,
@@ -659,8 +654,7 @@ export function SidebarProjectsSection({
                               isPathActive={isPathActive}
                             />
                           );
-                        })()
-                      ))}
+                        })}
                     </div>
                   </CollapsibleContent>
                 </Collapsible>

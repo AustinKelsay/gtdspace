@@ -147,6 +147,7 @@ impl GtdMcpServer {
         Parameters(request): Parameters<GoogleCalendarListEventsRequest>,
     ) -> Result<Json<crate::backend::GoogleCalendarMcpEnvelope>, rmcp::ErrorData> {
         crate::backend::mcp_google_calendar::google_calendar_list_events(request)
+            .await
             .map(Json)
             .map_err(internal_error)
     }
@@ -469,6 +470,7 @@ impl ServerHandler for GtdMcpServer {
             vec![ResourceContents::text(context_pack.markdown, uri).with_mime_type("text/markdown")]
         } else if uri == GOOGLE_CALENDAR_EVENTS_RESOURCE_URI {
             let payload = crate::backend::mcp_google_calendar::google_calendar_events_resource()
+                .await
                 .map_err(internal_error)?;
             vec![ResourceContents::text(
                 serde_json::to_string_pretty(&payload).map_err(internal_error)?,

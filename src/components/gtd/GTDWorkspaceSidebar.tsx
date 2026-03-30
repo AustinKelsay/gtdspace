@@ -18,6 +18,7 @@ import { createCalendarFile, buildSectionPathCandidates } from '@/components/gtd
 import { useGTDWorkspaceSidebar } from '@/hooks/useGTDWorkspaceSidebar';
 import type { GTDWorkspaceSidebarProps } from '@/components/gtd/sidebar/types';
 import type { MarkdownFile } from '@/types';
+import { norm } from '@/utils/path';
 
 export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   currentFolder,
@@ -45,7 +46,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const openSidebarActionCount = React.useMemo(
     () =>
       (sidebar.gtdSpace?.projects ?? []).reduce((sum, project) => {
-        const projectKey = project.path.replace(/\\/g, '/');
+        const projectKey = norm(project.path) ?? project.path;
         const projectFiles = sidebar.projectActions[projectKey] || [];
         return (
           sum +
@@ -62,7 +63,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   const isActionCountLoading = React.useMemo(
     () =>
       (sidebar.gtdSpace?.projects ?? []).some((project) => {
-        const projectKey = project.path.replace(/\\/g, '/');
+        const projectKey = norm(project.path) ?? project.path;
         return (
           Boolean(sidebar.projectLoading[projectKey]) ||
           !Object.prototype.hasOwnProperty.call(sidebar.projectActions, projectKey)

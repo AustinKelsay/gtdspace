@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub mod auth;
+pub mod cache;
 pub mod calendar_client;
 pub mod config_manager;
 pub mod custom_flow_delegate;
@@ -14,6 +15,7 @@ pub mod sync;
 pub mod token_manager;
 
 // Re-export the config from config_manager to avoid duplication
+pub use cache::{load_google_calendar_cache, CachedEvents};
 pub use config_manager::GoogleOAuthConfig as GoogleCalendarConfig;
 
 use auth::GoogleAuthManager;
@@ -120,8 +122,8 @@ impl GoogleCalendarManager {
     pub async fn get_cached_events(
         &self,
     ) -> Result<Vec<GoogleCalendarEvent>, Box<dyn std::error::Error>> {
-        let sync = self.sync_manager.lock().await;
-        sync.get_cached_events()
+        let mut sync = self.sync_manager.lock().await;
+        sync.get_cached_events().await
     }
 }
 

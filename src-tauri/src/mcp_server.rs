@@ -19,6 +19,7 @@ use crate::backend::mcp_workspace::{
     ReferenceNoteUpdateRequest, WorkspaceListItemsRequest, WorkspacePathRequest,
     WorkspaceSearchRequest,
 };
+use crate::backend::{GoogleCalendarListEventsRequest, GOOGLE_CALENDAR_EVENTS_RESOURCE_URI};
 
 fn internal_error<E: ToString>(error: E) -> rmcp::ErrorData {
     rmcp::ErrorData::internal_error(error.to_string(), None)
@@ -134,6 +135,19 @@ impl GtdMcpServer {
     ) -> Result<Json<crate::backend::HabitHistoryResult>, rmcp::ErrorData> {
         self.service
             .get_habit_history(&request.path)
+            .map(Json)
+            .map_err(internal_error)
+    }
+
+    #[tool(
+        description = "Return cached Google Calendar events previously synced by the desktop app, with optional filtering by start time, text query, cancellation status, and result limit. Cancelled events are excluded by default unless includeCancelled is true."
+    )]
+    async fn google_calendar_list_events(
+        &self,
+        Parameters(request): Parameters<GoogleCalendarListEventsRequest>,
+    ) -> Result<Json<crate::backend::GoogleCalendarMcpEnvelope>, rmcp::ErrorData> {
+        crate::backend::mcp_google_calendar::google_calendar_list_events(request)
+            .await
             .map(Json)
             .map_err(internal_error)
     }
@@ -390,6 +404,13 @@ impl ServerHandler for GtdMcpServer {
             .with_mime_type("text/markdown")
             .with_description("Generated human-readable workspace context pack.")
             .no_annotation(),
+            rmcp::model::RawResource::new(
+                GOOGLE_CALENDAR_EVENTS_RESOURCE_URI,
+                "Google Calendar Events JSON",
+            )
+            .with_mime_type("application/json")
+            .with_description("Cached Google Calendar events previously synced by the desktop app.")
+            .no_annotation(),
         ];
         resources.extend(context_pack.pack.items.iter().map(|item| {
             rmcp::model::RawResource::new(
@@ -447,6 +468,15 @@ impl ServerHandler for GtdMcpServer {
                 .workspace_context_pack()
                 .map_err(internal_error)?;
             vec![ResourceContents::text(context_pack.markdown, uri).with_mime_type("text/markdown")]
+        } else if uri == GOOGLE_CALENDAR_EVENTS_RESOURCE_URI {
+            let payload = crate::backend::mcp_google_calendar::google_calendar_events_resource()
+                .await
+                .map_err(internal_error)?;
+            vec![ResourceContents::text(
+                serde_json::to_string_pretty(&payload).map_err(internal_error)?,
+                uri,
+            )
+            .with_mime_type("application/json")]
         } else if let Some(encoded) = uri.strip_prefix("gtdspace://item/") {
             let decoded = urlencoding::decode(encoded).map_err(internal_error)?;
             let item = self

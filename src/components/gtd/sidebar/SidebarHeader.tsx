@@ -6,6 +6,7 @@ import { FileSearch } from '@/components/file-browser/FileSearch';
 export type SidebarHeaderProps = {
   projectCount: number;
   actionCount: number;
+  isActionCountLoading: boolean;
   showSearch: boolean;
   searchQuery: string;
   onToggleSearch: () => void;
@@ -17,6 +18,7 @@ export type SidebarHeaderProps = {
 export function SidebarHeader({
   projectCount,
   actionCount,
+  isActionCountLoading,
   showSearch,
   searchQuery,
   onToggleSearch,
@@ -66,7 +68,9 @@ export function SidebarHeader({
           <div className="flex items-center gap-1 min-w-0">
             <FileText className="h-3 w-3 text-muted-foreground flex-shrink-0" />
             <span className="truncate inline-block">
-              {actionCount} {actionCount === 1 ? 'Action' : 'Actions'}
+              {isActionCountLoading
+                ? 'Loading actions'
+                : `${actionCount} ${actionCount === 1 ? 'Action' : 'Actions'}`}
             </span>
           </div>
         </div>

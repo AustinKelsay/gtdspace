@@ -49,6 +49,7 @@ type UseGTDWorkspaceSidebarResult = {
   setCancelledProjectsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   expandedCompletedActions: Set<string>;
   projectActions: Record<string, MarkdownFile[]>;
+  projectLoading: Record<string, boolean>;
   actionStatuses: Record<string, string>;
   searchQuery: string;
   setSearchQuery: React.Dispatch<React.SetStateAction<string>>;
@@ -186,6 +187,7 @@ export function useGTDWorkspaceSidebar({
     new Set()
   );
   const [projectActions, setProjectActions] = React.useState<Record<string, MarkdownFile[]>>({});
+  const [projectLoading, setProjectLoading] = React.useState<Record<string, boolean>>({});
   const [actionStatuses, setActionStatuses] = React.useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = React.useState('');
   const [showSearch, setShowSearch] = React.useState(false);
@@ -219,6 +221,7 @@ export function useGTDWorkspaceSidebar({
 
   const sectionFilesRef = React.useRef<Record<string, MarkdownFile[]>>({});
   const projectActionsRef = React.useRef<Record<string, MarkdownFile[]>>({});
+  const projectLoadingRef = React.useRef<Record<string, boolean>>({});
   const lastRootRef = React.useRef<string | null>(null);
   const preloadedRef = React.useRef(false);
   const loadingSectionsRef = React.useRef<Set<string>>(new Set());
@@ -250,6 +253,10 @@ export function useGTDWorkspaceSidebar({
   React.useEffect(() => {
     projectActionsRef.current = projectActions;
   }, [projectActions]);
+
+  React.useEffect(() => {
+    projectLoadingRef.current = projectLoading;
+  }, [projectLoading]);
 
   const syncHorizonReadme = React.useCallback(async (folderPath: string, files: MarkdownFile[]) => {
     const folderName = getFolderName(folderPath);
@@ -565,6 +572,19 @@ export function useGTDWorkspaceSidebar({
   const loadProjectActions = React.useCallback(async (projectPath: string) => {
     const generationAtStart = workspaceGenerationRef.current;
     const normalizedKey = normalizePath(projectPath) ?? projectPath.replace(/\\/g, '/');
+    if (projectLoadingRef.current[normalizedKey]) {
+      return;
+    }
+
+    projectLoadingRef.current = {
+      ...projectLoadingRef.current,
+      [normalizedKey]: true,
+    };
+    setProjectLoading((prev) => ({
+      ...prev,
+      [normalizedKey]: true,
+    }));
+
     try {
       let files = await withErrorHandling(async () => {
         return safeInvoke<MarkdownFile[]>('list_project_actions', { projectPath: normalizedKey }, null);
@@ -585,10 +605,12 @@ export function useGTDWorkspaceSidebar({
         return;
       }
 
-      setProjectActions((prev) => ({
-        ...prev,
-        [normalizedKey]: files ?? [],
-      }));
+      flushSync(() => {
+        setProjectActions((prev) => ({
+          ...prev,
+          [normalizedKey]: files ?? [],
+        }));
+      });
 
       const statusResults = await Promise.all(
         (files ?? []).map(async (action) => {
@@ -615,10 +637,24 @@ export function useGTDWorkspaceSidebar({
         return;
       }
 
-      setActionStatuses((prev) => ({
-        ...prev,
-        ...Object.fromEntries(statusResults.map((result) => [result.path, result.status])),
-      }));
+      const nextStatuses = Object.fromEntries(
+        statusResults.map((result) => [result.path, result.status])
+      );
+
+      flushSync(() => {
+        setActionStatuses((prev) => ({
+          ...prev,
+          ...nextStatuses,
+        }));
+        setProjectLoading((prev) => {
+          const next = { ...prev };
+          delete next[normalizedKey];
+          return next;
+        });
+      });
+      projectLoadingRef.current = Object.fromEntries(
+        Object.entries(projectLoadingRef.current).filter(([path]) => path !== normalizedKey)
+      );
 
       setActionMetadata((prev) => {
         const next = { ...prev };
@@ -637,6 +673,20 @@ export function useGTDWorkspaceSidebar({
       });
     } catch {
       // Keep existing project action state when a refresh fails.
+    } finally {
+      if (workspaceGenerationRef.current === generationAtStart) {
+        projectLoadingRef.current = Object.fromEntries(
+          Object.entries(projectLoadingRef.current).filter(([path]) => path !== normalizedKey)
+        );
+        setProjectLoading((prev) => {
+          if (!(normalizedKey in prev)) {
+            return prev;
+          }
+          const next = { ...prev };
+          delete next[normalizedKey];
+          return next;
+        });
+      }
     }
   }, [withErrorHandling]);
 
@@ -671,6 +721,8 @@ export function useGTDWorkspaceSidebar({
         sectionFilesRef.current = {};
         setProjectActions({});
         projectActionsRef.current = {};
+        setProjectLoading({});
+        projectLoadingRef.current = {};
         setProjectMetadata({});
         setActionMetadata({});
         setActionStatuses({});
@@ -1095,12 +1147,12 @@ export function useGTDWorkspaceSidebar({
 
     const missingProjects = gtdSpace.projects.filter((project) => {
       const normalizedKey = normalizePath(project.path) ?? project.path.replace(/\\/g, '/');
-      return !projectActions[normalizedKey];
+      return !projectActions[normalizedKey] && !projectLoading[normalizedKey];
     });
     if (missingProjects.length === 0) return;
 
     void Promise.all(missingProjects.map((project) => loadProjectActions(project.path)));
-  }, [gtdSpace?.projects, loadProjectActions, projectActions]);
+  }, [gtdSpace?.projects, loadProjectActions, projectActions, projectLoading]);
 
   const toggleSection = React.useCallback((sectionId: string) => {
     setExpandedSections((prev) =>
@@ -1125,7 +1177,10 @@ export function useGTDWorkspaceSidebar({
     async (project: GTDProject) => {
       setSelectedProject(project);
       const normalizedProjectPath = normalizePath(project.path) ?? project.path.replace(/\\/g, '/');
-      if (!projectActionsRef.current[normalizedProjectPath]) {
+      if (
+        !projectActionsRef.current[normalizedProjectPath] &&
+        !projectLoadingRef.current[normalizedProjectPath]
+      ) {
         await loadProjectActions(project.path);
       }
 
@@ -1144,7 +1199,10 @@ export function useGTDWorkspaceSidebar({
       }
 
       setExpandedProjects((prev) => [...prev, normalizedProjectPath]);
-      if (!projectActionsRef.current[normalizedProjectPath]) {
+      if (
+        !projectActionsRef.current[normalizedProjectPath] &&
+        !projectLoadingRef.current[normalizedProjectPath]
+      ) {
         await loadProjectActions(project.path);
       }
     },
@@ -1277,6 +1335,17 @@ export function useGTDWorkspaceSidebar({
           delete next[normalizedDeletePath];
           return next;
         });
+        setProjectLoading((prev) => {
+          if (!(normalizedDeletePath in prev)) {
+            return prev;
+          }
+          const next = { ...prev };
+          delete next[normalizedDeletePath];
+          return next;
+        });
+        projectLoadingRef.current = Object.fromEntries(
+          Object.entries(projectLoadingRef.current).filter(([path]) => path !== normalizedDeletePath)
+        );
         removeProjectOverlay(normalizedDeletePath);
         window.dispatchEvent(
           new CustomEvent('file-deleted', {
@@ -1495,6 +1564,7 @@ export function useGTDWorkspaceSidebar({
     setCancelledProjectsExpanded,
     expandedCompletedActions,
     projectActions,
+    projectLoading,
     actionStatuses,
     searchQuery,
     setSearchQuery,

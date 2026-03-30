@@ -3752,7 +3752,7 @@ mod tests {
     fn context_pack_markdown_contains_workspace_and_items() {
         let pack = ContextPack {
             version: 1,
-            server_version: "2.3.6".to_string(),
+            server_version: gtdspace_server_version().to_string(),
             generated_at: "2026-01-01T00:00:00Z".to_string(),
             workspace_root: "/tmp/workspace".to_string(),
             fingerprint: WorkspaceFingerprint {

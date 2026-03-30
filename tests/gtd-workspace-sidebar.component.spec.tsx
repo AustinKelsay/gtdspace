@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { GTDWorkspaceSidebar } from '@/components/gtd/GTDWorkspaceSidebar';
 import { emitMetadataChange } from '@/utils/content-event-bus';
 import type { GTDProject, GTDSpace, MarkdownFile } from '@/types';
@@ -46,7 +46,7 @@ const activeProject: GTDProject = {
   path: `${rootPath}/Projects/Project Alpha`,
   dueDate: '2026-03-30',
   createdDateTime: '2026-03-01T10:00:00Z',
-  action_count: 2,
+  action_count: 4,
 };
 
 const completedProject: GTDProject = {
@@ -74,7 +74,7 @@ const gtdSpace: GTDSpace = {
   is_initialized: true,
   isGTDSpace: true,
   projects: [activeProject, completedProject, cancelledProject],
-  total_actions: 2,
+  total_actions: 4,
 };
 
 const projectActions: MarkdownFile[] = [
@@ -90,6 +90,22 @@ const projectActions: MarkdownFile[] = [
     id: `${activeProject.path}/Clean desk.md`,
     name: 'Clean desk.md',
     path: `${activeProject.path}/Clean desk.md`,
+    size: 100,
+    last_modified: 1,
+    extension: 'md',
+  },
+  {
+    id: `${activeProject.path}/Waiting on legal.md`,
+    name: 'Waiting on legal.md',
+    path: `${activeProject.path}/Waiting on legal.md`,
+    size: 100,
+    last_modified: 1,
+    extension: 'md',
+  },
+  {
+    id: `${activeProject.path}/Old draft.md`,
+    name: 'Old draft.md',
+    path: `${activeProject.path}/Old draft.md`,
     size: 100,
     last_modified: 1,
     extension: 'md',
@@ -140,7 +156,13 @@ describe('GTDWorkspaceSidebar component', () => {
         return '# Write spec\n\n[!singleselect:status:in-progress]\n[!datetime:due_date:2026-03-29]';
       }
       if (path.endsWith('Clean desk.md')) {
-        return '# Clean desk\n\n[!singleselect:status:completed]';
+        return '# Clean desk\n\n[!singleselect:status:done]';
+      }
+      if (path.endsWith('Waiting on legal.md')) {
+        return '# Waiting on legal\n\n[!singleselect:status:waiting_for]';
+      }
+      if (path.endsWith('Old draft.md')) {
+        return '# Old draft\n\n[!singleselect:status:canceled]';
       }
       return '# File';
     });
@@ -231,6 +253,10 @@ describe('GTDWorkspaceSidebar component', () => {
 
     expect(await screen.findByText('Project Alpha')).toBeInTheDocument();
     expect(await screen.findByText('Morning Run')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('2 Actions')).toBeInTheDocument();
+      expect(screen.getByText('2 actions')).toBeInTheDocument();
+    });
     expect(screen.getByText('Completed Projects')).toBeInTheDocument();
     expect(screen.getByText('Cancelled Projects')).toBeInTheDocument();
     expect(screen.queryByText('Project Cancelled')).not.toBeInTheDocument();
@@ -238,7 +264,16 @@ describe('GTDWorkspaceSidebar component', () => {
     fireEvent.click(screen.getByLabelText('Expand Project Alpha'));
 
     expect(await screen.findByText('Write spec')).toBeInTheDocument();
-    expect(screen.getByText('Completed Actions')).toBeInTheDocument();
+    expect(screen.getByText('Waiting on legal')).toBeInTheDocument();
+    expect(screen.queryByText('Old draft')).not.toBeInTheDocument();
+
+    const completedActionsGroup = screen.getByText('Completed Actions').closest('[data-sidebar-group="completed-actions"]');
+    expect(completedActionsGroup).toBeTruthy();
+    expect(within(completedActionsGroup as HTMLElement).getByText('1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Completed Actions'));
+    expect(await screen.findByText('Clean desk')).toBeInTheDocument();
+    expect(screen.queryByText('Old draft')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Completed Projects'));
     expect(await screen.findByText('Project Done')).toBeInTheDocument();

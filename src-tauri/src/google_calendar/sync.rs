@@ -4,19 +4,16 @@ use chrono::{DateTime, Utc};
 use google_calendar3::{hyper, hyper_rustls, CalendarHub};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
-use super::GoogleCalendarEvent;
+use super::{
+    cache::{load_google_calendar_cache, save_google_calendar_cache, CachedEvents},
+    GoogleCalendarEvent,
+};
 
 // Default time window used when no explicit bounds are provided
 const DEFAULT_SYNC_DAYS_PAST: i64 = 30;
 const DEFAULT_SYNC_DAYS_FUTURE: i64 = 90;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachedEvents {
-    pub events: Vec<GoogleCalendarEvent>,
-    pub last_updated: DateTime<Utc>,
-}
 
 pub struct CalendarSyncManager {
     app_handle: AppHandle,
@@ -92,15 +89,17 @@ impl CalendarSyncManager {
                 }
             }
 
-            // Update cache
-            self.cached_events = Some(CachedEvents {
+            // Update cache before persisting so the in-memory snapshot matches disk.
+            let cache = CachedEvents {
                 events: all_events.clone(),
                 last_updated: Utc::now(),
-            });
-            self.last_sync_time = Some(Utc::now());
+            };
 
             // Save cache to disk for persistence
-            self.save_cache().await?;
+            self.save_cache(&cache).await?;
+
+            self.last_sync_time = Some(cache.last_updated);
+            self.cached_events = Some(cache.clone());
 
             // Emit event to frontend
             self.app_handle
@@ -142,9 +141,15 @@ impl CalendarSyncManager {
         Ok(calendars)
     }
 
-    pub fn get_cached_events(
-        &self,
+    pub async fn get_cached_events(
+        &mut self,
     ) -> Result<Vec<GoogleCalendarEvent>, Box<dyn std::error::Error>> {
+        if self.cached_events.is_none() {
+            let cache = load_cached_events_from_disk().await?;
+            self.last_sync_time = cache.as_ref().map(|cache| cache.last_updated);
+            self.cached_events = Some(cache.unwrap_or_else(empty_cached_events));
+        }
+
         Ok(self
             .cached_events
             .as_ref()
@@ -160,40 +165,18 @@ impl CalendarSyncManager {
         self.is_syncing.load(Ordering::SeqCst)
     }
 
-    async fn save_cache(&self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(cache) = &self.cached_events {
-            let app_dir = self
-                .app_handle
-                .path()
-                .app_data_dir()
-                .map_err(|e| format!("Failed to get app data directory: {}", e))?;
-
-            // Ensure directory exists
-            tokio::fs::create_dir_all(&app_dir).await?;
-
-            let path = app_dir.join("google_calendar_cache.json");
-            let json = serde_json::to_string_pretty(&cache)?;
-            tokio::fs::write(&path, json).await?;
-        }
+    async fn save_cache(&self, cache: &CachedEvents) -> Result<(), Box<dyn std::error::Error>> {
+        save_google_calendar_cache(cache)
+            .await
+            .map_err(std::io::Error::other)?;
         Ok(())
     }
 
     #[allow(dead_code)]
     pub async fn load_cache(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let app_dir = self
-            .app_handle
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("Failed to get app data directory: {}", e))?;
-
-        let path = app_dir.join("google_calendar_cache.json");
-
-        if path.exists() {
-            let content = tokio::fs::read_to_string(&path).await?;
-            let cache: CachedEvents = serde_json::from_str(&content)?;
-            self.cached_events = Some(cache.clone());
-            self.last_sync_time = Some(cache.last_updated);
-        }
+        let cache = load_cached_events_from_disk().await?;
+        self.last_sync_time = cache.as_ref().map(|cache| cache.last_updated);
+        self.cached_events = Some(cache.unwrap_or_else(empty_cached_events));
 
         Ok(())
     }
@@ -206,4 +189,26 @@ pub struct CalendarInfo {
     pub description: Option<String>,
     pub color_id: Option<String>,
     pub selected: bool,
+}
+
+fn empty_cached_events() -> CachedEvents {
+    CachedEvents {
+        events: Vec::new(),
+        // A disk miss is memoized as an empty in-memory cache to avoid repeated reads.
+        // `last_sync_time` remains `None`, so this sentinel timestamp is never surfaced.
+        last_updated: DateTime::from_timestamp(0, 0)
+            .expect("the Unix epoch should always be representable"),
+    }
+}
+
+async fn load_cached_events_from_disk() -> Result<Option<CachedEvents>, std::io::Error> {
+    tokio::task::spawn_blocking(load_google_calendar_cache)
+        .await
+        .map_err(|error| {
+            std::io::Error::other(format!(
+                "Failed to join Google Calendar cache load task: {}",
+                error
+            ))
+        })?
+        .map_err(std::io::Error::other)
 }

@@ -3,6 +3,8 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Calendar } from 'lucide-react';
 import { GTD_SECTIONS, SIDEBAR_ACTIVE_ROW_CLASSES } from '@/components/gtd/sidebar/constants';
+import { normalizeStatus } from '@/utils/gtd-status';
+import { partitionActions } from '@/utils/partition-actions';
 import {
   SidebarDialogs,
   SidebarHeader,
@@ -16,6 +18,7 @@ import { createCalendarFile, buildSectionPathCandidates } from '@/components/gtd
 import { useGTDWorkspaceSidebar } from '@/hooks/useGTDWorkspaceSidebar';
 import type { GTDWorkspaceSidebarProps } from '@/components/gtd/sidebar/types';
 import type { MarkdownFile } from '@/types';
+import { norm } from '@/utils/path';
 
 export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   currentFolder,
@@ -40,6 +43,34 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
   });
 
   const spacePath = sidebar.rootPath ?? '';
+  const openSidebarActionCount = React.useMemo(
+    () =>
+      (sidebar.gtdSpace?.projects ?? []).reduce((sum, project) => {
+        const projectKey = norm(project.path) ?? project.path;
+        const projectFiles = sidebar.projectActions[projectKey] || [];
+        return (
+          sum +
+          partitionActions(projectFiles, {
+            metadata: sidebar.actionMetadata,
+            statuses: sidebar.actionStatuses,
+            normalize: normalizeStatus,
+            excludeReadme: true,
+          }).open.length
+        );
+      }, 0),
+    [sidebar.actionMetadata, sidebar.actionStatuses, sidebar.gtdSpace?.projects, sidebar.projectActions]
+  );
+  const isActionCountLoading = React.useMemo(
+    () =>
+      (sidebar.gtdSpace?.projects ?? []).some((project) => {
+        const projectKey = norm(project.path) ?? project.path;
+        return (
+          Boolean(sidebar.projectLoading[projectKey]) ||
+          !Object.prototype.hasOwnProperty.call(sidebar.projectActions, projectKey)
+        );
+      }),
+    [sidebar.gtdSpace?.projects, sidebar.projectActions, sidebar.projectLoading]
+  );
 
   if (!currentFolder) {
     return (
@@ -63,10 +94,8 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
     <Card className={`flex flex-col h-full border-r ${className}`}>
       <SidebarHeader
         projectCount={sidebar.gtdSpace.projects?.length || 0}
-        actionCount={
-          sidebar.gtdSpace.projects?.reduce((sum, project) => sum + (project.action_count || 0), 0) ||
-          0
-        }
+        actionCount={openSidebarActionCount}
+        isActionCountLoading={isActionCountLoading}
         showSearch={sidebar.showSearch}
         searchQuery={sidebar.searchQuery}
         onToggleSearch={() => sidebar.setShowSearch((prev) => !prev)}
@@ -126,6 +155,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                       completedProjects={sidebar.completedProjects}
                       cancelledProjects={sidebar.cancelledProjects}
                       projectActions={sidebar.projectActions}
+                      projectLoading={sidebar.projectLoading}
                       projectMetadata={sidebar.projectMetadata}
                       actionMetadata={sidebar.actionMetadata}
                       actionStatuses={sidebar.actionStatuses}

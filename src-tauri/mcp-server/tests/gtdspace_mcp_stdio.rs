@@ -4,9 +4,10 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use gtdspace_lib::backend::{
-    ChangeApplyResult, ChangeSetSummary, ContextPack, GtdItemSummary, HabitHistoryResult,
-    PlannedChange, WorkspaceInfo, WorkspaceRefreshResult, WorkspaceSearchResult,
-    gtdspace_server_version, normalize_workspace_path,
+    ChangeApplyResult, ChangeSetSummary, ContextPack, GoogleCalendarMcpEnvelope,
+    GtdItemSummary, HabitHistoryResult, PlannedChange, WorkspaceInfo, WorkspaceRefreshResult,
+    WorkspaceSearchResult, GOOGLE_CALENDAR_EVENTS_RESOURCE_URI, gtdspace_server_version,
+    normalize_workspace_path,
 };
 use gtdspace_lib::test_utils::{seed_test_workspace, write_test_file};
 use rmcp::{
@@ -27,12 +28,32 @@ fn mcp_settings_dir(root: &Path) -> PathBuf {
     }
 }
 
+fn mcp_app_data_dir(root: &Path) -> PathBuf {
+    if cfg!(target_os = "macos") {
+        root.join("Library/Application Support/com.gtdspace.app")
+    } else if cfg!(target_os = "windows") {
+        root.join("AppData/Roaming/com.gtdspace.app")
+    } else {
+        root.join(".local/share/com.gtdspace.app")
+    }
+}
+
 fn write_saved_mcp_settings(home_root: &Path, settings: Value) -> Result<(), Box<dyn Error>> {
     let settings_dir = mcp_settings_dir(home_root);
     fs::create_dir_all(&settings_dir)?;
     fs::write(
         settings_dir.join("settings.json"),
         serde_json::to_vec_pretty(&json!({ "user_settings": settings }))?,
+    )?;
+    Ok(())
+}
+
+fn write_google_calendar_cache(home_root: &Path, cache: Value) -> Result<(), Box<dyn Error>> {
+    let app_data_dir = mcp_app_data_dir(home_root);
+    fs::create_dir_all(&app_data_dir)?;
+    fs::write(
+        app_data_dir.join("google_calendar_cache.json"),
+        serde_json::to_vec_pretty(&cache)?,
     )?;
     Ok(())
 }
@@ -49,6 +70,30 @@ async fn start_client(
         }),
     )?;
 
+    Ok(().serve(transport).await?)
+}
+
+async fn start_client_with_app_data_root(
+    workspace: &Path,
+    home_root: &Path,
+) -> Result<rmcp::service::RunningService<rmcp::RoleClient, ()>, Box<dyn Error>> {
+    let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_gtdspace-mcp"));
+    command
+        .arg("--workspace")
+        .arg(workspace)
+        .arg("--log-level")
+        .arg("warn")
+        .env("HOME", home_root);
+
+    if cfg!(target_os = "windows") {
+        command.env("APPDATA", home_root.join("AppData/Roaming"));
+    } else if cfg!(target_os = "linux") {
+        command
+            .env("XDG_DATA_HOME", home_root.join(".local/share"))
+            .env("XDG_CONFIG_HOME", home_root.join(".config"));
+    }
+
+    let transport = TokioChildProcess::new(command.configure(|_cmd| {}))?;
     Ok(().serve(transport).await?)
 }
 
@@ -155,11 +200,17 @@ async fn mcp_server_exposes_resources_and_applies_project_change() -> Result<(),
     assert!(resources
         .iter()
         .any(|resource| resource.uri == "gtdspace://spec/gtd-spec"));
+    assert!(resources
+        .iter()
+        .any(|resource| resource.uri == GOOGLE_CALENDAR_EVENTS_RESOURCE_URI));
 
     let tools = client.list_all_tools().await?;
     assert!(tools.iter().any(|tool| tool.name == "workspace_info"));
     assert!(tools.iter().any(|tool| tool.name == "project_create"));
     assert!(tools.iter().any(|tool| tool.name == "change_apply"));
+    assert!(tools
+        .iter()
+        .any(|tool| tool.name == "google_calendar_list_events"));
 
     let context_json = client
         .read_resource(ReadResourceRequestParams::new(
@@ -284,6 +335,193 @@ async fn mcp_server_exposes_resources_and_applies_project_change() -> Result<(),
     assert_eq!(regenerated_info.context_pack_cache.source, "generated");
     regenerated_client.cancel().await?;
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn mcp_server_returns_empty_google_calendar_resource_without_cache() -> Result<(), Box<dyn Error>> {
+    let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
+    let fake_home = tempfile::tempdir()?;
+
+    let client = start_client_with_app_data_root(workspace.path(), fake_home.path()).await?;
+
+    let calendar_json = client
+        .read_resource(ReadResourceRequestParams::new(
+            GOOGLE_CALENDAR_EVENTS_RESOURCE_URI,
+        ))
+        .await?;
+    let envelope: GoogleCalendarMcpEnvelope =
+        serde_json::from_str(&read_first_text_resource(calendar_json)?)?;
+
+    assert_eq!(envelope.source, "cache");
+    assert!(!envelope.cache_available);
+    assert_eq!(envelope.cache_event_count, 0);
+    assert_eq!(envelope.returned_count, 0);
+    assert!(envelope.events.is_empty());
+
+    client.cancel().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn mcp_server_reads_and_filters_google_calendar_cache() -> Result<(), Box<dyn Error>> {
+    let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
+    let fake_home = tempfile::tempdir()?;
+
+    write_google_calendar_cache(
+        fake_home.path(),
+        json!({
+            "events": [
+                {
+                    "id": "evt-1",
+                    "summary": "Team sync",
+                    "description": "Alice reviews priorities",
+                    "start": "2026-03-29T09:00:00-05:00",
+                    "end": "2026-03-29T09:30:00-05:00",
+                    "location": "HQ",
+                    "attendees": ["alice@example.com"],
+                    "meeting_link": "https://meet.example.com/sync",
+                    "status": "confirmed",
+                    "color_id": "1"
+                },
+                {
+                    "id": "evt-2",
+                    "summary": "Company offsite",
+                    "description": "All hands",
+                    "start": "2026-03-30",
+                    "end": "2026-03-31",
+                    "location": "Austin",
+                    "attendees": ["team@example.com"],
+                    "meeting_link": null,
+                    "status": "confirmed",
+                    "color_id": "2"
+                },
+                {
+                    "id": "evt-3",
+                    "summary": "Retro",
+                    "description": "Cancelled meeting",
+                    "start": "2026-03-31T16:00:00-05:00",
+                    "end": "2026-03-31T17:00:00-05:00",
+                    "location": "Remote",
+                    "attendees": ["bob@example.com"],
+                    "meeting_link": "https://meet.example.com/retro",
+                    "status": "cancelled",
+                    "color_id": "3"
+                }
+            ],
+            "last_updated": "2026-03-29T18:00:00Z"
+        }),
+    )?;
+
+    let client = start_client_with_app_data_root(workspace.path(), fake_home.path()).await?;
+
+    let calendar_json = client
+        .read_resource(ReadResourceRequestParams::new(
+            GOOGLE_CALENDAR_EVENTS_RESOURCE_URI,
+        ))
+        .await?;
+    let envelope: GoogleCalendarMcpEnvelope =
+        serde_json::from_str(&read_first_text_resource(calendar_json)?)?;
+    assert!(envelope.cache_available);
+    assert_eq!(envelope.cache_event_count, 3);
+    assert_eq!(envelope.returned_count, 3);
+    assert_eq!(envelope.events[0].meeting_link.as_deref(), Some("https://meet.example.com/sync"));
+
+    let filtered: GoogleCalendarMcpEnvelope = call_tool_typed(
+        &client,
+        "google_calendar_list_events",
+        Some(
+            json!({
+                "query": "alice",
+                "includeCancelled": false,
+                "maxResults": 5
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+    assert_eq!(filtered.matched_count, 1);
+    assert_eq!(filtered.events[0].id, "evt-1");
+
+    let excluded_cancelled: GoogleCalendarMcpEnvelope = call_tool_typed(
+        &client,
+        "google_calendar_list_events",
+        Some(
+            json!({
+                "query": "retro",
+                "includeCancelled": false,
+                "maxResults": 5
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+    assert_eq!(excluded_cancelled.matched_count, 0);
+    assert!(excluded_cancelled.events.is_empty());
+
+    let included_cancelled: GoogleCalendarMcpEnvelope = call_tool_typed(
+        &client,
+        "google_calendar_list_events",
+        Some(
+            json!({
+                "query": "retro",
+                "includeCancelled": true,
+                "maxResults": 5
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+    assert_eq!(included_cancelled.matched_count, 1);
+    assert_eq!(included_cancelled.events[0].id, "evt-3");
+
+    let day_filtered: GoogleCalendarMcpEnvelope = call_tool_typed(
+        &client,
+        "google_calendar_list_events",
+        Some(
+            json!({
+                "timeMin": "2026-03-30",
+                "timeMax": "2026-03-30"
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+    assert_eq!(day_filtered.matched_count, 1);
+    assert_eq!(day_filtered.events[0].id, "evt-2");
+
+    client.cancel().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn mcp_server_errors_for_malformed_google_calendar_cache() -> Result<(), Box<dyn Error>> {
+    let workspace = seed_test_workspace().map_err(|error| -> Box<dyn Error> { error.into() })?;
+    let fake_home = tempfile::tempdir()?;
+    let app_data_dir = mcp_app_data_dir(fake_home.path());
+    fs::create_dir_all(&app_data_dir)?;
+    fs::write(app_data_dir.join("google_calendar_cache.json"), "{bad json")?;
+
+    let client = start_client_with_app_data_root(workspace.path(), fake_home.path()).await?;
+
+    let error = client
+        .read_resource(ReadResourceRequestParams::new(
+            GOOGLE_CALENDAR_EVENTS_RESOURCE_URI,
+        ))
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("Failed to parse Google Calendar cache"));
+
+    client.cancel().await?;
     Ok(())
 }
 

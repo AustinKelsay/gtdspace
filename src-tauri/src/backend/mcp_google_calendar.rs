@@ -219,6 +219,7 @@ fn event_matches_time_bounds(
             return Ok(false);
         }
     };
+    let has_explicit_end = event.end.is_some();
     let end = match event.end.as_deref() {
         Some(end) => match parse_event_end(end) {
             Ok(end) => end,
@@ -236,7 +237,7 @@ fn event_matches_time_bounds(
     };
 
     if let Some(min) = time_min {
-        if end < *min {
+        if (has_explicit_end && end <= *min) || (!has_explicit_end && end < *min) {
             return Ok(false);
         }
     }
@@ -258,7 +259,12 @@ fn parse_event_start(value: &str) -> Result<DateTime<FixedOffset>, String> {
 }
 
 fn parse_event_end(value: &str) -> Result<DateTime<FixedOffset>, String> {
-    parse_filter_value(value, BoundKind::Max).map_err(|error| {
+    let bound_kind = if value.contains('T') || value.contains('t') {
+        BoundKind::Max
+    } else {
+        BoundKind::Min
+    };
+    parse_filter_value(value, bound_kind).map_err(|error| {
         format!(
             "Failed to parse cached Google Calendar event end '{}': {}",
             value, error
@@ -418,6 +424,17 @@ mod tests {
 
         assert_eq!(response.matched_count, 1);
         assert_eq!(response.events[0].id, "evt-2");
+    }
+
+    #[test]
+    fn google_calendar_list_events_excludes_all_day_event_on_exclusive_end_date() {
+        let response = list(GoogleCalendarListEventsRequest {
+            time_min: Some("2026-03-31".to_string()),
+            time_max: Some("2026-03-31".to_string()),
+            ..GoogleCalendarListEventsRequest::default()
+        });
+
+        assert_eq!(response.matched_count, 0);
     }
 
     #[test]

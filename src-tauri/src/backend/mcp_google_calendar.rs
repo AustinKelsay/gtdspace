@@ -93,7 +93,7 @@ fn google_calendar_list_events_from_cache(
         return Ok(empty_envelope());
     };
 
-    let include_cancelled = request.include_cancelled.unwrap_or(true);
+    let include_cancelled = request.include_cancelled.unwrap_or(false);
     let query = normalize_optional_string(request.query);
     let time_min = normalize_optional_string(request.time_min)
         .as_deref()
@@ -263,7 +263,7 @@ fn local_day_boundary(
             .and_hms_opt(0, 0, 0)
             .ok_or_else(|| format!("Invalid local start-of-day for {}", date))?,
         BoundKind::Max => date
-            .and_hms_opt(23, 59, 59)
+            .and_hms_nano_opt(23, 59, 59, 999_999_999)
             .ok_or_else(|| format!("Invalid local end-of-day for {}", date))?,
     };
     let mapped = Local.from_local_datetime(&naive);
@@ -390,6 +390,14 @@ mod tests {
     }
 
     #[test]
+    fn google_calendar_list_events_excludes_cancelled_by_default() {
+        let response = list(GoogleCalendarListEventsRequest::default());
+
+        assert_eq!(response.matched_count, 2);
+        assert!(response.events.iter().all(|event| event.id != "evt-3"));
+    }
+
+    #[test]
     fn google_calendar_list_events_excludes_cancelled_when_requested() {
         let response = list(GoogleCalendarListEventsRequest {
             include_cancelled: Some(false),
@@ -403,6 +411,7 @@ mod tests {
     #[test]
     fn google_calendar_list_events_reports_truncation() {
         let response = list(GoogleCalendarListEventsRequest {
+            include_cancelled: Some(true),
             max_results: Some(1),
             ..GoogleCalendarListEventsRequest::default()
         });
@@ -421,6 +430,7 @@ mod tests {
         let response = google_calendar_list_events_from_cache(
             Some(cache),
             GoogleCalendarListEventsRequest {
+                include_cancelled: Some(true),
                 time_min: Some("2026-03-29".to_string()),
                 time_max: Some("2026-03-31".to_string()),
                 ..GoogleCalendarListEventsRequest::default()

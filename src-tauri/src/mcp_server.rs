@@ -140,7 +140,7 @@ impl GtdMcpServer {
     }
 
     #[tool(
-        description = "Return cached Google Calendar events previously synced by the desktop app, with optional filtering by start time, text query, cancellation status, and result limit."
+        description = "Return cached Google Calendar events previously synced by the desktop app, with optional filtering by start time, text query, cancellation status, and result limit. Cancelled events are excluded by default unless includeCancelled is true."
     )]
     async fn google_calendar_list_events(
         &self,

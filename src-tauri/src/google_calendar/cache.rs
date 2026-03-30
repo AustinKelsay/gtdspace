@@ -196,6 +196,9 @@ fn resolve_app_data_dir_for_os(
         }
     }
 
+    // The empty qualifier and organization are deliberate here. We want
+    // ProjectDirs to derive the platform-default data_dir for APP_IDENTIFIER
+    // when explicit environment overrides are unavailable.
     ProjectDirs::from("", "", APP_IDENTIFIER)
         .map(|dirs| dirs.data_dir().to_path_buf())
         .ok_or_else(|| "Failed to resolve Google Calendar app data directory".to_string())

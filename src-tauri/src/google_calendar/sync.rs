@@ -144,7 +144,16 @@ impl CalendarSyncManager {
         &mut self,
     ) -> Result<Vec<GoogleCalendarEvent>, Box<dyn std::error::Error>> {
         if self.cached_events.is_none() {
-            if let Some(cache) = load_google_calendar_cache().map_err(std::io::Error::other)? {
+            let cache = tokio::task::spawn_blocking(load_google_calendar_cache)
+                .await
+                .map_err(|error| {
+                    std::io::Error::other(format!(
+                        "Failed to join Google Calendar cache load task: {}",
+                        error
+                    ))
+                })?
+                .map_err(std::io::Error::other)?;
+            if let Some(cache) = cache {
                 self.last_sync_time = Some(cache.last_updated);
                 self.cached_events = Some(cache);
             }

@@ -74,7 +74,7 @@ Google Calendar cache semantics:
 - If no cache file exists, the resource and tool return a successful empty payload with `cacheAvailable: false`.
 - If the cache file is malformed or partially written, the resource/tool call fails with a parse error instead of silently dropping events.
 - The resource returns the full cached event list.
-- The tool supports optional filtering by `timeMin`, `timeMax`, `query`, `includeCancelled`, and `maxResults`.
+- The tool supports optional filtering by `timeMin`, `timeMax`, `query`, `includeCancelled`, and `maxResults`. Cancelled events are excluded by default unless `includeCancelled` is set to `true`.
 - Google Calendar events are intentionally excluded from `workspace/context.json`, `workspace/context.md`, workspace fingerprinting, and `workspace_refresh` invalidation rules.
 
 Mutation planning tools:

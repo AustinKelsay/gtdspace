@@ -1,4 +1,5 @@
 import type { MarkdownFile } from '@/types';
+import { norm } from '@/utils/path';
 
 type StatusNormalizer = (status: string) => string;
 
@@ -19,7 +20,8 @@ export function partitionActions(
 
   for (const action of items) {
     if (excludeReadme && action.name.toLowerCase().includes('readme')) continue;
-    const raw = metadata[action.path]?.status ?? statuses[action.path] ?? 'in-progress';
+    const key = norm(action.path) ?? action.path;
+    const raw = metadata[key]?.status ?? statuses[key] ?? 'in-progress';
     const st = normalize(raw);
     if (st === 'completed') {
       completed.push(action);

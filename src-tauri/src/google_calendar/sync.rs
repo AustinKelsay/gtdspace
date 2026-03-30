@@ -94,11 +94,12 @@ impl CalendarSyncManager {
                 events: all_events.clone(),
                 last_updated: Utc::now(),
             };
-            self.last_sync_time = Some(cache.last_updated);
-            self.cached_events = Some(cache.clone());
 
             // Save cache to disk for persistence
             self.save_cache(&cache).await?;
+
+            self.last_sync_time = Some(cache.last_updated);
+            self.cached_events = Some(cache.clone());
 
             // Emit event to frontend
             self.app_handle
@@ -153,10 +154,8 @@ impl CalendarSyncManager {
                     ))
                 })?
                 .map_err(std::io::Error::other)?;
-            if let Some(cache) = cache {
-                self.last_sync_time = Some(cache.last_updated);
-                self.cached_events = Some(cache);
-            }
+            self.last_sync_time = cache.as_ref().map(|cache| cache.last_updated);
+            self.cached_events = Some(cache.unwrap_or_else(empty_cached_events));
         }
 
         Ok(self
@@ -183,10 +182,9 @@ impl CalendarSyncManager {
 
     #[allow(dead_code)]
     pub async fn load_cache(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(cache) = load_google_calendar_cache().map_err(std::io::Error::other)? {
-            self.cached_events = Some(cache.clone());
-            self.last_sync_time = Some(cache.last_updated);
-        }
+        let cache = load_google_calendar_cache().map_err(std::io::Error::other)?;
+        self.last_sync_time = cache.as_ref().map(|cache| cache.last_updated);
+        self.cached_events = Some(cache.unwrap_or_else(empty_cached_events));
 
         Ok(())
     }
@@ -199,4 +197,14 @@ pub struct CalendarInfo {
     pub description: Option<String>,
     pub color_id: Option<String>,
     pub selected: bool,
+}
+
+fn empty_cached_events() -> CachedEvents {
+    CachedEvents {
+        events: Vec::new(),
+        // A disk miss is memoized as an empty in-memory cache to avoid repeated reads.
+        // `last_sync_time` remains `None`, so this sentinel timestamp is never surfaced.
+        last_updated: DateTime::from_timestamp(0, 0)
+            .expect("the Unix epoch should always be representable"),
+    }
 }

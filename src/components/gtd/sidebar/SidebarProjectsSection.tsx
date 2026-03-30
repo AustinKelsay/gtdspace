@@ -49,6 +49,7 @@ type SidebarProjectsSectionProps = {
   completedProjects: GTDProject[];
   cancelledProjects: GTDProject[];
   projectActions: Record<string, MarkdownFile[]>;
+  projectLoading: Record<string, boolean>;
   projectMetadata: Record<string, SidebarProjectMetadata>;
   actionMetadata: Record<string, SidebarActionMetadata>;
   actionStatuses: Record<string, string>;
@@ -78,6 +79,7 @@ type ProjectRowProps = {
   projectMetadata: Record<string, SidebarProjectMetadata>;
   actionMetadata: Record<string, SidebarActionMetadata>;
   actionStatuses: Record<string, string>;
+  isLoadingActions: boolean;
   expandedProjects: string[];
   expandedCompletedActions: Set<string>;
   activeFilePath?: string | null;
@@ -165,6 +167,7 @@ function ProjectRow({
   projectMetadata,
   actionMetadata,
   actionStatuses,
+  isLoadingActions,
   expandedProjects,
   expandedCompletedActions,
   activeFilePath,
@@ -258,7 +261,9 @@ function ProjectRow({
           <div className="flex-1 min-w-0 ml-1">
             <div className="font-medium text-sm break-words whitespace-normal">{display.title}</div>
             <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <span className="truncate inline-block">{displayedActionCount} actions</span>
+              <span className="truncate inline-block">
+                {isLoadingActions ? 'Loading actions...' : `${displayedActionCount} actions`}
+              </span>
               {dueDate && (
                 <span className="flex items-center flex-shrink-0">
                   <Calendar className="h-2.5 w-2.5 mr-0.5" />
@@ -327,7 +332,9 @@ function ProjectRow({
 
       {isExpanded && (
         <div className={`${isCompletedVariant ? 'pl-6 pr-2 py-1 space-y-0.5' : 'pl-8 py-0.5'}`}>
-          {openActions.length === 0 && completedActions.length === 0 ? (
+          {isLoadingActions ? (
+            <div className="text-xs text-muted-foreground py-1 px-1">Loading actions...</div>
+          ) : openActions.length === 0 && completedActions.length === 0 ? (
             <div className="text-xs text-muted-foreground py-1 px-1">
               {isCompletedVariant ? 'No actions' : 'No actions yet'}
             </div>
@@ -391,6 +398,25 @@ function ProjectRow({
   );
 }
 
+function getProjectActionState(
+  project: GTDProject,
+  projectMetadata: Record<string, SidebarProjectMetadata>,
+  projectActions: Record<string, MarkdownFile[]>,
+  projectLoading: Record<string, boolean>,
+) {
+  const displayKey = norm(getProjectDisplay(project, projectMetadata).path) ?? project.path;
+  const projectKey = norm(project.path) ?? project.path;
+  const hasDisplayActions = Object.prototype.hasOwnProperty.call(projectActions, displayKey);
+  const hasProjectActions = Object.prototype.hasOwnProperty.call(projectActions, projectKey);
+
+  return {
+    actions: projectActions[displayKey] || projectActions[projectKey] || [],
+    isLoading:
+      Boolean(projectLoading[displayKey] || projectLoading[projectKey]) ||
+      (!hasDisplayActions && !hasProjectActions),
+  };
+}
+
 export function SidebarProjectsSection({
   isExpanded,
   isLoading,
@@ -399,6 +425,7 @@ export function SidebarProjectsSection({
   completedProjects,
   cancelledProjects,
   projectActions,
+  projectLoading,
   projectMetadata,
   actionMetadata,
   actionStatuses,
@@ -467,30 +494,38 @@ export function SidebarProjectsSection({
           ) : (
             <>
               {activeProjects.map((project) => (
-                <ProjectRow
-                  key={getProjectDisplay(project, projectMetadata).path}
-                  project={project}
-                  projectActions={(() => {
-                    const displayKey = norm(getProjectDisplay(project, projectMetadata).path) ?? project.path;
-                    const projectKey = norm(project.path) ?? project.path;
-                    return projectActions[displayKey] || projectActions[projectKey] || [];
-                  })()}
-                  projectMetadata={projectMetadata}
-                  actionMetadata={actionMetadata}
-                  actionStatuses={actionStatuses}
-                  expandedProjects={expandedProjects}
-                  expandedCompletedActions={expandedCompletedActions}
-                  activeFilePath={activeFilePath}
-                  onOpenProject={onOpenProject}
-                  onToggleProjectExpand={onToggleProjectExpand}
-                  onAddAction={onAddAction}
-                  onToggleCompletedActions={onToggleCompletedActions}
-                  onOpenAction={onOpenAction}
-                  onOpenProjectFolder={onOpenProjectFolder}
-                  onOpenFileLocation={onOpenFileLocation}
-                  onQueueDelete={onQueueDelete}
-                  isPathActive={isPathActive}
-                />
+                (() => {
+                  const actionState = getProjectActionState(
+                    project,
+                    projectMetadata,
+                    projectActions,
+                    projectLoading,
+                  );
+
+                  return (
+                    <ProjectRow
+                      key={getProjectDisplay(project, projectMetadata).path}
+                      project={project}
+                      projectActions={actionState.actions}
+                      projectMetadata={projectMetadata}
+                      actionMetadata={actionMetadata}
+                      actionStatuses={actionStatuses}
+                      isLoadingActions={actionState.isLoading}
+                      expandedProjects={expandedProjects}
+                      expandedCompletedActions={expandedCompletedActions}
+                      activeFilePath={activeFilePath}
+                      onOpenProject={onOpenProject}
+                      onToggleProjectExpand={onToggleProjectExpand}
+                      onAddAction={onAddAction}
+                      onToggleCompletedActions={onToggleCompletedActions}
+                      onOpenAction={onOpenAction}
+                      onOpenProjectFolder={onOpenProjectFolder}
+                      onOpenFileLocation={onOpenFileLocation}
+                      onQueueDelete={onQueueDelete}
+                      isPathActive={isPathActive}
+                    />
+                  );
+                })()
               ))}
 
               {completedProjects.length > 0 && (
@@ -523,31 +558,39 @@ export function SidebarProjectsSection({
                   <CollapsibleContent>
                     <div className="pl-2 pr-1 py-1 space-y-0.5">
                       {completedProjects.map((project) => (
-                        <ProjectRow
-                          key={`completed-${getProjectDisplay(project, projectMetadata).path}`}
-                          project={project}
-                          projectActions={(() => {
-                            const displayKey = norm(getProjectDisplay(project, projectMetadata).path) ?? project.path;
-                            const projectKey = norm(project.path) ?? project.path;
-                            return projectActions[displayKey] || projectActions[projectKey] || [];
-                          })()}
-                          projectMetadata={projectMetadata}
-                          actionMetadata={actionMetadata}
-                          actionStatuses={actionStatuses}
-                          expandedProjects={expandedProjects}
-                          expandedCompletedActions={expandedCompletedActions}
-                          activeFilePath={activeFilePath}
-                          isCompletedVariant
-                          onOpenProject={onOpenProject}
-                          onToggleProjectExpand={onToggleProjectExpand}
-                          onAddAction={onAddAction}
-                          onToggleCompletedActions={onToggleCompletedActions}
-                          onOpenAction={onOpenAction}
-                          onOpenProjectFolder={onOpenProjectFolder}
-                          onOpenFileLocation={onOpenFileLocation}
-                          onQueueDelete={onQueueDelete}
-                          isPathActive={isPathActive}
-                        />
+                        (() => {
+                          const actionState = getProjectActionState(
+                            project,
+                            projectMetadata,
+                            projectActions,
+                            projectLoading,
+                          );
+
+                          return (
+                            <ProjectRow
+                              key={`completed-${getProjectDisplay(project, projectMetadata).path}`}
+                              project={project}
+                              projectActions={actionState.actions}
+                              projectMetadata={projectMetadata}
+                              actionMetadata={actionMetadata}
+                              actionStatuses={actionStatuses}
+                              isLoadingActions={actionState.isLoading}
+                              expandedProjects={expandedProjects}
+                              expandedCompletedActions={expandedCompletedActions}
+                              activeFilePath={activeFilePath}
+                              isCompletedVariant
+                              onOpenProject={onOpenProject}
+                              onToggleProjectExpand={onToggleProjectExpand}
+                              onAddAction={onAddAction}
+                              onToggleCompletedActions={onToggleCompletedActions}
+                              onOpenAction={onOpenAction}
+                              onOpenProjectFolder={onOpenProjectFolder}
+                              onOpenFileLocation={onOpenFileLocation}
+                              onQueueDelete={onQueueDelete}
+                              isPathActive={isPathActive}
+                            />
+                          );
+                        })()
                       ))}
                     </div>
                   </CollapsibleContent>
@@ -584,31 +627,39 @@ export function SidebarProjectsSection({
                   <CollapsibleContent>
                     <div className="pl-2 pr-1 py-1 space-y-0.5">
                       {cancelledProjects.map((project) => (
-                        <ProjectRow
-                          key={`cancelled-${getProjectDisplay(project, projectMetadata).path}`}
-                          project={project}
-                          projectActions={(() => {
-                            const displayKey = norm(getProjectDisplay(project, projectMetadata).path) ?? project.path;
-                            const projectKey = norm(project.path) ?? project.path;
-                            return projectActions[displayKey] || projectActions[projectKey] || [];
-                          })()}
-                          projectMetadata={projectMetadata}
-                          actionMetadata={actionMetadata}
-                          actionStatuses={actionStatuses}
-                          expandedProjects={expandedProjects}
-                          expandedCompletedActions={expandedCompletedActions}
-                          activeFilePath={activeFilePath}
-                          isCompletedVariant
-                          onOpenProject={onOpenProject}
-                          onToggleProjectExpand={onToggleProjectExpand}
-                          onAddAction={onAddAction}
-                          onToggleCompletedActions={onToggleCompletedActions}
-                          onOpenAction={onOpenAction}
-                          onOpenProjectFolder={onOpenProjectFolder}
-                          onOpenFileLocation={onOpenFileLocation}
-                          onQueueDelete={onQueueDelete}
-                          isPathActive={isPathActive}
-                        />
+                        (() => {
+                          const actionState = getProjectActionState(
+                            project,
+                            projectMetadata,
+                            projectActions,
+                            projectLoading,
+                          );
+
+                          return (
+                            <ProjectRow
+                              key={`cancelled-${getProjectDisplay(project, projectMetadata).path}`}
+                              project={project}
+                              projectActions={actionState.actions}
+                              projectMetadata={projectMetadata}
+                              actionMetadata={actionMetadata}
+                              actionStatuses={actionStatuses}
+                              isLoadingActions={actionState.isLoading}
+                              expandedProjects={expandedProjects}
+                              expandedCompletedActions={expandedCompletedActions}
+                              activeFilePath={activeFilePath}
+                              isCompletedVariant
+                              onOpenProject={onOpenProject}
+                              onToggleProjectExpand={onToggleProjectExpand}
+                              onAddAction={onAddAction}
+                              onToggleCompletedActions={onToggleCompletedActions}
+                              onOpenAction={onOpenAction}
+                              onOpenProjectFolder={onOpenProjectFolder}
+                              onOpenFileLocation={onOpenFileLocation}
+                              onQueueDelete={onQueueDelete}
+                              isPathActive={isPathActive}
+                            />
+                          );
+                        })()
                       ))}
                     </div>
                   </CollapsibleContent>

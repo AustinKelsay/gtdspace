@@ -59,6 +59,17 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       }, 0),
     [sidebar.actionMetadata, sidebar.actionStatuses, sidebar.gtdSpace?.projects, sidebar.projectActions]
   );
+  const isActionCountLoading = React.useMemo(
+    () =>
+      (sidebar.gtdSpace?.projects ?? []).some((project) => {
+        const projectKey = project.path.replace(/\\/g, '/');
+        return (
+          Boolean(sidebar.projectLoading[projectKey]) ||
+          !Object.prototype.hasOwnProperty.call(sidebar.projectActions, projectKey)
+        );
+      }),
+    [sidebar.gtdSpace?.projects, sidebar.projectActions, sidebar.projectLoading]
+  );
 
   if (!currentFolder) {
     return (
@@ -83,6 +94,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
       <SidebarHeader
         projectCount={sidebar.gtdSpace.projects?.length || 0}
         actionCount={openSidebarActionCount}
+        isActionCountLoading={isActionCountLoading}
         showSearch={sidebar.showSearch}
         searchQuery={sidebar.searchQuery}
         onToggleSearch={() => sidebar.setShowSearch((prev) => !prev)}
@@ -142,6 +154,7 @@ export const GTDWorkspaceSidebar: React.FC<GTDWorkspaceSidebarProps> = ({
                       completedProjects={sidebar.completedProjects}
                       cancelledProjects={sidebar.cancelledProjects}
                       projectActions={sidebar.projectActions}
+                      projectLoading={sidebar.projectLoading}
                       projectMetadata={sidebar.projectMetadata}
                       actionMetadata={sidebar.actionMetadata}
                       actionStatuses={sidebar.actionStatuses}

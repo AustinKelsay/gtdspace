@@ -213,8 +213,24 @@ fn event_matches_time_bounds(
             return Ok(false);
         }
     };
+    let end = match event.end.as_deref() {
+        Some(end) => match parse_event_end(end) {
+            Ok(end) => end,
+            Err(error) => {
+                log::warn!(
+                    "Skipping cached Google Calendar event '{}' with unparseable end '{}': {}",
+                    event.id,
+                    end,
+                    error
+                );
+                return Ok(false);
+            }
+        },
+        None => start,
+    };
+
     if let Some(min) = time_min {
-        if start < *min {
+        if end < *min {
             return Ok(false);
         }
     }
@@ -230,6 +246,15 @@ fn parse_event_start(value: &str) -> Result<DateTime<FixedOffset>, String> {
     parse_filter_value(value, BoundKind::Min).map_err(|error| {
         format!(
             "Failed to parse cached Google Calendar event start '{}': {}",
+            value, error
+        )
+    })
+}
+
+fn parse_event_end(value: &str) -> Result<DateTime<FixedOffset>, String> {
+    parse_filter_value(value, BoundKind::Max).map_err(|error| {
+        format!(
+            "Failed to parse cached Google Calendar event end '{}': {}",
             value, error
         )
     })
@@ -387,6 +412,38 @@ mod tests {
 
         assert_eq!(response.matched_count, 1);
         assert_eq!(response.events[0].id, "evt-2");
+    }
+
+    #[test]
+    fn google_calendar_list_events_includes_events_that_overlap_the_requested_window() {
+        let mut cache = sample_cache();
+        cache.events.push(GoogleCalendarEvent {
+            id: "evt-4".to_string(),
+            summary: "Multi-day workshop".to_string(),
+            description: Some("Spans the entire query window".to_string()),
+            start: Some("2026-03-28T23:00:00-05:00".to_string()),
+            end: Some("2026-03-30T01:00:00-05:00".to_string()),
+            location: Some("Chicago".to_string()),
+            attendees: vec!["team@example.com".to_string()],
+            meeting_link: None,
+            status: "confirmed".to_string(),
+            color_id: Some("4".to_string()),
+        });
+
+        let response = google_calendar_list_events_from_cache(
+            Some(cache),
+            GoogleCalendarListEventsRequest {
+                time_min: Some("2026-03-29".to_string()),
+                time_max: Some("2026-03-29".to_string()),
+                include_cancelled: Some(true),
+                ..GoogleCalendarListEventsRequest::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(response.matched_count, 2);
+        assert!(response.events.iter().any(|event| event.id == "evt-1"));
+        assert!(response.events.iter().any(|event| event.id == "evt-4"));
     }
 
     #[test]

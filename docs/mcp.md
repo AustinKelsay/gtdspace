@@ -42,6 +42,7 @@ The server exposes these MCP resources:
 - `gtdspace://spec/architecture`
 - `gtdspace://workspace/context.json`
 - `gtdspace://workspace/context.md`
+- `gtdspace://integrations/google-calendar/events.json`
 - `gtdspace://item/<workspace-relative-path>`
 
 The item resource uses a URL-encoded workspace-relative path, for example:
@@ -62,8 +63,19 @@ Read/query tools:
 - `workspace_get_relationships`
 - `workspace_read_markdown`
 - `habit_get_history`
+- `google_calendar_list_events`
 
 `workspace_info` now includes `serverVersion` so clients can confirm which GTD Space backend build they are connected to. The generated workspace context resource also includes the same `serverVersion` field.
+
+Google Calendar access is cache-only in MCP v1. The desktop app remains responsible for OAuth and sync. The MCP server reads the persisted `google_calendar_cache.json` file from the app-data directory on demand and never calls the Google API directly.
+
+Google Calendar cache semantics:
+
+- If no cache file exists, the resource and tool return a successful empty payload with `cacheAvailable: false`.
+- If the cache file is malformed or partially written, the resource/tool call fails with a parse error instead of silently dropping events.
+- The resource returns the full cached event list.
+- The tool supports optional filtering by `timeMin`, `timeMax`, `query`, `includeCancelled`, and `maxResults`.
+- Google Calendar events are intentionally excluded from `workspace/context.json`, `workspace/context.md`, workspace fingerprinting, and `workspace_refresh` invalidation rules.
 
 Mutation planning tools:
 

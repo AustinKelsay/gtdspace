@@ -1,10 +1,15 @@
 //! Tauri commands that wrap the Google Calendar integration module.
 
-use crate::google_calendar::{GoogleCalendarEvent, GoogleCalendarManager, SyncStatus};
+use crate::google_calendar::{
+    load_google_calendar_cache, GoogleCalendarEvent, GoogleCalendarManager, SyncStatus,
+};
 use lazy_static::lazy_static;
 use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::sync::Mutex as TokioMutex;
+
+#[cfg(test)]
+use std::path::Path;
 
 lazy_static! {
     static ref GOOGLE_CALENDAR_MANAGER: TokioMutex<Option<Arc<GoogleCalendarManager>>> =
@@ -46,6 +51,11 @@ async fn clear_google_calendar_manager() {
     *manager_guard = None;
 }
 
+async fn get_google_calendar_manager_if_initialized() -> Option<Arc<GoogleCalendarManager>> {
+    let manager_guard = GOOGLE_CALENDAR_MANAGER.lock().await;
+    manager_guard.as_ref().cloned()
+}
+
 async fn clear_google_calendar_session_locked(app: AppHandle) -> Result<(), String> {
     use crate::google_calendar::token_manager::TokenManager;
 
@@ -67,6 +77,23 @@ async fn clear_google_calendar_session_locked(app: AppHandle) -> Result<(), Stri
 async fn clear_google_calendar_session(app: AppHandle) -> Result<(), String> {
     let _lifecycle_guard = GOOGLE_CALENDAR_LIFECYCLE_LOCK.lock().await;
     clear_google_calendar_session_locked(app).await
+}
+
+fn read_cached_google_calendar_events_from_disk() -> Result<Vec<GoogleCalendarEvent>, String> {
+    Ok(load_google_calendar_cache()?
+        .map(|cache| cache.events)
+        .unwrap_or_default())
+}
+
+#[cfg(test)]
+fn read_cached_google_calendar_events_from_path(
+    path: &Path,
+) -> Result<Vec<GoogleCalendarEvent>, String> {
+    Ok(
+        crate::google_calendar::cache::load_google_calendar_cache_from_path(path)?
+            .map(|cache| cache.events)
+            .unwrap_or_default(),
+    )
 }
 
 /// Helper function to load Google OAuth credentials from secure storage or environment variables.
@@ -359,16 +386,16 @@ pub async fn google_calendar_get_status(app: AppHandle) -> Result<SyncStatus, St
 
 #[tauri::command]
 pub async fn google_calendar_get_cached_events(
-    app: AppHandle,
+    _app: AppHandle,
 ) -> Result<Vec<GoogleCalendarEvent>, String> {
-    let manager = get_or_init_google_calendar_manager(app).await?;
+    if let Some(manager) = get_google_calendar_manager_if_initialized().await {
+        return manager
+            .get_cached_events()
+            .await
+            .map_err(|e| format!("Failed to get cached Google Calendar events: {}", e));
+    }
 
-    let events = manager
-        .get_cached_events()
-        .await
-        .map_err(|e| format!("Failed to get cached Google Calendar events: {}", e))?;
-
-    Ok(events)
+    read_cached_google_calendar_events_from_disk()
 }
 
 // ===== GOOGLE CALENDAR OAUTH CONFIGURATION =====
@@ -502,4 +529,39 @@ pub async fn google_oauth_has_config(app: AppHandle) -> Result<bool, String> {
         .map_err(|e| format!("Failed to create config manager: {}", e))?;
 
     Ok(config_manager.has_config())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_cached_google_calendar_events_from_path;
+    use crate::google_calendar::cache::CachedEvents;
+    use crate::google_calendar::GoogleCalendarEvent;
+    use chrono::Utc;
+    use std::fs;
+
+    #[test]
+    fn read_cached_google_calendar_events_from_path_supports_cold_start_cache_reads() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cache_path = temp_dir.path().join("google_calendar_cache.json");
+        let cache = CachedEvents {
+            events: vec![GoogleCalendarEvent {
+                id: "evt-1".to_string(),
+                summary: "Planning".to_string(),
+                description: Some("Cold start cache test".to_string()),
+                start: Some("2026-03-29T09:00:00-05:00".to_string()),
+                end: Some("2026-03-29T10:00:00-05:00".to_string()),
+                location: Some("Desk".to_string()),
+                attendees: vec!["planner@example.com".to_string()],
+                meeting_link: Some("https://meet.example.com/planning".to_string()),
+                status: "confirmed".to_string(),
+                color_id: Some("2".to_string()),
+            }],
+            last_updated: Utc::now(),
+        };
+        fs::write(&cache_path, serde_json::to_vec_pretty(&cache).unwrap()).unwrap();
+
+        let events = read_cached_google_calendar_events_from_path(&cache_path).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].summary, "Planning");
+    }
 }

@@ -8,7 +8,7 @@ The Rust command layer is now split by domain under `src-tauri/src/commands/`, w
 
 The newest GTD refactor also introduced explicit domain helpers behind the command facade. For habits, `gtd_habits.rs` now delegates parsing, history migration, and reset-window math to `gtd_habits_domain.rs` instead of keeping those rules inline inside command handlers.
 
-The MCP work adds a second backend surface that reuses the same GTD business rules without going through Tauri invoke handlers. `src-tauri/src/backend/mcp_workspace.rs` owns the shared workspace indexing, context-pack generation, and dry-run/apply flow, while `src-tauri/src/mcp_server.rs` exposes that layer as a standalone stdio MCP server for local-model clients.
+The MCP work adds a second backend surface that reuses the same GTD business rules without going through Tauri invoke handlers. `src-tauri/src/backend/mcp_workspace.rs` owns the shared workspace indexing, context-pack generation, and dry-run/apply flow, `src-tauri/src/backend/mcp_google_calendar.rs` owns cache-backed Google Calendar MCP reads, and `src-tauri/src/mcp_server.rs` exposes those layers as a standalone stdio MCP server for local-model clients.
 
 The desktop Settings UI now also has a dedicated MCP Server page. That page is intentionally light on knobs: it documents the exposed resources/tools, surfaces the few persisted launch defaults (`mcp_server_workspace_path`, `mcp_server_read_only`, `mcp_server_log_level`), and lets the standalone `gtdspace-mcp` process inherit those defaults whenever callers omit the equivalent CLI flags.
 
@@ -39,7 +39,9 @@ The current command surface falls into these groups:
 - `gtd_habits.rs`: habit creation, updates, and reset logic
 - `gtd_habits_domain.rs`: shared habit-domain parsing, history insertion, and calendar reset calculations
 - `gtd_relationships.rs`: reverse-link and habit-reference lookup
+- `google_calendar/cache.rs`: shared app-data cache path resolution plus durable cache read/write helpers
 - `backend/mcp_workspace.rs`: shared GTD workspace service used by both Tauri-adjacent code and the standalone MCP server
+- `backend/mcp_google_calendar.rs`: cache-backed Google Calendar MCP resource and query filtering
 - `mcp_server.rs`: MCP stdio server exposing GTD resources and tools
 - `git_commands.rs`: Tauri command wrappers for git sync
 - `git_sync.rs`: core encrypted git sync implementation
@@ -136,8 +138,10 @@ The most important current caveat is that the backend watcher emits `changed`, w
 - GTD content is stored as markdown files on disk
 - Standard settings are persisted through the Tauri store
 - Sensitive values such as git sync secrets and Google OAuth config use secure storage-oriented commands
+- Synced Google Calendar events are persisted to `google_calendar_cache.json` in the app-data directory and are read by both the desktop command surface and the standalone MCP server
 - Tauri capability and CSP settings live in `src-tauri/tauri.conf.json` and `src-tauri/capabilities/`
 - `save_file` now writes through a same-directory temporary file and rename so successful saves replace content atomically
+- Google Calendar cache writes also use a same-directory temporary file and rename so MCP readers do not observe partially written JSON during desktop sync
 - `delete_folder` is idempotent and treats already-missing folders as a successful deletion
 - `create_gtd_habit` creates the markdown file with `create_new` semantics so duplicate habit names are rejected atomically
 - Legacy habit-history list migration preserves unmatched lines verbatim instead of silently dropping hand-written notes

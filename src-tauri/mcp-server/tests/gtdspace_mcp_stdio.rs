@@ -22,7 +22,7 @@ fn mcp_settings_dir(root: &Path) -> PathBuf {
     if cfg!(target_os = "macos") {
         root.join("Library/Application Support/com.gtdspace.app")
     } else if cfg!(target_os = "windows") {
-        root.join("AppData/Roaming/com.gtdspace.app/config")
+        root.join("AppData/Roaming/com.gtdspace.app")
     } else {
         root.join(".config/com.gtdspace.app")
     }
@@ -86,7 +86,9 @@ async fn start_client_with_app_data_root(
         .env("HOME", home_root);
 
     if cfg!(target_os = "windows") {
-        command.env("APPDATA", home_root.join("AppData/Roaming"));
+        command
+            .env("APPDATA", home_root.join("AppData/Roaming"))
+            .env("USERPROFILE", home_root);
     } else if cfg!(target_os = "linux") {
         command
             .env("XDG_DATA_HOME", home_root.join(".local/share"))
@@ -104,7 +106,9 @@ async fn start_client_from_saved_defaults(
     command.env("HOME", home_root);
 
     if cfg!(target_os = "windows") {
-        command.env("APPDATA", home_root.join("AppData/Roaming"));
+        command
+            .env("APPDATA", home_root.join("AppData/Roaming"))
+            .env("USERPROFILE", home_root);
     } else if cfg!(target_os = "linux") {
         command.env("XDG_CONFIG_HOME", home_root.join(".config"));
     }

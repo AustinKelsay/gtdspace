@@ -28,6 +28,7 @@ import { useSettings } from '@/hooks/useSettings';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { McpServerLogLevel } from '@/types';
+import { getMcpWorkspaceAncestors } from '@/utils/mcp-settings';
 import { checkTauriContextAsync } from '@/utils/tauri-ready';
 
 const MCP_RESOURCES = [
@@ -103,53 +104,6 @@ const shellQuote = (value: string) => {
   return `"${value.replace(/["\\$`]/g, '\\$&')}"`;
 };
 
-const normalizeWorkspacePath = (value: string): string => {
-  const trimmed = value.trim();
-  if (trimmed === '/' || /^[A-Za-z]:[\\/]?$/.test(trimmed)) {
-    return trimmed.length === 2 ? `${trimmed}\\` : trimmed;
-  }
-  return trimmed.replace(/[\\/]+$/, '');
-};
-
-const getParentWorkspacePath = (value: string): string | null => {
-  const normalized = normalizeWorkspacePath(value);
-  if (!normalized || normalized === '/' || /^[A-Za-z]:[\\/]$/.test(normalized)) {
-    return null;
-  }
-
-  const lastSeparator = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
-  if (lastSeparator < 0) {
-    return null;
-  }
-  if (lastSeparator === 0) {
-    return normalized[0];
-  }
-
-  const parent = normalized.slice(0, lastSeparator);
-  if (/^[A-Za-z]:$/.test(parent)) {
-    const separator = normalized.includes('\\') ? '\\' : '/';
-    return `${parent}${separator}`;
-  }
-
-  return parent;
-};
-
-const getWorkspaceAncestors = (value: string): string[] => {
-  const ancestors: string[] = [];
-  let current = normalizeWorkspacePath(value);
-
-  while (current) {
-    ancestors.push(current);
-    const parent = getParentWorkspacePath(current);
-    if (!parent || parent === current) {
-      break;
-    }
-    current = parent;
-  }
-
-  return ancestors;
-};
-
 const getWorkspaceResolutionLabel = (source: 'override' | 'resolved' | 'last-folder' | 'default-space' | 'platform-default' | 'unavailable') => {
   switch (source) {
     case 'override':
@@ -177,7 +131,7 @@ const isValidWorkspaceCandidate = async (
   path: string,
   invokeWithHandling: InvokeWithHandling
 ) => {
-  for (const candidate of getWorkspaceAncestors(path)) {
+  for (const candidate of getMcpWorkspaceAncestors(path)) {
     const isValid = await invokeWithHandling<boolean>(
       'check_is_gtd_space',
       { path: candidate },

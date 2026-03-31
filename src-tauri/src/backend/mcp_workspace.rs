@@ -1,10 +1,9 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::env;
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, Timelike, Utc};
+use chrono::{Local, NaiveDate, NaiveDateTime, Timelike, Utc};
 use directories::ProjectDirs;
 use rmcp::schemars;
 use rmcp::schemars::transform::RecursiveTransform;
@@ -15,16 +14,29 @@ use sha2::{Digest, Sha256};
 use strsim::jaro_winkler;
 use uuid::Uuid;
 
-use crate::commands::filesystem::{
-    create_directory, list_markdown_files, read_file, save_file, MarkdownFile,
+use crate::backend::mcp_workspace_config::resolve_workspace;
+use crate::backend::mcp_workspace_context::{
+    build_context_pack, build_context_pack_markdown, read_cached_context_pack,
+    to_public_cache_paths, write_cached_context_pack, CachePaths, CachedContextPack,
 };
+#[cfg(test)]
+use crate::backend::mcp_workspace_index::parse_reference_list;
+use crate::backend::mcp_workspace_index::{
+    build_fingerprint, build_item_summaries, extract_multiselect, extract_reference_list,
+    extract_section_body, item_type_key, normalize_absolute_to_relative, normalize_path_components,
+    normalize_reference_list, normalize_relative_input, normalize_similarity_key,
+    parse_reference_note, path_is_within_workspace, project_similarity_keys, sanitize_title,
+};
+#[cfg(test)]
+use crate::commands::filesystem::MarkdownFile;
+use crate::commands::filesystem::{create_directory, list_markdown_files, read_file, save_file};
 use crate::commands::gtd_habits::update_habit_status;
 use crate::commands::gtd_habits_domain::{
     apply_status_marker, format_history_entry, format_history_time, insert_history_entry,
     parse_habit_state, parse_history_rows_strict, parse_history_timestamp, HabitStatus,
     DEFAULT_HISTORY_TEMPLATE,
 };
-use crate::commands::gtd_projects::{list_gtd_projects, rename_gtd_action, rename_gtd_project};
+use crate::commands::gtd_projects::{rename_gtd_action, rename_gtd_project};
 use crate::commands::gtd_relationships::{find_habits_referencing, find_reverse_relationships};
 use crate::commands::search::{search_files, SearchFilters};
 use crate::commands::seed_data::{
@@ -33,19 +45,16 @@ use crate::commands::seed_data::{
     ProjectReadmeParams,
 };
 use crate::commands::utils::sanitize_markdown_file_stem;
-use crate::commands::workspace::{check_is_gtd_space, get_default_gtd_space_path};
 
-const CONTEXT_PACK_VERSION: u32 = 1;
-const SETTINGS_FILE_NAME: &str = "settings.json";
 const CONTEXT_CACHE_DIR: &str = "mcp-context";
 const MAX_CONTEXT_PACK_RETRIES: usize = 5;
 const MAX_CHANGE_SET_TOMBSTONES: usize = 256;
-const DEFAULT_MCP_SERVER_LOG_LEVEL: &str = "info";
-const VALID_MCP_SERVER_LOG_LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
 
 pub(crate) const GTD_SPEC_DOC: &str = include_str!("../../../spec/gtd-spec.md");
 pub(crate) const MARKDOWN_SCHEMA_DOC: &str = include_str!("../../../spec/02-markdown-schema.md");
 pub(crate) const ARCHITECTURE_DOC: &str = include_str!("../../../docs/architecture.md");
+
+pub use crate::backend::mcp_workspace_index::normalize_workspace_path;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
@@ -131,13 +140,6 @@ pub struct WorkspaceInfo {
     pub item_counts: BTreeMap<String, usize>,
     pub fingerprint: WorkspaceFingerprint,
     pub context_pack_cache: ContextPackCache,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct McpServerLaunchSettings {
-    pub read_only: bool,
-    pub log_level: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -525,31 +527,6 @@ struct WorkspaceSnapshot {
     items: Vec<GtdItemSummary>,
     item_lookup: HashMap<String, GtdItemSummary>,
     item_counts: BTreeMap<String, usize>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ContextPackManifest {
-    workspace_path_hash: String,
-    generated_at: String,
-    generator_version: u32,
-    fingerprint: WorkspaceFingerprint,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct CachedContextPack {
-    pub pack: ContextPack,
-    pub markdown: String,
-    cache_paths: CachePaths,
-    source: String,
-}
-
-#[derive(Debug, Clone)]
-struct CachePaths {
-    root: PathBuf,
-    manifest: PathBuf,
-    json: PathBuf,
-    markdown: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -1675,7 +1652,12 @@ impl GtdWorkspaceService {
                 }
             }
 
-            let pack = build_context_pack(snapshot.clone(), self.workspace_root());
+            let pack = build_context_pack(
+                snapshot.fingerprint.clone(),
+                snapshot.item_counts.clone(),
+                snapshot.items.clone(),
+                self.workspace_root(),
+            );
             let markdown = build_context_pack_markdown(&pack);
             write_cached_context_pack(&cache_paths, &pack, &markdown)?;
             let cached = CachedContextPack {
@@ -2080,11 +2062,13 @@ impl GtdWorkspaceService {
 
 impl CachedContextPack {
     fn to_public(&self, valid: bool) -> ContextPackCache {
+        let (cache_dir, manifest_path, json_path, markdown_path) =
+            to_public_cache_paths(&self.cache_paths);
         ContextPackCache {
-            cache_dir: normalize_path(&self.cache_paths.root),
-            manifest_path: normalize_path(&self.cache_paths.manifest),
-            json_path: normalize_path(&self.cache_paths.json),
-            markdown_path: normalize_path(&self.cache_paths.markdown),
+            cache_dir,
+            manifest_path,
+            json_path,
+            markdown_path,
             source: self.source.clone(),
             valid,
         }
@@ -2362,123 +2346,9 @@ fn remove_unsupported_integer_formats(schema: &mut schemars::Schema) {
     }
 }
 
-fn resolve_workspace(cli_workspace: Option<String>) -> Result<PathBuf, String> {
-    if let Some(path) = cli_workspace {
-        return validate_workspace_candidate(Path::new(&path));
-    }
-
-    if let Some(settings) = load_saved_user_settings() {
-        if let Some(candidate) = settings.mcp_server_workspace_path {
-            return validate_workspace_candidate(Path::new(&candidate));
-        }
-
-        for candidate in [settings.last_folder, settings.default_space_path]
-            .into_iter()
-            .flatten()
-        {
-            if let Ok(path) = validate_workspace_candidate(Path::new(&candidate)) {
-                return Ok(path);
-            }
-        }
-    }
-
-    let default_path = get_default_gtd_space_path()?;
-    validate_workspace_candidate(Path::new(&default_path))
-}
-
-fn validate_workspace_candidate(candidate: &Path) -> Result<PathBuf, String> {
-    for ancestor in candidate.ancestors() {
-        let path = normalize_path(ancestor);
-        if check_is_gtd_space(path.clone())? {
-            return fs::canonicalize(ancestor)
-                .map_err(|error| format!("Failed to resolve workspace '{}': {}", path, error));
-        }
-    }
-    Err(format!(
-        "Path '{}' is not inside a valid GTD workspace",
-        candidate.display()
-    ))
-}
-
 fn project_dirs() -> Result<ProjectDirs, String> {
     ProjectDirs::from("", "", "com.gtdspace.app")
         .ok_or_else(|| "Failed to resolve GTD Space application directories".to_string())
-}
-
-fn settings_file_path() -> Option<PathBuf> {
-    #[cfg(target_os = "windows")]
-    if let Ok(appdata) = env::var("APPDATA") {
-        return Some(
-            PathBuf::from(appdata)
-                .join("com.gtdspace.app")
-                .join("config")
-                .join(SETTINGS_FILE_NAME),
-        );
-    }
-
-    #[cfg(target_os = "linux")]
-    if let Ok(config_home) = env::var("XDG_CONFIG_HOME") {
-        return Some(
-            PathBuf::from(config_home)
-                .join("com.gtdspace.app")
-                .join(SETTINGS_FILE_NAME),
-        );
-    }
-
-    #[cfg(target_os = "macos")]
-    if let Ok(home) = env::var("HOME") {
-        return Some(
-            PathBuf::from(home)
-                .join("Library")
-                .join("Application Support")
-                .join("com.gtdspace.app")
-                .join(SETTINGS_FILE_NAME),
-        );
-    }
-
-    project_dirs()
-        .ok()
-        .map(|dirs| dirs.config_dir().join(SETTINGS_FILE_NAME))
-}
-
-fn load_saved_settings() -> Option<Value> {
-    let settings_path = settings_file_path()?;
-    let contents = fs::read_to_string(settings_path).ok()?;
-    serde_json::from_str::<Value>(&contents).ok()
-}
-
-fn load_saved_user_settings() -> Option<crate::commands::settings::UserSettings> {
-    let settings = load_saved_settings()?;
-    let user_settings = settings.get("user_settings")?;
-    crate::commands::settings::parse_user_settings_value(user_settings).ok()
-}
-
-fn sanitize_mcp_server_log_level(value: Option<&str>) -> String {
-    let normalized = value
-        .unwrap_or(DEFAULT_MCP_SERVER_LOG_LEVEL)
-        .trim()
-        .to_ascii_lowercase();
-    if VALID_MCP_SERVER_LOG_LEVELS.contains(&normalized.as_str()) {
-        normalized
-    } else {
-        DEFAULT_MCP_SERVER_LOG_LEVEL.to_string()
-    }
-}
-
-pub fn load_mcp_server_launch_settings() -> McpServerLaunchSettings {
-    let user_settings = load_saved_user_settings();
-
-    McpServerLaunchSettings {
-        read_only: user_settings
-            .as_ref()
-            .and_then(|settings| settings.mcp_server_read_only)
-            .unwrap_or(false),
-        log_level: sanitize_mcp_server_log_level(
-            user_settings
-                .as_ref()
-                .and_then(|settings| settings.mcp_server_log_level.as_deref()),
-        ),
-    }
 }
 
 fn snapshot_matches_state(state: &ServiceState, fingerprint: &WorkspaceFingerprint) -> bool {
@@ -2489,478 +2359,8 @@ fn snapshot_matches_state(state: &ServiceState, fingerprint: &WorkspaceFingerpri
         .unwrap_or(false)
 }
 
-fn build_fingerprint(root: &Path, files: &[MarkdownFile]) -> WorkspaceFingerprint {
-    let mut latest_modified_unix = 0_u64;
-    let mut hasher = Sha256::new();
-
-    for file in files {
-        latest_modified_unix = latest_modified_unix.max(file.last_modified);
-        let relative = normalize_absolute_to_relative(root, &file.path);
-        hasher.update(relative.as_bytes());
-        hasher.update(file.last_modified.to_string().as_bytes());
-    }
-
-    WorkspaceFingerprint {
-        normalized_root_path: normalize_path(root),
-        latest_modified_unix,
-        markdown_file_count: files.len(),
-        aggregate_digest: format!("{:x}", hasher.finalize()),
-    }
-}
-
-fn build_item_summaries(
-    root: &Path,
-    files: Vec<MarkdownFile>,
-) -> Result<Vec<GtdItemSummary>, String> {
-    let project_paths = list_gtd_projects(normalize_path(root))?
-        .into_iter()
-        .map(|project| {
-            (
-                normalize_path(Path::new(&project.path).join("README.md")),
-                project,
-            )
-        })
-        .collect::<HashMap<_, _>>();
-
-    let mut items = Vec::new();
-    for file in files {
-        if let Some(item) = parse_item_summary(root, &file, &project_paths)? {
-            items.push(item);
-        }
-    }
-    items.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-    Ok(items)
-}
-
-fn parse_item_summary(
-    root: &Path,
-    file: &MarkdownFile,
-    project_readmes: &HashMap<String, crate::commands::gtd_projects::GTDProject>,
-) -> Result<Option<GtdItemSummary>, String> {
-    let relative_path = normalize_absolute_to_relative(root, &file.path);
-    let normalized = relative_path.replace('\\', "/");
-    let content = read_file(file.path.clone())?;
-    let title = extract_h1(&content).unwrap_or_else(|| strip_markdown_extension(&file.name));
-    let references = extract_all_reference_groups(&content);
-    let created_fallback = Some(unix_to_rfc3339(file.last_modified));
-
-    let summary = if is_horizon_overview(&normalized) {
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::HorizonOverview,
-            title,
-            status: None,
-            due_date: None,
-            focus_date: None,
-            target_date: None,
-            horizon: extract_single_select(&content, "horizon-altitude"),
-            review_cadence: extract_single_select(&content, "horizon-review-cadence"),
-            frequency: None,
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: None,
-            description: extract_section_body(&content, "How to work this horizon in GTD Space"),
-            references,
-        })
-    } else if is_project_readme(&normalized) {
-        let project = project_readmes.get(&normalize_path(&file.path));
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Project,
-            title,
-            status: extract_single_select(&content, "project-status")
-                .or_else(|| extract_single_select(&content, "status")),
-            due_date: extract_datetime(&content, "due_date"),
-            focus_date: None,
-            target_date: None,
-            horizon: None,
-            review_cadence: None,
-            frequency: None,
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: project.map(|entry| normalize_path(&entry.path)),
-            description: extract_section_body(&content, "Desired Outcome")
-                .or_else(|| extract_section_body(&content, "Description")),
-            references,
-        })
-    } else if normalized.starts_with("Projects/") {
-        let project_path = Path::new(&normalized)
-            .parent()
-            .map(normalize_path)
-            .unwrap_or_default();
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Action,
-            title,
-            status: extract_single_select(&content, "status"),
-            due_date: extract_datetime(&content, "due_date"),
-            focus_date: extract_datetime(&content, "focus_date")
-                .or_else(|| extract_datetime(&content, "focus_date_time")),
-            target_date: None,
-            horizon: None,
-            review_cadence: None,
-            frequency: None,
-            effort: extract_single_select(&content, "effort"),
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: Some(project_path),
-            description: extract_section_body(&content, "Notes"),
-            references,
-        })
-    } else if normalized.starts_with("Habits/") {
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Habit,
-            title,
-            status: extract_checkbox_status(&content),
-            due_date: None,
-            focus_date: extract_datetime(&content, "focus_date"),
-            target_date: None,
-            horizon: None,
-            review_cadence: None,
-            frequency: extract_single_select(&content, "habit-frequency"),
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: None,
-            description: extract_section_body(&content, "Notes"),
-            references,
-        })
-    } else if normalized.starts_with("Areas of Focus/") {
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Area,
-            title,
-            status: extract_single_select(&content, "area-status"),
-            due_date: None,
-            focus_date: None,
-            target_date: None,
-            horizon: None,
-            review_cadence: extract_single_select(&content, "area-review-cadence"),
-            frequency: None,
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: None,
-            description: extract_section_body(&content, "Description"),
-            references,
-        })
-    } else if normalized.starts_with("Goals/") {
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Goal,
-            title,
-            status: extract_single_select(&content, "goal-status"),
-            due_date: None,
-            focus_date: None,
-            target_date: extract_datetime(&content, "goal-target-date")
-                .or_else(|| extract_datetime(&content, "target_date")),
-            horizon: None,
-            review_cadence: None,
-            frequency: None,
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: None,
-            description: extract_section_body(&content, "Description"),
-            references,
-        })
-    } else if normalized.starts_with("Vision/") {
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Vision,
-            title,
-            status: None,
-            due_date: None,
-            focus_date: None,
-            target_date: None,
-            horizon: extract_single_select(&content, "vision-horizon"),
-            review_cadence: None,
-            frequency: None,
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: None,
-            description: extract_section_body(&content, "Narrative"),
-            references,
-        })
-    } else if normalized.starts_with("Purpose & Principles/") {
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Purpose,
-            title,
-            status: None,
-            due_date: None,
-            focus_date: None,
-            target_date: None,
-            horizon: None,
-            review_cadence: None,
-            frequency: None,
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: None,
-            description: extract_section_body(&content, "Description"),
-            references,
-        })
-    } else if normalized.starts_with("Cabinet/") {
-        let (_, body) = parse_reference_note(&content);
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::CabinetNote,
-            title,
-            status: None,
-            due_date: None,
-            focus_date: None,
-            target_date: None,
-            horizon: None,
-            review_cadence: None,
-            frequency: None,
-            effort: None,
-            created_date_time: created_fallback,
-            parent_project_path: None,
-            description: Some(body),
-            references,
-        })
-    } else if normalized.starts_with("Someday Maybe/") {
-        let (_, body) = parse_reference_note(&content);
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::SomedayNote,
-            title,
-            status: None,
-            due_date: None,
-            focus_date: None,
-            target_date: None,
-            horizon: None,
-            review_cadence: None,
-            frequency: None,
-            effort: None,
-            created_date_time: created_fallback,
-            parent_project_path: None,
-            description: Some(body),
-            references,
-        })
-    } else {
-        None
-    };
-
-    Ok(summary)
-}
-
-fn build_context_pack(snapshot: WorkspaceSnapshot, workspace_root: String) -> ContextPack {
-    ContextPack {
-        version: CONTEXT_PACK_VERSION,
-        server_version: default_server_version(),
-        generated_at: Utc::now().to_rfc3339(),
-        workspace_root,
-        fingerprint: snapshot.fingerprint,
-        top_level_folders: vec![
-            FolderMeaning {
-                folder: "Projects".to_string(),
-                meaning: "Project folders with canonical README.md files and sibling action files."
-                    .to_string(),
-            },
-            FolderMeaning {
-                folder: "Habits".to_string(),
-                meaning: "One markdown file per habit.".to_string(),
-            },
-            FolderMeaning {
-                folder: "Areas of Focus".to_string(),
-                meaning: "Area pages plus a folder overview README.".to_string(),
-            },
-            FolderMeaning {
-                folder: "Goals".to_string(),
-                meaning: "Goal pages plus a folder overview README.".to_string(),
-            },
-            FolderMeaning {
-                folder: "Vision".to_string(),
-                meaning: "Vision pages plus a folder overview README.".to_string(),
-            },
-            FolderMeaning {
-                folder: "Purpose & Principles".to_string(),
-                meaning: "Purpose pages plus a folder overview README.".to_string(),
-            },
-            FolderMeaning {
-                folder: "Someday Maybe".to_string(),
-                meaning: "Flat idea/reference note area.".to_string(),
-            },
-            FolderMeaning {
-                folder: "Cabinet".to_string(),
-                meaning: "Flat reference storage area.".to_string(),
-            },
-        ],
-        marker_glossary: vec![
-            MarkerDefinition {
-                family: "singleselect".to_string(),
-                syntax: "[!singleselect:<field>:<value>]".to_string(),
-                notes: "Canonical enum-like GTD metadata.".to_string(),
-            },
-            MarkerDefinition {
-                family: "multiselect".to_string(),
-                syntax: "[!multiselect:<field>:a,b,c]".to_string(),
-                notes: "Used for contexts and selected multi-value fields.".to_string(),
-            },
-            MarkerDefinition {
-                family: "checkbox".to_string(),
-                syntax: "[!checkbox:habit-status:true|false]".to_string(),
-                notes: "Canonical habit completion marker.".to_string(),
-            },
-            MarkerDefinition {
-                family: "datetime".to_string(),
-                syntax: "[!datetime:<field>:<value>]".to_string(),
-                notes: "Dates and timestamps such as due dates and created timestamps.".to_string(),
-            },
-            MarkerDefinition {
-                family: "references".to_string(),
-                syntax: "[!areas-references:...] / [!references:...]".to_string(),
-                notes: "Typed and generic links between GTD items.".to_string(),
-            },
-        ],
-        item_counts: snapshot.item_counts,
-        items: snapshot.items,
-        operation_guidance: vec![
-            "Prefer GTD semantic tools over raw file edits.".to_string(),
-            "All write tools dry-run first and require change_apply.".to_string(),
-            "If a project path is unclear, call workspace_list_items({\"itemType\":\"project\"}) before action_create."
-                .to_string(),
-            "Planned changes do not modify files until change_apply succeeds.".to_string(),
-            "Paths in tool requests should be workspace-relative unless otherwise noted."
-                .to_string(),
-        ],
-    }
-}
-
-fn build_context_pack_markdown(pack: &ContextPack) -> String {
-    let mut lines = vec![
-        "# GTD Space Context Pack".to_string(),
-        String::new(),
-        format!("- Server version: `{}`", pack.server_version),
-        format!("- Workspace: `{}`", pack.workspace_root),
-        format!("- Generated: `{}`", pack.generated_at),
-        format!(
-            "- Files indexed: `{}`",
-            pack.fingerprint.markdown_file_count
-        ),
-        String::new(),
-        "## Folder Semantics".to_string(),
-    ];
-    for folder in &pack.top_level_folders {
-        lines.push(format!("- `{}`: {}", folder.folder, folder.meaning));
-    }
-    lines.push(String::new());
-    lines.push("## Item Counts".to_string());
-    for (key, value) in &pack.item_counts {
-        lines.push(format!("- `{}`: {}", key, value));
-    }
-    lines.push(String::new());
-    lines.push("## Tool Guidance".to_string());
-    for entry in &pack.operation_guidance {
-        lines.push(format!("- {}", entry));
-    }
-    lines.push(String::new());
-    lines.push("## Items".to_string());
-    for item in &pack.items {
-        lines.push(format!(
-            "- `{}` [{}] {}",
-            item.relative_path,
-            item_type_key(&item.item_type),
-            item.title
-        ));
-    }
-    format!("{}\n", lines.join("\n"))
-}
-
-fn read_cached_context_pack(
-    cache_paths: &CachePaths,
-    fingerprint: &WorkspaceFingerprint,
-) -> Result<Option<CachedContextPack>, String> {
-    if !cache_paths.manifest.exists()
-        || !cache_paths.json.exists()
-        || !cache_paths.markdown.exists()
-    {
-        return Ok(None);
-    }
-    let manifest = fs::read_to_string(&cache_paths.manifest)
-        .map_err(|error| format!("Failed to read context manifest: {}", error))?;
-    let manifest = serde_json::from_str::<ContextPackManifest>(&manifest)
-        .map_err(|error| format!("Failed to parse context manifest: {}", error))?;
-    if manifest.generator_version != CONTEXT_PACK_VERSION || manifest.fingerprint != *fingerprint {
-        return Ok(None);
-    }
-    let json = fs::read_to_string(&cache_paths.json)
-        .map_err(|error| format!("Failed to read cached context JSON: {}", error))?;
-    let markdown = fs::read_to_string(&cache_paths.markdown)
-        .map_err(|error| format!("Failed to read cached context markdown: {}", error))?;
-    let pack = serde_json::from_str::<ContextPack>(&json)
-        .map_err(|error| format!("Failed to parse cached context JSON: {}", error))?;
-    Ok(Some(CachedContextPack {
-        pack,
-        markdown,
-        cache_paths: cache_paths.clone(),
-        source: "cache".to_string(),
-    }))
-}
-
-fn write_cached_context_pack(
-    cache_paths: &CachePaths,
-    pack: &ContextPack,
-    markdown: &str,
-) -> Result<(), String> {
-    fs::create_dir_all(&cache_paths.root)
-        .map_err(|error| format!("Failed to create context cache directory: {}", error))?;
-    let mut hasher = Sha256::new();
-    hasher.update(pack.workspace_root.as_bytes());
-    let manifest = ContextPackManifest {
-        workspace_path_hash: format!("{:x}", hasher.finalize()),
-        generated_at: pack.generated_at.clone(),
-        generator_version: CONTEXT_PACK_VERSION,
-        fingerprint: pack.fingerprint.clone(),
-    };
-    fs::write(
-        &cache_paths.manifest,
-        serde_json::to_vec_pretty(&manifest).map_err(|error| error.to_string())?,
-    )
-    .map_err(|error| format!("Failed to write context manifest: {}", error))?;
-    fs::write(
-        &cache_paths.json,
-        serde_json::to_vec_pretty(pack).map_err(|error| error.to_string())?,
-    )
-    .map_err(|error| format!("Failed to write context JSON: {}", error))?;
-    fs::write(&cache_paths.markdown, markdown)
-        .map_err(|error| format!("Failed to write context markdown: {}", error))?;
-    Ok(())
-}
-
-pub fn normalize_workspace_path<P: AsRef<Path>>(path: P) -> String {
-    let normalized = path.as_ref().to_string_lossy().replace('\\', "/");
-    normalized
-        .strip_prefix("//?/")
-        .or_else(|| normalized.strip_prefix("\\\\?/"))
-        .unwrap_or(&normalized)
-        .to_string()
-}
-
 fn normalize_path<P: AsRef<Path>>(path: P) -> String {
     normalize_workspace_path(path)
-}
-
-fn path_is_within_workspace(path: &Path, root: &Path) -> bool {
-    let normalized_root = normalize_path(root).trim_end_matches('/').to_string();
-    let normalized_path = normalize_path(path);
-    #[cfg(target_os = "windows")]
-    let normalized_root = normalized_root.to_lowercase();
-    #[cfg(target_os = "windows")]
-    let normalized_path = normalized_path.to_lowercase();
-    normalized_path == normalized_root || normalized_path.starts_with(&(normalized_root + "/"))
-}
-
-fn normalize_relative_input(path: &str) -> String {
-    path.trim().trim_start_matches("./").replace('\\', "/")
 }
 
 pub fn gtdspace_server_version() -> &'static str {
@@ -2969,288 +2369,6 @@ pub fn gtdspace_server_version() -> &'static str {
 
 fn default_server_version() -> String {
     gtdspace_server_version().to_string()
-}
-
-fn normalize_absolute_to_relative(root: &Path, path: &str) -> String {
-    let absolute = Path::new(path);
-    if absolute.is_absolute() {
-        let stripped = absolute.strip_prefix(root).map(normalize_path);
-        stripped
-            .unwrap_or_else(|_| {
-                let normalized_root = normalize_path(root).trim_end_matches('/').to_string();
-                let normalized_absolute = normalize_path(absolute);
-                normalized_absolute
-                    .strip_prefix(&(normalized_root.clone() + "/"))
-                    .or_else(|| normalized_absolute.strip_prefix(&normalized_root))
-                    .map(str::to_string)
-                    .unwrap_or(normalized_absolute)
-            })
-            .trim_start_matches('/')
-            .to_string()
-    } else {
-        normalize_relative_input(path)
-    }
-}
-
-fn item_type_key(kind: &GtdItemType) -> &'static str {
-    match kind {
-        GtdItemType::Project => "project",
-        GtdItemType::Action => "action",
-        GtdItemType::Habit => "habit",
-        GtdItemType::Area => "area",
-        GtdItemType::Goal => "goal",
-        GtdItemType::Vision => "vision",
-        GtdItemType::Purpose => "purpose",
-        GtdItemType::CabinetNote => "cabinet-note",
-        GtdItemType::SomedayNote => "someday-note",
-        GtdItemType::HorizonOverview => "horizon-overview",
-    }
-}
-
-fn strip_markdown_extension(name: &str) -> String {
-    let lowered = name.to_ascii_lowercase();
-    if lowered.ends_with(".markdown") {
-        name[..name.len() - ".markdown".len()].to_string()
-    } else if lowered.ends_with(".md") {
-        name[..name.len() - ".md".len()].to_string()
-    } else {
-        name.to_string()
-    }
-}
-
-fn normalize_similarity_key(value: &str) -> String {
-    strip_markdown_extension(&normalize_relative_input(value))
-        .to_ascii_lowercase()
-        .chars()
-        .filter(|character| character.is_ascii_alphanumeric())
-        .collect()
-}
-
-fn strip_project_readme_suffix(path: &str) -> String {
-    path.strip_suffix("/README.md")
-        .or_else(|| path.strip_suffix("/README.markdown"))
-        .unwrap_or(path)
-        .to_string()
-}
-
-fn project_similarity_keys(item: &GtdItemSummary) -> Vec<String> {
-    let mut candidates = vec![
-        normalize_similarity_key(&item.relative_path),
-        normalize_similarity_key(&strip_project_readme_suffix(&item.relative_path)),
-        normalize_similarity_key(&item.title),
-    ];
-    candidates.retain(|candidate| !candidate.is_empty());
-    candidates.sort();
-    candidates.dedup();
-    candidates
-}
-
-fn sanitize_title(input: &str, fallback: &str) -> String {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        fallback.to_string()
-    } else {
-        trimmed.to_string()
-    }
-}
-
-fn is_project_readme(path: &str) -> bool {
-    path.starts_with("Projects/") && path.split('/').count() == 3 && path.ends_with("README.md")
-        || path.starts_with("Projects/")
-            && path.split('/').count() == 3
-            && path.ends_with("README.markdown")
-}
-
-fn is_horizon_overview(path: &str) -> bool {
-    matches!(
-        path,
-        "Areas of Focus/README.md"
-            | "Goals/README.md"
-            | "Vision/README.md"
-            | "Purpose & Principles/README.md"
-    )
-}
-
-fn extract_h1(content: &str) -> Option<String> {
-    content.lines().find_map(|line| {
-        line.trim()
-            .strip_prefix("# ")
-            .map(|value| value.trim().to_string())
-    })
-}
-
-fn extract_single_select(content: &str, field: &str) -> Option<String> {
-    extract_marker(content, &format!("[!singleselect:{}:", field))
-        .or_else(|| extract_marker(content, &format!("[!multiselect:{}:", field)))
-}
-
-fn extract_checkbox_status(content: &str) -> Option<String> {
-    extract_marker(content, "[!checkbox:habit-status:").map(|value| {
-        if value.eq_ignore_ascii_case("true") {
-            "completed".to_string()
-        } else {
-            "todo".to_string()
-        }
-    })
-}
-
-fn extract_datetime(content: &str, field: &str) -> Option<String> {
-    extract_marker(content, &format!("[!datetime:{}:", field))
-}
-
-fn extract_multiselect(content: &str, field: &str) -> Vec<String> {
-    extract_marker(content, &format!("[!multiselect:{}:", field))
-        .map(|value| {
-            value
-                .split(',')
-                .map(|entry| entry.trim().to_string())
-                .filter(|entry| !entry.is_empty())
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default()
-}
-
-fn extract_marker(content: &str, prefix: &str) -> Option<String> {
-    let start = content.find(prefix)?;
-    let remaining = &content[start + prefix.len()..];
-    let end = remaining.find(']')?;
-    Some(remaining[..end].trim().to_string())
-}
-
-fn extract_section_body(content: &str, heading: &str) -> Option<String> {
-    let mut active = false;
-    let mut buffer = Vec::new();
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.eq_ignore_ascii_case(&format!("## {}", heading)) {
-            active = true;
-            continue;
-        }
-        if active && trimmed.starts_with("## ") {
-            break;
-        }
-        if active {
-            buffer.push(line);
-        }
-    }
-
-    let value = buffer.join("\n").trim().to_string();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value)
-    }
-}
-
-fn extract_all_reference_groups(content: &str) -> Vec<GtdItemReferenceSummary> {
-    let groups = [
-        ("projects", "projects-references"),
-        ("areas", "areas-references"),
-        ("goals", "goals-references"),
-        ("vision", "vision-references"),
-        ("purpose", "purpose-references"),
-        ("references", "references"),
-    ];
-    groups
-        .into_iter()
-        .filter_map(|(kind, tag)| {
-            let paths = extract_reference_list(content, tag);
-            if paths.is_empty() {
-                None
-            } else {
-                Some(GtdItemReferenceSummary {
-                    kind: kind.to_string(),
-                    paths,
-                })
-            }
-        })
-        .collect()
-}
-
-fn extract_reference_list(content: &str, tag: &str) -> Vec<String> {
-    let marker = format!("[!{}:", tag);
-    let Some(start) = content.find(&marker) else {
-        return Vec::new();
-    };
-    let remainder = &content[start + marker.len()..];
-    let Some(end) = remainder.find(']') else {
-        return Vec::new();
-    };
-    parse_reference_list(&remainder[..end])
-}
-
-fn parse_reference_list(raw: &str) -> Vec<String> {
-    let decoded = decode_loose(raw.trim());
-    if decoded.is_empty() {
-        return Vec::new();
-    }
-
-    if decoded.starts_with('[') {
-        if let Ok(list) = serde_json::from_str::<Vec<String>>(&decoded) {
-            return normalize_reference_list(list);
-        }
-    }
-
-    normalize_reference_list(
-        decoded
-            .trim_matches(['[', ']'])
-            .split(',')
-            .map(|value| {
-                value
-                    .trim()
-                    .trim_matches('"')
-                    .trim_matches('\'')
-                    .to_string()
-            })
-            .collect(),
-    )
-}
-
-fn normalize_path_components(path: &Path) -> PathBuf {
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
-            Component::RootDir => normalized.push(component.as_os_str()),
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            Component::Normal(part) => normalized.push(part),
-        }
-    }
-    normalized
-}
-
-fn normalize_reference_list(values: Vec<String>) -> Vec<String> {
-    let mut output = values
-        .into_iter()
-        .map(|value| value.replace('\\', "/"))
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .collect::<Vec<_>>();
-    output.sort();
-    output.dedup();
-    output
-}
-
-fn decode_loose(input: &str) -> String {
-    let mut current = input.to_string();
-    for _ in 0..3 {
-        match urlencoding::decode(&current) {
-            Ok(decoded) if decoded != current => current = decoded.into_owned(),
-            _ => break,
-        }
-    }
-    current
-}
-
-fn unix_to_rfc3339(timestamp: u64) -> String {
-    let seconds = i64::try_from(timestamp).unwrap_or(i64::MAX);
-    DateTime::<Utc>::from_timestamp(seconds, 0)
-        .unwrap_or_else(Utc::now)
-        .to_rfc3339()
 }
 
 fn hash_bytes(bytes: &[u8]) -> String {
@@ -3672,19 +2790,6 @@ fn extract_additional_after_section(content: &str, heading: &str) -> Option<Stri
     } else {
         Some(value)
     }
-}
-
-fn parse_reference_note(content: &str) -> (String, String) {
-    let title = extract_h1(content).unwrap_or_else(|| "Untitled Note".to_string());
-    let body = content
-        .lines()
-        .skip_while(|line| !line.trim().starts_with("# "))
-        .skip(1)
-        .collect::<Vec<_>>()
-        .join("\n")
-        .trim()
-        .to_string();
-    (title, body)
 }
 
 fn horizon_folder_name(page_type: &HorizonPageType) -> &'static str {

@@ -5,6 +5,7 @@
  */
 
 import type { UserSettings, Theme, EditorMode, McpServerLogLevel } from '@/types';
+import { coerceMcpServerReadOnlyLike, VALID_MCP_LOG_LEVELS } from '@/utils/mcp-settings';
 
 /**
  * Valid theme values
@@ -50,11 +51,6 @@ const GIT_SYNC_HISTORY_RANGE = { min: 1, max: 20 } as const;
  * Minimum auto pull cadence (minutes)
  */
 const GIT_SYNC_AUTO_PULL_MIN = 1;
-
-/**
- * Valid log levels accepted by the standalone MCP server.
- */
-const VALID_MCP_LOG_LEVELS: readonly McpServerLogLevel[] = ['error', 'warn', 'info', 'debug', 'trace'] as const;
 
 /**
  * Shortcut value format matcher (e.g., mod+shift+p)
@@ -389,22 +385,7 @@ export function validateAndCoerceSettings(importedData: unknown): ValidationResu
 
   if (data.mcp_server_read_only !== undefined && data.mcp_server_read_only !== null && typeof data.mcp_server_read_only !== 'boolean') {
     const rawValue = data.mcp_server_read_only;
-    let normalizedValue: boolean | null = null;
-
-    if (typeof rawValue === 'string') {
-      const normalized = rawValue.trim().toLowerCase();
-      if (['true', 'yes', '1'].includes(normalized)) {
-        normalizedValue = true;
-      } else if (['false', 'no', '0'].includes(normalized)) {
-        normalizedValue = false;
-      }
-    } else if (typeof rawValue === 'number') {
-      if (rawValue === 1) {
-        normalizedValue = true;
-      } else if (rawValue === 0) {
-        normalizedValue = false;
-      }
-    }
+    const normalizedValue = coerceMcpServerReadOnlyLike(rawValue);
 
     if (normalizedValue === null) {
       recordError('mcp_server_read_only', 'must be a boolean or a supported boolean-like value', rawValue, null, 'fatal');

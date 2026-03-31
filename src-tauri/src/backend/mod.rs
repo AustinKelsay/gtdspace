@@ -1,5 +1,8 @@
 pub mod mcp_google_calendar;
 pub mod mcp_workspace;
+pub mod mcp_workspace_config;
+pub mod mcp_workspace_context;
+pub mod mcp_workspace_index;
 
 pub use mcp_google_calendar::{
     GoogleCalendarListEventsRequest, GoogleCalendarMcpEnvelope, GoogleCalendarMcpEvent,
@@ -12,3 +15,4 @@ pub use mcp_workspace::{
     HabitHistoryRowInput, PlannedChange, RelationshipSummary, WorkspaceFingerprint, WorkspaceInfo,
     WorkspaceListItemsResult, WorkspaceRefreshResult, WorkspaceSearchResult,
 };
+pub use mcp_workspace_config::{load_mcp_server_launch_settings, McpServerLaunchSettings};

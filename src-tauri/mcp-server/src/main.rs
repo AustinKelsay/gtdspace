@@ -17,7 +17,7 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    let saved_defaults = gtdspace_lib::backend::mcp_workspace::load_mcp_server_launch_settings();
+    let saved_defaults = gtdspace_lib::backend::load_mcp_server_launch_settings();
     let log_level = args.log_level.unwrap_or(saved_defaults.log_level);
     let read_only = args.read_only.unwrap_or(saved_defaults.read_only);
     init_logger(&log_level);

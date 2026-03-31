@@ -8,10 +8,13 @@ use tauri::AppHandle;
 use tauri_plugin_store::StoreBuilder;
 use tokio::sync::Mutex as TokioMutex;
 
+use crate::mcp_settings::{
+    coerce_mcp_server_read_only, normalize_mcp_server_workspace_path,
+    sanitize_mcp_server_log_level, DEFAULT_MCP_SERVER_LOG_LEVEL,
+};
+
 const SECURE_STORAGE_SERVICE: &str = "com.gtdspace.app";
 const GIT_SYNC_ENCRYPTION_KEY_NAME: &str = "git_sync_encryption_key";
-const DEFAULT_MCP_SERVER_LOG_LEVEL: &str = "info";
-const VALID_MCP_SERVER_LOG_LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
 static SETTINGS_LOCK: Lazy<TokioMutex<()>> = Lazy::new(|| TokioMutex::new(()));
 
 #[cfg(test)]
@@ -77,53 +80,6 @@ fn merge_with_default_settings(mut settings: UserSettings) -> UserSettings {
         .or(defaults.mcp_server_log_level);
 
     settings
-}
-
-fn sanitize_mcp_server_log_level(value: Option<&str>) -> String {
-    let normalized = value
-        .unwrap_or(DEFAULT_MCP_SERVER_LOG_LEVEL)
-        .trim()
-        .to_ascii_lowercase();
-    if VALID_MCP_SERVER_LOG_LEVELS.contains(&normalized.as_str()) {
-        normalized
-    } else {
-        DEFAULT_MCP_SERVER_LOG_LEVEL.to_string()
-    }
-}
-
-fn normalize_mcp_server_workspace_path(value: Option<String>) -> Option<String> {
-    value.and_then(|path| {
-        let trimmed = path.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    })
-}
-
-fn coerce_mcp_server_read_only(value: &Value) -> Option<bool> {
-    match value {
-        Value::Bool(boolean) => Some(*boolean),
-        Value::Number(number) => {
-            if number.as_i64() == Some(0) || number.as_u64() == Some(0) {
-                Some(false)
-            } else if number.as_i64() == Some(1) || number.as_u64() == Some(1) {
-                Some(true)
-            } else {
-                None
-            }
-        }
-        Value::String(string) => {
-            let normalized = string.trim().to_ascii_lowercase();
-            match normalized.as_str() {
-                "true" | "1" | "yes" | "y" | "on" => Some(true),
-                "false" | "0" | "no" | "n" | "off" => Some(false),
-                _ => None,
-            }
-        }
-        _ => None,
-    }
 }
 
 fn deserialize_mcp_server_workspace_path<'de, D>(

@@ -89,7 +89,21 @@ pub(crate) fn path_is_within_workspace(path: &Path, root: &Path) -> bool {
 }
 
 pub(crate) fn normalize_relative_input(path: &str) -> String {
-    path.trim().trim_start_matches("./").replace('\\', "/")
+    path.trim()
+        .replace('\\', "/")
+        .trim_start_matches("./")
+        .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_relative_input;
+
+    #[test]
+    fn normalize_relative_input_strips_windows_relative_prefix() {
+        assert_eq!(normalize_relative_input(r".\foo\bar"), "foo/bar");
+        assert_eq!(normalize_relative_input("./foo/bar"), "foo/bar");
+    }
 }
 
 pub(crate) fn normalize_absolute_to_relative(root: &Path, path: &str) -> String {

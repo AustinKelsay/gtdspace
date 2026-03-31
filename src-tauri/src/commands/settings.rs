@@ -10,7 +10,7 @@ use tokio::sync::Mutex as TokioMutex;
 
 use crate::mcp_settings::{
     coerce_mcp_server_read_only, normalize_mcp_server_workspace_path,
-    sanitize_mcp_server_log_level, DEFAULT_MCP_SERVER_LOG_LEVEL,
+    sanitize_mcp_server_log_level, settings_store_path, DEFAULT_MCP_SERVER_LOG_LEVEL,
 };
 
 const SECURE_STORAGE_SERVICE: &str = "com.gtdspace.app";
@@ -371,16 +371,14 @@ impl std::fmt::Debug for UserSettings {
 /// ```
 fn load_settings_unlocked(app: &AppHandle) -> Result<UserSettings, String> {
     log::info!("Loading user settings");
+    let settings_store_path = settings_store_path();
 
     // Get or create store
-    let store = match tauri_plugin_store::StoreExt::get_store(
-        app,
-        std::path::PathBuf::from("settings.json"),
-    ) {
+    let store = match tauri_plugin_store::StoreExt::get_store(app, settings_store_path.clone()) {
         Some(store) => store,
         None => {
             // Create new store if it doesn't exist
-            match StoreBuilder::new(app, std::path::PathBuf::from("settings.json")).build() {
+            match StoreBuilder::new(app, settings_store_path).build() {
                 Ok(store) => store,
                 Err(e) => {
                     log::error!("Failed to create settings store: {}", e);
@@ -542,16 +540,14 @@ pub async fn load_settings(app: AppHandle) -> Result<UserSettings, String> {
 /// ```
 fn save_settings_unlocked(app: &AppHandle, settings: &UserSettings) -> Result<String, String> {
     log::info!("Saving user settings");
+    let settings_store_path = settings_store_path();
 
     // Get or create store
-    let store = match tauri_plugin_store::StoreExt::get_store(
-        app,
-        std::path::PathBuf::from("settings.json"),
-    ) {
+    let store = match tauri_plugin_store::StoreExt::get_store(app, settings_store_path.clone()) {
         Some(store) => store,
         None => {
             // Create new store if it doesn't exist
-            match StoreBuilder::new(app, std::path::PathBuf::from("settings.json")).build() {
+            match StoreBuilder::new(app, settings_store_path).build() {
                 Ok(store) => store,
                 Err(e) => {
                     log::error!("Failed to create settings store: {}", e);

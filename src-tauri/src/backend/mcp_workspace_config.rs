@@ -1,16 +1,13 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use directories::ProjectDirs;
 use rmcp::schemars;
 use serde_json::Value;
 
 use crate::backend::normalize_workspace_path;
 use crate::commands::settings::{parse_user_settings_value, UserSettings};
 use crate::commands::workspace::{check_is_gtd_space, get_default_gtd_space_path};
-use crate::mcp_settings::sanitize_mcp_server_log_level;
-
-const SETTINGS_FILE_NAME: &str = "settings.json";
+use crate::mcp_settings::{sanitize_mcp_server_log_level, settings_file_path};
 
 #[derive(
     Debug, Clone, serde::Serialize, serde::Deserialize, rmcp::schemars::JsonSchema, PartialEq, Eq,
@@ -73,47 +70,6 @@ fn validate_workspace_candidate(candidate: &Path) -> Result<PathBuf, String> {
         "Path '{}' is not inside a valid GTD workspace",
         candidate.display()
     ))
-}
-
-fn project_dirs() -> Result<ProjectDirs, String> {
-    ProjectDirs::from("", "", "com.gtdspace.app")
-        .ok_or_else(|| "Failed to resolve GTD Space application directories".to_string())
-}
-
-fn settings_file_path() -> Option<PathBuf> {
-    #[cfg(target_os = "windows")]
-    if let Ok(appdata) = std::env::var("APPDATA") {
-        return Some(
-            PathBuf::from(appdata)
-                .join("com.gtdspace.app")
-                .join("config")
-                .join(SETTINGS_FILE_NAME),
-        );
-    }
-
-    #[cfg(target_os = "linux")]
-    if let Ok(config_home) = std::env::var("XDG_CONFIG_HOME") {
-        return Some(
-            PathBuf::from(config_home)
-                .join("com.gtdspace.app")
-                .join(SETTINGS_FILE_NAME),
-        );
-    }
-
-    #[cfg(target_os = "macos")]
-    if let Ok(home) = std::env::var("HOME") {
-        return Some(
-            PathBuf::from(home)
-                .join("Library")
-                .join("Application Support")
-                .join("com.gtdspace.app")
-                .join(SETTINGS_FILE_NAME),
-        );
-    }
-
-    project_dirs()
-        .ok()
-        .map(|dirs| dirs.config_dir().join(SETTINGS_FILE_NAME))
 }
 
 fn load_saved_settings() -> Option<Value> {

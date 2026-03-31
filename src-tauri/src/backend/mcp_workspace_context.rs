@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use tempfile::NamedTempFile;
 
 use crate::backend::gtdspace_server_version;
 use crate::backend::mcp_workspace::{
@@ -171,25 +173,32 @@ pub(crate) fn read_cached_context_pack(
     cache_paths: &CachePaths,
     fingerprint: &WorkspaceFingerprint,
 ) -> Result<Option<CachedContextPack>, String> {
-    if !cache_paths.manifest.exists()
-        || !cache_paths.json.exists()
-        || !cache_paths.markdown.exists()
-    {
+    if !cache_paths.manifest.exists() {
         return Ok(None);
     }
-    let manifest = fs::read_to_string(&cache_paths.manifest)
-        .map_err(|error| format!("Failed to read context manifest: {}", error))?;
-    let manifest = serde_json::from_str::<ContextPackManifest>(&manifest)
-        .map_err(|error| format!("Failed to parse context manifest: {}", error))?;
+    let manifest = match fs::read_to_string(&cache_paths.manifest) {
+        Ok(manifest) => manifest,
+        Err(_) => return Ok(None),
+    };
+    let manifest = match serde_json::from_str::<ContextPackManifest>(&manifest) {
+        Ok(manifest) => manifest,
+        Err(_) => return Ok(None),
+    };
     if manifest.generator_version != CONTEXT_PACK_VERSION || manifest.fingerprint != *fingerprint {
         return Ok(None);
     }
-    let json = fs::read_to_string(&cache_paths.json)
-        .map_err(|error| format!("Failed to read cached context JSON: {}", error))?;
-    let markdown = fs::read_to_string(&cache_paths.markdown)
-        .map_err(|error| format!("Failed to read cached context markdown: {}", error))?;
-    let pack = serde_json::from_str::<ContextPack>(&json)
-        .map_err(|error| format!("Failed to parse cached context JSON: {}", error))?;
+    let json = match fs::read_to_string(&cache_paths.json) {
+        Ok(json) => json,
+        Err(_) => return Ok(None),
+    };
+    let markdown = match fs::read_to_string(&cache_paths.markdown) {
+        Ok(markdown) => markdown,
+        Err(_) => return Ok(None),
+    };
+    let pack = match serde_json::from_str::<ContextPack>(&json) {
+        Ok(pack) => pack,
+        Err(_) => return Ok(None),
+    };
     Ok(Some(CachedContextPack {
         pack,
         markdown,
@@ -213,19 +222,66 @@ pub(crate) fn write_cached_context_pack(
         generator_version: CONTEXT_PACK_VERSION,
         fingerprint: pack.fingerprint.clone(),
     };
-    fs::write(
-        &cache_paths.manifest,
-        serde_json::to_vec_pretty(&manifest).map_err(|error| error.to_string())?,
-    )
-    .map_err(|error| format!("Failed to write context manifest: {}", error))?;
-    fs::write(
+    if cache_paths.manifest.exists() {
+        fs::remove_file(&cache_paths.manifest)
+            .map_err(|error| format!("Failed to clear stale context manifest: {}", error))?;
+    }
+    write_bytes_atomically(
         &cache_paths.json,
-        serde_json::to_vec_pretty(pack).map_err(|error| error.to_string())?,
-    )
-    .map_err(|error| format!("Failed to write context JSON: {}", error))?;
-    fs::write(&cache_paths.markdown, markdown)
-        .map_err(|error| format!("Failed to write context markdown: {}", error))?;
+        &serde_json::to_vec_pretty(pack).map_err(|error| error.to_string())?,
+        "context JSON",
+    )?;
+    write_bytes_atomically(
+        &cache_paths.markdown,
+        markdown.as_bytes(),
+        "context markdown",
+    )?;
+    write_bytes_atomically_synced(
+        &cache_paths.manifest,
+        &serde_json::to_vec_pretty(&manifest).map_err(|error| error.to_string())?,
+        "context manifest",
+    )?;
     Ok(())
+}
+
+fn write_bytes_atomically(path: &PathBuf, bytes: &[u8], label: &str) -> Result<(), String> {
+    let temp_dir = path.parent().unwrap_or(cache_dir_root_fallback());
+    let mut temp_file = NamedTempFile::new_in(temp_dir)
+        .map_err(|error| format!("Failed to create temporary {} file: {}", label, error))?;
+    temp_file
+        .write_all(bytes)
+        .map_err(|error| format!("Failed to write temporary {} file: {}", label, error))?;
+    temp_file
+        .flush()
+        .map_err(|error| format!("Failed to flush temporary {} file: {}", label, error))?;
+    temp_file
+        .persist(path)
+        .map_err(|error| format!("Failed to replace {} atomically: {}", label, error.error))?;
+    Ok(())
+}
+
+fn write_bytes_atomically_synced(path: &PathBuf, bytes: &[u8], label: &str) -> Result<(), String> {
+    let temp_dir = path.parent().unwrap_or(cache_dir_root_fallback());
+    let mut temp_file = NamedTempFile::new_in(temp_dir)
+        .map_err(|error| format!("Failed to create temporary {} file: {}", label, error))?;
+    temp_file
+        .write_all(bytes)
+        .map_err(|error| format!("Failed to write temporary {} file: {}", label, error))?;
+    temp_file
+        .flush()
+        .map_err(|error| format!("Failed to flush temporary {} file: {}", label, error))?;
+    temp_file
+        .as_file()
+        .sync_all()
+        .map_err(|error| format!("Failed to sync temporary {} file: {}", label, error))?;
+    temp_file
+        .persist(path)
+        .map_err(|error| format!("Failed to replace {} atomically: {}", label, error.error))?;
+    Ok(())
+}
+
+fn cache_dir_root_fallback() -> &'static std::path::Path {
+    std::path::Path::new(".")
 }
 
 pub(crate) fn to_public_cache_paths(cache_paths: &CachePaths) -> (String, String, String, String) {
@@ -235,4 +291,76 @@ pub(crate) fn to_public_cache_paths(cache_paths: &CachePaths) -> (String, String
         normalize_workspace_path(&cache_paths.json),
         normalize_workspace_path(&cache_paths.markdown),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::write_test_file;
+    use std::collections::BTreeMap;
+
+    fn sample_fingerprint() -> WorkspaceFingerprint {
+        WorkspaceFingerprint {
+            normalized_root_path: "/tmp/workspace".to_string(),
+            latest_modified_unix: 1_743_379_200,
+            markdown_file_count: 1,
+            aggregate_digest: "digest".to_string(),
+        }
+    }
+
+    fn sample_pack() -> ContextPack {
+        ContextPack {
+            version: CONTEXT_PACK_VERSION,
+            server_version: "test".to_string(),
+            generated_at: "2026-03-31T00:00:00Z".to_string(),
+            workspace_root: "/tmp/workspace".to_string(),
+            fingerprint: sample_fingerprint(),
+            top_level_folders: Vec::new(),
+            marker_glossary: Vec::new(),
+            item_counts: BTreeMap::new(),
+            items: Vec::new(),
+            operation_guidance: vec!["Prefer semantic tools".to_string()],
+        }
+    }
+
+    fn sample_cache_paths(root: &std::path::Path) -> CachePaths {
+        CachePaths {
+            root: root.to_path_buf(),
+            manifest: root.join("manifest.json"),
+            json: root.join("gtd-context.json"),
+            markdown: root.join("gtd-context.md"),
+        }
+    }
+
+    #[test]
+    fn malformed_cached_context_is_treated_as_cache_miss() -> Result<(), String> {
+        let temp_dir = tempfile::tempdir().map_err(|error| error.to_string())?;
+        let cache_paths = sample_cache_paths(temp_dir.path());
+        let fingerprint = sample_fingerprint();
+        write_test_file(&cache_paths.manifest, "{not valid json")?;
+        write_test_file(&cache_paths.json, "{not valid json")?;
+        write_test_file(&cache_paths.markdown, "stale markdown")?;
+
+        let cached = read_cached_context_pack(&cache_paths, &fingerprint)?;
+
+        assert!(cached.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn cached_context_requires_manifest_even_if_payloads_exist() -> Result<(), String> {
+        let temp_dir = tempfile::tempdir().map_err(|error| error.to_string())?;
+        let cache_paths = sample_cache_paths(temp_dir.path());
+        let pack = sample_pack();
+        write_test_file(
+            &cache_paths.json,
+            &serde_json::to_string_pretty(&pack).map_err(|error| error.to_string())?,
+        )?;
+        write_test_file(&cache_paths.markdown, "cached markdown")?;
+
+        let cached = read_cached_context_pack(&cache_paths, &pack.fingerprint)?;
+
+        assert!(cached.is_none());
+        Ok(())
+    }
 }

@@ -62,6 +62,22 @@ describe('settings validation for MCP server defaults', () => {
     expect(result.errors).toEqual([]);
   });
 
+  it('accepts the extended boolean-like tokens used by the backend', () => {
+    const truthy = validateAndCoerceSettings({
+      ...baseSettings,
+      mcp_server_read_only: 'on',
+    });
+    const falsy = validateAndCoerceSettings({
+      ...baseSettings,
+      mcp_server_read_only: 'n',
+    });
+
+    expect(truthy.isValid).toBe(true);
+    expect(truthy.coercedSettings.mcp_server_read_only).toBe(true);
+    expect(falsy.isValid).toBe(true);
+    expect(falsy.coercedSettings.mcp_server_read_only).toBe(false);
+  });
+
   it('rejects unrecognized read-only values as fatal validation errors', () => {
     const result = validateAndCoerceSettings({
       ...baseSettings,

@@ -62,10 +62,10 @@ export const coerceMcpServerReadOnlyLike = (value: unknown): boolean | null => {
 
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
-    if (['true', 'yes', '1'].includes(normalized)) {
+    if (['true', 'yes', 'y', 'on', '1'].includes(normalized)) {
       return true;
     }
-    if (['false', 'no', '0'].includes(normalized)) {
+    if (['false', 'no', 'n', 'off', '0'].includes(normalized)) {
       return false;
     }
     return null;

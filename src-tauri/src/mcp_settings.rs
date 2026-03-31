@@ -1,7 +1,50 @@
+use std::path::PathBuf;
+
+use directories::ProjectDirs;
 use serde_json::Value;
 
+pub const SETTINGS_FILE_NAME: &str = "settings.json";
 pub const DEFAULT_MCP_SERVER_LOG_LEVEL: &str = "info";
 pub const VALID_MCP_SERVER_LOG_LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
+
+pub fn settings_store_path() -> PathBuf {
+    PathBuf::from(SETTINGS_FILE_NAME)
+}
+
+pub fn settings_file_path() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        return Some(
+            PathBuf::from(appdata)
+                .join("com.gtdspace.app")
+                .join("config")
+                .join(SETTINGS_FILE_NAME),
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    if let Ok(config_home) = std::env::var("XDG_CONFIG_HOME") {
+        return Some(
+            PathBuf::from(config_home)
+                .join("com.gtdspace.app")
+                .join(SETTINGS_FILE_NAME),
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    if let Ok(home) = std::env::var("HOME") {
+        return Some(
+            PathBuf::from(home)
+                .join("Library")
+                .join("Application Support")
+                .join("com.gtdspace.app")
+                .join(SETTINGS_FILE_NAME),
+        );
+    }
+
+    ProjectDirs::from("", "", "com.gtdspace.app")
+        .map(|dirs| dirs.config_dir().join(SETTINGS_FILE_NAME))
+}
 
 pub fn sanitize_mcp_server_log_level(value: Option<&str>) -> String {
     let normalized = value

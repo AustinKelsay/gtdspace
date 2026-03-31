@@ -17,7 +17,6 @@ pub fn settings_file_path() -> Option<PathBuf> {
         return Some(
             PathBuf::from(appdata)
                 .join("com.gtdspace.app")
-                .join("config")
                 .join(SETTINGS_FILE_NAME),
         );
     }

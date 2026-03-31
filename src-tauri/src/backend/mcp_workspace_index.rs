@@ -95,17 +95,6 @@ pub(crate) fn normalize_relative_input(path: &str) -> String {
         .to_string()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::normalize_relative_input;
-
-    #[test]
-    fn normalize_relative_input_strips_windows_relative_prefix() {
-        assert_eq!(normalize_relative_input(r".\foo\bar"), "foo/bar");
-        assert_eq!(normalize_relative_input("./foo/bar"), "foo/bar");
-    }
-}
-
 pub(crate) fn normalize_absolute_to_relative(root: &Path, path: &str) -> String {
     let absolute = Path::new(path);
     if absolute.is_absolute() {
@@ -607,4 +596,15 @@ fn unix_to_rfc3339(timestamp: u64) -> String {
     DateTime::<Utc>::from_timestamp(seconds, 0)
         .unwrap_or_else(Utc::now)
         .to_rfc3339()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_relative_input;
+
+    #[test]
+    fn normalize_relative_input_strips_windows_relative_prefix() {
+        assert_eq!(normalize_relative_input(r".\foo\bar"), "foo/bar");
+        assert_eq!(normalize_relative_input("./foo/bar"), "foo/bar");
+    }
 }

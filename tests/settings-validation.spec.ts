@@ -51,31 +51,26 @@ describe('settings validation for MCP server defaults', () => {
     );
   });
 
-  it('coerces supported boolean-like read-only values', () => {
+  it.each([
+    ['true', true],
+    ['yes', true],
+    ['y', true],
+    ['on', true],
+    ['1', true],
+    ['false', false],
+    ['no', false],
+    ['n', false],
+    ['off', false],
+    ['0', false],
+  ])('coerces supported read-only token %s to %s', (token, expected) => {
     const result = validateAndCoerceSettings({
       ...baseSettings,
-      mcp_server_read_only: 'yes',
+      mcp_server_read_only: token,
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.coercedSettings.mcp_server_read_only).toBe(true);
+    expect(result.coercedSettings.mcp_server_read_only).toBe(expected);
     expect(result.errors).toEqual([]);
-  });
-
-  it('accepts the extended boolean-like tokens used by the backend', () => {
-    const truthy = validateAndCoerceSettings({
-      ...baseSettings,
-      mcp_server_read_only: 'on',
-    });
-    const falsy = validateAndCoerceSettings({
-      ...baseSettings,
-      mcp_server_read_only: 'n',
-    });
-
-    expect(truthy.isValid).toBe(true);
-    expect(truthy.coercedSettings.mcp_server_read_only).toBe(true);
-    expect(falsy.isValid).toBe(true);
-    expect(falsy.coercedSettings.mcp_server_read_only).toBe(false);
   });
 
   it('rejects unrecognized read-only values as fatal validation errors', () => {

@@ -267,7 +267,15 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
       const actionName = action?.name || 'Action';
 
       // Read content for temp backup
-      const backupContent = await safeInvoke<string>('read_file', { path: actionPath }, '') || '';
+      const backupContent = await safeInvoke<string>('read_file', { path: actionPath }, null);
+      if (backupContent == null) {
+        toast({
+          title: 'Delete failed',
+          description: 'Could not back up action before delete',
+          variant: 'destructive'
+        });
+        return;
+      }
 
       // Delete the file and verify result
       const delResult = await safeInvoke<FileOperationResult>('delete_file', { path: actionPath }, { success: false, message: 'Failed to delete file' });

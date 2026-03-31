@@ -126,4 +126,45 @@ describe('Toaster components', () => {
     expect(toasts[0]).toHaveAttribute('data-duration', '8000');
     expect(toasts[1]).toHaveAttribute('data-duration', '12000');
   });
+
+  it('keeps loading toasts open until they are dismissed', () => {
+    toastHookMock.mockReturnValue({
+      dismiss: vi.fn(),
+      toast: vi.fn(),
+      toasts: [
+        {
+          id: 'toast-loading',
+          open: true,
+          title: 'Loading',
+          description: 'Syncing calendar',
+        },
+      ],
+    });
+
+    render(<Toaster />);
+
+    const toast = screen.getByTestId('toast-root');
+    expect(toast).not.toHaveAttribute('data-duration');
+  });
+
+  it('renders an accessible dismiss label on the close control', () => {
+    toastHookMock.mockReturnValue({
+      dismiss: vi.fn(),
+      toast: vi.fn(),
+      toasts: [
+        {
+          id: 'toast-info',
+          open: true,
+          title: 'Info',
+          description: 'Dismiss me',
+        },
+      ],
+    });
+
+    render(<Toaster />);
+
+    expect(
+      screen.getByRole('button', { name: 'Dismiss notification' })
+    ).toBeInTheDocument();
+  });
 });

@@ -120,6 +120,7 @@ export function useToast() {
     const { id, dismiss } = toast({
       title: 'Loading',
       description: message,
+      duration: undefined,
     });
     
     return {

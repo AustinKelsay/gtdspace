@@ -50,6 +50,7 @@ use crate::commands::utils::sanitize_markdown_file_stem;
 const CONTEXT_CACHE_DIR: &str = "mcp-context";
 const MAX_CONTEXT_PACK_RETRIES: usize = 5;
 const MAX_CHANGE_SET_TOMBSTONES: usize = 256;
+const APP_IDENTIFIER: &str = "com.gtdspace.app";
 
 pub(crate) const GTD_SPEC_DOC: &str = include_str!("../../../spec/gtd-spec.md");
 pub(crate) const MARKDOWN_SCHEMA_DOC: &str = include_str!("../../../spec/02-markdown-schema.md");
@@ -1689,14 +1690,11 @@ impl GtdWorkspaceService {
     }
 
     fn cache_paths(&self) -> Result<CachePaths, String> {
-        let dirs = project_dirs()?;
+        let cache_dir = app_cache_dir()?;
         let mut hasher = Sha256::new();
         hasher.update(self.workspace_root().as_bytes());
         let workspace_hash = encode_hex(hasher.finalize());
-        let root = dirs
-            .cache_dir()
-            .join(CONTEXT_CACHE_DIR)
-            .join(workspace_hash);
+        let root = cache_dir.join(CONTEXT_CACHE_DIR).join(workspace_hash);
         Ok(CachePaths {
             manifest: root.join("manifest.json"),
             json: root.join("gtd-context.json"),
@@ -2348,8 +2346,89 @@ fn remove_unsupported_integer_formats(schema: &mut schemars::Schema) {
 }
 
 fn project_dirs() -> Result<ProjectDirs, String> {
-    ProjectDirs::from("", "", "com.gtdspace.app")
+    ProjectDirs::from("", "", APP_IDENTIFIER)
         .ok_or_else(|| "Failed to resolve GTD Space application directories".to_string())
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OsKind {
+    Windows,
+    Macos,
+    Linux,
+}
+
+fn current_os_kind() -> OsKind {
+    #[cfg(target_os = "windows")]
+    {
+        OsKind::Windows
+    }
+    #[cfg(target_os = "macos")]
+    {
+        OsKind::Macos
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        OsKind::Linux
+    }
+}
+
+fn app_cache_dir() -> Result<PathBuf, String> {
+    let local_appdata = std::env::var("LOCALAPPDATA").ok();
+    let appdata = std::env::var("APPDATA").ok();
+    let home = std::env::var("HOME").ok();
+    let xdg_cache_home = std::env::var("XDG_CACHE_HOME").ok();
+
+    resolve_app_cache_dir_for_os(
+        current_os_kind(),
+        local_appdata.as_deref(),
+        appdata.as_deref(),
+        home.as_deref(),
+        xdg_cache_home.as_deref(),
+    )
+}
+
+fn resolve_app_cache_dir_for_os(
+    os: OsKind,
+    local_appdata: Option<&str>,
+    appdata: Option<&str>,
+    home: Option<&str>,
+    xdg_cache_home: Option<&str>,
+) -> Result<PathBuf, String> {
+    match os {
+        OsKind::Windows => {
+            if let Some(local_appdata) = normalize_env_value(local_appdata) {
+                return Ok(PathBuf::from(local_appdata).join(APP_IDENTIFIER));
+            }
+            if let Some(appdata) = normalize_env_value(appdata) {
+                return Ok(PathBuf::from(appdata).join(APP_IDENTIFIER));
+            }
+        }
+        OsKind::Macos => {
+            if let Some(home) = normalize_env_value(home) {
+                return Ok(PathBuf::from(home)
+                    .join("Library")
+                    .join("Caches")
+                    .join(APP_IDENTIFIER));
+            }
+        }
+        OsKind::Linux => {
+            if let Some(xdg_cache_home) = normalize_env_value(xdg_cache_home) {
+                return Ok(PathBuf::from(xdg_cache_home).join(APP_IDENTIFIER));
+            }
+            if let Some(home) = normalize_env_value(home) {
+                return Ok(PathBuf::from(home).join(".cache").join(APP_IDENTIFIER));
+            }
+        }
+    }
+
+    project_dirs().map(|dirs| dirs.cache_dir().to_path_buf())
+}
+
+fn normalize_env_value(value: Option<&str>) -> Option<&str> {
+    value
+        .map(str::trim)
+        .filter(|candidate| !candidate.is_empty())
 }
 
 fn snapshot_matches_state(state: &ServiceState, fingerprint: &WorkspaceFingerprint) -> bool {
@@ -2824,6 +2903,48 @@ mod tests {
                 "Someday Maybe/Idea.md".to_string()
             ]
         );
+    }
+
+    #[test]
+    fn resolve_app_cache_dir_honors_platform_overrides() -> Result<(), String> {
+        assert_eq!(
+            resolve_app_cache_dir_for_os(
+                OsKind::Windows,
+                Some("C:/Users/tester/AppData/Local"),
+                Some("C:/Users/tester/AppData/Roaming"),
+                Some("C:/Users/tester"),
+                None,
+            )?,
+            PathBuf::from("C:/Users/tester/AppData/Local").join(APP_IDENTIFIER)
+        );
+        assert_eq!(
+            resolve_app_cache_dir_for_os(
+                OsKind::Windows,
+                None,
+                Some("C:/Users/tester/AppData/Roaming"),
+                Some("C:/Users/tester"),
+                None,
+            )?,
+            PathBuf::from("C:/Users/tester/AppData/Roaming").join(APP_IDENTIFIER)
+        );
+        assert_eq!(
+            resolve_app_cache_dir_for_os(OsKind::Macos, None, None, Some("/Users/tester"), None,)?,
+            PathBuf::from("/Users/tester")
+                .join("Library")
+                .join("Caches")
+                .join(APP_IDENTIFIER)
+        );
+        assert_eq!(
+            resolve_app_cache_dir_for_os(
+                OsKind::Linux,
+                None,
+                None,
+                Some("/home/tester"),
+                Some("/tmp/cache-home"),
+            )?,
+            PathBuf::from("/tmp/cache-home").join(APP_IDENTIFIER)
+        );
+        Ok(())
     }
 
     #[test]

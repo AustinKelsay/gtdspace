@@ -65,6 +65,25 @@ describe('useToast helper', () => {
     expect(onReload).toHaveBeenCalledTimes(1);
   });
 
+  it('marks loading toasts as non-expiring', () => {
+    toastMock.mockReturnValue({
+      id: 'loading-toast',
+      dismiss: vi.fn(),
+    });
+
+    const { result } = renderHook(() => useToast());
+
+    act(() => {
+      result.current.showLoading('Syncing calendar');
+    });
+
+    expect(toastMock).toHaveBeenCalledWith({
+      title: 'Loading',
+      description: 'Syncing calendar',
+      duration: undefined,
+    });
+  });
+
   it('deduplicates repeated file-reloaded toasts inside the dedupe window', () => {
     const { result } = renderHook(() => useToast());
 

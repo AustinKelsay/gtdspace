@@ -30,6 +30,10 @@ function getToastIcon(title?: React.ReactNode, variant?: "default" | "destructiv
   return <Info className="h-5 w-5 text-blue-500 shrink-0" />;
 }
 
+function isLoadingToast(title?: React.ReactNode) {
+  return typeof title === 'string' && title.toLowerCase() === 'loading';
+}
+
 export function Toaster() {
   const { toasts, dismiss } = useToast()
 
@@ -37,12 +41,13 @@ export function Toaster() {
     <ToastProvider swipeDirection="right">
       {toasts.map(function ({ id, title, description, action, duration, onOpenChange, variant, ...props }) {
         const icon = getToastIcon(title, variant);
+        const resolvedDuration = duration ?? (isLoadingToast(title) ? undefined : DEFAULT_TOAST_DURATION_MS);
 
         return (
           <Toast
             key={id}
             variant={variant}
-            duration={duration ?? DEFAULT_TOAST_DURATION_MS}
+            duration={resolvedDuration}
             onOpenChange={onOpenChange}
             {...props}
           >

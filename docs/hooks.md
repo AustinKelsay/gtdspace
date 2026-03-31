@@ -74,6 +74,14 @@ The current UX contract is intentional:
 - externally modified dirty tabs do not auto-reload
 - deleted files still close open tabs
 
+The current toast contract is also intentional:
+
+- transient action feedback uses the shared toast system mounted at the app shell level
+- toast notifications appear as a fixed bottom-right stack so they never push header or editor layout
+- standard success, info, warning, and error toasts default to 8 seconds
+- actionable toasts such as file-reload prompts or undo affordances use a 12-second duration
+- inline `Alert` panels remain the right tool for persistent status or validation context, and dialogs remain the right tool for confirmations or required input
+
 ## Hooks With Narrow Or Transitional Roles
 
 Some hooks are narrower or not part of the core steady-state runtime:

@@ -100,6 +100,17 @@ The settings UI is organized under `src/components/settings/` and includes:
 
 The settings docs should reflect this grouped structure, not an old flat preferences modal.
 
+## Settings Feedback Behavior
+
+Settings mutations should use the shared transient toast system for short-lived feedback such as:
+
+- saved or exported successfully
+- import completed or completed with warnings
+- copy-to-clipboard success
+- destructive or validation failures that happen while submitting a settings action
+
+Persistent inline `Alert` content in settings should remain reserved for longer-lived state, setup guidance, or warnings that need to stay visible while the user is reading or configuring an integration.
+
 ## Validation And Migration
 
 Settings are validated and normalized before use. The relevant logic lives in:

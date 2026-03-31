@@ -26,6 +26,7 @@ import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { GTDProjectDialog, GTDActionDialog } from '@/components/gtd';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { useToast } from '@/hooks/use-toast';
+import { ACTION_TOAST_DURATION_MS } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import {
   DashboardOverview,
@@ -279,8 +280,10 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
       const undoToast = toast({
         title: 'Action deleted',
         description: `${actionName} was deleted`,
+        duration: ACTION_TOAST_DURATION_MS,
         action: (
           <ToastAction
+            altText={`Restore ${actionName}`}
             onClick={async () => {
               try {
                 const writeOk = await safeInvoke('save_file', { path: actionPath, content: backupContent }, null);
@@ -656,7 +659,11 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                         await loadHabits(gtdSpace.root_path);
                       } catch (error) {
                         log.error('Failed to create habit', error);
-                        alert(`Failed to create habit: ${error}`);
+                        toast({
+                          title: 'Create habit failed',
+                          description: String(error),
+                          variant: 'destructive',
+                        });
                       }
                     }
                   }

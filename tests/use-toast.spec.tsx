@@ -6,6 +6,8 @@ const toastMock = vi.fn();
 const dismissMock = vi.fn();
 
 vi.mock('@/hooks/use-toast', () => ({
+  ACTION_TOAST_DURATION_MS: 12000,
+  DEFAULT_TOAST_DURATION_MS: 8000,
   useToast: () => ({
     toast: toastMock,
     dismiss: dismissMock,
@@ -36,6 +38,31 @@ describe('useToast helper', () => {
       title: 'Info',
       description: '"Notes.md" was refreshed from disk',
     });
+  });
+
+  it('uses a longer actionable toast with a reload action when a file can be reloaded', () => {
+    const onReload = vi.fn();
+    const { result } = renderHook(() => useToast());
+
+    act(() => {
+      result.current.showFileModified('Notes.md', { onReload });
+    });
+
+    expect(toastMock).toHaveBeenCalledTimes(1);
+    const payload = toastMock.mock.calls[0]?.[0];
+    expect(payload).toMatchObject({
+      title: 'Warning',
+      description: '"Notes.md" was modified externally',
+      duration: 12000,
+    });
+    expect(payload.action.props.altText).toBe('Reload file from disk');
+    expect(payload.action.props.children).toBe('Reload file');
+
+    act(() => {
+      payload.action.props.onClick();
+    });
+
+    expect(onReload).toHaveBeenCalledTimes(1);
   });
 
   it('deduplicates repeated file-reloaded toasts inside the dedupe window', () => {

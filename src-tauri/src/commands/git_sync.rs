@@ -15,6 +15,7 @@ use rand::RngExt;
 use serde::Serialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use sha2_010::Sha256 as Pbkdf2Sha256;
 use similar::{ChangeTag, TextDiff};
 use std::ffi::OsStr;
 use std::fmt;
@@ -1365,7 +1366,7 @@ fn encrypt_file_to_path(
         .map_err(|e| format!("Failed to write nonce: {}", e))?;
 
     let mut key = [0u8; 32];
-    pbkdf2_hmac::<Sha256>(passphrase.as_bytes(), &salt, PBKDF2_ITERATIONS, &mut key);
+    pbkdf2_hmac::<Pbkdf2Sha256>(passphrase.as_bytes(), &salt, PBKDF2_ITERATIONS, &mut key);
     let cipher = Aes256Gcm::new_from_slice(&key)
         .map_err(|e| format!("Failed to initialize cipher: {}", e))?;
 
@@ -1465,7 +1466,7 @@ fn decrypt_file_to_path(
         .map_err(|e| format!("Failed to read salt: {}", e))?;
 
     let mut key = [0u8; 32];
-    pbkdf2_hmac::<Sha256>(passphrase.as_bytes(), &salt, PBKDF2_ITERATIONS, &mut key);
+    pbkdf2_hmac::<Pbkdf2Sha256>(passphrase.as_bytes(), &salt, PBKDF2_ITERATIONS, &mut key);
 
     let mut writer = BufWriter::new(
         File::create(output_path)

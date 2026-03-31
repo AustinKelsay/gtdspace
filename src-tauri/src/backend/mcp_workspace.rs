@@ -14,6 +14,7 @@ use sha2::{Digest, Sha256};
 use strsim::jaro_winkler;
 use uuid::Uuid;
 
+use crate::backend::encode_hex;
 use crate::backend::mcp_workspace_config::resolve_workspace;
 use crate::backend::mcp_workspace_context::{
     build_context_pack, build_context_pack_markdown, read_cached_context_pack,
@@ -1691,7 +1692,7 @@ impl GtdWorkspaceService {
         let dirs = project_dirs()?;
         let mut hasher = Sha256::new();
         hasher.update(self.workspace_root().as_bytes());
-        let workspace_hash = format!("{:x}", hasher.finalize());
+        let workspace_hash = encode_hex(hasher.finalize());
         let root = dirs
             .cache_dir()
             .join(CONTEXT_CACHE_DIR)
@@ -2374,7 +2375,7 @@ fn default_server_version() -> String {
 fn hash_bytes(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    format!("{:x}", hasher.finalize())
+    encode_hex(hasher.finalize())
 }
 
 fn hash_file_if_exists(path: &str) -> Result<Option<String>, String> {

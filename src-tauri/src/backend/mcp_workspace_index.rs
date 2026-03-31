@@ -4,6 +4,7 @@ use std::path::{Component, Path, PathBuf};
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 
+use crate::backend::encode_hex;
 use crate::backend::mcp_workspace::{
     GtdItemReferenceSummary, GtdItemSummary, GtdItemType, WorkspaceFingerprint,
 };
@@ -25,7 +26,7 @@ pub(crate) fn build_fingerprint(root: &Path, files: &[MarkdownFile]) -> Workspac
         normalized_root_path: normalize_path(root),
         latest_modified_unix,
         markdown_file_count: files.len(),
-        aggregate_digest: format!("{:x}", hasher.finalize()),
+        aggregate_digest: encode_hex(hasher.finalize()),
     }
 }
 

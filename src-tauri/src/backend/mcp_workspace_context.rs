@@ -7,12 +7,12 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tempfile::NamedTempFile;
 
-use crate::backend::gtdspace_server_version;
 use crate::backend::mcp_workspace::{
     ContextPack, FolderMeaning, GtdItemSummary, MarkerDefinition, WorkspaceFingerprint,
 };
 use crate::backend::mcp_workspace_index::item_type_key;
 use crate::backend::normalize_workspace_path;
+use crate::backend::{encode_hex, gtdspace_server_version};
 
 const CONTEXT_PACK_VERSION: u32 = 1;
 
@@ -217,7 +217,7 @@ pub(crate) fn write_cached_context_pack(
     let mut hasher = Sha256::new();
     hasher.update(pack.workspace_root.as_bytes());
     let manifest = ContextPackManifest {
-        workspace_path_hash: format!("{:x}", hasher.finalize()),
+        workspace_path_hash: encode_hex(hasher.finalize()),
         generated_at: pack.generated_at.clone(),
         generator_version: CONTEXT_PACK_VERSION,
         fingerprint: pack.fingerprint.clone(),

@@ -16,3 +16,13 @@ pub use mcp_workspace::{
     WorkspaceListItemsResult, WorkspaceRefreshResult, WorkspaceSearchResult,
 };
 pub use mcp_workspace_config::{load_mcp_server_launch_settings, McpServerLaunchSettings};
+
+pub(crate) fn encode_hex(bytes: impl AsRef<[u8]>) -> String {
+    let bytes = bytes.as_ref();
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        use std::fmt::Write as _;
+        let _ = write!(&mut output, "{:02x}", byte);
+    }
+    output
+}

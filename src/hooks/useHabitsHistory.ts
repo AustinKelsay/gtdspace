@@ -9,6 +9,7 @@ import { readFileText } from './useFileManager';
 import { localISODate, toISOStringFromEpoch } from '@/utils/time';
 import type { GTDHabit, MarkdownFile } from '@/types';
 import { createScopedLogger } from '@/utils/logger';
+import { countHabitsCompletedOnDate } from '@/utils/habit-progress';
 import {
   calculateNextHabitReset,
   isHabitResetAction,
@@ -448,23 +449,11 @@ ${newRow}
       throw err;
     }
   }, [refresh]);
+
+  const today = localISODate(new Date());
   
   const summary = useMemo(() => {
-    // Get today's date in YYYY-MM-DD format using local timezone
-    const now = new Date();
-    const today = [
-      now.getFullYear(),
-      String(now.getMonth() + 1).padStart(2, '0'),
-      String(now.getDate()).padStart(2, '0')
-    ].join('-');
-
-    // Count habits completed today based on history entries
-    const completedToday = habits.filter(habit => {
-      // Check if there's a history entry for today
-      const todayEntry = habit.history.find(entry => entry.date === today);
-      // Return true only if entry exists and is completed
-      return todayEntry?.completed === true;
-    }).length;
+    const completedToday = countHabitsCompletedOnDate(habits, today, today);
 
     const streaksActive = habits.filter(h => h.currentStreak > 0).length;
     const averageSuccessRate = habits.length > 0
@@ -482,7 +471,7 @@ ${newRow}
       averageSuccessRate,
       needingAttention
     };
-  }, [habits]);
+  }, [habits, today]);
   
   const analytics = useMemo(() => {
     if (habits.length === 0) {

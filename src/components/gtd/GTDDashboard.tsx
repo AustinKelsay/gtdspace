@@ -26,6 +26,7 @@ import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { GTDProjectDialog, GTDActionDialog } from '@/components/gtd';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { useToast } from '@/hooks/use-toast';
+import { ACTION_TOAST_DURATION_MS } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import {
   DashboardOverview,
@@ -266,7 +267,15 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
       const actionName = action?.name || 'Action';
 
       // Read content for temp backup
-      const backupContent = await safeInvoke<string>('read_file', { path: actionPath }, '') || '';
+      const backupContent = await safeInvoke<string>('read_file', { path: actionPath }, null);
+      if (backupContent == null) {
+        toast({
+          title: 'Delete failed',
+          description: 'Could not back up action before delete',
+          variant: 'destructive'
+        });
+        return;
+      }
 
       // Delete the file and verify result
       const delResult = await safeInvoke<FileOperationResult>('delete_file', { path: actionPath }, { success: false, message: 'Failed to delete file' });
@@ -279,8 +288,10 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
       const undoToast = toast({
         title: 'Action deleted',
         description: `${actionName} was deleted`,
+        duration: ACTION_TOAST_DURATION_MS,
         action: (
           <ToastAction
+            altText={`Restore ${actionName}`}
             onClick={async () => {
               try {
                 const writeOk = await safeInvoke('save_file', { path: actionPath, content: backupContent }, null);
@@ -623,20 +634,20 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
                       const frequency = selectedFrequency.value;
 
-                      try {
-                        const habitPath = await withErrorHandling(async () => {
-                          const createdPath = await invoke<string>('create_gtd_habit', {
-                            spacePath: gtdSpace.root_path,
-                            habitName: sanitizedHabitName,
-                            frequency,
-                            focusTime: null
-                          });
-                          return createdPath;
-                        }, 'Failed to create habit');
-                        if (!habitPath) {
-                          return;
-                        }
+                      const habitPath = await withErrorHandling(async () => {
+                        const createdPath = await invoke<string>('create_gtd_habit', {
+                          spacePath: gtdSpace.root_path,
+                          habitName: sanitizedHabitName,
+                          frequency,
+                          focusTime: null
+                        });
+                        return createdPath;
+                      }, 'Failed to create habit');
+                      if (!habitPath) {
+                        return;
+                      }
 
+                      try {
                         // Open the new habit file
                         if (onSelectFile) {
                           const normalizedHabitPath = norm(habitPath) ?? habitPath;
@@ -655,8 +666,12 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                         // Reload habits
                         await loadHabits(gtdSpace.root_path);
                       } catch (error) {
-                        log.error('Failed to create habit', error);
-                        alert(`Failed to create habit: ${error}`);
+                        log.error('Failed to reload habits or select created habit', error);
+                        toast({
+                          title: 'Reloading habits or file selection failed',
+                          description: String(error),
+                          variant: 'destructive',
+                        });
                       }
                     }
                   }

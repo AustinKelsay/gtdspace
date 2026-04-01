@@ -8,7 +8,7 @@ import {
   ToastTitle,
   ToastViewport,
 } from "@/components/ui/toast"
-import { useToast } from "@/hooks/useToast"
+import { DEFAULT_TOAST_DURATION_MS, useToast } from "@/hooks/use-toast"
 import { CheckCircle, XCircle, AlertTriangle, Info, Loader2 } from "lucide-react"
 
 function getToastIcon(title?: React.ReactNode, variant?: "default" | "destructive") {
@@ -30,16 +30,27 @@ function getToastIcon(title?: React.ReactNode, variant?: "default" | "destructiv
   return <Info className="h-5 w-5 text-blue-500 shrink-0" />;
 }
 
+function isLoadingToast(title?: React.ReactNode) {
+  return typeof title === 'string' && title.toLowerCase() === 'loading';
+}
+
 export function Toaster() {
   const { toasts, dismiss } = useToast()
 
   return (
-    <ToastProvider>
-      {toasts.map(function ({ id, title, description, action, onOpenChange: _onOpenChange, variant, ...props }) {
+    <ToastProvider swipeDirection="right">
+      {toasts.map(function ({ id, title, description, action, duration, onOpenChange, variant, ...props }) {
         const icon = getToastIcon(title, variant);
+        const resolvedDuration = duration ?? (isLoadingToast(title) ? undefined : DEFAULT_TOAST_DURATION_MS);
 
         return (
-          <Toast key={id} variant={variant} {...props}>
+          <Toast
+            key={id}
+            variant={variant}
+            duration={resolvedDuration}
+            onOpenChange={onOpenChange}
+            {...props}
+          >
             <div className="flex items-start gap-3">
               {icon}
               <div className="grid gap-1">

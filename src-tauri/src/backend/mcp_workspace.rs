@@ -1,10 +1,9 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::env;
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, Timelike, Utc};
+use chrono::{Local, NaiveDate, NaiveDateTime, Timelike, Utc};
 use directories::ProjectDirs;
 use rmcp::schemars;
 use rmcp::schemars::transform::RecursiveTransform;
@@ -15,37 +14,53 @@ use sha2::{Digest, Sha256};
 use strsim::jaro_winkler;
 use uuid::Uuid;
 
-use crate::commands::filesystem::{
-    create_directory, list_markdown_files, read_file, save_file, MarkdownFile,
+use crate::backend::encode_hex;
+use crate::backend::mcp_workspace_config::resolve_workspace;
+use crate::backend::mcp_workspace_context::{
+    build_context_pack, build_context_pack_markdown, read_cached_context_pack,
+    to_public_cache_paths, write_cached_context_pack, CachePaths, CachedContextPack,
 };
+#[cfg(test)]
+use crate::backend::mcp_workspace_index::parse_reference_list;
+use crate::backend::mcp_workspace_index::{
+    build_fingerprint, build_item_summaries, item_type_key, normalize_absolute_to_relative,
+    normalize_path_components, normalize_relative_input, normalize_similarity_key,
+    parse_reference_note, path_is_within_workspace, project_similarity_keys, sanitize_title,
+};
+use crate::backend::mcp_workspace_markdown::{
+    build_action_markdown, build_habit_markdown, build_horizon_markdown, build_project_markdown,
+    build_reference_note_markdown, parse_action_update_seed, parse_horizon_update_seed,
+    parse_project_update_seed, preview_write, project_directory_from_readme,
+    resolve_project_readme_in_directory, ActionBuildInput, HabitBuildInput, HorizonBuildInput,
+    ProjectBuildInput,
+};
+#[cfg(test)]
+use crate::commands::filesystem::MarkdownFile;
+use crate::commands::filesystem::{create_directory, list_markdown_files, read_file, save_file};
 use crate::commands::gtd_habits::update_habit_status;
 use crate::commands::gtd_habits_domain::{
     apply_status_marker, format_history_entry, format_history_time, insert_history_entry,
     parse_habit_state, parse_history_rows_strict, parse_history_timestamp, HabitStatus,
-    DEFAULT_HISTORY_TEMPLATE,
 };
-use crate::commands::gtd_projects::{list_gtd_projects, rename_gtd_action, rename_gtd_project};
+use crate::commands::gtd_projects::{rename_gtd_action, rename_gtd_project};
 use crate::commands::gtd_relationships::{find_habits_referencing, find_reverse_relationships};
 use crate::commands::search::{search_files, SearchFilters};
-use crate::commands::seed_data::{
-    generate_area_of_focus_template_with_refs, generate_goal_template_with_refs,
-    generate_project_readme_with_refs, generate_vision_document_template_with_refs,
-    ProjectReadmeParams,
-};
 use crate::commands::utils::sanitize_markdown_file_stem;
-use crate::commands::workspace::{check_is_gtd_space, get_default_gtd_space_path};
 
-const CONTEXT_PACK_VERSION: u32 = 1;
-const SETTINGS_FILE_NAME: &str = "settings.json";
 const CONTEXT_CACHE_DIR: &str = "mcp-context";
 const MAX_CONTEXT_PACK_RETRIES: usize = 5;
 const MAX_CHANGE_SET_TOMBSTONES: usize = 256;
-const DEFAULT_MCP_SERVER_LOG_LEVEL: &str = "info";
-const VALID_MCP_SERVER_LOG_LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
+const APP_IDENTIFIER: &str = "com.gtdspace.app";
+const DEFAULT_LIST_ITEMS_LIMIT: usize = 200;
+const MAX_LIST_ITEMS_LIMIT: usize = 1000;
+const DEFAULT_SEARCH_LIMIT: usize = 20;
+const MAX_SEARCH_LIMIT: usize = 1000;
 
 pub(crate) const GTD_SPEC_DOC: &str = include_str!("../../../spec/gtd-spec.md");
 pub(crate) const MARKDOWN_SCHEMA_DOC: &str = include_str!("../../../spec/02-markdown-schema.md");
 pub(crate) const ARCHITECTURE_DOC: &str = include_str!("../../../docs/architecture.md");
+
+pub use crate::backend::mcp_workspace_index::normalize_workspace_path;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
@@ -73,6 +88,8 @@ pub struct GtdItemReferenceSummary {
 #[serde(rename_all = "camelCase")]
 pub struct GtdItemSummary {
     pub relative_path: String,
+    #[serde(skip_serializing, skip_deserializing)]
+    #[schemars(skip)]
     pub absolute_path: String,
     pub item_type: GtdItemType,
     pub title: String,
@@ -135,13 +152,6 @@ pub struct WorkspaceInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct McpServerLaunchSettings {
-    pub read_only: bool,
-    pub log_level: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
 #[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceSearchMatch {
     pub file_path: String,
@@ -156,12 +166,14 @@ pub struct WorkspaceSearchMatch {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceListItemsResult {
     pub items: Vec<GtdItemSummary>,
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSearchResult {
     pub matches: Vec<WorkspaceSearchMatch>,
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -249,10 +261,34 @@ pub struct ChangeApplyResult {
     pub replayed: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ChangeSetErrorKind {
+    ReadOnly,
+    Unknown,
+    Invalidated,
+    Discarded,
+    AlreadyApplied,
+    Stale,
+    ApplyFailed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangeSetToolError {
+    pub kind: ChangeSetErrorKind,
+    pub change_set_id: Option<String>,
+    pub status: Option<ChangeStatus>,
+    pub reason: Option<String>,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceListItemsRequest {
     pub item_type: Option<GtdItemType>,
+    pub cursor: Option<String>,
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -260,8 +296,9 @@ pub struct WorkspaceListItemsRequest {
 #[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceSearchRequest {
     pub query: String,
-    #[serde(default = "default_search_limit")]
-    pub max_results: usize,
+    pub cursor: Option<String>,
+    pub limit: Option<usize>,
+    pub max_results: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -297,16 +334,11 @@ pub struct ProjectUpdateRequest {
     pub description: Option<String>,
     pub due_date: Option<String>,
     pub status: Option<String>,
-    #[serde(default)]
-    pub areas: Vec<String>,
-    #[serde(default)]
-    pub goals: Vec<String>,
-    #[serde(default)]
-    pub vision: Vec<String>,
-    #[serde(default)]
-    pub purpose: Vec<String>,
-    #[serde(default)]
-    pub general_references: Vec<String>,
+    pub areas: Option<Vec<String>>,
+    pub goals: Option<Vec<String>>,
+    pub vision: Option<Vec<String>>,
+    pub purpose: Option<Vec<String>>,
+    pub general_references: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -342,11 +374,9 @@ pub struct ActionUpdateRequest {
     pub focus_date: Option<String>,
     pub due_date: Option<String>,
     pub effort: Option<String>,
-    #[serde(default)]
-    pub contexts: Vec<String>,
+    pub contexts: Option<Vec<String>>,
     pub notes: Option<String>,
-    #[serde(default)]
-    pub general_references: Vec<String>,
+    pub general_references: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -476,18 +506,12 @@ pub struct HorizonPageUpdateRequest {
     pub target_date: Option<String>,
     pub horizon: Option<String>,
     pub description: Option<String>,
-    #[serde(default)]
-    pub projects: Vec<String>,
-    #[serde(default)]
-    pub areas: Vec<String>,
-    #[serde(default)]
-    pub goals: Vec<String>,
-    #[serde(default)]
-    pub vision: Vec<String>,
-    #[serde(default)]
-    pub purpose: Vec<String>,
-    #[serde(default)]
-    pub general_references: Vec<String>,
+    pub projects: Option<Vec<String>>,
+    pub areas: Option<Vec<String>>,
+    pub goals: Option<Vec<String>>,
+    pub vision: Option<Vec<String>>,
+    pub purpose: Option<Vec<String>>,
+    pub general_references: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -513,6 +537,39 @@ pub struct ReferenceNoteUpdateRequest {
     pub body: Option<String>,
 }
 
+impl std::fmt::Display for ChangeSetToolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for ChangeSetToolError {}
+
+impl WorkspaceListItemsRequest {
+    fn resolved_limit(&self) -> usize {
+        self.limit
+            .unwrap_or(DEFAULT_LIST_ITEMS_LIMIT)
+            .clamp(1, MAX_LIST_ITEMS_LIMIT)
+    }
+
+    fn resolved_offset(&self) -> Result<usize, String> {
+        parse_pagination_cursor(self.cursor.as_deref())
+    }
+}
+
+impl WorkspaceSearchRequest {
+    fn resolved_limit(&self) -> usize {
+        self.limit
+            .or(self.max_results)
+            .unwrap_or(DEFAULT_SEARCH_LIMIT)
+            .clamp(1, MAX_SEARCH_LIMIT)
+    }
+
+    fn resolved_offset(&self) -> Result<usize, String> {
+        parse_pagination_cursor(self.cursor.as_deref())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangeSetRequest {
@@ -525,31 +582,6 @@ struct WorkspaceSnapshot {
     items: Vec<GtdItemSummary>,
     item_lookup: HashMap<String, GtdItemSummary>,
     item_counts: BTreeMap<String, usize>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ContextPackManifest {
-    workspace_path_hash: String,
-    generated_at: String,
-    generator_version: u32,
-    fingerprint: WorkspaceFingerprint,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct CachedContextPack {
-    pub pack: ContextPack,
-    pub markdown: String,
-    cache_paths: CachePaths,
-    source: String,
-}
-
-#[derive(Debug, Clone)]
-struct CachePaths {
-    root: PathBuf,
-    manifest: PathBuf,
-    json: PathBuf,
-    markdown: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -720,13 +752,24 @@ impl GtdWorkspaceService {
         self.ensure_context_pack(false)
     }
 
-    pub fn list_items(&self, filter: Option<GtdItemType>) -> Result<Vec<GtdItemSummary>, String> {
+    pub fn list_items(
+        &self,
+        request: WorkspaceListItemsRequest,
+    ) -> Result<WorkspaceListItemsResult, String> {
         let snapshot = self.ensure_snapshot(false)?;
-        Ok(snapshot
+        let items = snapshot
             .items
             .into_iter()
-            .filter(|item| filter.as_ref().is_none_or(|kind| item.item_type == *kind))
-            .collect())
+            .filter(|item| {
+                request
+                    .item_type
+                    .as_ref()
+                    .is_none_or(|kind| item.item_type == *kind)
+            })
+            .collect::<Vec<_>>();
+        let (items, next_cursor) =
+            paginate_entries(items, request.resolved_offset()?, request.resolved_limit());
+        Ok(WorkspaceListItemsResult { items, next_cursor })
     }
 
     pub fn get_item(&self, path: &str) -> Result<GtdItemSummary, String> {
@@ -781,27 +824,34 @@ impl GtdWorkspaceService {
     pub async fn search(
         &self,
         request: WorkspaceSearchRequest,
-    ) -> Result<Vec<WorkspaceSearchMatch>, String> {
+    ) -> Result<WorkspaceSearchResult, String> {
+        let offset = request.resolved_offset()?;
+        let limit = request.resolved_limit();
         let filters = SearchFilters {
             case_sensitive: false,
             whole_word: false,
             use_regex: false,
             include_file_names: true,
-            max_results: request.max_results.max(1),
+            max_results: offset.saturating_add(limit).clamp(1, MAX_SEARCH_LIMIT),
         };
         let response = search_files(request.query, self.workspace_root(), filters).await?;
-        Ok(response
+        let matches = response
             .results
             .into_iter()
             .map(|entry| WorkspaceSearchMatch {
-                file_path: entry.file_path,
+                file_path: normalize_absolute_to_relative(&self.workspace_root, &entry.file_path),
                 file_name: entry.file_name,
                 line_number: entry.line_number,
                 line_content: entry.line_content,
                 match_start: entry.match_start,
                 match_end: entry.match_end,
             })
-            .collect())
+            .collect::<Vec<_>>();
+        let (matches, next_cursor) = paginate_entries(matches, offset, limit);
+        Ok(WorkspaceSearchResult {
+            matches,
+            next_cursor,
+        })
     }
 
     pub fn relationships(&self, path: &str) -> Result<RelationshipSummary, String> {
@@ -845,6 +895,10 @@ impl GtdWorkspaceService {
             return Err(format!("Project '{}' already exists", title));
         }
         let readme_path = project_dir.join("README.md");
+        let project_dir_relative =
+            normalize_absolute_to_relative(&self.workspace_root, &normalize_path(&project_dir));
+        let readme_relative =
+            normalize_absolute_to_relative(&self.workspace_root, &normalize_path(&readme_path));
         let content = build_project_markdown(ProjectBuildInput {
             title: title.clone(),
             description: request.description,
@@ -857,16 +911,12 @@ impl GtdWorkspaceService {
             general_references: request.general_references,
             created_date_time: Utc::now().to_rfc3339(),
             additional_content: None,
-        });
+        })?;
         self.store_change_set(
             "project_create",
             format!("Create project '{}'", title),
-            vec![normalize_path(&project_dir), normalize_path(&readme_path)],
-            preview_write(
-                "Create project README",
-                &normalize_path(&readme_path),
-                &content,
-            ),
+            vec![project_dir_relative, readme_relative.clone()],
+            preview_write("Create project README", &readme_relative, &content),
             vec![
                 ChangeOperation::CreateDirectory {
                     path: normalize_path(&project_dir),
@@ -899,34 +949,16 @@ impl GtdWorkspaceService {
                 .unwrap_or_default(),
             due_date: request.due_date.or(parsed.due_date),
             status: request.status.unwrap_or(parsed.status),
-            areas: if request.areas.is_empty() {
-                parsed.areas
-            } else {
-                request.areas
-            },
-            goals: if request.goals.is_empty() {
-                parsed.goals
-            } else {
-                request.goals
-            },
-            vision: if request.vision.is_empty() {
-                parsed.vision
-            } else {
-                request.vision
-            },
-            purpose: if request.purpose.is_empty() {
-                parsed.purpose
-            } else {
-                request.purpose
-            },
-            general_references: if request.general_references.is_empty() {
-                parsed.general_references
-            } else {
-                request.general_references
-            },
+            areas: request.areas.unwrap_or(parsed.areas),
+            goals: request.goals.unwrap_or(parsed.goals),
+            vision: request.vision.unwrap_or(parsed.vision),
+            purpose: request.purpose.unwrap_or(parsed.purpose),
+            general_references: request
+                .general_references
+                .unwrap_or(parsed.general_references),
             created_date_time: parsed.created_date_time,
             additional_content: parsed.additional_content,
-        });
+        })?;
         self.store_change_set(
             "project_update",
             format!("Update project '{}'", item.title),
@@ -991,15 +1023,13 @@ impl GtdWorkspaceService {
             notes: request.notes,
             created_date_time: Utc::now().to_rfc3339(),
         });
+        let action_relative =
+            normalize_absolute_to_relative(&self.workspace_root, &normalize_path(&action_path));
         self.store_change_set(
             "action_create",
             format!("Create action '{}'", request.name),
-            vec![normalize_path(&action_path)],
-            preview_write(
-                "Create action markdown",
-                &normalize_path(&action_path),
-                &content,
-            ),
+            vec![action_relative.clone()],
+            preview_write("Create action markdown", &action_relative, &content),
             vec![ChangeOperation::WriteFile {
                 path: normalize_path(&action_path),
                 expected_sha256: None,
@@ -1025,16 +1055,10 @@ impl GtdWorkspaceService {
             focus_date: request.focus_date.or(parsed.focus_date),
             due_date: request.due_date.or(parsed.due_date),
             effort: request.effort.unwrap_or(parsed.effort),
-            contexts: if request.contexts.is_empty() {
-                parsed.contexts
-            } else {
-                request.contexts
-            },
-            general_references: if request.general_references.is_empty() {
-                parsed.general_references
-            } else {
-                request.general_references
-            },
+            contexts: request.contexts.unwrap_or(parsed.contexts),
+            general_references: request
+                .general_references
+                .unwrap_or(parsed.general_references),
             notes: request.notes.or(parsed.notes),
             created_date_time: parsed.created_date_time,
         });
@@ -1098,15 +1122,13 @@ impl GtdWorkspaceService {
             purpose: request.purpose,
             created_date_time: Utc::now().to_rfc3339(),
         })?;
+        let habit_relative =
+            normalize_absolute_to_relative(&self.workspace_root, &normalize_path(&habit_path));
         self.store_change_set(
             "habit_create",
             format!("Create habit '{}'", title),
-            vec![normalize_path(&habit_path)],
-            preview_write(
-                "Create habit markdown",
-                &normalize_path(&habit_path),
-                &content,
-            ),
+            vec![habit_relative.clone()],
+            preview_write("Create habit markdown", &habit_relative, &content),
             vec![ChangeOperation::WriteFile {
                 path: normalize_path(&habit_path),
                 expected_sha256: None,
@@ -1240,6 +1262,8 @@ impl GtdWorkspaceService {
                 normalize_path(&file_path)
             ));
         }
+        let page_relative =
+            normalize_absolute_to_relative(&self.workspace_root, &normalize_path(&file_path));
         let content = build_horizon_markdown(
             &request.page_type,
             HorizonBuildInput {
@@ -1262,8 +1286,8 @@ impl GtdWorkspaceService {
         self.store_change_set(
             "horizon_page_create",
             format!("Create {:?} page", request.page_type),
-            vec![normalize_path(&file_path)],
-            preview_write("Create horizon page", &normalize_path(&file_path), &content),
+            vec![page_relative.clone()],
+            preview_write("Create horizon page", &page_relative, &content),
             vec![ChangeOperation::WriteFile {
                 path: normalize_path(&file_path),
                 expected_sha256: None,
@@ -1298,36 +1322,14 @@ impl GtdWorkspaceService {
                 target_date: request.target_date.or(parsed.target_date),
                 horizon: request.horizon.or(parsed.horizon),
                 description: request.description.or(parsed.description),
-                projects: if request.projects.is_empty() {
-                    parsed.projects
-                } else {
-                    request.projects
-                },
-                areas: if request.areas.is_empty() {
-                    parsed.areas
-                } else {
-                    request.areas
-                },
-                goals: if request.goals.is_empty() {
-                    parsed.goals
-                } else {
-                    request.goals
-                },
-                vision: if request.vision.is_empty() {
-                    parsed.vision
-                } else {
-                    request.vision
-                },
-                purpose: if request.purpose.is_empty() {
-                    parsed.purpose
-                } else {
-                    request.purpose
-                },
-                general_references: if request.general_references.is_empty() {
-                    parsed.general_references
-                } else {
-                    request.general_references
-                },
+                projects: request.projects.unwrap_or(parsed.projects),
+                areas: request.areas.unwrap_or(parsed.areas),
+                goals: request.goals.unwrap_or(parsed.goals),
+                vision: request.vision.unwrap_or(parsed.vision),
+                purpose: request.purpose.unwrap_or(parsed.purpose),
+                general_references: request
+                    .general_references
+                    .unwrap_or(parsed.general_references),
                 created_date_time: parsed.created_date_time,
                 trailing_content: parsed.trailing_content,
             },
@@ -1363,11 +1365,13 @@ impl GtdWorkspaceService {
             return Err(format!("Note already exists at {}", normalize_path(&path)));
         }
         let content = build_reference_note_markdown(&title, request.body, None);
+        let note_relative =
+            normalize_absolute_to_relative(&self.workspace_root, &normalize_path(&path));
         self.store_change_set(
             "reference_note_create",
             format!("Create {} note '{}'", folder, title),
-            vec![normalize_path(&path)],
-            preview_write("Create reference note", &normalize_path(&path), &content),
+            vec![note_relative.clone()],
+            preview_write("Create reference note", &note_relative, &content),
             vec![ChangeOperation::WriteFile {
                 path: normalize_path(&path),
                 expected_sha256: None,
@@ -1410,14 +1414,30 @@ impl GtdWorkspaceService {
         )
     }
 
-    pub fn change_apply(&self, request: ChangeSetRequest) -> Result<ChangeApplyResult, String> {
-        self.reject_if_read_only()?;
+    pub fn change_apply(
+        &self,
+        request: ChangeSetRequest,
+    ) -> Result<ChangeApplyResult, ChangeSetToolError> {
+        if self.read_only {
+            return Err(Self::change_set_tool_error(
+                ChangeSetErrorKind::ReadOnly,
+                None,
+                None,
+                Some("read-only"),
+                "This MCP server is running in read-only mode".to_string(),
+            ));
+        }
         let change_set_id = request.change_set_id;
         let stored = {
-            let state = self
-                .state
-                .lock()
-                .map_err(|_| "Failed to lock workspace state".to_string())?;
+            let state = self.state.lock().map_err(|_| {
+                Self::change_set_tool_error(
+                    ChangeSetErrorKind::ApplyFailed,
+                    Some(&change_set_id),
+                    None,
+                    Some("state-lock"),
+                    "Failed to lock workspace state".to_string(),
+                )
+            })?;
             if let Some(stored) = state.change_sets.get(&change_set_id).cloned() {
                 stored
             } else if let Some(tombstone) = Self::lookup_terminal_change_set(&state, &change_set_id)
@@ -1429,7 +1449,7 @@ impl GtdWorkspaceService {
                 }
                 return Err(Self::terminal_change_set_apply_error(&tombstone));
             } else {
-                return Err(Self::unknown_change_set_message(&change_set_id));
+                return Err(Self::unknown_change_set_error(&change_set_id));
             }
         };
 
@@ -1439,10 +1459,15 @@ impl GtdWorkspaceService {
                     "Change set '{}' is no longer valid because workspace files changed since planning: {} Create a fresh plan before applying.",
                     change_set_id, error
                 );
-                let mut state = self
-                    .state
-                    .lock()
-                    .map_err(|_| "Failed to lock workspace state".to_string())?;
+                let mut state = self.state.lock().map_err(|_| {
+                    Self::change_set_tool_error(
+                        ChangeSetErrorKind::ApplyFailed,
+                        Some(&change_set_id),
+                        Some(ChangeStatus::Invalidated),
+                        Some("state-lock"),
+                        "Failed to lock workspace state".to_string(),
+                    )
+                })?;
                 state.change_sets.remove(&change_set_id);
                 Self::record_change_set_tombstone(
                     &mut state,
@@ -1460,7 +1485,13 @@ impl GtdWorkspaceService {
                 );
                 state.snapshot = None;
                 state.context_pack = None;
-                return Err(message);
+                return Err(Self::change_set_tool_error(
+                    ChangeSetErrorKind::Stale,
+                    Some(&change_set_id),
+                    Some(ChangeStatus::Invalidated),
+                    Some("workspace-changed"),
+                    message,
+                ));
             }
         }
 
@@ -1497,10 +1528,15 @@ impl GtdWorkspaceService {
                     "Change set '{}' previously failed during apply: {} Workspace state may be partially updated; run workspace_refresh before continuing and create a new plan.",
                     change_set_id, error
                 );
-                let mut state = self
-                    .state
-                    .lock()
-                    .map_err(|_| "Failed to lock workspace state".to_string())?;
+                let mut state = self.state.lock().map_err(|_| {
+                    Self::change_set_tool_error(
+                        ChangeSetErrorKind::ApplyFailed,
+                        Some(&change_set_id),
+                        Some(ChangeStatus::Invalidated),
+                        Some("state-lock"),
+                        "Failed to lock workspace state".to_string(),
+                    )
+                })?;
                 state.change_sets.remove(&change_set_id);
                 Self::record_change_set_tombstone(
                     &mut state,
@@ -1518,34 +1554,58 @@ impl GtdWorkspaceService {
                 );
                 state.snapshot = None;
                 state.context_pack = None;
-                return Err(format!(
-                    "{} Workspace state may be partially updated; run workspace_refresh before continuing.",
-                    error
+                return Err(Self::change_set_tool_error(
+                    ChangeSetErrorKind::ApplyFailed,
+                    Some(&change_set_id),
+                    Some(ChangeStatus::Invalidated),
+                    Some("apply-failed"),
+                    format!(
+                        "{} Workspace state may be partially updated; run workspace_refresh before continuing.",
+                        error
+                    ),
                 ));
             }
         }
 
         {
-            let mut state = self
-                .state
-                .lock()
-                .map_err(|_| "Failed to lock workspace state".to_string())?;
+            let mut state = self.state.lock().map_err(|_| {
+                Self::change_set_tool_error(
+                    ChangeSetErrorKind::ApplyFailed,
+                    Some(&change_set_id),
+                    None,
+                    Some("state-lock"),
+                    "Failed to lock workspace state".to_string(),
+                )
+            })?;
             state.change_sets.remove(&change_set_id);
             state.snapshot = None;
             state.context_pack = None;
         }
 
-        let info = self.workspace_info()?;
+        let info = self.workspace_info().map_err(|error| {
+            Self::change_set_tool_error(
+                ChangeSetErrorKind::ApplyFailed,
+                Some(&change_set_id),
+                Some(ChangeStatus::Applied),
+                Some("workspace-info"),
+                error,
+            )
+        })?;
         let result = ChangeApplyResult {
             change_set: Self::change_set_summary(&stored.public, ChangeStatus::Applied),
             workspace_info: info,
             replayed: false,
         };
         {
-            let mut state = self
-                .state
-                .lock()
-                .map_err(|_| "Failed to lock workspace state".to_string())?;
+            let mut state = self.state.lock().map_err(|_| {
+                Self::change_set_tool_error(
+                    ChangeSetErrorKind::ApplyFailed,
+                    Some(&change_set_id),
+                    Some(ChangeStatus::Applied),
+                    Some("state-lock"),
+                    "Failed to lock workspace state".to_string(),
+                )
+            })?;
             Self::record_change_set_tombstone(
                 &mut state,
                 change_set_id,
@@ -1561,15 +1621,23 @@ impl GtdWorkspaceService {
         Ok(result)
     }
 
-    pub fn change_discard(&self, request: ChangeSetRequest) -> Result<ChangeSetSummary, String> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| "Failed to lock workspace state".to_string())?;
+    pub fn change_discard(
+        &self,
+        request: ChangeSetRequest,
+    ) -> Result<ChangeSetSummary, ChangeSetToolError> {
+        let mut state = self.state.lock().map_err(|_| {
+            Self::change_set_tool_error(
+                ChangeSetErrorKind::ApplyFailed,
+                Some(&request.change_set_id),
+                None,
+                Some("state-lock"),
+                "Failed to lock workspace state".to_string(),
+            )
+        })?;
         let mut change = state
             .change_sets
             .remove(&request.change_set_id)
-            .ok_or_else(|| format!("Unknown change set '{}'", request.change_set_id))?;
+            .ok_or_else(|| Self::unknown_change_set_error(&request.change_set_id))?;
         change.public.status = ChangeStatus::Discarded;
         let summary = ChangeSetSummary {
             id: change.public.id,
@@ -1629,7 +1697,6 @@ impl GtdWorkspaceService {
         };
         state.snapshot = Some(snapshot.clone());
         state.context_pack = None;
-        state.change_sets.clear();
         Ok(snapshot)
     }
 
@@ -1675,7 +1742,12 @@ impl GtdWorkspaceService {
                 }
             }
 
-            let pack = build_context_pack(snapshot.clone(), self.workspace_root());
+            let pack = build_context_pack(
+                snapshot.fingerprint.clone(),
+                snapshot.item_counts.clone(),
+                snapshot.items.clone(),
+                self.workspace_root(),
+            );
             let markdown = build_context_pack_markdown(&pack);
             write_cached_context_pack(&cache_paths, &pack, &markdown)?;
             let cached = CachedContextPack {
@@ -1706,14 +1778,11 @@ impl GtdWorkspaceService {
     }
 
     fn cache_paths(&self) -> Result<CachePaths, String> {
-        let dirs = project_dirs()?;
+        let cache_dir = app_cache_dir()?;
         let mut hasher = Sha256::new();
         hasher.update(self.workspace_root().as_bytes());
-        let workspace_hash = format!("{:x}", hasher.finalize());
-        let root = dirs
-            .cache_dir()
-            .join(CONTEXT_CACHE_DIR)
-            .join(workspace_hash);
+        let workspace_hash = encode_hex(hasher.finalize());
+        let root = cache_dir.join(CONTEXT_CACHE_DIR).join(workspace_hash);
         Ok(CachePaths {
             manifest: root.join("manifest.json"),
             json: root.join("gtd-context.json"),
@@ -2031,48 +2100,145 @@ impl GtdWorkspaceService {
         })
     }
 
-    fn unknown_change_set_message(change_set_id: &str) -> String {
-        format!(
-            "Unknown change set '{}'. It may belong to a different MCP server session, may have expired after restart, or may never have been created.",
-            change_set_id
+    fn change_set_tool_error(
+        kind: ChangeSetErrorKind,
+        change_set_id: Option<&str>,
+        status: Option<ChangeStatus>,
+        reason: Option<&str>,
+        message: String,
+    ) -> ChangeSetToolError {
+        ChangeSetToolError {
+            kind,
+            change_set_id: change_set_id.map(str::to_string),
+            status,
+            reason: reason.map(str::to_string),
+            message,
+        }
+    }
+
+    fn unknown_change_set_error(change_set_id: &str) -> ChangeSetToolError {
+        Self::change_set_tool_error(
+            ChangeSetErrorKind::Unknown,
+            Some(change_set_id),
+            None,
+            Some("unknown"),
+            format!(
+                "Unknown change set '{}'. It may belong to a different MCP server session, may have expired after restart, or may never have been created.",
+                change_set_id
+            ),
         )
     }
 
-    fn terminal_change_set_apply_error(tombstone: &StoredChangeSetTombstone) -> String {
+    fn terminal_change_set_apply_error(tombstone: &StoredChangeSetTombstone) -> ChangeSetToolError {
         if let Some(message) = tombstone.message.as_deref() {
-            return message.to_string();
+            let kind = match (tombstone.state, tombstone.reason) {
+                (TerminalChangeSetState::Applied, TerminalChangeSetReason::Applied) => {
+                    ChangeSetErrorKind::AlreadyApplied
+                }
+                (TerminalChangeSetState::Discarded, TerminalChangeSetReason::Discarded) => {
+                    ChangeSetErrorKind::Discarded
+                }
+                (
+                    TerminalChangeSetState::Invalidated,
+                    TerminalChangeSetReason::InvalidatedByRefresh,
+                ) => ChangeSetErrorKind::Invalidated,
+                (
+                    TerminalChangeSetState::Invalidated,
+                    TerminalChangeSetReason::InvalidatedByRevalidation,
+                ) => ChangeSetErrorKind::Stale,
+                (TerminalChangeSetState::Failed, TerminalChangeSetReason::ApplyFailed) => {
+                    ChangeSetErrorKind::ApplyFailed
+                }
+                _ => ChangeSetErrorKind::Invalidated,
+            };
+            let reason = match tombstone.reason {
+                TerminalChangeSetReason::Applied => "already-applied",
+                TerminalChangeSetReason::Discarded => "discarded",
+                TerminalChangeSetReason::InvalidatedByRefresh => "workspace-refresh",
+                TerminalChangeSetReason::InvalidatedByRevalidation => "workspace-changed",
+                TerminalChangeSetReason::ApplyFailed => "apply-failed",
+            };
+            return Self::change_set_tool_error(
+                kind,
+                Some(&tombstone.summary.id),
+                Some(tombstone.summary.status.clone()),
+                Some(reason),
+                message.to_string(),
+            );
         }
 
         match (tombstone.state, tombstone.reason) {
-            (TerminalChangeSetState::Applied, TerminalChangeSetReason::Applied) => format!(
-                "Change set '{}' was already applied in this MCP server session.",
-                tombstone.summary.id
-            ),
-            (TerminalChangeSetState::Discarded, TerminalChangeSetReason::Discarded) => format!(
-                "Change set '{}' was discarded and can no longer be applied. Create a fresh plan if you still want to make this change.",
-                tombstone.summary.id
-            ),
+            (TerminalChangeSetState::Applied, TerminalChangeSetReason::Applied) => {
+                Self::change_set_tool_error(
+                    ChangeSetErrorKind::AlreadyApplied,
+                    Some(&tombstone.summary.id),
+                    Some(tombstone.summary.status.clone()),
+                    Some("already-applied"),
+                    format!(
+                        "Change set '{}' was already applied in this MCP server session.",
+                        tombstone.summary.id
+                    ),
+                )
+            }
+            (TerminalChangeSetState::Discarded, TerminalChangeSetReason::Discarded) => {
+                Self::change_set_tool_error(
+                    ChangeSetErrorKind::Discarded,
+                    Some(&tombstone.summary.id),
+                    Some(tombstone.summary.status.clone()),
+                    Some("discarded"),
+                    format!(
+                        "Change set '{}' was discarded and can no longer be applied. Create a fresh plan if you still want to make this change.",
+                        tombstone.summary.id
+                    ),
+                )
+            }
             (
                 TerminalChangeSetState::Invalidated,
                 TerminalChangeSetReason::InvalidatedByRefresh,
-            ) => format!(
-                "Change set '{}' was invalidated by workspace_refresh and can no longer be applied. Create a fresh plan before applying.",
-                tombstone.summary.id
+            ) => Self::change_set_tool_error(
+                ChangeSetErrorKind::Invalidated,
+                Some(&tombstone.summary.id),
+                Some(tombstone.summary.status.clone()),
+                Some("workspace-refresh"),
+                format!(
+                    "Change set '{}' was invalidated by workspace_refresh and can no longer be applied. Create a fresh plan before applying.",
+                    tombstone.summary.id
+                ),
             ),
             (
                 TerminalChangeSetState::Invalidated,
                 TerminalChangeSetReason::InvalidatedByRevalidation,
-            ) => format!(
-                "Change set '{}' is no longer valid because workspace files changed since planning. Create a fresh plan before applying.",
-                tombstone.summary.id
+            ) => Self::change_set_tool_error(
+                ChangeSetErrorKind::Stale,
+                Some(&tombstone.summary.id),
+                Some(tombstone.summary.status.clone()),
+                Some("workspace-changed"),
+                format!(
+                    "Change set '{}' is no longer valid because workspace files changed since planning. Create a fresh plan before applying.",
+                    tombstone.summary.id
+                ),
             ),
-            (TerminalChangeSetState::Failed, TerminalChangeSetReason::ApplyFailed) => format!(
-                "Change set '{}' previously failed during apply. Workspace state may be partially updated; run workspace_refresh before continuing and create a new plan.",
-                tombstone.summary.id
-            ),
-            _ => format!(
-                "Change set '{}' is no longer pending and can no longer be applied.",
-                tombstone.summary.id
+            (TerminalChangeSetState::Failed, TerminalChangeSetReason::ApplyFailed) => {
+                Self::change_set_tool_error(
+                    ChangeSetErrorKind::ApplyFailed,
+                    Some(&tombstone.summary.id),
+                    Some(tombstone.summary.status.clone()),
+                    Some("apply-failed"),
+                    format!(
+                        "Change set '{}' previously failed during apply. Workspace state may be partially updated; run workspace_refresh before continuing and create a new plan.",
+                        tombstone.summary.id
+                    ),
+                )
+            }
+            _ => Self::change_set_tool_error(
+                ChangeSetErrorKind::Invalidated,
+                Some(&tombstone.summary.id),
+                Some(tombstone.summary.status.clone()),
+                Some("not-pending"),
+                format!(
+                    "Change set '{}' is no longer pending and can no longer be applied.",
+                    tombstone.summary.id
+                ),
             ),
         }
     }
@@ -2080,120 +2246,17 @@ impl GtdWorkspaceService {
 
 impl CachedContextPack {
     fn to_public(&self, valid: bool) -> ContextPackCache {
+        let (cache_dir, manifest_path, json_path, markdown_path) =
+            to_public_cache_paths(&self.cache_paths);
         ContextPackCache {
-            cache_dir: normalize_path(&self.cache_paths.root),
-            manifest_path: normalize_path(&self.cache_paths.manifest),
-            json_path: normalize_path(&self.cache_paths.json),
-            markdown_path: normalize_path(&self.cache_paths.markdown),
+            cache_dir,
+            manifest_path,
+            json_path,
+            markdown_path,
             source: self.source.clone(),
             valid,
         }
     }
-}
-
-#[derive(Debug)]
-struct ProjectBuildInput {
-    title: String,
-    description: String,
-    due_date: Option<String>,
-    status: String,
-    areas: Vec<String>,
-    goals: Vec<String>,
-    vision: Vec<String>,
-    purpose: Vec<String>,
-    general_references: Vec<String>,
-    created_date_time: String,
-    additional_content: Option<String>,
-}
-
-#[derive(Debug)]
-struct ActionBuildInput {
-    title: String,
-    status: String,
-    focus_date: Option<String>,
-    due_date: Option<String>,
-    effort: String,
-    contexts: Vec<String>,
-    general_references: Vec<String>,
-    notes: Option<String>,
-    created_date_time: String,
-}
-
-#[derive(Debug)]
-struct HabitBuildInput {
-    title: String,
-    frequency: String,
-    focus_time: Option<String>,
-    projects: Vec<String>,
-    areas: Vec<String>,
-    goals: Vec<String>,
-    vision: Vec<String>,
-    purpose: Vec<String>,
-    created_date_time: String,
-}
-
-#[derive(Debug)]
-struct HorizonBuildInput {
-    title: String,
-    status: Option<String>,
-    review_cadence: Option<String>,
-    target_date: Option<String>,
-    horizon: Option<String>,
-    description: Option<String>,
-    projects: Vec<String>,
-    areas: Vec<String>,
-    goals: Vec<String>,
-    vision: Vec<String>,
-    purpose: Vec<String>,
-    general_references: Vec<String>,
-    created_date_time: String,
-    trailing_content: Option<String>,
-}
-
-#[derive(Debug)]
-struct ProjectUpdateSeed {
-    title: String,
-    description: Option<String>,
-    due_date: Option<String>,
-    status: String,
-    areas: Vec<String>,
-    goals: Vec<String>,
-    vision: Vec<String>,
-    purpose: Vec<String>,
-    general_references: Vec<String>,
-    created_date_time: String,
-    additional_content: Option<String>,
-}
-
-#[derive(Debug)]
-struct ActionUpdateSeed {
-    title: String,
-    status: String,
-    focus_date: Option<String>,
-    due_date: Option<String>,
-    effort: String,
-    contexts: Vec<String>,
-    general_references: Vec<String>,
-    notes: Option<String>,
-    created_date_time: String,
-}
-
-#[derive(Debug)]
-struct HorizonUpdateSeed {
-    title: String,
-    status: Option<String>,
-    review_cadence: Option<String>,
-    target_date: Option<String>,
-    horizon: Option<String>,
-    description: Option<String>,
-    projects: Vec<String>,
-    areas: Vec<String>,
-    goals: Vec<String>,
-    vision: Vec<String>,
-    purpose: Vec<String>,
-    general_references: Vec<String>,
-    created_date_time: String,
-    trailing_content: Option<String>,
 }
 
 fn resolve_history_entry_timestamp(
@@ -2344,8 +2407,27 @@ fn replace_or_append_history_section(content: &str, history_section: &str) -> St
     }
 }
 
-fn default_search_limit() -> usize {
-    20
+fn parse_pagination_cursor(cursor: Option<&str>) -> Result<usize, String> {
+    match cursor.map(str::trim).filter(|entry| !entry.is_empty()) {
+        None => Ok(0),
+        Some(raw) => raw.parse::<usize>().map_err(|_| {
+            format!(
+                "Invalid cursor '{}'. Expected a non-negative integer offset.",
+                raw
+            )
+        }),
+    }
+}
+
+fn paginate_entries<T>(entries: Vec<T>, offset: usize, limit: usize) -> (Vec<T>, Option<String>) {
+    let total = entries.len();
+    let mut entries = entries.into_iter().skip(offset).collect::<Vec<_>>();
+    if entries.len() > limit {
+        entries.truncate(limit);
+    }
+    let returned = entries.len();
+    let next_cursor = (offset + returned < total).then(|| (offset + returned).to_string());
+    (entries, next_cursor)
 }
 
 fn remove_unsupported_integer_formats(schema: &mut schemars::Schema) {
@@ -2362,123 +2444,90 @@ fn remove_unsupported_integer_formats(schema: &mut schemars::Schema) {
     }
 }
 
-fn resolve_workspace(cli_workspace: Option<String>) -> Result<PathBuf, String> {
-    if let Some(path) = cli_workspace {
-        return validate_workspace_candidate(Path::new(&path));
+fn project_dirs() -> Result<ProjectDirs, String> {
+    ProjectDirs::from("", "", APP_IDENTIFIER)
+        .ok_or_else(|| "Failed to resolve GTD Space application directories".to_string())
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OsKind {
+    Windows,
+    Macos,
+    Linux,
+}
+
+fn current_os_kind() -> OsKind {
+    #[cfg(target_os = "windows")]
+    {
+        OsKind::Windows
     }
+    #[cfg(target_os = "macos")]
+    {
+        OsKind::Macos
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        OsKind::Linux
+    }
+}
 
-    if let Some(settings) = load_saved_user_settings() {
-        if let Some(candidate) = settings.mcp_server_workspace_path {
-            return validate_workspace_candidate(Path::new(&candidate));
+fn app_cache_dir() -> Result<PathBuf, String> {
+    let local_appdata = std::env::var("LOCALAPPDATA").ok();
+    let appdata = std::env::var("APPDATA").ok();
+    let home = std::env::var("HOME").ok();
+    let xdg_cache_home = std::env::var("XDG_CACHE_HOME").ok();
+
+    resolve_app_cache_dir_for_os(
+        current_os_kind(),
+        local_appdata.as_deref(),
+        appdata.as_deref(),
+        home.as_deref(),
+        xdg_cache_home.as_deref(),
+    )
+}
+
+fn resolve_app_cache_dir_for_os(
+    os: OsKind,
+    local_appdata: Option<&str>,
+    appdata: Option<&str>,
+    home: Option<&str>,
+    xdg_cache_home: Option<&str>,
+) -> Result<PathBuf, String> {
+    match os {
+        OsKind::Windows => {
+            if let Some(local_appdata) = normalize_env_value(local_appdata) {
+                return Ok(PathBuf::from(local_appdata).join(APP_IDENTIFIER));
+            }
+            if let Some(appdata) = normalize_env_value(appdata) {
+                return Ok(PathBuf::from(appdata).join(APP_IDENTIFIER));
+            }
         }
-
-        for candidate in [settings.last_folder, settings.default_space_path]
-            .into_iter()
-            .flatten()
-        {
-            if let Ok(path) = validate_workspace_candidate(Path::new(&candidate)) {
-                return Ok(path);
+        OsKind::Macos => {
+            if let Some(home) = normalize_env_value(home) {
+                return Ok(PathBuf::from(home)
+                    .join("Library")
+                    .join("Caches")
+                    .join(APP_IDENTIFIER));
+            }
+        }
+        OsKind::Linux => {
+            if let Some(xdg_cache_home) = normalize_env_value(xdg_cache_home) {
+                return Ok(PathBuf::from(xdg_cache_home).join(APP_IDENTIFIER));
+            }
+            if let Some(home) = normalize_env_value(home) {
+                return Ok(PathBuf::from(home).join(".cache").join(APP_IDENTIFIER));
             }
         }
     }
 
-    let default_path = get_default_gtd_space_path()?;
-    validate_workspace_candidate(Path::new(&default_path))
+    project_dirs().map(|dirs| dirs.cache_dir().to_path_buf())
 }
 
-fn validate_workspace_candidate(candidate: &Path) -> Result<PathBuf, String> {
-    for ancestor in candidate.ancestors() {
-        let path = normalize_path(ancestor);
-        if check_is_gtd_space(path.clone())? {
-            return fs::canonicalize(ancestor)
-                .map_err(|error| format!("Failed to resolve workspace '{}': {}", path, error));
-        }
-    }
-    Err(format!(
-        "Path '{}' is not inside a valid GTD workspace",
-        candidate.display()
-    ))
-}
-
-fn project_dirs() -> Result<ProjectDirs, String> {
-    ProjectDirs::from("", "", "com.gtdspace.app")
-        .ok_or_else(|| "Failed to resolve GTD Space application directories".to_string())
-}
-
-fn settings_file_path() -> Option<PathBuf> {
-    #[cfg(target_os = "windows")]
-    if let Ok(appdata) = env::var("APPDATA") {
-        return Some(
-            PathBuf::from(appdata)
-                .join("com.gtdspace.app")
-                .join("config")
-                .join(SETTINGS_FILE_NAME),
-        );
-    }
-
-    #[cfg(target_os = "linux")]
-    if let Ok(config_home) = env::var("XDG_CONFIG_HOME") {
-        return Some(
-            PathBuf::from(config_home)
-                .join("com.gtdspace.app")
-                .join(SETTINGS_FILE_NAME),
-        );
-    }
-
-    #[cfg(target_os = "macos")]
-    if let Ok(home) = env::var("HOME") {
-        return Some(
-            PathBuf::from(home)
-                .join("Library")
-                .join("Application Support")
-                .join("com.gtdspace.app")
-                .join(SETTINGS_FILE_NAME),
-        );
-    }
-
-    project_dirs()
-        .ok()
-        .map(|dirs| dirs.config_dir().join(SETTINGS_FILE_NAME))
-}
-
-fn load_saved_settings() -> Option<Value> {
-    let settings_path = settings_file_path()?;
-    let contents = fs::read_to_string(settings_path).ok()?;
-    serde_json::from_str::<Value>(&contents).ok()
-}
-
-fn load_saved_user_settings() -> Option<crate::commands::settings::UserSettings> {
-    let settings = load_saved_settings()?;
-    let user_settings = settings.get("user_settings")?;
-    crate::commands::settings::parse_user_settings_value(user_settings).ok()
-}
-
-fn sanitize_mcp_server_log_level(value: Option<&str>) -> String {
-    let normalized = value
-        .unwrap_or(DEFAULT_MCP_SERVER_LOG_LEVEL)
-        .trim()
-        .to_ascii_lowercase();
-    if VALID_MCP_SERVER_LOG_LEVELS.contains(&normalized.as_str()) {
-        normalized
-    } else {
-        DEFAULT_MCP_SERVER_LOG_LEVEL.to_string()
-    }
-}
-
-pub fn load_mcp_server_launch_settings() -> McpServerLaunchSettings {
-    let user_settings = load_saved_user_settings();
-
-    McpServerLaunchSettings {
-        read_only: user_settings
-            .as_ref()
-            .and_then(|settings| settings.mcp_server_read_only)
-            .unwrap_or(false),
-        log_level: sanitize_mcp_server_log_level(
-            user_settings
-                .as_ref()
-                .and_then(|settings| settings.mcp_server_log_level.as_deref()),
-        ),
-    }
+fn normalize_env_value(value: Option<&str>) -> Option<&str> {
+    value
+        .map(str::trim)
+        .filter(|candidate| !candidate.is_empty())
 }
 
 fn snapshot_matches_state(state: &ServiceState, fingerprint: &WorkspaceFingerprint) -> bool {
@@ -2489,478 +2538,8 @@ fn snapshot_matches_state(state: &ServiceState, fingerprint: &WorkspaceFingerpri
         .unwrap_or(false)
 }
 
-fn build_fingerprint(root: &Path, files: &[MarkdownFile]) -> WorkspaceFingerprint {
-    let mut latest_modified_unix = 0_u64;
-    let mut hasher = Sha256::new();
-
-    for file in files {
-        latest_modified_unix = latest_modified_unix.max(file.last_modified);
-        let relative = normalize_absolute_to_relative(root, &file.path);
-        hasher.update(relative.as_bytes());
-        hasher.update(file.last_modified.to_string().as_bytes());
-    }
-
-    WorkspaceFingerprint {
-        normalized_root_path: normalize_path(root),
-        latest_modified_unix,
-        markdown_file_count: files.len(),
-        aggregate_digest: format!("{:x}", hasher.finalize()),
-    }
-}
-
-fn build_item_summaries(
-    root: &Path,
-    files: Vec<MarkdownFile>,
-) -> Result<Vec<GtdItemSummary>, String> {
-    let project_paths = list_gtd_projects(normalize_path(root))?
-        .into_iter()
-        .map(|project| {
-            (
-                normalize_path(Path::new(&project.path).join("README.md")),
-                project,
-            )
-        })
-        .collect::<HashMap<_, _>>();
-
-    let mut items = Vec::new();
-    for file in files {
-        if let Some(item) = parse_item_summary(root, &file, &project_paths)? {
-            items.push(item);
-        }
-    }
-    items.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-    Ok(items)
-}
-
-fn parse_item_summary(
-    root: &Path,
-    file: &MarkdownFile,
-    project_readmes: &HashMap<String, crate::commands::gtd_projects::GTDProject>,
-) -> Result<Option<GtdItemSummary>, String> {
-    let relative_path = normalize_absolute_to_relative(root, &file.path);
-    let normalized = relative_path.replace('\\', "/");
-    let content = read_file(file.path.clone())?;
-    let title = extract_h1(&content).unwrap_or_else(|| strip_markdown_extension(&file.name));
-    let references = extract_all_reference_groups(&content);
-    let created_fallback = Some(unix_to_rfc3339(file.last_modified));
-
-    let summary = if is_horizon_overview(&normalized) {
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::HorizonOverview,
-            title,
-            status: None,
-            due_date: None,
-            focus_date: None,
-            target_date: None,
-            horizon: extract_single_select(&content, "horizon-altitude"),
-            review_cadence: extract_single_select(&content, "horizon-review-cadence"),
-            frequency: None,
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: None,
-            description: extract_section_body(&content, "How to work this horizon in GTD Space"),
-            references,
-        })
-    } else if is_project_readme(&normalized) {
-        let project = project_readmes.get(&normalize_path(&file.path));
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Project,
-            title,
-            status: extract_single_select(&content, "project-status")
-                .or_else(|| extract_single_select(&content, "status")),
-            due_date: extract_datetime(&content, "due_date"),
-            focus_date: None,
-            target_date: None,
-            horizon: None,
-            review_cadence: None,
-            frequency: None,
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: project.map(|entry| normalize_path(&entry.path)),
-            description: extract_section_body(&content, "Desired Outcome")
-                .or_else(|| extract_section_body(&content, "Description")),
-            references,
-        })
-    } else if normalized.starts_with("Projects/") {
-        let project_path = Path::new(&normalized)
-            .parent()
-            .map(normalize_path)
-            .unwrap_or_default();
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Action,
-            title,
-            status: extract_single_select(&content, "status"),
-            due_date: extract_datetime(&content, "due_date"),
-            focus_date: extract_datetime(&content, "focus_date")
-                .or_else(|| extract_datetime(&content, "focus_date_time")),
-            target_date: None,
-            horizon: None,
-            review_cadence: None,
-            frequency: None,
-            effort: extract_single_select(&content, "effort"),
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: Some(project_path),
-            description: extract_section_body(&content, "Notes"),
-            references,
-        })
-    } else if normalized.starts_with("Habits/") {
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Habit,
-            title,
-            status: extract_checkbox_status(&content),
-            due_date: None,
-            focus_date: extract_datetime(&content, "focus_date"),
-            target_date: None,
-            horizon: None,
-            review_cadence: None,
-            frequency: extract_single_select(&content, "habit-frequency"),
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: None,
-            description: extract_section_body(&content, "Notes"),
-            references,
-        })
-    } else if normalized.starts_with("Areas of Focus/") {
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Area,
-            title,
-            status: extract_single_select(&content, "area-status"),
-            due_date: None,
-            focus_date: None,
-            target_date: None,
-            horizon: None,
-            review_cadence: extract_single_select(&content, "area-review-cadence"),
-            frequency: None,
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: None,
-            description: extract_section_body(&content, "Description"),
-            references,
-        })
-    } else if normalized.starts_with("Goals/") {
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Goal,
-            title,
-            status: extract_single_select(&content, "goal-status"),
-            due_date: None,
-            focus_date: None,
-            target_date: extract_datetime(&content, "goal-target-date")
-                .or_else(|| extract_datetime(&content, "target_date")),
-            horizon: None,
-            review_cadence: None,
-            frequency: None,
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: None,
-            description: extract_section_body(&content, "Description"),
-            references,
-        })
-    } else if normalized.starts_with("Vision/") {
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Vision,
-            title,
-            status: None,
-            due_date: None,
-            focus_date: None,
-            target_date: None,
-            horizon: extract_single_select(&content, "vision-horizon"),
-            review_cadence: None,
-            frequency: None,
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: None,
-            description: extract_section_body(&content, "Narrative"),
-            references,
-        })
-    } else if normalized.starts_with("Purpose & Principles/") {
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::Purpose,
-            title,
-            status: None,
-            due_date: None,
-            focus_date: None,
-            target_date: None,
-            horizon: None,
-            review_cadence: None,
-            frequency: None,
-            effort: None,
-            created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: None,
-            description: extract_section_body(&content, "Description"),
-            references,
-        })
-    } else if normalized.starts_with("Cabinet/") {
-        let (_, body) = parse_reference_note(&content);
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::CabinetNote,
-            title,
-            status: None,
-            due_date: None,
-            focus_date: None,
-            target_date: None,
-            horizon: None,
-            review_cadence: None,
-            frequency: None,
-            effort: None,
-            created_date_time: created_fallback,
-            parent_project_path: None,
-            description: Some(body),
-            references,
-        })
-    } else if normalized.starts_with("Someday Maybe/") {
-        let (_, body) = parse_reference_note(&content);
-        Some(GtdItemSummary {
-            relative_path: normalized.clone(),
-            absolute_path: normalize_path(&file.path),
-            item_type: GtdItemType::SomedayNote,
-            title,
-            status: None,
-            due_date: None,
-            focus_date: None,
-            target_date: None,
-            horizon: None,
-            review_cadence: None,
-            frequency: None,
-            effort: None,
-            created_date_time: created_fallback,
-            parent_project_path: None,
-            description: Some(body),
-            references,
-        })
-    } else {
-        None
-    };
-
-    Ok(summary)
-}
-
-fn build_context_pack(snapshot: WorkspaceSnapshot, workspace_root: String) -> ContextPack {
-    ContextPack {
-        version: CONTEXT_PACK_VERSION,
-        server_version: default_server_version(),
-        generated_at: Utc::now().to_rfc3339(),
-        workspace_root,
-        fingerprint: snapshot.fingerprint,
-        top_level_folders: vec![
-            FolderMeaning {
-                folder: "Projects".to_string(),
-                meaning: "Project folders with canonical README.md files and sibling action files."
-                    .to_string(),
-            },
-            FolderMeaning {
-                folder: "Habits".to_string(),
-                meaning: "One markdown file per habit.".to_string(),
-            },
-            FolderMeaning {
-                folder: "Areas of Focus".to_string(),
-                meaning: "Area pages plus a folder overview README.".to_string(),
-            },
-            FolderMeaning {
-                folder: "Goals".to_string(),
-                meaning: "Goal pages plus a folder overview README.".to_string(),
-            },
-            FolderMeaning {
-                folder: "Vision".to_string(),
-                meaning: "Vision pages plus a folder overview README.".to_string(),
-            },
-            FolderMeaning {
-                folder: "Purpose & Principles".to_string(),
-                meaning: "Purpose pages plus a folder overview README.".to_string(),
-            },
-            FolderMeaning {
-                folder: "Someday Maybe".to_string(),
-                meaning: "Flat idea/reference note area.".to_string(),
-            },
-            FolderMeaning {
-                folder: "Cabinet".to_string(),
-                meaning: "Flat reference storage area.".to_string(),
-            },
-        ],
-        marker_glossary: vec![
-            MarkerDefinition {
-                family: "singleselect".to_string(),
-                syntax: "[!singleselect:<field>:<value>]".to_string(),
-                notes: "Canonical enum-like GTD metadata.".to_string(),
-            },
-            MarkerDefinition {
-                family: "multiselect".to_string(),
-                syntax: "[!multiselect:<field>:a,b,c]".to_string(),
-                notes: "Used for contexts and selected multi-value fields.".to_string(),
-            },
-            MarkerDefinition {
-                family: "checkbox".to_string(),
-                syntax: "[!checkbox:habit-status:true|false]".to_string(),
-                notes: "Canonical habit completion marker.".to_string(),
-            },
-            MarkerDefinition {
-                family: "datetime".to_string(),
-                syntax: "[!datetime:<field>:<value>]".to_string(),
-                notes: "Dates and timestamps such as due dates and created timestamps.".to_string(),
-            },
-            MarkerDefinition {
-                family: "references".to_string(),
-                syntax: "[!areas-references:...] / [!references:...]".to_string(),
-                notes: "Typed and generic links between GTD items.".to_string(),
-            },
-        ],
-        item_counts: snapshot.item_counts,
-        items: snapshot.items,
-        operation_guidance: vec![
-            "Prefer GTD semantic tools over raw file edits.".to_string(),
-            "All write tools dry-run first and require change_apply.".to_string(),
-            "If a project path is unclear, call workspace_list_items({\"itemType\":\"project\"}) before action_create."
-                .to_string(),
-            "Planned changes do not modify files until change_apply succeeds.".to_string(),
-            "Paths in tool requests should be workspace-relative unless otherwise noted."
-                .to_string(),
-        ],
-    }
-}
-
-fn build_context_pack_markdown(pack: &ContextPack) -> String {
-    let mut lines = vec![
-        "# GTD Space Context Pack".to_string(),
-        String::new(),
-        format!("- Server version: `{}`", pack.server_version),
-        format!("- Workspace: `{}`", pack.workspace_root),
-        format!("- Generated: `{}`", pack.generated_at),
-        format!(
-            "- Files indexed: `{}`",
-            pack.fingerprint.markdown_file_count
-        ),
-        String::new(),
-        "## Folder Semantics".to_string(),
-    ];
-    for folder in &pack.top_level_folders {
-        lines.push(format!("- `{}`: {}", folder.folder, folder.meaning));
-    }
-    lines.push(String::new());
-    lines.push("## Item Counts".to_string());
-    for (key, value) in &pack.item_counts {
-        lines.push(format!("- `{}`: {}", key, value));
-    }
-    lines.push(String::new());
-    lines.push("## Tool Guidance".to_string());
-    for entry in &pack.operation_guidance {
-        lines.push(format!("- {}", entry));
-    }
-    lines.push(String::new());
-    lines.push("## Items".to_string());
-    for item in &pack.items {
-        lines.push(format!(
-            "- `{}` [{}] {}",
-            item.relative_path,
-            item_type_key(&item.item_type),
-            item.title
-        ));
-    }
-    format!("{}\n", lines.join("\n"))
-}
-
-fn read_cached_context_pack(
-    cache_paths: &CachePaths,
-    fingerprint: &WorkspaceFingerprint,
-) -> Result<Option<CachedContextPack>, String> {
-    if !cache_paths.manifest.exists()
-        || !cache_paths.json.exists()
-        || !cache_paths.markdown.exists()
-    {
-        return Ok(None);
-    }
-    let manifest = fs::read_to_string(&cache_paths.manifest)
-        .map_err(|error| format!("Failed to read context manifest: {}", error))?;
-    let manifest = serde_json::from_str::<ContextPackManifest>(&manifest)
-        .map_err(|error| format!("Failed to parse context manifest: {}", error))?;
-    if manifest.generator_version != CONTEXT_PACK_VERSION || manifest.fingerprint != *fingerprint {
-        return Ok(None);
-    }
-    let json = fs::read_to_string(&cache_paths.json)
-        .map_err(|error| format!("Failed to read cached context JSON: {}", error))?;
-    let markdown = fs::read_to_string(&cache_paths.markdown)
-        .map_err(|error| format!("Failed to read cached context markdown: {}", error))?;
-    let pack = serde_json::from_str::<ContextPack>(&json)
-        .map_err(|error| format!("Failed to parse cached context JSON: {}", error))?;
-    Ok(Some(CachedContextPack {
-        pack,
-        markdown,
-        cache_paths: cache_paths.clone(),
-        source: "cache".to_string(),
-    }))
-}
-
-fn write_cached_context_pack(
-    cache_paths: &CachePaths,
-    pack: &ContextPack,
-    markdown: &str,
-) -> Result<(), String> {
-    fs::create_dir_all(&cache_paths.root)
-        .map_err(|error| format!("Failed to create context cache directory: {}", error))?;
-    let mut hasher = Sha256::new();
-    hasher.update(pack.workspace_root.as_bytes());
-    let manifest = ContextPackManifest {
-        workspace_path_hash: format!("{:x}", hasher.finalize()),
-        generated_at: pack.generated_at.clone(),
-        generator_version: CONTEXT_PACK_VERSION,
-        fingerprint: pack.fingerprint.clone(),
-    };
-    fs::write(
-        &cache_paths.manifest,
-        serde_json::to_vec_pretty(&manifest).map_err(|error| error.to_string())?,
-    )
-    .map_err(|error| format!("Failed to write context manifest: {}", error))?;
-    fs::write(
-        &cache_paths.json,
-        serde_json::to_vec_pretty(pack).map_err(|error| error.to_string())?,
-    )
-    .map_err(|error| format!("Failed to write context JSON: {}", error))?;
-    fs::write(&cache_paths.markdown, markdown)
-        .map_err(|error| format!("Failed to write context markdown: {}", error))?;
-    Ok(())
-}
-
-pub fn normalize_workspace_path<P: AsRef<Path>>(path: P) -> String {
-    let normalized = path.as_ref().to_string_lossy().replace('\\', "/");
-    normalized
-        .strip_prefix("//?/")
-        .or_else(|| normalized.strip_prefix("\\\\?/"))
-        .unwrap_or(&normalized)
-        .to_string()
-}
-
 fn normalize_path<P: AsRef<Path>>(path: P) -> String {
     normalize_workspace_path(path)
-}
-
-fn path_is_within_workspace(path: &Path, root: &Path) -> bool {
-    let normalized_root = normalize_path(root).trim_end_matches('/').to_string();
-    let normalized_path = normalize_path(path);
-    #[cfg(target_os = "windows")]
-    let normalized_root = normalized_root.to_lowercase();
-    #[cfg(target_os = "windows")]
-    let normalized_path = normalized_path.to_lowercase();
-    normalized_path == normalized_root || normalized_path.starts_with(&(normalized_root + "/"))
-}
-
-fn normalize_relative_input(path: &str) -> String {
-    path.trim().trim_start_matches("./").replace('\\', "/")
 }
 
 pub fn gtdspace_server_version() -> &'static str {
@@ -2971,292 +2550,10 @@ fn default_server_version() -> String {
     gtdspace_server_version().to_string()
 }
 
-fn normalize_absolute_to_relative(root: &Path, path: &str) -> String {
-    let absolute = Path::new(path);
-    if absolute.is_absolute() {
-        let stripped = absolute.strip_prefix(root).map(normalize_path);
-        stripped
-            .unwrap_or_else(|_| {
-                let normalized_root = normalize_path(root).trim_end_matches('/').to_string();
-                let normalized_absolute = normalize_path(absolute);
-                normalized_absolute
-                    .strip_prefix(&(normalized_root.clone() + "/"))
-                    .or_else(|| normalized_absolute.strip_prefix(&normalized_root))
-                    .map(str::to_string)
-                    .unwrap_or(normalized_absolute)
-            })
-            .trim_start_matches('/')
-            .to_string()
-    } else {
-        normalize_relative_input(path)
-    }
-}
-
-fn item_type_key(kind: &GtdItemType) -> &'static str {
-    match kind {
-        GtdItemType::Project => "project",
-        GtdItemType::Action => "action",
-        GtdItemType::Habit => "habit",
-        GtdItemType::Area => "area",
-        GtdItemType::Goal => "goal",
-        GtdItemType::Vision => "vision",
-        GtdItemType::Purpose => "purpose",
-        GtdItemType::CabinetNote => "cabinet-note",
-        GtdItemType::SomedayNote => "someday-note",
-        GtdItemType::HorizonOverview => "horizon-overview",
-    }
-}
-
-fn strip_markdown_extension(name: &str) -> String {
-    let lowered = name.to_ascii_lowercase();
-    if lowered.ends_with(".markdown") {
-        name[..name.len() - ".markdown".len()].to_string()
-    } else if lowered.ends_with(".md") {
-        name[..name.len() - ".md".len()].to_string()
-    } else {
-        name.to_string()
-    }
-}
-
-fn normalize_similarity_key(value: &str) -> String {
-    strip_markdown_extension(&normalize_relative_input(value))
-        .to_ascii_lowercase()
-        .chars()
-        .filter(|character| character.is_ascii_alphanumeric())
-        .collect()
-}
-
-fn strip_project_readme_suffix(path: &str) -> String {
-    path.strip_suffix("/README.md")
-        .or_else(|| path.strip_suffix("/README.markdown"))
-        .unwrap_or(path)
-        .to_string()
-}
-
-fn project_similarity_keys(item: &GtdItemSummary) -> Vec<String> {
-    let mut candidates = vec![
-        normalize_similarity_key(&item.relative_path),
-        normalize_similarity_key(&strip_project_readme_suffix(&item.relative_path)),
-        normalize_similarity_key(&item.title),
-    ];
-    candidates.retain(|candidate| !candidate.is_empty());
-    candidates.sort();
-    candidates.dedup();
-    candidates
-}
-
-fn sanitize_title(input: &str, fallback: &str) -> String {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        fallback.to_string()
-    } else {
-        trimmed.to_string()
-    }
-}
-
-fn is_project_readme(path: &str) -> bool {
-    path.starts_with("Projects/") && path.split('/').count() == 3 && path.ends_with("README.md")
-        || path.starts_with("Projects/")
-            && path.split('/').count() == 3
-            && path.ends_with("README.markdown")
-}
-
-fn is_horizon_overview(path: &str) -> bool {
-    matches!(
-        path,
-        "Areas of Focus/README.md"
-            | "Goals/README.md"
-            | "Vision/README.md"
-            | "Purpose & Principles/README.md"
-    )
-}
-
-fn extract_h1(content: &str) -> Option<String> {
-    content.lines().find_map(|line| {
-        line.trim()
-            .strip_prefix("# ")
-            .map(|value| value.trim().to_string())
-    })
-}
-
-fn extract_single_select(content: &str, field: &str) -> Option<String> {
-    extract_marker(content, &format!("[!singleselect:{}:", field))
-        .or_else(|| extract_marker(content, &format!("[!multiselect:{}:", field)))
-}
-
-fn extract_checkbox_status(content: &str) -> Option<String> {
-    extract_marker(content, "[!checkbox:habit-status:").map(|value| {
-        if value.eq_ignore_ascii_case("true") {
-            "completed".to_string()
-        } else {
-            "todo".to_string()
-        }
-    })
-}
-
-fn extract_datetime(content: &str, field: &str) -> Option<String> {
-    extract_marker(content, &format!("[!datetime:{}:", field))
-}
-
-fn extract_multiselect(content: &str, field: &str) -> Vec<String> {
-    extract_marker(content, &format!("[!multiselect:{}:", field))
-        .map(|value| {
-            value
-                .split(',')
-                .map(|entry| entry.trim().to_string())
-                .filter(|entry| !entry.is_empty())
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default()
-}
-
-fn extract_marker(content: &str, prefix: &str) -> Option<String> {
-    let start = content.find(prefix)?;
-    let remaining = &content[start + prefix.len()..];
-    let end = remaining.find(']')?;
-    Some(remaining[..end].trim().to_string())
-}
-
-fn extract_section_body(content: &str, heading: &str) -> Option<String> {
-    let mut active = false;
-    let mut buffer = Vec::new();
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.eq_ignore_ascii_case(&format!("## {}", heading)) {
-            active = true;
-            continue;
-        }
-        if active && trimmed.starts_with("## ") {
-            break;
-        }
-        if active {
-            buffer.push(line);
-        }
-    }
-
-    let value = buffer.join("\n").trim().to_string();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value)
-    }
-}
-
-fn extract_all_reference_groups(content: &str) -> Vec<GtdItemReferenceSummary> {
-    let groups = [
-        ("projects", "projects-references"),
-        ("areas", "areas-references"),
-        ("goals", "goals-references"),
-        ("vision", "vision-references"),
-        ("purpose", "purpose-references"),
-        ("references", "references"),
-    ];
-    groups
-        .into_iter()
-        .filter_map(|(kind, tag)| {
-            let paths = extract_reference_list(content, tag);
-            if paths.is_empty() {
-                None
-            } else {
-                Some(GtdItemReferenceSummary {
-                    kind: kind.to_string(),
-                    paths,
-                })
-            }
-        })
-        .collect()
-}
-
-fn extract_reference_list(content: &str, tag: &str) -> Vec<String> {
-    let marker = format!("[!{}:", tag);
-    let Some(start) = content.find(&marker) else {
-        return Vec::new();
-    };
-    let remainder = &content[start + marker.len()..];
-    let Some(end) = remainder.find(']') else {
-        return Vec::new();
-    };
-    parse_reference_list(&remainder[..end])
-}
-
-fn parse_reference_list(raw: &str) -> Vec<String> {
-    let decoded = decode_loose(raw.trim());
-    if decoded.is_empty() {
-        return Vec::new();
-    }
-
-    if decoded.starts_with('[') {
-        if let Ok(list) = serde_json::from_str::<Vec<String>>(&decoded) {
-            return normalize_reference_list(list);
-        }
-    }
-
-    normalize_reference_list(
-        decoded
-            .trim_matches(['[', ']'])
-            .split(',')
-            .map(|value| {
-                value
-                    .trim()
-                    .trim_matches('"')
-                    .trim_matches('\'')
-                    .to_string()
-            })
-            .collect(),
-    )
-}
-
-fn normalize_path_components(path: &Path) -> PathBuf {
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
-            Component::RootDir => normalized.push(component.as_os_str()),
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            Component::Normal(part) => normalized.push(part),
-        }
-    }
-    normalized
-}
-
-fn normalize_reference_list(values: Vec<String>) -> Vec<String> {
-    let mut output = values
-        .into_iter()
-        .map(|value| value.replace('\\', "/"))
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .collect::<Vec<_>>();
-    output.sort();
-    output.dedup();
-    output
-}
-
-fn decode_loose(input: &str) -> String {
-    let mut current = input.to_string();
-    for _ in 0..3 {
-        match urlencoding::decode(&current) {
-            Ok(decoded) if decoded != current => current = decoded.into_owned(),
-            _ => break,
-        }
-    }
-    current
-}
-
-fn unix_to_rfc3339(timestamp: u64) -> String {
-    let seconds = i64::try_from(timestamp).unwrap_or(i64::MAX);
-    DateTime::<Utc>::from_timestamp(seconds, 0)
-        .unwrap_or_else(Utc::now)
-        .to_rfc3339()
-}
-
 fn hash_bytes(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    format!("{:x}", hasher.finalize())
+    encode_hex(hasher.finalize())
 }
 
 fn hash_file_if_exists(path: &str) -> Result<Option<String>, String> {
@@ -3265,426 +2562,6 @@ fn hash_file_if_exists(path: &str) -> Result<Option<String>, String> {
     }
     let bytes = fs::read(path).map_err(|error| format!("Failed to read '{}': {}", path, error))?;
     Ok(Some(hash_bytes(&bytes)))
-}
-
-fn preview_write(action: &str, path: &str, content: &str) -> String {
-    format!(
-        "{}\n- path: {}\n- bytes: {}\n\n{}",
-        action,
-        path,
-        content.len(),
-        content.lines().take(20).collect::<Vec<_>>().join("\n")
-    )
-}
-
-fn encode_reference_array(values: &[String]) -> String {
-    let normalized = normalize_reference_list(values.to_vec());
-    if normalized.is_empty() {
-        String::new()
-    } else {
-        serde_json::to_string(&normalized)
-            .map(|json| urlencoding::encode(&json).into_owned())
-            .unwrap_or_default()
-    }
-}
-
-fn encode_reference_csv(values: &[String]) -> String {
-    normalize_reference_list(values.to_vec()).join(",")
-}
-
-fn project_directory_from_readme(readme_path: &str) -> Result<String, String> {
-    let path = Path::new(readme_path);
-    let Some(parent) = path.parent() else {
-        return Err("Project README path has no parent directory".to_string());
-    };
-    Ok(normalize_path(parent))
-}
-
-fn resolve_project_readme_in_directory(project_dir: &Path) -> Option<PathBuf> {
-    let md_path = project_dir.join("README.md");
-    if md_path.exists() {
-        return Some(md_path);
-    }
-
-    let markdown_path = project_dir.join("README.markdown");
-    if markdown_path.exists() {
-        return Some(markdown_path);
-    }
-
-    None
-}
-
-fn build_project_markdown(input: ProjectBuildInput) -> String {
-    let mut content = generate_project_readme_with_refs(ProjectReadmeParams {
-        name: &input.title,
-        description: &input.description,
-        due_date: input.due_date.clone(),
-        status: &input.status,
-        areas_refs: &encode_reference_array(&input.areas),
-        goals_refs: &encode_reference_array(&input.goals),
-        vision_refs: &encode_reference_array(&input.vision),
-        purpose_refs: &encode_reference_array(&input.purpose),
-        general_refs: &encode_reference_csv(&input.general_references),
-    });
-    content = replace_datetime_marker(content, "created_date_time", &input.created_date_time);
-    if let Some(extra) = input
-        .additional_content
-        .filter(|value| !value.trim().is_empty())
-    {
-        content.push('\n');
-        content.push_str(extra.trim());
-        content.push('\n');
-    }
-    content
-}
-
-fn build_action_markdown(input: ActionBuildInput) -> String {
-    let references = encode_reference_csv(&input.general_references);
-    let contexts = input
-        .contexts
-        .into_iter()
-        .map(|entry| entry.trim().to_string())
-        .filter(|entry| !entry.is_empty())
-        .collect::<Vec<_>>()
-        .join(",");
-    let notes = input.notes.unwrap_or_else(|| {
-        "<!-- Add any additional notes or details about this action here -->".to_string()
-    });
-    format!(
-        "# {title}\n\n## Status\n[!singleselect:status:{status}]\n\n## Focus Date\n[!datetime:focus_date:{focus}]\n\n## Due Date\n[!datetime:due_date:{due}]\n\n## Effort\n[!singleselect:effort:{effort}]\n\n## Contexts\n[!multiselect:contexts:{contexts}]\n\n## References\n[!references:{references}]\n\n## Notes\n{notes}\n\n---\n## Created\n[!datetime:created_date_time:{created}]\n",
-        title = input.title,
-        status = input.status,
-        focus = input.focus_date.unwrap_or_default(),
-        due = input.due_date.unwrap_or_default(),
-        effort = input.effort,
-        contexts = contexts,
-        references = references,
-        notes = notes.trim_end(),
-        created = input.created_date_time
-    )
-}
-
-fn build_habit_markdown(input: HabitBuildInput) -> Result<String, String> {
-    let focus_section = if let Some(time) = input.focus_time.as_deref() {
-        format!(
-            "\n## Focus Date\n[!datetime:focus_date:{}T{}:00]\n",
-            Utc::now().format("%Y-%m-%d"),
-            time
-        )
-    } else {
-        String::new()
-    };
-    Ok(format!(
-        "# {title}\n\n## Status\n[!checkbox:habit-status:false]\n\n## Frequency\n[!singleselect:habit-frequency:{frequency}]{focus}\
-\n## Projects References\n[!projects-references:{projects}]\n\n## Areas References\n[!areas-references:{areas}]\n\n## Goals References\n[!goals-references:{goals}]\n\n## Vision References\n[!vision-references:{vision}]\n\n## Purpose & Principles References\n[!purpose-references:{purpose}]\n\n## Created\n[!datetime:created_date_time:{created}]\n\n## History\n{history}\n",
-        title = input.title,
-        frequency = input.frequency,
-        focus = focus_section,
-        projects = encode_reference_array(&input.projects),
-        areas = encode_reference_array(&input.areas),
-        goals = encode_reference_array(&input.goals),
-        vision = encode_reference_array(&input.vision),
-        purpose = encode_reference_array(&input.purpose),
-        created = input.created_date_time,
-        history = DEFAULT_HISTORY_TEMPLATE
-    ))
-}
-
-fn build_horizon_markdown(
-    page_type: &HorizonPageType,
-    input: HorizonBuildInput,
-) -> Result<String, String> {
-    let content = match page_type {
-        HorizonPageType::Area => {
-            let mut body = generate_area_of_focus_template_with_refs(
-                &input.title,
-                input
-                    .description
-                    .as_deref()
-                    .unwrap_or("Define the standard for this area."),
-                "",
-                &encode_reference_array(&input.goals),
-                &encode_reference_array(&input.vision),
-                &encode_reference_array(&input.purpose),
-            );
-            body = replace_marker(
-                body,
-                "[!singleselect:area-status:",
-                &input.status.unwrap_or_else(|| "steady".to_string()),
-            );
-            body = replace_marker(
-                body,
-                "[!singleselect:area-review-cadence:",
-                &input
-                    .review_cadence
-                    .unwrap_or_else(|| "monthly".to_string()),
-            );
-            body = replace_reference_marker(body, "projects-references", &input.projects);
-            body = replace_reference_marker(body, "areas-references", &input.areas);
-            body = replace_reference_marker(body, "references", &input.general_references);
-            body
-        }
-        HorizonPageType::Goal => {
-            let mut body = generate_goal_template_with_refs(
-                &input.title,
-                input.target_date.as_deref(),
-                input
-                    .description
-                    .as_deref()
-                    .unwrap_or("Describe the desired outcome for this goal."),
-                &encode_reference_array(&input.vision),
-                &encode_reference_array(&input.purpose),
-            );
-            body = replace_marker(
-                body,
-                "[!singleselect:goal-status:",
-                &input.status.unwrap_or_else(|| "in-progress".to_string()),
-            );
-            body = replace_reference_marker(body, "projects-references", &input.projects);
-            body = replace_reference_marker(body, "areas-references", &input.areas);
-            body = replace_reference_marker(body, "references", &input.general_references);
-            body
-        }
-        HorizonPageType::Vision => {
-            let mut body = generate_vision_document_template_with_refs(&encode_reference_array(
-                &input.purpose,
-            ));
-            body = replace_h1(body, &input.title);
-            body = replace_marker(
-                body,
-                "[!singleselect:vision-horizon:",
-                &input.horizon.unwrap_or_else(|| "3-years".to_string()),
-            );
-            body = replace_reference_marker(body, "projects-references", &input.projects);
-            body = replace_reference_marker(body, "goals-references", &input.goals);
-            body = replace_reference_marker(body, "areas-references", &input.areas);
-            body = replace_reference_marker(body, "references", &input.general_references);
-            if let Some(narrative) = input.description {
-                body = replace_section_body(body, "Narrative", &narrative);
-            }
-            body
-        }
-        HorizonPageType::Purpose => {
-            let body = format!(
-                "# {}\n\n## Projects References\n[!projects-references:{}]\n\n## Goals References\n[!goals-references:{}]\n\n## Vision References\n[!vision-references:{}]\n{}\n## References (optional)\n[!references:{}]\n\n## Created\n[!datetime:created_date_time:{}]\n\n## Description\n{}\n",
-                input.title,
-                encode_reference_array(&input.projects),
-                encode_reference_array(&input.goals),
-                encode_reference_array(&input.vision),
-                if input.areas.is_empty() {
-                    String::new()
-                } else {
-                    format!(
-                        "## Areas References (optional)\n[!areas-references:{}]\n\n",
-                        encode_reference_array(&input.areas)
-                    )
-                },
-                encode_reference_csv(&input.general_references),
-                input.created_date_time,
-                input
-                    .description
-                    .unwrap_or_else(|| "Describe your purpose and principles.".to_string())
-            );
-            body
-        }
-    };
-
-    let mut content =
-        replace_datetime_marker(content, "created_date_time", &input.created_date_time);
-    if let Some(trailing) = input
-        .trailing_content
-        .filter(|value| !value.trim().is_empty())
-    {
-        if !content.ends_with('\n') {
-            content.push('\n');
-        }
-        content.push('\n');
-        content.push_str(trailing.trim());
-        content.push('\n');
-    }
-    Ok(content)
-}
-
-fn build_reference_note_markdown(
-    title: &str,
-    new_body: Option<String>,
-    existing_body: Option<String>,
-) -> String {
-    let body = new_body
-        .or(existing_body)
-        .unwrap_or_else(|| "<!-- Add note body -->".to_string());
-    format!("# {}\n\n{}\n", title.trim(), body.trim_end())
-}
-
-fn replace_marker(mut content: String, prefix: &str, value: &str) -> String {
-    if let Some(start) = content.find(prefix) {
-        let remainder = &content[start + prefix.len()..];
-        if let Some(end) = remainder.find(']') {
-            let end_index = start + prefix.len() + end;
-            content.replace_range(start + prefix.len()..end_index, value);
-        }
-    }
-    content
-}
-
-fn replace_reference_marker(content: String, tag: &str, values: &[String]) -> String {
-    let encoded = if tag == "references" {
-        encode_reference_csv(values)
-    } else {
-        encode_reference_array(values)
-    };
-    replace_marker(content, &format!("[!{}:", tag), &encoded)
-}
-
-fn replace_datetime_marker(content: String, field: &str, value: &str) -> String {
-    replace_marker(content, &format!("[!datetime:{}:", field), value)
-}
-
-fn replace_h1(content: String, title: &str) -> String {
-    let mut lines = content.lines().map(str::to_string).collect::<Vec<_>>();
-    if let Some(first) = lines.iter_mut().find(|line| line.trim().starts_with("# ")) {
-        *first = format!("# {}", title.trim());
-    } else {
-        lines.insert(0, format!("# {}", title.trim()));
-    }
-    format!("{}\n", lines.join("\n"))
-}
-
-fn replace_section_body(content: String, heading: &str, new_body: &str) -> String {
-    let mut output = Vec::new();
-    let mut active = false;
-    let mut replaced = false;
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.eq_ignore_ascii_case(&format!("## {}", heading)) {
-            active = true;
-            replaced = true;
-            output.push(line.to_string());
-            output.push(new_body.trim_end().to_string());
-            continue;
-        }
-        if active && trimmed.starts_with("## ") {
-            active = false;
-        }
-        if !active {
-            output.push(line.to_string());
-        }
-    }
-    if !replaced {
-        output.push(String::new());
-        output.push(format!("## {}", heading));
-        output.push(new_body.trim_end().to_string());
-    }
-    format!("{}\n", output.join("\n"))
-}
-
-fn parse_project_update_seed(content: &str, item: &GtdItemSummary) -> ProjectUpdateSeed {
-    ProjectUpdateSeed {
-        title: item.title.clone(),
-        description: item.description.clone(),
-        due_date: item.due_date.clone(),
-        status: item
-            .status
-            .clone()
-            .unwrap_or_else(|| "in-progress".to_string()),
-        areas: extract_reference_list(content, "areas-references"),
-        goals: extract_reference_list(content, "goals-references"),
-        vision: extract_reference_list(content, "vision-references"),
-        purpose: extract_reference_list(content, "purpose-references"),
-        general_references: extract_reference_list(content, "references"),
-        created_date_time: item
-            .created_date_time
-            .clone()
-            .unwrap_or_else(|| Utc::now().to_rfc3339()),
-        additional_content: extract_tail_after(content, "[!habits-list]"),
-    }
-}
-
-fn parse_action_update_seed(content: &str, item: &GtdItemSummary) -> ActionUpdateSeed {
-    ActionUpdateSeed {
-        title: item.title.clone(),
-        status: item
-            .status
-            .clone()
-            .unwrap_or_else(|| "in-progress".to_string()),
-        focus_date: item.focus_date.clone(),
-        due_date: item.due_date.clone(),
-        effort: item.effort.clone().unwrap_or_else(|| "medium".to_string()),
-        contexts: extract_multiselect(content, "contexts"),
-        general_references: extract_reference_list(content, "references"),
-        notes: extract_section_body(content, "Notes"),
-        created_date_time: item
-            .created_date_time
-            .clone()
-            .unwrap_or_else(|| Utc::now().to_rfc3339()),
-    }
-}
-
-fn parse_horizon_update_seed(
-    page_type: &HorizonPageType,
-    content: &str,
-    item: &GtdItemSummary,
-) -> HorizonUpdateSeed {
-    let trailing_heading = match page_type {
-        HorizonPageType::Area | HorizonPageType::Goal | HorizonPageType::Purpose => "Description",
-        HorizonPageType::Vision => "Narrative",
-    };
-    HorizonUpdateSeed {
-        title: item.title.clone(),
-        status: item.status.clone(),
-        review_cadence: item.review_cadence.clone(),
-        target_date: item.target_date.clone(),
-        horizon: item.horizon.clone(),
-        description: item.description.clone(),
-        projects: extract_reference_list(content, "projects-references"),
-        areas: extract_reference_list(content, "areas-references"),
-        goals: extract_reference_list(content, "goals-references"),
-        vision: extract_reference_list(content, "vision-references"),
-        purpose: extract_reference_list(content, "purpose-references"),
-        general_references: extract_reference_list(content, "references"),
-        created_date_time: item
-            .created_date_time
-            .clone()
-            .unwrap_or_else(|| Utc::now().to_rfc3339()),
-        trailing_content: extract_additional_after_section(content, trailing_heading),
-    }
-}
-
-fn extract_tail_after(content: &str, marker: &str) -> Option<String> {
-    let start = content.find(marker)?;
-    let tail = &content[start + marker.len()..];
-    let value = tail.trim().to_string();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value)
-    }
-}
-
-fn extract_additional_after_section(content: &str, heading: &str) -> Option<String> {
-    let marker = format!("## {}", heading);
-    let start = content.find(&marker)?;
-    let tail = &content[start..];
-    let rest = tail.split_once('\n')?.1;
-    let value = rest.trim().to_string();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value)
-    }
-}
-
-fn parse_reference_note(content: &str) -> (String, String) {
-    let title = extract_h1(content).unwrap_or_else(|| "Untitled Note".to_string());
-    let body = content
-        .lines()
-        .skip_while(|line| !line.trim().starts_with("# "))
-        .skip(1)
-        .collect::<Vec<_>>()
-        .join("\n")
-        .trim()
-        .to_string();
-    (title, body)
 }
 
 fn horizon_folder_name(page_type: &HorizonPageType) -> &'static str {
@@ -3718,6 +2595,48 @@ mod tests {
                 "Someday Maybe/Idea.md".to_string()
             ]
         );
+    }
+
+    #[test]
+    fn resolve_app_cache_dir_honors_platform_overrides() -> Result<(), String> {
+        assert_eq!(
+            resolve_app_cache_dir_for_os(
+                OsKind::Windows,
+                Some("C:/Users/tester/AppData/Local"),
+                Some("C:/Users/tester/AppData/Roaming"),
+                Some("C:/Users/tester"),
+                None,
+            )?,
+            PathBuf::from("C:/Users/tester/AppData/Local").join(APP_IDENTIFIER)
+        );
+        assert_eq!(
+            resolve_app_cache_dir_for_os(
+                OsKind::Windows,
+                None,
+                Some("C:/Users/tester/AppData/Roaming"),
+                Some("C:/Users/tester"),
+                None,
+            )?,
+            PathBuf::from("C:/Users/tester/AppData/Roaming").join(APP_IDENTIFIER)
+        );
+        assert_eq!(
+            resolve_app_cache_dir_for_os(OsKind::Macos, None, None, Some("/Users/tester"), None,)?,
+            PathBuf::from("/Users/tester")
+                .join("Library")
+                .join("Caches")
+                .join(APP_IDENTIFIER)
+        );
+        assert_eq!(
+            resolve_app_cache_dir_for_os(
+                OsKind::Linux,
+                None,
+                None,
+                Some("/home/tester"),
+                Some("/tmp/cache-home"),
+            )?,
+            PathBuf::from("/tmp/cache-home").join(APP_IDENTIFIER)
+        );
+        Ok(())
     }
 
     #[test]
@@ -3834,7 +2753,8 @@ mod tests {
             .change_apply(ChangeSetRequest {
                 change_set_id: planned.change_set.id,
             })
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("workspace_refresh"));
         assert!(!error.contains("Unknown change set"));
         Ok(())
@@ -3852,11 +2772,11 @@ mod tests {
             description: None,
             due_date: None,
             status: None,
-            areas: vec![],
-            goals: vec![],
-            vision: vec![],
-            purpose: vec![],
-            general_references: vec![],
+            areas: Some(vec![]),
+            goals: Some(vec![]),
+            vision: Some(vec![]),
+            purpose: Some(vec![]),
+            general_references: Some(vec![]),
         })?;
 
         let alpha_readme = workspace.path().join("Projects/Alpha Project/README.md");
@@ -3869,15 +2789,87 @@ mod tests {
             .change_apply(ChangeSetRequest {
                 change_set_id: change_set_id.clone(),
             })
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("changed since planning"));
         assert!(error.contains("Create a fresh plan"));
 
         let retry_error = service
             .change_apply(ChangeSetRequest { change_set_id })
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
         assert!(retry_error.contains("changed since planning"));
         assert!(!retry_error.contains("Unknown change set"));
+        Ok(())
+    }
+
+    #[test]
+    fn change_apply_after_snapshot_rebuild_still_reports_stale_plan() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let planned = service.plan_project_update(ProjectUpdateRequest {
+            path: "Projects/Alpha Project/README.md".to_string(),
+            title: Some("Alpha Project Updated".to_string()),
+            description: None,
+            due_date: None,
+            status: None,
+            areas: None,
+            goals: None,
+            vision: None,
+            purpose: None,
+            general_references: None,
+        })?;
+
+        let alpha_readme = workspace.path().join("Projects/Alpha Project/README.md");
+        let existing = fs::read_to_string(&alpha_readme).map_err(|error| error.to_string())?;
+        fs::write(&alpha_readme, format!("{existing}\nConcurrent edit.\n"))
+            .map_err(|error| error.to_string())?;
+
+        let _ = service.workspace_info()?;
+
+        let error = service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id,
+            })
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("changed since planning"));
+        assert!(!error.contains("Unknown change set"));
+        Ok(())
+    }
+
+    #[test]
+    fn project_update_allows_clearing_reference_lists() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let planned = service.plan_project_update(ProjectUpdateRequest {
+            path: "Projects/Alpha Project/README.md".to_string(),
+            title: None,
+            description: None,
+            due_date: None,
+            status: None,
+            areas: Some(vec![]),
+            goals: Some(vec![]),
+            vision: Some(vec![]),
+            purpose: Some(vec![]),
+            general_references: Some(vec![]),
+        })?;
+        service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id,
+            })
+            .map_err(|error| error.to_string())?;
+
+        let updated = service.read_markdown("Projects/Alpha Project/README.md")?;
+        assert!(updated.contains("[!areas-references:]"));
+        assert!(updated.contains("[!goals-references:]"));
+        assert!(updated.contains("[!vision-references:]"));
+        assert!(updated.contains("[!purpose-references:]"));
+        assert!(updated.contains("[!references:]"));
         Ok(())
     }
 
@@ -4033,12 +3025,14 @@ Ship the visibible navigation updates.
             .change_apply(ChangeSetRequest {
                 change_set_id: change_set_id.clone(),
             })
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("workspace_refresh"));
 
         let retry_error = service
             .change_apply(ChangeSetRequest { change_set_id })
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
         assert!(retry_error.contains("previously failed during apply"));
         assert!(retry_error.contains("workspace_refresh"));
         assert!(!retry_error.contains("Unknown change set"));
@@ -4057,9 +3051,11 @@ Ship the visibible navigation updates.
             body: Some("Useful note.".to_string()),
         })?;
 
-        let first = service.change_apply(ChangeSetRequest {
-            change_set_id: planned.change_set.id.clone(),
-        })?;
+        let first = service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id.clone(),
+            })
+            .map_err(|error| error.to_string())?;
         assert!(!first.replayed);
 
         let note_path = workspace.path().join("Cabinet/Inbox Reference.md");
@@ -4072,9 +3068,11 @@ Ship the visibible navigation updates.
         )
         .map_err(|error| error.to_string())?;
 
-        let replay = service.change_apply(ChangeSetRequest {
-            change_set_id: planned.change_set.id,
-        })?;
+        let replay = service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id,
+            })
+            .map_err(|error| error.to_string())?;
         assert!(replay.replayed);
         assert_eq!(replay.change_set.id, first.change_set.id);
 
@@ -4095,26 +3093,30 @@ Ship the visibible navigation updates.
             body: Some("Temporary note.".to_string()),
         })?;
 
-        let discarded = service.change_discard(ChangeSetRequest {
-            change_set_id: planned.change_set.id.clone(),
-        })?;
+        let discarded = service
+            .change_discard(ChangeSetRequest {
+                change_set_id: planned.change_set.id.clone(),
+            })
+            .map_err(|error| error.to_string())?;
         assert_eq!(discarded.status, ChangeStatus::Discarded);
 
         let error = service
             .change_apply(ChangeSetRequest {
                 change_set_id: planned.change_set.id,
             })
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("discarded"));
         assert!(!error.contains("Unknown change set"));
         Ok(())
     }
 
     #[test]
-    fn unknown_change_set_message_mentions_session_or_restart() {
-        let error = GtdWorkspaceService::unknown_change_set_message("missing-id");
-        assert!(error.contains("different MCP server session"));
-        assert!(error.contains("expired after restart"));
+    fn unknown_change_set_error_mentions_session_or_restart() {
+        let error = GtdWorkspaceService::unknown_change_set_error("missing-id");
+        assert_eq!(error.kind, ChangeSetErrorKind::Unknown);
+        assert!(error.to_string().contains("different MCP server session"));
+        assert!(error.to_string().contains("expired after restart"));
     }
 
     #[test]
@@ -4207,9 +3209,11 @@ Ship the visibible navigation updates.
             purpose: vec![],
         })?;
 
-        service.change_apply(ChangeSetRequest {
-            change_set_id: planned.change_set.id,
-        })?;
+        service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id,
+            })
+            .map_err(|error| error.to_string())?;
 
         let content = service.read_markdown("Habits/Morning Run.md")?;
         assert!(content.contains("| Date | Time | Status | Action | Details |"));
@@ -4293,9 +3297,11 @@ Ship the visibible navigation updates.
             update_current_status: Some(true),
         })?;
 
-        service.change_apply(ChangeSetRequest {
-            change_set_id: planned.change_set.id,
-        })?;
+        service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id,
+            })
+            .map_err(|error| error.to_string())?;
 
         let content = fs::read_to_string(workspace.path().join("Habits/Morning Run.md"))
             .map_err(|error| error.to_string())?;
@@ -4353,9 +3359,11 @@ Still here
             update_current_status_from_latest: Some(true),
         })?;
 
-        service.change_apply(ChangeSetRequest {
-            change_set_id: planned.change_set.id,
-        })?;
+        service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id,
+            })
+            .map_err(|error| error.to_string())?;
 
         let content = fs::read_to_string(workspace.path().join("Habits/Morning Run.md"))
             .map_err(|error| error.to_string())?;

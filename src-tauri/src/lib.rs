@@ -7,6 +7,7 @@ pub mod backend;
 mod commands;
 mod google_calendar;
 pub mod mcp_server;
+mod mcp_settings;
 pub mod test_utils;
 
 #[cfg(debug_assertions)]

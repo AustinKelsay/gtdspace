@@ -32,6 +32,10 @@ import { calculateNextReset } from '@/hooks/useHabitsHistory';
 import { cn } from '@/lib/utils';
 import { formatCompactDate } from '@/utils/date-formatting';
 import { localISODate } from '@/utils/time';
+import {
+  countHabitsCompletedOnDate,
+  isHabitCompletedOnDate,
+} from '@/utils/habit-progress';
 
 interface DashboardHabitsProps {
   habits: HabitWithHistory[];
@@ -67,6 +71,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
   const [sortBy, setSortBy] = useState<'name' | 'frequency' | 'streak' | 'success'>('name');
   const [selectedHabit, setSelectedHabit] = useState<HabitWithHistory | null>(null);
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('month');
+  const todayStr = localISODate(new Date());
 
   // Auto-select first habit when viewing history if none selected
   React.useEffect(() => {
@@ -86,17 +91,10 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
 
     // Status filter (history-based, for today's completion)
     if (statusFilter !== 'all') {
-      const todayStr = localISODate(new Date());
       if (statusFilter === 'completed') {
-        filtered = filtered.filter(h =>
-          Array.isArray(h.history) && h.history.some(e => e.date === todayStr && e.completed)
-        );
+        filtered = filtered.filter((habit) => isHabitCompletedOnDate(habit, todayStr, todayStr));
       } else if (statusFilter === 'pending') {
-        filtered = filtered.filter(h => {
-          const entries = Array.isArray(h.history) ? h.history : [];
-          const todayEntry = entries.find(e => e.date === todayStr);
-          return !(todayEntry && todayEntry.completed);
-        });
+        filtered = filtered.filter((habit) => !isHabitCompletedOnDate(habit, todayStr, todayStr));
       }
     }
 
@@ -119,22 +117,12 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
     });
 
     return filtered;
-  }, [habits, frequencyFilter, statusFilter, sortBy]);
+  }, [habits, frequencyFilter, statusFilter, sortBy, todayStr]);
 
   // Calculate overall statistics
   const stats = useMemo(() => {
     const total = habits.length;
-
-    // Calculate today's date in YYYY-MM-DD format (local time)
-    const todayStr = localISODate(new Date());
-
-    // Count habits that have a completed entry for today
-    const completedToday = habits.filter(habit => {
-      // Check if habit has any history entry for today marked as completed
-      if (!habit.history || habit.history.length === 0) return false;
-      return habit.history.some(entry => entry.date === todayStr && entry.completed);
-    }).length;
-
+    const completedToday = countHabitsCompletedOnDate(habits, todayStr, todayStr);
     const completionRate = total > 0 ? Math.round((completedToday / total) * 100) : 0;
 
     const avgStreak = habits.reduce((acc, h) => acc + (h.currentStreak || 0), 0) / (total || 1);
@@ -154,7 +142,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
       bestPerformer,
       needsAttention
     };
-  }, [habits]);
+  }, [habits, todayStr]);
 
   // Calculate next reset time for a habit
   const getNextResetTime = useCallback((habit: HabitWithHistory) => {
@@ -191,7 +179,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
 
   // Render habit card
   const renderHabitCard = (habit: HabitWithHistory) => {
-    const isCompleted = Array.isArray(habit.history) && habit.history.some(e => e.date === localISODate(new Date()) && e.completed);
+    const isCompleted = isHabitCompletedOnDate(habit, todayStr, todayStr);
     const streakDisplay = getStreakDisplay(habit.currentStreak);
     const StreakIcon = streakDisplay.icon;
     const nextReset = getNextResetTime(habit);
@@ -415,8 +403,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
 
                   // Get ALL entries for this date
                   const entries = selectedHabit.history?.filter(h => h.date === dateStr) || [];
-                  // Check if ANY entry for this date shows completed
-                  const hasCompletion = entries.some(e => e.completed);
+                  const hasCompletion = isHabitCompletedOnDate(selectedHabit, dateStr, todayStr);
                   const entryCount = entries.length;
 
                   return (

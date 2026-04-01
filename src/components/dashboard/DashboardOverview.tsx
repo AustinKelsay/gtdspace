@@ -30,6 +30,7 @@ import type { ActionItem } from '@/hooks/useActionsData';
 import type { ProjectWithMetadata } from '@/hooks/useProjectsData';
 import type { HabitWithHistory } from '@/hooks/useHabitsHistory';
 import { cn } from '@/lib/utils';
+import { countHabitsCompletedOnDate } from '@/utils/habit-progress';
 import { localISODate } from '@/utils/time';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -90,6 +91,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 }) => {
   const [includeActions, setIncludeActions] = React.useState(true);
   const [onlyOverdue, setOnlyOverdue] = React.useState(false);
+  const todayStr = localISODate(new Date());
   // Calculate project statistics with enhanced metadata
   const projectStats = React.useMemo(() => {
     const active = projects.filter(p => p.status === 'in-progress').length;
@@ -127,13 +129,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   // Calculate enhanced habit statistics
   const habitStats = React.useMemo(() => {
-    // Count today's completions from history to avoid stale status
-    const todayStr = localISODate(new Date());
-    const completedToday = habits.reduce((sum, h) => {
-      const entries = Array.isArray(h.history) ? h.history : [];
-      const todayEntry = entries.find(e => e.date === todayStr);
-      return sum + (todayEntry && todayEntry.completed ? 1 : 0);
-    }, 0);
+    const completedToday = countHabitsCompletedOnDate(habits, todayStr, todayStr);
     const completionRate = habits.length > 0 ? Math.round((completedToday / habits.length) * 100) : 0;
     
     // Calculate aggregate statistics
@@ -166,7 +162,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       improving,
       declining
     };
-  }, [habits]);
+  }, [habits, todayStr]);
 
   // Calculate overall system health score with enhanced metrics
   const systemHealth = React.useMemo(() => {
@@ -277,7 +273,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       value: `${habitStats.completedToday}/${habitStats.total}`,
       icon: RefreshCw,
       color: 'text-green-500',
-      description: `${habitStats.avgSuccessRate}% success rate`
+      description: `${habitStats.completionRate}% completed today`
     }
   ];
 

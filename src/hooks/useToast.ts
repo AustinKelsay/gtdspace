@@ -1,5 +1,7 @@
 import React, { useCallback, useRef } from 'react';
+import { ToastAction } from '@/components/ui/toast';
 import { useToast as useShadcnToast } from '@/hooks/use-toast';
+import { ACTION_TOAST_DURATION_MS } from '@/hooks/use-toast';
 import { norm } from '@/utils/path';
 
 // Store for deduplication
@@ -118,6 +120,7 @@ export function useToast() {
     const { id, dismiss } = toast({
       title: 'Loading',
       description: message,
+      duration: undefined,
     });
     
     return {
@@ -153,9 +156,9 @@ export function useToast() {
       const action =
         options?.onReload
           ? React.createElement(
-              'button',
+              ToastAction,
               {
-                type: 'button',
+                altText: 'Reload file from disk',
                 className:
                   'ml-4 inline-flex items-center rounded-md border border-input bg-background px-3 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-accent',
                 onClick: options.onReload,
@@ -168,6 +171,7 @@ export function useToast() {
         title: 'Warning',
         description: `"${fileName}" was modified externally`,
         action,
+        duration: options?.onReload ? ACTION_TOAST_DURATION_MS : undefined,
       });
     },
     [toast, shouldShowToast]

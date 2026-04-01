@@ -51,14 +51,25 @@ describe('settings validation for MCP server defaults', () => {
     );
   });
 
-  it('coerces supported boolean-like read-only values', () => {
+  it.each([
+    ['true', true],
+    ['yes', true],
+    ['y', true],
+    ['on', true],
+    ['1', true],
+    ['false', false],
+    ['no', false],
+    ['n', false],
+    ['off', false],
+    ['0', false],
+  ])('coerces supported read-only token %s to %s', (token, expected) => {
     const result = validateAndCoerceSettings({
       ...baseSettings,
-      mcp_server_read_only: 'yes',
+      mcp_server_read_only: token,
     });
 
     expect(result.isValid).toBe(true);
-    expect(result.coercedSettings.mcp_server_read_only).toBe(true);
+    expect(result.coercedSettings.mcp_server_read_only).toBe(expected);
     expect(result.errors).toEqual([]);
   });
 

@@ -5,9 +5,9 @@ use std::process::Stdio;
 
 use gtdspace_lib::backend::{
     ChangeApplyResult, ChangeSetSummary, ContextPack, GoogleCalendarMcpEnvelope,
-    GtdItemSummary, HabitHistoryResult, PlannedChange, WorkspaceInfo, WorkspaceRefreshResult,
-    WorkspaceSearchResult, GOOGLE_CALENDAR_EVENTS_RESOURCE_URI, gtdspace_server_version,
-    normalize_workspace_path,
+    GtdItemSummary, HabitHistoryResult, PlannedChange, WorkspaceInfo, WorkspaceListItemsResult,
+    WorkspaceRefreshResult, WorkspaceSearchResult, GOOGLE_CALENDAR_EVENTS_RESOURCE_URI,
+    gtdspace_server_version, normalize_workspace_path,
 };
 use gtdspace_lib::test_utils::{seed_test_workspace, write_test_file};
 use rmcp::{
@@ -22,7 +22,7 @@ fn mcp_settings_dir(root: &Path) -> PathBuf {
     if cfg!(target_os = "macos") {
         root.join("Library/Application Support/com.gtdspace.app")
     } else if cfg!(target_os = "windows") {
-        root.join("AppData/Roaming/com.gtdspace.app/config")
+        root.join("AppData/Roaming/com.gtdspace.app")
     } else {
         root.join(".config/com.gtdspace.app")
     }
@@ -86,7 +86,9 @@ async fn start_client_with_app_data_root(
         .env("HOME", home_root);
 
     if cfg!(target_os = "windows") {
-        command.env("APPDATA", home_root.join("AppData/Roaming"));
+        command
+            .env("APPDATA", home_root.join("AppData/Roaming"))
+            .env("USERPROFILE", home_root);
     } else if cfg!(target_os = "linux") {
         command
             .env("XDG_DATA_HOME", home_root.join(".local/share"))
@@ -104,7 +106,9 @@ async fn start_client_from_saved_defaults(
     command.env("HOME", home_root);
 
     if cfg!(target_os = "windows") {
-        command.env("APPDATA", home_root.join("AppData/Roaming"));
+        command
+            .env("APPDATA", home_root.join("AppData/Roaming"))
+            .env("USERPROFILE", home_root);
     } else if cfg!(target_os = "linux") {
         command.env("XDG_CONFIG_HOME", home_root.join(".config"));
     }
@@ -203,6 +207,9 @@ async fn mcp_server_exposes_resources_and_applies_project_change() -> Result<(),
     assert!(resources
         .iter()
         .any(|resource| resource.uri == GOOGLE_CALENDAR_EVENTS_RESOURCE_URI));
+    assert!(!resources
+        .iter()
+        .any(|resource| resource.uri.starts_with("gtdspace://item/")));
 
     let tools = client.list_all_tools().await?;
     assert!(tools.iter().any(|tool| tool.name == "workspace_info"));
@@ -227,6 +234,10 @@ async fn mcp_server_exposes_resources_and_applies_project_change() -> Result<(),
         .items
         .iter()
         .any(|item| item.relative_path == "Projects/Alpha Project/README.md"));
+    assert!(context_pack
+        .items
+        .iter()
+        .all(|item| item.absolute_path.is_empty()));
 
     let info: WorkspaceInfo = call_tool_typed(&client, "workspace_info", None).await?;
     assert_eq!(info.server_version, gtdspace_server_version());
@@ -248,6 +259,43 @@ async fn mcp_server_exposes_resources_and_applies_project_change() -> Result<(),
     )
     .await?;
     assert!(!matches.matches.is_empty());
+    assert!(matches
+        .matches
+        .iter()
+        .all(|entry| !entry.file_path.starts_with(&normalize_workspace_path(&canonical_workspace_root))));
+
+    let first_page: WorkspaceListItemsResult = call_tool_typed(
+        &client,
+        "workspace_list_items",
+        Some(
+            json!({
+                "limit": 1
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+    assert_eq!(first_page.items.len(), 1);
+    assert_eq!(first_page.next_cursor.as_deref(), Some("1"));
+
+    let second_page: WorkspaceListItemsResult = call_tool_typed(
+        &client,
+        "workspace_list_items",
+        Some(
+            json!({
+                "limit": 1,
+                "cursor": first_page.next_cursor
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+    assert_eq!(second_page.items.len(), 1);
+    assert_eq!(second_page.next_cursor, None);
 
     let beta_readme = workspace_root.join("Projects/Beta Project/README.md");
     assert!(!beta_readme.exists());
@@ -444,6 +492,7 @@ async fn mcp_server_reads_and_filters_google_calendar_cache() -> Result<(), Box<
     .await?;
     assert_eq!(filtered.matched_count, 1);
     assert_eq!(filtered.events[0].id, "evt-1");
+    assert_eq!(filtered.next_cursor, None);
 
     let excluded_cancelled: GoogleCalendarMcpEnvelope = call_tool_typed(
         &client,
@@ -497,6 +546,41 @@ async fn mcp_server_reads_and_filters_google_calendar_cache() -> Result<(), Box<
     .await?;
     assert_eq!(day_filtered.matched_count, 1);
     assert_eq!(day_filtered.events[0].id, "evt-2");
+
+    let paged: GoogleCalendarMcpEnvelope = call_tool_typed(
+        &client,
+        "google_calendar_list_events",
+        Some(
+            json!({
+                "includeCancelled": true,
+                "limit": 2
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+    assert_eq!(paged.returned_count, 2);
+    assert_eq!(paged.next_cursor.as_deref(), Some("2"));
+
+    let paged_follow_up: GoogleCalendarMcpEnvelope = call_tool_typed(
+        &client,
+        "google_calendar_list_events",
+        Some(
+            json!({
+                "includeCancelled": true,
+                "limit": 2,
+                "cursor": paged.next_cursor
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ),
+    )
+    .await?;
+    assert_eq!(paged_follow_up.returned_count, 1);
+    assert_eq!(paged_follow_up.next_cursor, None);
 
     client.cancel().await?;
     Ok(())
@@ -950,6 +1034,8 @@ async fn mcp_server_reports_stale_plan_errors_without_falling_back_to_unknown() 
 
     let existing = fs::read_to_string(&project_readme)?;
     fs::write(&project_readme, format!("{existing}\nConcurrent edit.\n"))?;
+
+    let _: WorkspaceInfo = call_tool_typed(&client, "workspace_info", None).await?;
 
     let first_error = call_tool_typed::<ChangeApplyResult>(
         &client,

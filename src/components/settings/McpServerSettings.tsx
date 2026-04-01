@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   BookOpenText,
-  Copy,
   FolderOpen,
   Info,
   Server,
@@ -26,232 +25,20 @@ import { Switch } from '@/components/ui/switch';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { useSettings } from '@/hooks/useSettings';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
 import type { McpServerLogLevel } from '@/types';
 import { checkTauriContextAsync } from '@/utils/tauri-ready';
-
-const MCP_RESOURCES = [
-  'gtdspace://spec/gtd-spec',
-  'gtdspace://spec/markdown-schema',
-  'gtdspace://spec/architecture',
-  'gtdspace://workspace/context.json',
-  'gtdspace://workspace/context.md',
-  'gtdspace://item/<workspace-relative-path>',
-] as const;
-
-const READ_TOOLS = [
-  'workspace_info',
-  'workspace_refresh',
-  'workspace_list_items',
-  'workspace_search',
-  'workspace_get_item',
-  'workspace_get_relationships',
-  'workspace_read_markdown',
-] as const;
-
-const PLANNING_TOOLS = [
-  'project_create',
-  'project_update',
-  'project_rename',
-  'action_create',
-  'action_update',
-  'action_rename',
-  'habit_create',
-  'habit_update_status',
-  'horizon_page_create',
-  'horizon_page_update',
-  'reference_note_create',
-  'reference_note_update',
-] as const;
-
-const LIFECYCLE_TOOLS = ['change_apply', 'change_discard'] as const;
-
-const LOG_LEVEL_OPTIONS: Array<{
-  value: McpServerLogLevel;
-  label: string;
-  description: string;
-}> = [
-  { value: 'error', label: 'Error', description: 'Only failures' },
-  { value: 'warn', label: 'Warn', description: 'Warnings and errors' },
-  { value: 'info', label: 'Info', description: 'Recommended default' },
-  { value: 'debug', label: 'Debug', description: 'Verbose local troubleshooting' },
-  { value: 'trace', label: 'Trace', description: 'Maximum diagnostics' },
-];
-
-const FIELD_IDS = {
-  workspace: 'mcp-server-workspace',
-  readOnly: 'mcp-server-read-only',
-  logLevel: 'mcp-server-log-level',
-} as const;
-
-const isWindowsPlatform = () => {
-  const navigatorWithUserAgentData = globalThis.navigator as Navigator & {
-    userAgentData?: { platform?: string };
-  };
-  const platform =
-    navigatorWithUserAgentData?.userAgentData?.platform ??
-    globalThis.navigator?.platform ??
-    globalThis.navigator?.userAgent ??
-    '';
-  return /win/i.test(platform);
-};
-
-const shellQuote = (value: string) => {
-  if (isWindowsPlatform()) {
-    return `"${value.replace(/"/g, '\\"')}"`;
-  }
-  return `"${value.replace(/["\\$`]/g, '\\$&')}"`;
-};
-
-const normalizeWorkspacePath = (value: string): string => {
-  const trimmed = value.trim();
-  if (trimmed === '/' || /^[A-Za-z]:[\\/]?$/.test(trimmed)) {
-    return trimmed.length === 2 ? `${trimmed}\\` : trimmed;
-  }
-  return trimmed.replace(/[\\/]+$/, '');
-};
-
-const getParentWorkspacePath = (value: string): string | null => {
-  const normalized = normalizeWorkspacePath(value);
-  if (!normalized || normalized === '/' || /^[A-Za-z]:[\\/]$/.test(normalized)) {
-    return null;
-  }
-
-  const lastSeparator = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
-  if (lastSeparator < 0) {
-    return null;
-  }
-  if (lastSeparator === 0) {
-    return normalized[0];
-  }
-
-  const parent = normalized.slice(0, lastSeparator);
-  if (/^[A-Za-z]:$/.test(parent)) {
-    const separator = normalized.includes('\\') ? '\\' : '/';
-    return `${parent}${separator}`;
-  }
-
-  return parent;
-};
-
-const getWorkspaceAncestors = (value: string): string[] => {
-  const ancestors: string[] = [];
-  let current = normalizeWorkspacePath(value);
-
-  while (current) {
-    ancestors.push(current);
-    const parent = getParentWorkspacePath(current);
-    if (!parent || parent === current) {
-      break;
-    }
-    current = parent;
-  }
-
-  return ancestors;
-};
-
-const getWorkspaceResolutionLabel = (source: 'override' | 'resolved' | 'last-folder' | 'default-space' | 'platform-default' | 'unavailable') => {
-  switch (source) {
-    case 'override':
-      return 'MCP workspace override';
-    case 'resolved':
-      return 'Resolved GTD workspace ancestor';
-    case 'last-folder':
-      return 'Last opened workspace';
-    case 'default-space':
-      return 'Preferred GTD workspace';
-    case 'platform-default':
-      return 'Platform default GTD Space path';
-    default:
-      return 'Unavailable';
-  }
-};
-
-type InvokeWithHandling = <T>(
-  command: string,
-  args?: Record<string, unknown>,
-  options?: { errorMessage?: string }
-) => Promise<T | null>;
-
-const isValidWorkspaceCandidate = async (
-  path: string,
-  invokeWithHandling: InvokeWithHandling
-) => {
-  for (const candidate of getWorkspaceAncestors(path)) {
-    const isValid = await invokeWithHandling<boolean>(
-      'check_is_gtd_space',
-      { path: candidate },
-      { errorMessage: 'Failed to validate the MCP workspace path.' }
-    );
-
-    if (isValid === null) {
-      return null;
-    }
-
-    if (isValid) {
-      return candidate;
-    }
-  }
-
-  return false;
-};
-
-const DetailCard: React.FC<{
-  label: string;
-  value: string;
-  muted?: boolean;
-}> = ({ label, value, muted = false }) => (
-  <div className="rounded-lg border bg-muted/20 p-4">
-    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-      {label}
-    </p>
-    <p className={cn('mt-2 text-sm font-medium break-words', muted && 'text-muted-foreground')}>
-      {value}
-    </p>
-  </div>
-);
-
-const CodeBlock: React.FC<{
-  label: string;
-  value: string;
-  onCopy: () => void;
-}> = ({ label, value, onCopy }) => (
-  <div className="rounded-lg border bg-muted/20 p-4">
-    <div className="mb-2 flex items-center justify-between gap-3">
-      <p className="text-sm font-medium">{label}</p>
-      <Button variant="outline" size="sm" onClick={onCopy}>
-        <Copy className="mr-2 h-4 w-4" />
-        Copy
-      </Button>
-    </div>
-    <pre className="overflow-x-auto rounded-md bg-background px-3 py-2 text-xs leading-6">
-      <code>{value}</code>
-    </pre>
-  </div>
-);
-
-const ToolChipSection: React.FC<{
-  title: string;
-  description: string;
-  items: readonly string[];
-}> = ({ title, description, items }) => (
-  <div className="space-y-3">
-    <div>
-      <p className="text-sm font-semibold">{title}</p>
-      <p className="text-sm text-muted-foreground">{description}</p>
-    </div>
-    <div className="flex flex-wrap gap-2">
-      {items.map((item) => (
-        <code
-          key={item}
-          className="rounded-md border bg-muted/20 px-2.5 py-1 text-xs"
-        >
-          {item}
-        </code>
-      ))}
-    </div>
-  </div>
-);
+import {
+  FIELD_IDS,
+  getWorkspaceResolutionLabel,
+  LIFECYCLE_TOOLS,
+  LOG_LEVEL_OPTIONS,
+  MCP_RESOURCES,
+  PLANNING_TOOLS,
+  READ_TOOLS,
+  shellQuote,
+} from './mcp-server-settings-contract';
+import { CodeBlock, DetailCard, ToolChipSection } from './McpServerSettingsShared';
+import { useMcpWorkspaceResolution } from './useMcpWorkspaceResolution';
 
 export const McpServerSettings: React.FC = () => {
   const { settings, updateSettings } = useSettings();
@@ -260,10 +47,6 @@ export const McpServerSettings: React.FC = () => {
   const [workspaceDraft, setWorkspaceDraft] = React.useState(settings.mcp_server_workspace_path ?? '');
   const [platformDefaultPath, setPlatformDefaultPath] = React.useState<string | null>(null);
   const [isBrowsingWorkspace, setIsBrowsingWorkspace] = React.useState(false);
-  const [isCheckingWorkspace, setIsCheckingWorkspace] = React.useState(false);
-  const [resolvedWorkspaceIsValid, setResolvedWorkspaceIsValid] = React.useState<boolean | null>(null);
-  const [validationError, setValidationError] = React.useState<string | null>(null);
-  const workspaceValidationRequestRef = React.useRef(0);
 
   const invokeWithHandling = React.useCallback(async <T,>(
     command: string,
@@ -308,109 +91,18 @@ export const McpServerSettings: React.FC = () => {
   const workspaceOverride = settings.mcp_server_workspace_path?.trim() || null;
   const defaultLogLevel = settings.mcp_server_log_level ?? 'info';
   const readOnlyDefault = settings.mcp_server_read_only ?? false;
-
-  const fallbackWorkspaceCandidates = React.useMemo(
-    () => [
-      settings.last_folder?.trim() || null,
-      settings.default_space_path?.trim() || null,
-      platformDefaultPath?.trim() || null,
-    ]
-      .filter((path): path is string => Boolean(path))
-      .map((path) => {
-        if (path === settings.last_folder?.trim()) {
-          return { path, source: 'last-folder' as const };
-        }
-        if (path === settings.default_space_path?.trim()) {
-          return { path, source: 'default-space' as const };
-        }
-        return { path, source: 'platform-default' as const };
-      }),
-    [platformDefaultPath, settings.default_space_path, settings.last_folder]
-  );
-
-  const [workspaceResolution, setWorkspaceResolution] = React.useState<{
-    path: string | null;
-    source: 'override' | 'resolved' | 'last-folder' | 'default-space' | 'platform-default' | 'unavailable';
-  }>({ path: null, source: 'unavailable' });
-
-  React.useEffect(() => {
-    const requestId = workspaceValidationRequestRef.current + 1;
-    workspaceValidationRequestRef.current = requestId;
-    let isActive = true;
-
-    const validateWorkspace = async () => {
-      if (workspaceOverride) {
-        setWorkspaceResolution({ path: workspaceOverride, source: 'override' });
-        setIsCheckingWorkspace(true);
-        setValidationError(null);
-        const resolvedPath = await isValidWorkspaceCandidate(workspaceOverride, invokeWithHandling);
-
-        if (!isActive || workspaceValidationRequestRef.current !== requestId) {
-          return;
-        }
-
-        if (resolvedPath === null) {
-          setResolvedWorkspaceIsValid(null);
-          setValidationError(null);
-          setIsCheckingWorkspace(false);
-          return;
-        }
-
-        if (resolvedPath) {
-          setWorkspaceResolution({ path: resolvedPath, source: 'resolved' });
-        }
-        setResolvedWorkspaceIsValid(Boolean(resolvedPath));
-        setValidationError(resolvedPath ? null : 'Workspace path is not a valid GTD space');
-        setIsCheckingWorkspace(false);
-        return;
-      }
-
-      if (fallbackWorkspaceCandidates.length === 0) {
-        setWorkspaceResolution({ path: null, source: 'unavailable' });
-        setIsCheckingWorkspace(false);
-        setResolvedWorkspaceIsValid(null);
-        setValidationError(null);
-        return;
-      }
-
-      setIsCheckingWorkspace(true);
-      setValidationError(null);
-
-      for (const candidate of fallbackWorkspaceCandidates) {
-        const isValid = await isValidWorkspaceCandidate(candidate.path, invokeWithHandling);
-        if (!isActive || workspaceValidationRequestRef.current !== requestId) {
-          return;
-        }
-
-        if (isValid === null) {
-          setWorkspaceResolution({ path: null, source: 'unavailable' });
-          setResolvedWorkspaceIsValid(null);
-          setValidationError(null);
-          setIsCheckingWorkspace(false);
-          return;
-        }
-
-        if (isValid) {
-          setWorkspaceResolution({ ...candidate, path: isValid });
-          setResolvedWorkspaceIsValid(true);
-          setValidationError(null);
-          setIsCheckingWorkspace(false);
-          return;
-        }
-      }
-
-      setWorkspaceResolution({ path: null, source: 'unavailable' });
-      setResolvedWorkspaceIsValid(false);
-      setValidationError('Workspace path is not a valid GTD space');
-      setIsCheckingWorkspace(false);
-    };
-
-    void validateWorkspace();
-
-    return () => {
-      isActive = false;
-    };
-  }, [fallbackWorkspaceCandidates, invokeWithHandling, workspaceOverride]);
+  const {
+    workspaceResolution,
+    isCheckingWorkspace,
+    resolvedWorkspaceIsValid,
+    validationError,
+  } = useMcpWorkspaceResolution({
+    workspaceOverride,
+    lastFolder: settings.last_folder,
+    defaultSpacePath: settings.default_space_path,
+    platformDefaultPath,
+    invokeWithHandling,
+  });
 
   const persistWorkspaceOverride = React.useCallback(async (nextValue: string) => {
     await updateSettings({
@@ -700,12 +392,12 @@ export const McpServerSettings: React.FC = () => {
         <CardContent className="space-y-6">
           <ToolChipSection
             title="Resources"
-            description="Static GTD docs, generated workspace context, and item-specific reads."
+            description="Static GTD docs plus generated workspace context resources."
             items={MCP_RESOURCES}
           />
           <ToolChipSection
             title="Read and query tools"
-            description="Workspace inspection, search, relationship lookup, and markdown reads."
+            description="Workspace inspection, search, relationship lookup, habit history reads, calendar cache reads, and markdown access."
             items={READ_TOOLS}
           />
           <ToolChipSection
@@ -735,7 +427,7 @@ export const McpServerSettings: React.FC = () => {
           />
           <DetailCard
             label="Project Discovery"
-            value="If a client is unsure which project path to use for action_create, call workspace_list_items with itemType set to project and reuse one of the returned paths."
+            value="If a client is unsure which project path to use for action_create, call workspace_list_items with itemType set to project and reuse one of the returned paths. Item-specific reads go through workspace_get_item."
           />
           <DetailCard
             label="Version Surface"
@@ -743,7 +435,11 @@ export const McpServerSettings: React.FC = () => {
           />
           <DetailCard
             label="Refresh Behavior"
-            value="workspace_refresh clears cached workspace state and invalidates any pending change sets."
+            value="workspace_refresh is the explicit reset point: it clears cached workspace state and invalidates all pending change sets. Normal read tools do not discard pending plans."
+          />
+          <DetailCard
+            label="Pagination"
+            value="workspace_list_items, workspace_search, and google_calendar_list_events accept cursor and limit inputs and return nextCursor when more results are available."
           />
           <DetailCard
             label="Cache Location"

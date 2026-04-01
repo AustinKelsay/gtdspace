@@ -43,13 +43,6 @@ The server exposes these MCP resources:
 - `gtdspace://workspace/context.json`
 - `gtdspace://workspace/context.md`
 - `gtdspace://integrations/google-calendar/events.json`
-- `gtdspace://item/<workspace-relative-path>`
-
-The item resource uses a URL-encoded workspace-relative path, for example:
-
-```text
-gtdspace://item/Projects%2FAlpha%20Project%2FREADME.md
-```
 
 ## Tools
 
@@ -67,6 +60,21 @@ Read/query tools:
 
 `workspace_info` now includes `serverVersion` so clients can confirm which GTD Space backend build they are connected to. The generated workspace context resource also includes the same `serverVersion` field.
 
+Path notes for MCP responses:
+
+- Workspace item, relationship, search, and change-set paths are workspace-relative.
+- Absolute filesystem paths are kept internal to the server and are not part of the MCP response surface.
+
+Pagination notes:
+
+- `workspace_list_items` accepts optional `cursor` and `limit` inputs and returns `nextCursor` when more items are available.
+- Returns `nextCursor` when more matches are available; `workspace_search` accepts optional `cursor`, `limit`, and legacy `maxResults` inputs so older clients can continue paginating.
+- When more cached events are available, `google_calendar_list_events`, which accepts optional `cursor`, `limit`, and legacy `maxResults` inputs, returns `nextCursor`.
+
+Compatibility note:
+
+- `gtdspace://item/*` resource URIs are no longer listed by `list_resources`. Clients that previously dereferenced them should call `workspace_get_item` for structured metadata, use `workspace_read_markdown` for file contents, and regenerate candidate paths with `workspace_list_items` or `workspace_search`.
+
 Google Calendar access is cache-only in MCP v1. The desktop app remains responsible for OAuth and sync. The MCP server reads the persisted `google_calendar_cache.json` file from the app-data directory on demand and never calls the Google API directly.
 
 Google Calendar cache semantics:
@@ -74,7 +82,7 @@ Google Calendar cache semantics:
 - If no cache file exists, the resource and tool return a successful empty payload with `cacheAvailable: false`.
 - If the cache file is malformed or partially written, the resource/tool call fails with a parse error instead of silently dropping events.
 - The resource returns the full cached event list.
-- The tool supports optional filtering by `timeMin`, `timeMax`, `query`, `includeCancelled`, and `maxResults`. Cancelled events are excluded by default unless `includeCancelled` is set to `true`.
+- The tool supports optional filtering by `timeMin`, `timeMax`, `query`, `includeCancelled`, `cursor`, `limit`, and legacy `maxResults`. Cancelled events are excluded by default unless `includeCancelled` is set to `true`.
 - Google Calendar events are intentionally excluded from `workspace/context.json`, `workspace/context.md`, workspace fingerprinting, and `workspace_refresh` invalidation rules.
 
 Mutation planning tools:
@@ -84,6 +92,11 @@ Mutation planning tools:
 - `habit_create`, `habit_update_status`, `habit_write_history_entry`, `habit_replace_history`
 - `horizon_page_create`, `horizon_page_update`
 - `reference_note_create`, `reference_note_update`
+
+Update request semantics:
+
+- For list-valued update fields such as `areas`, `goals`, `vision`, `purpose`, `contexts`, and `generalReferences`, omitting the field preserves the current values.
+- Sending an empty array for one of those fields explicitly clears that section in the rewritten markdown.
 
 Path notes:
 
@@ -146,11 +159,13 @@ Typical action-create flow:
 
    Call `change_apply` with the returned `change_set_id` to actually write the markdown file.
 
-Before writing, `change_apply` revalidates the target files using the expected file hash captured during planning. If anything changed after the plan step, apply fails and the client must create a fresh plan.
+Before writing, `change_apply` revalidates the target files using the expected file hash captured during planning. If anything changed after the plan step, apply fails with a stale-plan error and the client must create a fresh plan.
 
 `change_discard` removes a pending plan without writing anything.
 
 `workspace_refresh` also invalidates all pending change sets.
+
+Normal read and query tools may rebuild cached snapshot/context state, but they do not discard pending change sets.
 
 If an apply step fails after a mutation has already started, the server invalidates its cached snapshot/context and returns an error telling the client to call `workspace_refresh` before continuing. V1 does not implement full multi-step rollback.
 
@@ -159,6 +174,7 @@ If an apply step fails after a mutation has already started, the server invalida
 - Change sets are session-scoped to the current `gtdspace-mcp` server process.
 - Repeating `change_apply` for an already-applied change set succeeds only within the same server session and returns the original apply receipt with `replayed: true`.
 - `workspace_refresh` invalidates all pending change sets. Those plans must be recreated before applying.
+- Normal read/query calls do not invalidate pending change sets.
 - `change_discard` transitions a pending change set to a terminal discarded state. Discarded plans cannot be applied later.
 - If the MCP server restarts, previously planned change-set ids are not preserved and later apply attempts will be treated as unknown.
 

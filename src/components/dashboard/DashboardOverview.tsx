@@ -31,6 +31,7 @@ import type { ProjectWithMetadata } from '@/hooks/useProjectsData';
 import type { HabitWithHistory } from '@/hooks/useHabitsHistory';
 import { cn } from '@/lib/utils';
 import { countHabitsCompletedOnDate } from '@/utils/habit-progress';
+import { localISODate } from '@/utils/time';
 import { Switch } from '@/components/ui/switch';
 import {
   formatRelativeDate,
@@ -127,14 +128,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   // Calculate enhanced habit statistics
   const habitStats = React.useMemo(() => {
-    const todayStr = formatRelativeDate ? undefined : undefined;
-    const today = new Date();
-    const todayStrResolved = [
-      today.getFullYear(),
-      String(today.getMonth() + 1).padStart(2, '0'),
-      String(today.getDate()).padStart(2, '0')
-    ].join('-');
-    const completedToday = countHabitsCompletedOnDate(habits, todayStrResolved, todayStrResolved);
+    const todayStr = localISODate(new Date());
+    const completedToday = countHabitsCompletedOnDate(habits, todayStr, todayStr);
     const completionRate = habits.length > 0 ? Math.round((completedToday / habits.length) * 100) : 0;
     
     // Calculate aggregate statistics

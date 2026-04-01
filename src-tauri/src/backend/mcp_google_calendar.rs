@@ -36,6 +36,7 @@ pub struct GoogleCalendarMcpEnvelope {
     pub matched_count: u32,
     pub returned_count: u32,
     pub truncated: bool,
+    pub next_cursor: Option<String>,
     pub events: Vec<GoogleCalendarMcpEvent>,
 }
 
@@ -46,6 +47,8 @@ pub struct GoogleCalendarListEventsRequest {
     pub time_max: Option<String>,
     pub query: Option<String>,
     pub include_cancelled: Option<bool>,
+    pub cursor: Option<String>,
+    pub limit: Option<u32>,
     pub max_results: Option<u32>,
 }
 
@@ -87,6 +90,7 @@ fn google_calendar_events_resource_from_cache(
         matched_count: count,
         returned_count: count,
         truncated: false,
+        next_cursor: None,
         events,
     })
 }
@@ -110,8 +114,10 @@ fn google_calendar_list_events_from_cache(
         .map(|value| parse_filter_bound(value, BoundKind::Max))
         .transpose()?;
     let (time_min, time_max) = normalize_bounds(time_min, time_max);
-    let max_results = request
-        .max_results
+    let offset = parse_cursor(request.cursor.as_deref())?;
+    let limit = request
+        .limit
+        .or(request.max_results)
         .map(|value| value.clamp(1, MAX_MAX_RESULTS as u32) as usize)
         .unwrap_or(DEFAULT_MAX_RESULTS);
 
@@ -134,8 +140,14 @@ fn google_calendar_list_events_from_cache(
     }
 
     let matched_count = matched.len();
-    let returned = matched.into_iter().take(max_results).collect::<Vec<_>>();
+    let returned = matched
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect::<Vec<_>>();
     let returned_count = returned.len();
+    let next_cursor =
+        (offset + returned_count < matched_count).then(|| (offset + returned_count).to_string());
 
     Ok(GoogleCalendarMcpEnvelope {
         source: "cache".to_string(),
@@ -144,7 +156,8 @@ fn google_calendar_list_events_from_cache(
         cache_event_count: to_u32_len(cache.events.len()),
         matched_count: to_u32_len(matched_count),
         returned_count: to_u32_len(returned_count),
-        truncated: matched_count > returned_count,
+        truncated: next_cursor.is_some(),
+        next_cursor,
         events: returned,
     })
 }
@@ -158,7 +171,20 @@ fn empty_envelope() -> GoogleCalendarMcpEnvelope {
         matched_count: 0,
         returned_count: 0,
         truncated: false,
+        next_cursor: None,
         events: Vec::new(),
+    }
+}
+
+fn parse_cursor(value: Option<&str>) -> Result<usize, String> {
+    match value.map(str::trim).filter(|entry| !entry.is_empty()) {
+        None => Ok(0),
+        Some(raw) => raw.parse::<usize>().map_err(|_| {
+            format!(
+                "Invalid cursor '{}'. Expected a non-negative integer offset.",
+                raw
+            )
+        }),
     }
 }
 

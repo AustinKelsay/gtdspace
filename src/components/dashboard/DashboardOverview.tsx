@@ -30,7 +30,7 @@ import type { ActionItem } from '@/hooks/useActionsData';
 import type { ProjectWithMetadata } from '@/hooks/useProjectsData';
 import type { HabitWithHistory } from '@/hooks/useHabitsHistory';
 import { cn } from '@/lib/utils';
-import { localISODate } from '@/utils/time';
+import { countHabitsCompletedOnDate } from '@/utils/habit-progress';
 import { Switch } from '@/components/ui/switch';
 import {
   formatRelativeDate,
@@ -127,13 +127,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   // Calculate enhanced habit statistics
   const habitStats = React.useMemo(() => {
-    // Count today's completions from history to avoid stale status
-    const todayStr = localISODate(new Date());
-    const completedToday = habits.reduce((sum, h) => {
-      const entries = Array.isArray(h.history) ? h.history : [];
-      const todayEntry = entries.find(e => e.date === todayStr);
-      return sum + (todayEntry && todayEntry.completed ? 1 : 0);
-    }, 0);
+    const todayStr = formatRelativeDate ? undefined : undefined;
+    const today = new Date();
+    const todayStrResolved = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0')
+    ].join('-');
+    const completedToday = countHabitsCompletedOnDate(habits, todayStrResolved, todayStrResolved);
     const completionRate = habits.length > 0 ? Math.round((completedToday / habits.length) * 100) : 0;
     
     // Calculate aggregate statistics
@@ -277,7 +278,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       value: `${habitStats.completedToday}/${habitStats.total}`,
       icon: RefreshCw,
       color: 'text-green-500',
-      description: `${habitStats.avgSuccessRate}% success rate`
+      description: `${habitStats.completionRate}% completed today`
     }
   ];
 

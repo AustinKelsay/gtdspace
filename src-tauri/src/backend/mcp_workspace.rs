@@ -23,10 +23,16 @@ use crate::backend::mcp_workspace_context::{
 #[cfg(test)]
 use crate::backend::mcp_workspace_index::parse_reference_list;
 use crate::backend::mcp_workspace_index::{
-    build_fingerprint, build_item_summaries, extract_multiselect, extract_reference_list,
-    extract_section_body, item_type_key, normalize_absolute_to_relative, normalize_path_components,
-    normalize_reference_list, normalize_relative_input, normalize_similarity_key,
+    build_fingerprint, build_item_summaries, item_type_key, normalize_absolute_to_relative,
+    normalize_path_components, normalize_relative_input, normalize_similarity_key,
     parse_reference_note, path_is_within_workspace, project_similarity_keys, sanitize_title,
+};
+use crate::backend::mcp_workspace_markdown::{
+    build_action_markdown, build_habit_markdown, build_horizon_markdown, build_project_markdown,
+    build_reference_note_markdown, parse_action_update_seed, parse_horizon_update_seed,
+    parse_project_update_seed, preview_write, project_directory_from_readme,
+    resolve_project_readme_in_directory, ActionBuildInput, HabitBuildInput, HorizonBuildInput,
+    ProjectBuildInput,
 };
 #[cfg(test)]
 use crate::commands::filesystem::MarkdownFile;
@@ -35,22 +41,20 @@ use crate::commands::gtd_habits::update_habit_status;
 use crate::commands::gtd_habits_domain::{
     apply_status_marker, format_history_entry, format_history_time, insert_history_entry,
     parse_habit_state, parse_history_rows_strict, parse_history_timestamp, HabitStatus,
-    DEFAULT_HISTORY_TEMPLATE,
 };
 use crate::commands::gtd_projects::{rename_gtd_action, rename_gtd_project};
 use crate::commands::gtd_relationships::{find_habits_referencing, find_reverse_relationships};
 use crate::commands::search::{search_files, SearchFilters};
-use crate::commands::seed_data::{
-    generate_area_of_focus_template_with_refs, generate_goal_template_with_refs,
-    generate_project_readme_with_refs, generate_vision_document_template_with_refs,
-    ProjectReadmeParams,
-};
 use crate::commands::utils::sanitize_markdown_file_stem;
 
 const CONTEXT_CACHE_DIR: &str = "mcp-context";
 const MAX_CONTEXT_PACK_RETRIES: usize = 5;
 const MAX_CHANGE_SET_TOMBSTONES: usize = 256;
 const APP_IDENTIFIER: &str = "com.gtdspace.app";
+const DEFAULT_LIST_ITEMS_LIMIT: usize = 200;
+const MAX_LIST_ITEMS_LIMIT: usize = 1000;
+const DEFAULT_SEARCH_LIMIT: usize = 20;
+const MAX_SEARCH_LIMIT: usize = 1000;
 
 pub(crate) const GTD_SPEC_DOC: &str = include_str!("../../../spec/gtd-spec.md");
 pub(crate) const MARKDOWN_SCHEMA_DOC: &str = include_str!("../../../spec/02-markdown-schema.md");
@@ -84,6 +88,8 @@ pub struct GtdItemReferenceSummary {
 #[serde(rename_all = "camelCase")]
 pub struct GtdItemSummary {
     pub relative_path: String,
+    #[serde(skip_serializing, skip_deserializing)]
+    #[schemars(skip)]
     pub absolute_path: String,
     pub item_type: GtdItemType,
     pub title: String,
@@ -160,12 +166,14 @@ pub struct WorkspaceSearchMatch {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceListItemsResult {
     pub items: Vec<GtdItemSummary>,
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSearchResult {
     pub matches: Vec<WorkspaceSearchMatch>,
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -253,10 +261,34 @@ pub struct ChangeApplyResult {
     pub replayed: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ChangeSetErrorKind {
+    ReadOnly,
+    Unknown,
+    Invalidated,
+    Discarded,
+    AlreadyApplied,
+    Stale,
+    ApplyFailed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangeSetToolError {
+    pub kind: ChangeSetErrorKind,
+    pub change_set_id: Option<String>,
+    pub status: Option<ChangeStatus>,
+    pub reason: Option<String>,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceListItemsRequest {
     pub item_type: Option<GtdItemType>,
+    pub cursor: Option<String>,
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -264,8 +296,9 @@ pub struct WorkspaceListItemsRequest {
 #[schemars(transform = RecursiveTransform(remove_unsupported_integer_formats))]
 pub struct WorkspaceSearchRequest {
     pub query: String,
-    #[serde(default = "default_search_limit")]
-    pub max_results: usize,
+    pub cursor: Option<String>,
+    pub limit: Option<usize>,
+    pub max_results: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -301,16 +334,11 @@ pub struct ProjectUpdateRequest {
     pub description: Option<String>,
     pub due_date: Option<String>,
     pub status: Option<String>,
-    #[serde(default)]
-    pub areas: Vec<String>,
-    #[serde(default)]
-    pub goals: Vec<String>,
-    #[serde(default)]
-    pub vision: Vec<String>,
-    #[serde(default)]
-    pub purpose: Vec<String>,
-    #[serde(default)]
-    pub general_references: Vec<String>,
+    pub areas: Option<Vec<String>>,
+    pub goals: Option<Vec<String>>,
+    pub vision: Option<Vec<String>>,
+    pub purpose: Option<Vec<String>>,
+    pub general_references: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -346,11 +374,9 @@ pub struct ActionUpdateRequest {
     pub focus_date: Option<String>,
     pub due_date: Option<String>,
     pub effort: Option<String>,
-    #[serde(default)]
-    pub contexts: Vec<String>,
+    pub contexts: Option<Vec<String>>,
     pub notes: Option<String>,
-    #[serde(default)]
-    pub general_references: Vec<String>,
+    pub general_references: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -480,18 +506,12 @@ pub struct HorizonPageUpdateRequest {
     pub target_date: Option<String>,
     pub horizon: Option<String>,
     pub description: Option<String>,
-    #[serde(default)]
-    pub projects: Vec<String>,
-    #[serde(default)]
-    pub areas: Vec<String>,
-    #[serde(default)]
-    pub goals: Vec<String>,
-    #[serde(default)]
-    pub vision: Vec<String>,
-    #[serde(default)]
-    pub purpose: Vec<String>,
-    #[serde(default)]
-    pub general_references: Vec<String>,
+    pub projects: Option<Vec<String>>,
+    pub areas: Option<Vec<String>>,
+    pub goals: Option<Vec<String>>,
+    pub vision: Option<Vec<String>>,
+    pub purpose: Option<Vec<String>>,
+    pub general_references: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -515,6 +535,39 @@ pub struct ReferenceNoteUpdateRequest {
     pub path: String,
     pub title: Option<String>,
     pub body: Option<String>,
+}
+
+impl std::fmt::Display for ChangeSetToolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for ChangeSetToolError {}
+
+impl WorkspaceListItemsRequest {
+    fn resolved_limit(&self) -> usize {
+        self.limit
+            .unwrap_or(DEFAULT_LIST_ITEMS_LIMIT)
+            .clamp(1, MAX_LIST_ITEMS_LIMIT)
+    }
+
+    fn resolved_offset(&self) -> Result<usize, String> {
+        parse_pagination_cursor(self.cursor.as_deref())
+    }
+}
+
+impl WorkspaceSearchRequest {
+    fn resolved_limit(&self) -> usize {
+        self.limit
+            .or(self.max_results)
+            .unwrap_or(DEFAULT_SEARCH_LIMIT)
+            .clamp(1, MAX_SEARCH_LIMIT)
+    }
+
+    fn resolved_offset(&self) -> Result<usize, String> {
+        parse_pagination_cursor(self.cursor.as_deref())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -699,13 +752,24 @@ impl GtdWorkspaceService {
         self.ensure_context_pack(false)
     }
 
-    pub fn list_items(&self, filter: Option<GtdItemType>) -> Result<Vec<GtdItemSummary>, String> {
+    pub fn list_items(
+        &self,
+        request: WorkspaceListItemsRequest,
+    ) -> Result<WorkspaceListItemsResult, String> {
         let snapshot = self.ensure_snapshot(false)?;
-        Ok(snapshot
+        let items = snapshot
             .items
             .into_iter()
-            .filter(|item| filter.as_ref().is_none_or(|kind| item.item_type == *kind))
-            .collect())
+            .filter(|item| {
+                request
+                    .item_type
+                    .as_ref()
+                    .is_none_or(|kind| item.item_type == *kind)
+            })
+            .collect::<Vec<_>>();
+        let (items, next_cursor) =
+            paginate_entries(items, request.resolved_offset()?, request.resolved_limit());
+        Ok(WorkspaceListItemsResult { items, next_cursor })
     }
 
     pub fn get_item(&self, path: &str) -> Result<GtdItemSummary, String> {
@@ -760,27 +824,34 @@ impl GtdWorkspaceService {
     pub async fn search(
         &self,
         request: WorkspaceSearchRequest,
-    ) -> Result<Vec<WorkspaceSearchMatch>, String> {
+    ) -> Result<WorkspaceSearchResult, String> {
+        let offset = request.resolved_offset()?;
+        let limit = request.resolved_limit();
         let filters = SearchFilters {
             case_sensitive: false,
             whole_word: false,
             use_regex: false,
             include_file_names: true,
-            max_results: request.max_results.max(1),
+            max_results: offset.saturating_add(limit).clamp(1, MAX_SEARCH_LIMIT),
         };
         let response = search_files(request.query, self.workspace_root(), filters).await?;
-        Ok(response
+        let matches = response
             .results
             .into_iter()
             .map(|entry| WorkspaceSearchMatch {
-                file_path: entry.file_path,
+                file_path: normalize_absolute_to_relative(&self.workspace_root, &entry.file_path),
                 file_name: entry.file_name,
                 line_number: entry.line_number,
                 line_content: entry.line_content,
                 match_start: entry.match_start,
                 match_end: entry.match_end,
             })
-            .collect())
+            .collect::<Vec<_>>();
+        let (matches, next_cursor) = paginate_entries(matches, offset, limit);
+        Ok(WorkspaceSearchResult {
+            matches,
+            next_cursor,
+        })
     }
 
     pub fn relationships(&self, path: &str) -> Result<RelationshipSummary, String> {
@@ -824,6 +895,10 @@ impl GtdWorkspaceService {
             return Err(format!("Project '{}' already exists", title));
         }
         let readme_path = project_dir.join("README.md");
+        let project_dir_relative =
+            normalize_absolute_to_relative(&self.workspace_root, &normalize_path(&project_dir));
+        let readme_relative =
+            normalize_absolute_to_relative(&self.workspace_root, &normalize_path(&readme_path));
         let content = build_project_markdown(ProjectBuildInput {
             title: title.clone(),
             description: request.description,
@@ -840,12 +915,8 @@ impl GtdWorkspaceService {
         self.store_change_set(
             "project_create",
             format!("Create project '{}'", title),
-            vec![normalize_path(&project_dir), normalize_path(&readme_path)],
-            preview_write(
-                "Create project README",
-                &normalize_path(&readme_path),
-                &content,
-            ),
+            vec![project_dir_relative, readme_relative.clone()],
+            preview_write("Create project README", &readme_relative, &content),
             vec![
                 ChangeOperation::CreateDirectory {
                     path: normalize_path(&project_dir),
@@ -878,31 +949,13 @@ impl GtdWorkspaceService {
                 .unwrap_or_default(),
             due_date: request.due_date.or(parsed.due_date),
             status: request.status.unwrap_or(parsed.status),
-            areas: if request.areas.is_empty() {
-                parsed.areas
-            } else {
-                request.areas
-            },
-            goals: if request.goals.is_empty() {
-                parsed.goals
-            } else {
-                request.goals
-            },
-            vision: if request.vision.is_empty() {
-                parsed.vision
-            } else {
-                request.vision
-            },
-            purpose: if request.purpose.is_empty() {
-                parsed.purpose
-            } else {
-                request.purpose
-            },
-            general_references: if request.general_references.is_empty() {
-                parsed.general_references
-            } else {
-                request.general_references
-            },
+            areas: request.areas.unwrap_or(parsed.areas),
+            goals: request.goals.unwrap_or(parsed.goals),
+            vision: request.vision.unwrap_or(parsed.vision),
+            purpose: request.purpose.unwrap_or(parsed.purpose),
+            general_references: request
+                .general_references
+                .unwrap_or(parsed.general_references),
             created_date_time: parsed.created_date_time,
             additional_content: parsed.additional_content,
         });
@@ -970,15 +1023,13 @@ impl GtdWorkspaceService {
             notes: request.notes,
             created_date_time: Utc::now().to_rfc3339(),
         });
+        let action_relative =
+            normalize_absolute_to_relative(&self.workspace_root, &normalize_path(&action_path));
         self.store_change_set(
             "action_create",
             format!("Create action '{}'", request.name),
-            vec![normalize_path(&action_path)],
-            preview_write(
-                "Create action markdown",
-                &normalize_path(&action_path),
-                &content,
-            ),
+            vec![action_relative.clone()],
+            preview_write("Create action markdown", &action_relative, &content),
             vec![ChangeOperation::WriteFile {
                 path: normalize_path(&action_path),
                 expected_sha256: None,
@@ -1004,16 +1055,10 @@ impl GtdWorkspaceService {
             focus_date: request.focus_date.or(parsed.focus_date),
             due_date: request.due_date.or(parsed.due_date),
             effort: request.effort.unwrap_or(parsed.effort),
-            contexts: if request.contexts.is_empty() {
-                parsed.contexts
-            } else {
-                request.contexts
-            },
-            general_references: if request.general_references.is_empty() {
-                parsed.general_references
-            } else {
-                request.general_references
-            },
+            contexts: request.contexts.unwrap_or(parsed.contexts),
+            general_references: request
+                .general_references
+                .unwrap_or(parsed.general_references),
             notes: request.notes.or(parsed.notes),
             created_date_time: parsed.created_date_time,
         });
@@ -1077,15 +1122,13 @@ impl GtdWorkspaceService {
             purpose: request.purpose,
             created_date_time: Utc::now().to_rfc3339(),
         })?;
+        let habit_relative =
+            normalize_absolute_to_relative(&self.workspace_root, &normalize_path(&habit_path));
         self.store_change_set(
             "habit_create",
             format!("Create habit '{}'", title),
-            vec![normalize_path(&habit_path)],
-            preview_write(
-                "Create habit markdown",
-                &normalize_path(&habit_path),
-                &content,
-            ),
+            vec![habit_relative.clone()],
+            preview_write("Create habit markdown", &habit_relative, &content),
             vec![ChangeOperation::WriteFile {
                 path: normalize_path(&habit_path),
                 expected_sha256: None,
@@ -1219,6 +1262,8 @@ impl GtdWorkspaceService {
                 normalize_path(&file_path)
             ));
         }
+        let page_relative =
+            normalize_absolute_to_relative(&self.workspace_root, &normalize_path(&file_path));
         let content = build_horizon_markdown(
             &request.page_type,
             HorizonBuildInput {
@@ -1241,8 +1286,8 @@ impl GtdWorkspaceService {
         self.store_change_set(
             "horizon_page_create",
             format!("Create {:?} page", request.page_type),
-            vec![normalize_path(&file_path)],
-            preview_write("Create horizon page", &normalize_path(&file_path), &content),
+            vec![page_relative.clone()],
+            preview_write("Create horizon page", &page_relative, &content),
             vec![ChangeOperation::WriteFile {
                 path: normalize_path(&file_path),
                 expected_sha256: None,
@@ -1277,36 +1322,14 @@ impl GtdWorkspaceService {
                 target_date: request.target_date.or(parsed.target_date),
                 horizon: request.horizon.or(parsed.horizon),
                 description: request.description.or(parsed.description),
-                projects: if request.projects.is_empty() {
-                    parsed.projects
-                } else {
-                    request.projects
-                },
-                areas: if request.areas.is_empty() {
-                    parsed.areas
-                } else {
-                    request.areas
-                },
-                goals: if request.goals.is_empty() {
-                    parsed.goals
-                } else {
-                    request.goals
-                },
-                vision: if request.vision.is_empty() {
-                    parsed.vision
-                } else {
-                    request.vision
-                },
-                purpose: if request.purpose.is_empty() {
-                    parsed.purpose
-                } else {
-                    request.purpose
-                },
-                general_references: if request.general_references.is_empty() {
-                    parsed.general_references
-                } else {
-                    request.general_references
-                },
+                projects: request.projects.unwrap_or(parsed.projects),
+                areas: request.areas.unwrap_or(parsed.areas),
+                goals: request.goals.unwrap_or(parsed.goals),
+                vision: request.vision.unwrap_or(parsed.vision),
+                purpose: request.purpose.unwrap_or(parsed.purpose),
+                general_references: request
+                    .general_references
+                    .unwrap_or(parsed.general_references),
                 created_date_time: parsed.created_date_time,
                 trailing_content: parsed.trailing_content,
             },
@@ -1342,11 +1365,13 @@ impl GtdWorkspaceService {
             return Err(format!("Note already exists at {}", normalize_path(&path)));
         }
         let content = build_reference_note_markdown(&title, request.body, None);
+        let note_relative =
+            normalize_absolute_to_relative(&self.workspace_root, &normalize_path(&path));
         self.store_change_set(
             "reference_note_create",
             format!("Create {} note '{}'", folder, title),
-            vec![normalize_path(&path)],
-            preview_write("Create reference note", &normalize_path(&path), &content),
+            vec![note_relative.clone()],
+            preview_write("Create reference note", &note_relative, &content),
             vec![ChangeOperation::WriteFile {
                 path: normalize_path(&path),
                 expected_sha256: None,
@@ -1389,14 +1414,30 @@ impl GtdWorkspaceService {
         )
     }
 
-    pub fn change_apply(&self, request: ChangeSetRequest) -> Result<ChangeApplyResult, String> {
-        self.reject_if_read_only()?;
+    pub fn change_apply(
+        &self,
+        request: ChangeSetRequest,
+    ) -> Result<ChangeApplyResult, ChangeSetToolError> {
+        if self.read_only {
+            return Err(Self::change_set_tool_error(
+                ChangeSetErrorKind::ReadOnly,
+                None,
+                None,
+                Some("read-only"),
+                "This MCP server is running in read-only mode".to_string(),
+            ));
+        }
         let change_set_id = request.change_set_id;
         let stored = {
-            let state = self
-                .state
-                .lock()
-                .map_err(|_| "Failed to lock workspace state".to_string())?;
+            let state = self.state.lock().map_err(|_| {
+                Self::change_set_tool_error(
+                    ChangeSetErrorKind::ApplyFailed,
+                    Some(&change_set_id),
+                    None,
+                    Some("state-lock"),
+                    "Failed to lock workspace state".to_string(),
+                )
+            })?;
             if let Some(stored) = state.change_sets.get(&change_set_id).cloned() {
                 stored
             } else if let Some(tombstone) = Self::lookup_terminal_change_set(&state, &change_set_id)
@@ -1408,7 +1449,7 @@ impl GtdWorkspaceService {
                 }
                 return Err(Self::terminal_change_set_apply_error(&tombstone));
             } else {
-                return Err(Self::unknown_change_set_message(&change_set_id));
+                return Err(Self::unknown_change_set_error(&change_set_id));
             }
         };
 
@@ -1418,10 +1459,15 @@ impl GtdWorkspaceService {
                     "Change set '{}' is no longer valid because workspace files changed since planning: {} Create a fresh plan before applying.",
                     change_set_id, error
                 );
-                let mut state = self
-                    .state
-                    .lock()
-                    .map_err(|_| "Failed to lock workspace state".to_string())?;
+                let mut state = self.state.lock().map_err(|_| {
+                    Self::change_set_tool_error(
+                        ChangeSetErrorKind::ApplyFailed,
+                        Some(&change_set_id),
+                        Some(ChangeStatus::Invalidated),
+                        Some("state-lock"),
+                        "Failed to lock workspace state".to_string(),
+                    )
+                })?;
                 state.change_sets.remove(&change_set_id);
                 Self::record_change_set_tombstone(
                     &mut state,
@@ -1439,7 +1485,13 @@ impl GtdWorkspaceService {
                 );
                 state.snapshot = None;
                 state.context_pack = None;
-                return Err(message);
+                return Err(Self::change_set_tool_error(
+                    ChangeSetErrorKind::Stale,
+                    Some(&change_set_id),
+                    Some(ChangeStatus::Invalidated),
+                    Some("workspace-changed"),
+                    message,
+                ));
             }
         }
 
@@ -1476,10 +1528,15 @@ impl GtdWorkspaceService {
                     "Change set '{}' previously failed during apply: {} Workspace state may be partially updated; run workspace_refresh before continuing and create a new plan.",
                     change_set_id, error
                 );
-                let mut state = self
-                    .state
-                    .lock()
-                    .map_err(|_| "Failed to lock workspace state".to_string())?;
+                let mut state = self.state.lock().map_err(|_| {
+                    Self::change_set_tool_error(
+                        ChangeSetErrorKind::ApplyFailed,
+                        Some(&change_set_id),
+                        Some(ChangeStatus::Invalidated),
+                        Some("state-lock"),
+                        "Failed to lock workspace state".to_string(),
+                    )
+                })?;
                 state.change_sets.remove(&change_set_id);
                 Self::record_change_set_tombstone(
                     &mut state,
@@ -1497,34 +1554,58 @@ impl GtdWorkspaceService {
                 );
                 state.snapshot = None;
                 state.context_pack = None;
-                return Err(format!(
-                    "{} Workspace state may be partially updated; run workspace_refresh before continuing.",
-                    error
+                return Err(Self::change_set_tool_error(
+                    ChangeSetErrorKind::ApplyFailed,
+                    Some(&change_set_id),
+                    Some(ChangeStatus::Invalidated),
+                    Some("apply-failed"),
+                    format!(
+                        "{} Workspace state may be partially updated; run workspace_refresh before continuing.",
+                        error
+                    ),
                 ));
             }
         }
 
         {
-            let mut state = self
-                .state
-                .lock()
-                .map_err(|_| "Failed to lock workspace state".to_string())?;
+            let mut state = self.state.lock().map_err(|_| {
+                Self::change_set_tool_error(
+                    ChangeSetErrorKind::ApplyFailed,
+                    Some(&change_set_id),
+                    None,
+                    Some("state-lock"),
+                    "Failed to lock workspace state".to_string(),
+                )
+            })?;
             state.change_sets.remove(&change_set_id);
             state.snapshot = None;
             state.context_pack = None;
         }
 
-        let info = self.workspace_info()?;
+        let info = self.workspace_info().map_err(|error| {
+            Self::change_set_tool_error(
+                ChangeSetErrorKind::ApplyFailed,
+                Some(&change_set_id),
+                Some(ChangeStatus::Applied),
+                Some("workspace-info"),
+                error,
+            )
+        })?;
         let result = ChangeApplyResult {
             change_set: Self::change_set_summary(&stored.public, ChangeStatus::Applied),
             workspace_info: info,
             replayed: false,
         };
         {
-            let mut state = self
-                .state
-                .lock()
-                .map_err(|_| "Failed to lock workspace state".to_string())?;
+            let mut state = self.state.lock().map_err(|_| {
+                Self::change_set_tool_error(
+                    ChangeSetErrorKind::ApplyFailed,
+                    Some(&change_set_id),
+                    Some(ChangeStatus::Applied),
+                    Some("state-lock"),
+                    "Failed to lock workspace state".to_string(),
+                )
+            })?;
             Self::record_change_set_tombstone(
                 &mut state,
                 change_set_id,
@@ -1540,15 +1621,23 @@ impl GtdWorkspaceService {
         Ok(result)
     }
 
-    pub fn change_discard(&self, request: ChangeSetRequest) -> Result<ChangeSetSummary, String> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| "Failed to lock workspace state".to_string())?;
+    pub fn change_discard(
+        &self,
+        request: ChangeSetRequest,
+    ) -> Result<ChangeSetSummary, ChangeSetToolError> {
+        let mut state = self.state.lock().map_err(|_| {
+            Self::change_set_tool_error(
+                ChangeSetErrorKind::ApplyFailed,
+                Some(&request.change_set_id),
+                None,
+                Some("state-lock"),
+                "Failed to lock workspace state".to_string(),
+            )
+        })?;
         let mut change = state
             .change_sets
             .remove(&request.change_set_id)
-            .ok_or_else(|| format!("Unknown change set '{}'", request.change_set_id))?;
+            .ok_or_else(|| Self::unknown_change_set_error(&request.change_set_id))?;
         change.public.status = ChangeStatus::Discarded;
         let summary = ChangeSetSummary {
             id: change.public.id,
@@ -1608,7 +1697,6 @@ impl GtdWorkspaceService {
         };
         state.snapshot = Some(snapshot.clone());
         state.context_pack = None;
-        state.change_sets.clear();
         Ok(snapshot)
     }
 
@@ -2012,48 +2100,145 @@ impl GtdWorkspaceService {
         })
     }
 
-    fn unknown_change_set_message(change_set_id: &str) -> String {
-        format!(
-            "Unknown change set '{}'. It may belong to a different MCP server session, may have expired after restart, or may never have been created.",
-            change_set_id
+    fn change_set_tool_error(
+        kind: ChangeSetErrorKind,
+        change_set_id: Option<&str>,
+        status: Option<ChangeStatus>,
+        reason: Option<&str>,
+        message: String,
+    ) -> ChangeSetToolError {
+        ChangeSetToolError {
+            kind,
+            change_set_id: change_set_id.map(str::to_string),
+            status,
+            reason: reason.map(str::to_string),
+            message,
+        }
+    }
+
+    fn unknown_change_set_error(change_set_id: &str) -> ChangeSetToolError {
+        Self::change_set_tool_error(
+            ChangeSetErrorKind::Unknown,
+            Some(change_set_id),
+            None,
+            Some("unknown"),
+            format!(
+                "Unknown change set '{}'. It may belong to a different MCP server session, may have expired after restart, or may never have been created.",
+                change_set_id
+            ),
         )
     }
 
-    fn terminal_change_set_apply_error(tombstone: &StoredChangeSetTombstone) -> String {
+    fn terminal_change_set_apply_error(tombstone: &StoredChangeSetTombstone) -> ChangeSetToolError {
         if let Some(message) = tombstone.message.as_deref() {
-            return message.to_string();
+            let kind = match (tombstone.state, tombstone.reason) {
+                (TerminalChangeSetState::Applied, TerminalChangeSetReason::Applied) => {
+                    ChangeSetErrorKind::AlreadyApplied
+                }
+                (TerminalChangeSetState::Discarded, TerminalChangeSetReason::Discarded) => {
+                    ChangeSetErrorKind::Discarded
+                }
+                (
+                    TerminalChangeSetState::Invalidated,
+                    TerminalChangeSetReason::InvalidatedByRefresh,
+                ) => ChangeSetErrorKind::Invalidated,
+                (
+                    TerminalChangeSetState::Invalidated,
+                    TerminalChangeSetReason::InvalidatedByRevalidation,
+                ) => ChangeSetErrorKind::Stale,
+                (TerminalChangeSetState::Failed, TerminalChangeSetReason::ApplyFailed) => {
+                    ChangeSetErrorKind::ApplyFailed
+                }
+                _ => ChangeSetErrorKind::Invalidated,
+            };
+            let reason = match tombstone.reason {
+                TerminalChangeSetReason::Applied => "already-applied",
+                TerminalChangeSetReason::Discarded => "discarded",
+                TerminalChangeSetReason::InvalidatedByRefresh => "workspace-refresh",
+                TerminalChangeSetReason::InvalidatedByRevalidation => "workspace-changed",
+                TerminalChangeSetReason::ApplyFailed => "apply-failed",
+            };
+            return Self::change_set_tool_error(
+                kind,
+                Some(&tombstone.summary.id),
+                Some(tombstone.summary.status.clone()),
+                Some(reason),
+                message.to_string(),
+            );
         }
 
         match (tombstone.state, tombstone.reason) {
-            (TerminalChangeSetState::Applied, TerminalChangeSetReason::Applied) => format!(
-                "Change set '{}' was already applied in this MCP server session.",
-                tombstone.summary.id
-            ),
-            (TerminalChangeSetState::Discarded, TerminalChangeSetReason::Discarded) => format!(
-                "Change set '{}' was discarded and can no longer be applied. Create a fresh plan if you still want to make this change.",
-                tombstone.summary.id
-            ),
+            (TerminalChangeSetState::Applied, TerminalChangeSetReason::Applied) => {
+                Self::change_set_tool_error(
+                    ChangeSetErrorKind::AlreadyApplied,
+                    Some(&tombstone.summary.id),
+                    Some(tombstone.summary.status.clone()),
+                    Some("already-applied"),
+                    format!(
+                        "Change set '{}' was already applied in this MCP server session.",
+                        tombstone.summary.id
+                    ),
+                )
+            }
+            (TerminalChangeSetState::Discarded, TerminalChangeSetReason::Discarded) => {
+                Self::change_set_tool_error(
+                    ChangeSetErrorKind::Discarded,
+                    Some(&tombstone.summary.id),
+                    Some(tombstone.summary.status.clone()),
+                    Some("discarded"),
+                    format!(
+                        "Change set '{}' was discarded and can no longer be applied. Create a fresh plan if you still want to make this change.",
+                        tombstone.summary.id
+                    ),
+                )
+            }
             (
                 TerminalChangeSetState::Invalidated,
                 TerminalChangeSetReason::InvalidatedByRefresh,
-            ) => format!(
-                "Change set '{}' was invalidated by workspace_refresh and can no longer be applied. Create a fresh plan before applying.",
-                tombstone.summary.id
+            ) => Self::change_set_tool_error(
+                ChangeSetErrorKind::Invalidated,
+                Some(&tombstone.summary.id),
+                Some(tombstone.summary.status.clone()),
+                Some("workspace-refresh"),
+                format!(
+                    "Change set '{}' was invalidated by workspace_refresh and can no longer be applied. Create a fresh plan before applying.",
+                    tombstone.summary.id
+                ),
             ),
             (
                 TerminalChangeSetState::Invalidated,
                 TerminalChangeSetReason::InvalidatedByRevalidation,
-            ) => format!(
-                "Change set '{}' is no longer valid because workspace files changed since planning. Create a fresh plan before applying.",
-                tombstone.summary.id
+            ) => Self::change_set_tool_error(
+                ChangeSetErrorKind::Stale,
+                Some(&tombstone.summary.id),
+                Some(tombstone.summary.status.clone()),
+                Some("workspace-changed"),
+                format!(
+                    "Change set '{}' is no longer valid because workspace files changed since planning. Create a fresh plan before applying.",
+                    tombstone.summary.id
+                ),
             ),
-            (TerminalChangeSetState::Failed, TerminalChangeSetReason::ApplyFailed) => format!(
-                "Change set '{}' previously failed during apply. Workspace state may be partially updated; run workspace_refresh before continuing and create a new plan.",
-                tombstone.summary.id
-            ),
-            _ => format!(
-                "Change set '{}' is no longer pending and can no longer be applied.",
-                tombstone.summary.id
+            (TerminalChangeSetState::Failed, TerminalChangeSetReason::ApplyFailed) => {
+                Self::change_set_tool_error(
+                    ChangeSetErrorKind::ApplyFailed,
+                    Some(&tombstone.summary.id),
+                    Some(tombstone.summary.status.clone()),
+                    Some("apply-failed"),
+                    format!(
+                        "Change set '{}' previously failed during apply. Workspace state may be partially updated; run workspace_refresh before continuing and create a new plan.",
+                        tombstone.summary.id
+                    ),
+                )
+            }
+            _ => Self::change_set_tool_error(
+                ChangeSetErrorKind::Invalidated,
+                Some(&tombstone.summary.id),
+                Some(tombstone.summary.status.clone()),
+                Some("not-pending"),
+                format!(
+                    "Change set '{}' is no longer pending and can no longer be applied.",
+                    tombstone.summary.id
+                ),
             ),
         }
     }
@@ -2072,111 +2257,6 @@ impl CachedContextPack {
             valid,
         }
     }
-}
-
-#[derive(Debug)]
-struct ProjectBuildInput {
-    title: String,
-    description: String,
-    due_date: Option<String>,
-    status: String,
-    areas: Vec<String>,
-    goals: Vec<String>,
-    vision: Vec<String>,
-    purpose: Vec<String>,
-    general_references: Vec<String>,
-    created_date_time: String,
-    additional_content: Option<String>,
-}
-
-#[derive(Debug)]
-struct ActionBuildInput {
-    title: String,
-    status: String,
-    focus_date: Option<String>,
-    due_date: Option<String>,
-    effort: String,
-    contexts: Vec<String>,
-    general_references: Vec<String>,
-    notes: Option<String>,
-    created_date_time: String,
-}
-
-#[derive(Debug)]
-struct HabitBuildInput {
-    title: String,
-    frequency: String,
-    focus_time: Option<String>,
-    projects: Vec<String>,
-    areas: Vec<String>,
-    goals: Vec<String>,
-    vision: Vec<String>,
-    purpose: Vec<String>,
-    created_date_time: String,
-}
-
-#[derive(Debug)]
-struct HorizonBuildInput {
-    title: String,
-    status: Option<String>,
-    review_cadence: Option<String>,
-    target_date: Option<String>,
-    horizon: Option<String>,
-    description: Option<String>,
-    projects: Vec<String>,
-    areas: Vec<String>,
-    goals: Vec<String>,
-    vision: Vec<String>,
-    purpose: Vec<String>,
-    general_references: Vec<String>,
-    created_date_time: String,
-    trailing_content: Option<String>,
-}
-
-#[derive(Debug)]
-struct ProjectUpdateSeed {
-    title: String,
-    description: Option<String>,
-    due_date: Option<String>,
-    status: String,
-    areas: Vec<String>,
-    goals: Vec<String>,
-    vision: Vec<String>,
-    purpose: Vec<String>,
-    general_references: Vec<String>,
-    created_date_time: String,
-    additional_content: Option<String>,
-}
-
-#[derive(Debug)]
-struct ActionUpdateSeed {
-    title: String,
-    status: String,
-    focus_date: Option<String>,
-    due_date: Option<String>,
-    effort: String,
-    contexts: Vec<String>,
-    general_references: Vec<String>,
-    notes: Option<String>,
-    created_date_time: String,
-}
-
-#[derive(Debug)]
-struct HorizonUpdateSeed {
-    title: String,
-    status: Option<String>,
-    review_cadence: Option<String>,
-    target_date: Option<String>,
-    horizon: Option<String>,
-    description: Option<String>,
-    projects: Vec<String>,
-    areas: Vec<String>,
-    goals: Vec<String>,
-    vision: Vec<String>,
-    purpose: Vec<String>,
-    general_references: Vec<String>,
-    created_date_time: String,
-    trailing_content: Option<String>,
 }
 
 fn resolve_history_entry_timestamp(
@@ -2327,8 +2407,27 @@ fn replace_or_append_history_section(content: &str, history_section: &str) -> St
     }
 }
 
-fn default_search_limit() -> usize {
-    20
+fn parse_pagination_cursor(cursor: Option<&str>) -> Result<usize, String> {
+    match cursor.map(str::trim).filter(|entry| !entry.is_empty()) {
+        None => Ok(0),
+        Some(raw) => raw.parse::<usize>().map_err(|_| {
+            format!(
+                "Invalid cursor '{}'. Expected a non-negative integer offset.",
+                raw
+            )
+        }),
+    }
+}
+
+fn paginate_entries<T>(entries: Vec<T>, offset: usize, limit: usize) -> (Vec<T>, Option<String>) {
+    let total = entries.len();
+    let mut entries = entries.into_iter().skip(offset).collect::<Vec<_>>();
+    if entries.len() > limit {
+        entries.truncate(limit);
+    }
+    let returned = entries.len();
+    let next_cursor = (offset + returned < total).then(|| (offset + returned).to_string());
+    (entries, next_cursor)
 }
 
 fn remove_unsupported_integer_formats(schema: &mut schemars::Schema) {
@@ -2463,413 +2562,6 @@ fn hash_file_if_exists(path: &str) -> Result<Option<String>, String> {
     }
     let bytes = fs::read(path).map_err(|error| format!("Failed to read '{}': {}", path, error))?;
     Ok(Some(hash_bytes(&bytes)))
-}
-
-fn preview_write(action: &str, path: &str, content: &str) -> String {
-    format!(
-        "{}\n- path: {}\n- bytes: {}\n\n{}",
-        action,
-        path,
-        content.len(),
-        content.lines().take(20).collect::<Vec<_>>().join("\n")
-    )
-}
-
-fn encode_reference_array(values: &[String]) -> String {
-    let normalized = normalize_reference_list(values.to_vec());
-    if normalized.is_empty() {
-        String::new()
-    } else {
-        serde_json::to_string(&normalized)
-            .map(|json| urlencoding::encode(&json).into_owned())
-            .unwrap_or_default()
-    }
-}
-
-fn encode_reference_csv(values: &[String]) -> String {
-    normalize_reference_list(values.to_vec()).join(",")
-}
-
-fn project_directory_from_readme(readme_path: &str) -> Result<String, String> {
-    let path = Path::new(readme_path);
-    let Some(parent) = path.parent() else {
-        return Err("Project README path has no parent directory".to_string());
-    };
-    Ok(normalize_path(parent))
-}
-
-fn resolve_project_readme_in_directory(project_dir: &Path) -> Option<PathBuf> {
-    let md_path = project_dir.join("README.md");
-    if md_path.exists() {
-        return Some(md_path);
-    }
-
-    let markdown_path = project_dir.join("README.markdown");
-    if markdown_path.exists() {
-        return Some(markdown_path);
-    }
-
-    None
-}
-
-fn build_project_markdown(input: ProjectBuildInput) -> String {
-    let mut content = generate_project_readme_with_refs(ProjectReadmeParams {
-        name: &input.title,
-        description: &input.description,
-        due_date: input.due_date.clone(),
-        status: &input.status,
-        areas_refs: &encode_reference_array(&input.areas),
-        goals_refs: &encode_reference_array(&input.goals),
-        vision_refs: &encode_reference_array(&input.vision),
-        purpose_refs: &encode_reference_array(&input.purpose),
-        general_refs: &encode_reference_csv(&input.general_references),
-    });
-    content = replace_datetime_marker(content, "created_date_time", &input.created_date_time);
-    if let Some(extra) = input
-        .additional_content
-        .filter(|value| !value.trim().is_empty())
-    {
-        content.push('\n');
-        content.push_str(extra.trim());
-        content.push('\n');
-    }
-    content
-}
-
-fn build_action_markdown(input: ActionBuildInput) -> String {
-    let references = encode_reference_csv(&input.general_references);
-    let contexts = input
-        .contexts
-        .into_iter()
-        .map(|entry| entry.trim().to_string())
-        .filter(|entry| !entry.is_empty())
-        .collect::<Vec<_>>()
-        .join(",");
-    let notes = input.notes.unwrap_or_else(|| {
-        "<!-- Add any additional notes or details about this action here -->".to_string()
-    });
-    format!(
-        "# {title}\n\n## Status\n[!singleselect:status:{status}]\n\n## Focus Date\n[!datetime:focus_date:{focus}]\n\n## Due Date\n[!datetime:due_date:{due}]\n\n## Effort\n[!singleselect:effort:{effort}]\n\n## Contexts\n[!multiselect:contexts:{contexts}]\n\n## References\n[!references:{references}]\n\n## Notes\n{notes}\n\n---\n## Created\n[!datetime:created_date_time:{created}]\n",
-        title = input.title,
-        status = input.status,
-        focus = input.focus_date.unwrap_or_default(),
-        due = input.due_date.unwrap_or_default(),
-        effort = input.effort,
-        contexts = contexts,
-        references = references,
-        notes = notes.trim_end(),
-        created = input.created_date_time
-    )
-}
-
-fn build_habit_markdown(input: HabitBuildInput) -> Result<String, String> {
-    let focus_section = if let Some(time) = input.focus_time.as_deref() {
-        format!(
-            "\n## Focus Date\n[!datetime:focus_date:{}T{}:00]\n",
-            Utc::now().format("%Y-%m-%d"),
-            time
-        )
-    } else {
-        String::new()
-    };
-    Ok(format!(
-        "# {title}\n\n## Status\n[!checkbox:habit-status:false]\n\n## Frequency\n[!singleselect:habit-frequency:{frequency}]{focus}\
-\n## Projects References\n[!projects-references:{projects}]\n\n## Areas References\n[!areas-references:{areas}]\n\n## Goals References\n[!goals-references:{goals}]\n\n## Vision References\n[!vision-references:{vision}]\n\n## Purpose & Principles References\n[!purpose-references:{purpose}]\n\n## Created\n[!datetime:created_date_time:{created}]\n\n## History\n{history}\n",
-        title = input.title,
-        frequency = input.frequency,
-        focus = focus_section,
-        projects = encode_reference_array(&input.projects),
-        areas = encode_reference_array(&input.areas),
-        goals = encode_reference_array(&input.goals),
-        vision = encode_reference_array(&input.vision),
-        purpose = encode_reference_array(&input.purpose),
-        created = input.created_date_time,
-        history = DEFAULT_HISTORY_TEMPLATE
-    ))
-}
-
-fn build_horizon_markdown(
-    page_type: &HorizonPageType,
-    input: HorizonBuildInput,
-) -> Result<String, String> {
-    let content = match page_type {
-        HorizonPageType::Area => {
-            let mut body = generate_area_of_focus_template_with_refs(
-                &input.title,
-                input
-                    .description
-                    .as_deref()
-                    .unwrap_or("Define the standard for this area."),
-                "",
-                &encode_reference_array(&input.goals),
-                &encode_reference_array(&input.vision),
-                &encode_reference_array(&input.purpose),
-            );
-            body = replace_marker(
-                body,
-                "[!singleselect:area-status:",
-                &input.status.unwrap_or_else(|| "steady".to_string()),
-            );
-            body = replace_marker(
-                body,
-                "[!singleselect:area-review-cadence:",
-                &input
-                    .review_cadence
-                    .unwrap_or_else(|| "monthly".to_string()),
-            );
-            body = replace_reference_marker(body, "projects-references", &input.projects);
-            body = replace_reference_marker(body, "areas-references", &input.areas);
-            body = replace_reference_marker(body, "references", &input.general_references);
-            body
-        }
-        HorizonPageType::Goal => {
-            let mut body = generate_goal_template_with_refs(
-                &input.title,
-                input.target_date.as_deref(),
-                input
-                    .description
-                    .as_deref()
-                    .unwrap_or("Describe the desired outcome for this goal."),
-                &encode_reference_array(&input.vision),
-                &encode_reference_array(&input.purpose),
-            );
-            body = replace_marker(
-                body,
-                "[!singleselect:goal-status:",
-                &input.status.unwrap_or_else(|| "in-progress".to_string()),
-            );
-            body = replace_reference_marker(body, "projects-references", &input.projects);
-            body = replace_reference_marker(body, "areas-references", &input.areas);
-            body = replace_reference_marker(body, "references", &input.general_references);
-            body
-        }
-        HorizonPageType::Vision => {
-            let mut body = generate_vision_document_template_with_refs(&encode_reference_array(
-                &input.purpose,
-            ));
-            body = replace_h1(body, &input.title);
-            body = replace_marker(
-                body,
-                "[!singleselect:vision-horizon:",
-                &input.horizon.unwrap_or_else(|| "3-years".to_string()),
-            );
-            body = replace_reference_marker(body, "projects-references", &input.projects);
-            body = replace_reference_marker(body, "goals-references", &input.goals);
-            body = replace_reference_marker(body, "areas-references", &input.areas);
-            body = replace_reference_marker(body, "references", &input.general_references);
-            if let Some(narrative) = input.description {
-                body = replace_section_body(body, "Narrative", &narrative);
-            }
-            body
-        }
-        HorizonPageType::Purpose => {
-            let body = format!(
-                "# {}\n\n## Projects References\n[!projects-references:{}]\n\n## Goals References\n[!goals-references:{}]\n\n## Vision References\n[!vision-references:{}]\n{}\n## References (optional)\n[!references:{}]\n\n## Created\n[!datetime:created_date_time:{}]\n\n## Description\n{}\n",
-                input.title,
-                encode_reference_array(&input.projects),
-                encode_reference_array(&input.goals),
-                encode_reference_array(&input.vision),
-                if input.areas.is_empty() {
-                    String::new()
-                } else {
-                    format!(
-                        "## Areas References (optional)\n[!areas-references:{}]\n\n",
-                        encode_reference_array(&input.areas)
-                    )
-                },
-                encode_reference_csv(&input.general_references),
-                input.created_date_time,
-                input
-                    .description
-                    .unwrap_or_else(|| "Describe your purpose and principles.".to_string())
-            );
-            body
-        }
-    };
-
-    let mut content =
-        replace_datetime_marker(content, "created_date_time", &input.created_date_time);
-    if let Some(trailing) = input
-        .trailing_content
-        .filter(|value| !value.trim().is_empty())
-    {
-        if !content.ends_with('\n') {
-            content.push('\n');
-        }
-        content.push('\n');
-        content.push_str(trailing.trim());
-        content.push('\n');
-    }
-    Ok(content)
-}
-
-fn build_reference_note_markdown(
-    title: &str,
-    new_body: Option<String>,
-    existing_body: Option<String>,
-) -> String {
-    let body = new_body
-        .or(existing_body)
-        .unwrap_or_else(|| "<!-- Add note body -->".to_string());
-    format!("# {}\n\n{}\n", title.trim(), body.trim_end())
-}
-
-fn replace_marker(mut content: String, prefix: &str, value: &str) -> String {
-    if let Some(start) = content.find(prefix) {
-        let remainder = &content[start + prefix.len()..];
-        if let Some(end) = remainder.find(']') {
-            let end_index = start + prefix.len() + end;
-            content.replace_range(start + prefix.len()..end_index, value);
-        }
-    }
-    content
-}
-
-fn replace_reference_marker(content: String, tag: &str, values: &[String]) -> String {
-    let encoded = if tag == "references" {
-        encode_reference_csv(values)
-    } else {
-        encode_reference_array(values)
-    };
-    replace_marker(content, &format!("[!{}:", tag), &encoded)
-}
-
-fn replace_datetime_marker(content: String, field: &str, value: &str) -> String {
-    replace_marker(content, &format!("[!datetime:{}:", field), value)
-}
-
-fn replace_h1(content: String, title: &str) -> String {
-    let mut lines = content.lines().map(str::to_string).collect::<Vec<_>>();
-    if let Some(first) = lines.iter_mut().find(|line| line.trim().starts_with("# ")) {
-        *first = format!("# {}", title.trim());
-    } else {
-        lines.insert(0, format!("# {}", title.trim()));
-    }
-    format!("{}\n", lines.join("\n"))
-}
-
-fn replace_section_body(content: String, heading: &str, new_body: &str) -> String {
-    let mut output = Vec::new();
-    let mut active = false;
-    let mut replaced = false;
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.eq_ignore_ascii_case(&format!("## {}", heading)) {
-            active = true;
-            replaced = true;
-            output.push(line.to_string());
-            output.push(new_body.trim_end().to_string());
-            continue;
-        }
-        if active && trimmed.starts_with("## ") {
-            active = false;
-        }
-        if !active {
-            output.push(line.to_string());
-        }
-    }
-    if !replaced {
-        output.push(String::new());
-        output.push(format!("## {}", heading));
-        output.push(new_body.trim_end().to_string());
-    }
-    format!("{}\n", output.join("\n"))
-}
-
-fn parse_project_update_seed(content: &str, item: &GtdItemSummary) -> ProjectUpdateSeed {
-    ProjectUpdateSeed {
-        title: item.title.clone(),
-        description: item.description.clone(),
-        due_date: item.due_date.clone(),
-        status: item
-            .status
-            .clone()
-            .unwrap_or_else(|| "in-progress".to_string()),
-        areas: extract_reference_list(content, "areas-references"),
-        goals: extract_reference_list(content, "goals-references"),
-        vision: extract_reference_list(content, "vision-references"),
-        purpose: extract_reference_list(content, "purpose-references"),
-        general_references: extract_reference_list(content, "references"),
-        created_date_time: item
-            .created_date_time
-            .clone()
-            .unwrap_or_else(|| Utc::now().to_rfc3339()),
-        additional_content: extract_tail_after(content, "[!habits-list]"),
-    }
-}
-
-fn parse_action_update_seed(content: &str, item: &GtdItemSummary) -> ActionUpdateSeed {
-    ActionUpdateSeed {
-        title: item.title.clone(),
-        status: item
-            .status
-            .clone()
-            .unwrap_or_else(|| "in-progress".to_string()),
-        focus_date: item.focus_date.clone(),
-        due_date: item.due_date.clone(),
-        effort: item.effort.clone().unwrap_or_else(|| "medium".to_string()),
-        contexts: extract_multiselect(content, "contexts"),
-        general_references: extract_reference_list(content, "references"),
-        notes: extract_section_body(content, "Notes"),
-        created_date_time: item
-            .created_date_time
-            .clone()
-            .unwrap_or_else(|| Utc::now().to_rfc3339()),
-    }
-}
-
-fn parse_horizon_update_seed(
-    page_type: &HorizonPageType,
-    content: &str,
-    item: &GtdItemSummary,
-) -> HorizonUpdateSeed {
-    let trailing_heading = match page_type {
-        HorizonPageType::Area | HorizonPageType::Goal | HorizonPageType::Purpose => "Description",
-        HorizonPageType::Vision => "Narrative",
-    };
-    HorizonUpdateSeed {
-        title: item.title.clone(),
-        status: item.status.clone(),
-        review_cadence: item.review_cadence.clone(),
-        target_date: item.target_date.clone(),
-        horizon: item.horizon.clone(),
-        description: item.description.clone(),
-        projects: extract_reference_list(content, "projects-references"),
-        areas: extract_reference_list(content, "areas-references"),
-        goals: extract_reference_list(content, "goals-references"),
-        vision: extract_reference_list(content, "vision-references"),
-        purpose: extract_reference_list(content, "purpose-references"),
-        general_references: extract_reference_list(content, "references"),
-        created_date_time: item
-            .created_date_time
-            .clone()
-            .unwrap_or_else(|| Utc::now().to_rfc3339()),
-        trailing_content: extract_additional_after_section(content, trailing_heading),
-    }
-}
-
-fn extract_tail_after(content: &str, marker: &str) -> Option<String> {
-    let start = content.find(marker)?;
-    let tail = &content[start + marker.len()..];
-    let value = tail.trim().to_string();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value)
-    }
-}
-
-fn extract_additional_after_section(content: &str, heading: &str) -> Option<String> {
-    let marker = format!("## {}", heading);
-    let start = content.find(&marker)?;
-    let tail = &content[start..];
-    let rest = tail.split_once('\n')?.1;
-    let value = rest.trim().to_string();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value)
-    }
 }
 
 fn horizon_folder_name(page_type: &HorizonPageType) -> &'static str {
@@ -3061,7 +2753,8 @@ mod tests {
             .change_apply(ChangeSetRequest {
                 change_set_id: planned.change_set.id,
             })
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("workspace_refresh"));
         assert!(!error.contains("Unknown change set"));
         Ok(())
@@ -3079,11 +2772,11 @@ mod tests {
             description: None,
             due_date: None,
             status: None,
-            areas: vec![],
-            goals: vec![],
-            vision: vec![],
-            purpose: vec![],
-            general_references: vec![],
+            areas: Some(vec![]),
+            goals: Some(vec![]),
+            vision: Some(vec![]),
+            purpose: Some(vec![]),
+            general_references: Some(vec![]),
         })?;
 
         let alpha_readme = workspace.path().join("Projects/Alpha Project/README.md");
@@ -3096,15 +2789,87 @@ mod tests {
             .change_apply(ChangeSetRequest {
                 change_set_id: change_set_id.clone(),
             })
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("changed since planning"));
         assert!(error.contains("Create a fresh plan"));
 
         let retry_error = service
             .change_apply(ChangeSetRequest { change_set_id })
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
         assert!(retry_error.contains("changed since planning"));
         assert!(!retry_error.contains("Unknown change set"));
+        Ok(())
+    }
+
+    #[test]
+    fn change_apply_after_snapshot_rebuild_still_reports_stale_plan() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let planned = service.plan_project_update(ProjectUpdateRequest {
+            path: "Projects/Alpha Project/README.md".to_string(),
+            title: Some("Alpha Project Updated".to_string()),
+            description: None,
+            due_date: None,
+            status: None,
+            areas: None,
+            goals: None,
+            vision: None,
+            purpose: None,
+            general_references: None,
+        })?;
+
+        let alpha_readme = workspace.path().join("Projects/Alpha Project/README.md");
+        let existing = fs::read_to_string(&alpha_readme).map_err(|error| error.to_string())?;
+        fs::write(&alpha_readme, format!("{existing}\nConcurrent edit.\n"))
+            .map_err(|error| error.to_string())?;
+
+        let _ = service.workspace_info()?;
+
+        let error = service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id,
+            })
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("changed since planning"));
+        assert!(!error.contains("Unknown change set"));
+        Ok(())
+    }
+
+    #[test]
+    fn project_update_allows_clearing_reference_lists() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        let service =
+            GtdWorkspaceService::new(Some(workspace.path().to_string_lossy().to_string()), false)?;
+
+        let planned = service.plan_project_update(ProjectUpdateRequest {
+            path: "Projects/Alpha Project/README.md".to_string(),
+            title: None,
+            description: None,
+            due_date: None,
+            status: None,
+            areas: Some(vec![]),
+            goals: Some(vec![]),
+            vision: Some(vec![]),
+            purpose: Some(vec![]),
+            general_references: Some(vec![]),
+        })?;
+        service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id,
+            })
+            .map_err(|error| error.to_string())?;
+
+        let updated = service.read_markdown("Projects/Alpha Project/README.md")?;
+        assert!(updated.contains("[!areas-references:]"));
+        assert!(updated.contains("[!goals-references:]"));
+        assert!(updated.contains("[!vision-references:]"));
+        assert!(updated.contains("[!purpose-references:]"));
+        assert!(updated.contains("[!references:]"));
         Ok(())
     }
 
@@ -3260,12 +3025,14 @@ Ship the visibible navigation updates.
             .change_apply(ChangeSetRequest {
                 change_set_id: change_set_id.clone(),
             })
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("workspace_refresh"));
 
         let retry_error = service
             .change_apply(ChangeSetRequest { change_set_id })
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
         assert!(retry_error.contains("previously failed during apply"));
         assert!(retry_error.contains("workspace_refresh"));
         assert!(!retry_error.contains("Unknown change set"));
@@ -3284,9 +3051,11 @@ Ship the visibible navigation updates.
             body: Some("Useful note.".to_string()),
         })?;
 
-        let first = service.change_apply(ChangeSetRequest {
-            change_set_id: planned.change_set.id.clone(),
-        })?;
+        let first = service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id.clone(),
+            })
+            .map_err(|error| error.to_string())?;
         assert!(!first.replayed);
 
         let note_path = workspace.path().join("Cabinet/Inbox Reference.md");
@@ -3299,9 +3068,11 @@ Ship the visibible navigation updates.
         )
         .map_err(|error| error.to_string())?;
 
-        let replay = service.change_apply(ChangeSetRequest {
-            change_set_id: planned.change_set.id,
-        })?;
+        let replay = service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id,
+            })
+            .map_err(|error| error.to_string())?;
         assert!(replay.replayed);
         assert_eq!(replay.change_set.id, first.change_set.id);
 
@@ -3322,26 +3093,30 @@ Ship the visibible navigation updates.
             body: Some("Temporary note.".to_string()),
         })?;
 
-        let discarded = service.change_discard(ChangeSetRequest {
-            change_set_id: planned.change_set.id.clone(),
-        })?;
+        let discarded = service
+            .change_discard(ChangeSetRequest {
+                change_set_id: planned.change_set.id.clone(),
+            })
+            .map_err(|error| error.to_string())?;
         assert_eq!(discarded.status, ChangeStatus::Discarded);
 
         let error = service
             .change_apply(ChangeSetRequest {
                 change_set_id: planned.change_set.id,
             })
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("discarded"));
         assert!(!error.contains("Unknown change set"));
         Ok(())
     }
 
     #[test]
-    fn unknown_change_set_message_mentions_session_or_restart() {
-        let error = GtdWorkspaceService::unknown_change_set_message("missing-id");
-        assert!(error.contains("different MCP server session"));
-        assert!(error.contains("expired after restart"));
+    fn unknown_change_set_error_mentions_session_or_restart() {
+        let error = GtdWorkspaceService::unknown_change_set_error("missing-id");
+        assert_eq!(error.kind, ChangeSetErrorKind::Unknown);
+        assert!(error.to_string().contains("different MCP server session"));
+        assert!(error.to_string().contains("expired after restart"));
     }
 
     #[test]
@@ -3434,9 +3209,11 @@ Ship the visibible navigation updates.
             purpose: vec![],
         })?;
 
-        service.change_apply(ChangeSetRequest {
-            change_set_id: planned.change_set.id,
-        })?;
+        service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id,
+            })
+            .map_err(|error| error.to_string())?;
 
         let content = service.read_markdown("Habits/Morning Run.md")?;
         assert!(content.contains("| Date | Time | Status | Action | Details |"));
@@ -3520,9 +3297,11 @@ Ship the visibible navigation updates.
             update_current_status: Some(true),
         })?;
 
-        service.change_apply(ChangeSetRequest {
-            change_set_id: planned.change_set.id,
-        })?;
+        service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id,
+            })
+            .map_err(|error| error.to_string())?;
 
         let content = fs::read_to_string(workspace.path().join("Habits/Morning Run.md"))
             .map_err(|error| error.to_string())?;
@@ -3580,9 +3359,11 @@ Still here
             update_current_status_from_latest: Some(true),
         })?;
 
-        service.change_apply(ChangeSetRequest {
-            change_set_id: planned.change_set.id,
-        })?;
+        service
+            .change_apply(ChangeSetRequest {
+                change_set_id: planned.change_set.id,
+            })
+            .map_err(|error| error.to_string())?;
 
         let content = fs::read_to_string(workspace.path().join("Habits/Morning Run.md"))
             .map_err(|error| error.to_string())?;

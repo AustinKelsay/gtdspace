@@ -291,7 +291,8 @@ fn parse_item_summary(
             frequency: None,
             effort: None,
             created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
-            parent_project_path: project.map(|entry| normalize_path(&entry.path)),
+            parent_project_path: project
+                .map(|entry| normalize_absolute_to_relative(root, &entry.path)),
             description: extract_section_body(&content, "Desired Outcome")
                 .or_else(|| extract_section_body(&content, "Description")),
             references,

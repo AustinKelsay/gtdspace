@@ -25,6 +25,13 @@ fn internal_error<E: ToString>(error: E) -> rmcp::ErrorData {
     rmcp::ErrorData::internal_error(error.to_string(), None)
 }
 
+fn invalid_params_with_data<T: serde::Serialize>(
+    message: impl Into<String>,
+    data: &T,
+) -> rmcp::ErrorData {
+    rmcp::ErrorData::invalid_params(message.into(), serde_json::to_value(data).ok())
+}
+
 #[derive(Clone, Debug)]
 pub struct GtdMcpServer {
     service: Arc<GtdWorkspaceService>,
@@ -71,18 +78,22 @@ impl GtdMcpServer {
             .map_err(internal_error)
     }
 
-    #[tool(description = "List indexed GTD items, optionally filtered by item type.")]
+    #[tool(
+        description = "List indexed GTD items, optionally filtered by item type, with optional cursor/limit pagination."
+    )]
     async fn workspace_list_items(
         &self,
         Parameters(request): Parameters<WorkspaceListItemsRequest>,
     ) -> Result<Json<crate::backend::WorkspaceListItemsResult>, rmcp::ErrorData> {
         self.service
-            .list_items(request.item_type)
-            .map(|items| Json(crate::backend::WorkspaceListItemsResult { items }))
+            .list_items(request)
+            .map(Json)
             .map_err(internal_error)
     }
 
-    #[tool(description = "Search markdown content within the bound GTD workspace.")]
+    #[tool(
+        description = "Search markdown content within the bound GTD workspace, with optional cursor/limit pagination."
+    )]
     async fn workspace_search(
         &self,
         Parameters(request): Parameters<WorkspaceSearchRequest>,
@@ -90,7 +101,7 @@ impl GtdMcpServer {
         self.service
             .search(request)
             .await
-            .map(|matches| Json(crate::backend::WorkspaceSearchResult { matches }))
+            .map(Json)
             .map_err(internal_error)
     }
 
@@ -140,7 +151,7 @@ impl GtdMcpServer {
     }
 
     #[tool(
-        description = "Return cached Google Calendar events previously synced by the desktop app, with optional filtering by start time, text query, cancellation status, and result limit. Cancelled events are excluded by default unless includeCancelled is true."
+        description = "Return cached Google Calendar events previously synced by the desktop app, with optional filtering by start time, text query, cancellation status, and cursor/limit pagination. Cancelled events are excluded by default unless includeCancelled is true."
     )]
     async fn google_calendar_list_events(
         &self,
@@ -342,7 +353,7 @@ impl GtdMcpServer {
         self.service
             .change_apply(request)
             .map(Json)
-            .map_err(internal_error)
+            .map_err(|error| invalid_params_with_data(error.message.clone(), &error))
     }
 
     #[tool(description = "Discard a previously planned dry-run change set without applying it.")]
@@ -353,7 +364,7 @@ impl GtdMcpServer {
         self.service
             .change_discard(request)
             .map(Json)
-            .map_err(internal_error)
+            .map_err(|error| invalid_params_with_data(error.message.clone(), &error))
     }
 }
 
@@ -373,11 +384,7 @@ impl ServerHandler for GtdMcpServer {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<rmcp::RoleServer>,
     ) -> Result<ListResourcesResult, rmcp::ErrorData> {
-        let context_pack = self
-            .service
-            .workspace_context_pack()
-            .map_err(internal_error)?;
-        let mut resources: Vec<Resource> = vec![
+        let resources: Vec<Resource> = vec![
             rmcp::model::RawResource::new("gtdspace://spec/gtd-spec", "GTD Spec")
                 .with_mime_type("text/markdown")
                 .with_description("Canonical GTD behavior and markdown contract.")
@@ -412,18 +419,6 @@ impl ServerHandler for GtdMcpServer {
             .with_description("Cached Google Calendar events previously synced by the desktop app.")
             .no_annotation(),
         ];
-        resources.extend(context_pack.pack.items.iter().map(|item| {
-            rmcp::model::RawResource::new(
-                format!(
-                    "gtdspace://item/{}",
-                    urlencoding::encode(&item.relative_path)
-                ),
-                item.title.clone(),
-            )
-            .with_mime_type("application/json")
-            .with_description(format!("Structured summary for {}", item.relative_path))
-            .no_annotation()
-        }));
         Ok(ListResourcesResult {
             resources,
             next_cursor: None,
@@ -474,17 +469,6 @@ impl ServerHandler for GtdMcpServer {
                 .map_err(internal_error)?;
             vec![ResourceContents::text(
                 serde_json::to_string_pretty(&payload).map_err(internal_error)?,
-                uri,
-            )
-            .with_mime_type("application/json")]
-        } else if let Some(encoded) = uri.strip_prefix("gtdspace://item/") {
-            let decoded = urlencoding::decode(encoded).map_err(internal_error)?;
-            let item = self
-                .service
-                .get_item(decoded.as_ref())
-                .map_err(internal_error)?;
-            vec![ResourceContents::text(
-                serde_json::to_string_pretty(&item).map_err(internal_error)?,
                 uri,
             )
             .with_mime_type("application/json")]

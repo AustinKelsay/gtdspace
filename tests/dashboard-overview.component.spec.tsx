@@ -71,4 +71,58 @@ describe('DashboardOverview habits stat', () => {
     expect(screen.getByText('80% completed today')).toBeInTheDocument();
     expect(screen.queryByText('100% success rate')).not.toBeInTheDocument();
   });
+
+  it('recomputes today habit stats after midnight when the component rerenders', () => {
+    const habits = [
+      buildHabit({
+        name: 'Habit 1',
+        status: 'todo',
+        history: [{ date: '2026-03-31', time: '08:00', completed: true }],
+      }),
+      buildHabit({
+        name: 'Habit 2',
+        path: '/space/Habits/2.md',
+        status: 'todo',
+      }),
+    ];
+
+    const { rerender } = render(
+      <DashboardOverview
+        gtdSpace={gtdSpace}
+        projects={[]}
+        habits={habits}
+        actions={[]}
+        actionSummary={{
+          total: 0,
+          inProgress: 0,
+          completed: 0,
+          waiting: 0,
+        }}
+        horizonCounts={{}}
+      />
+    );
+
+    expect(screen.getByText('1/2')).toBeInTheDocument();
+    expect(screen.getByText('50% completed today')).toBeInTheDocument();
+
+    vi.setSystemTime(new Date('2026-04-01T00:05:00'));
+    rerender(
+      <DashboardOverview
+        gtdSpace={gtdSpace}
+        projects={[]}
+        habits={habits}
+        actions={[]}
+        actionSummary={{
+          total: 0,
+          inProgress: 0,
+          completed: 0,
+          waiting: 0,
+        }}
+        horizonCounts={{}}
+      />
+    );
+
+    expect(screen.getByText('0/2')).toBeInTheDocument();
+    expect(screen.getByText('0% completed today')).toBeInTheDocument();
+  });
 });

@@ -177,14 +177,23 @@ fn empty_envelope() -> GoogleCalendarMcpEnvelope {
 }
 
 fn parse_cursor(value: Option<&str>) -> Result<usize, String> {
-    match value.map(str::trim).filter(|entry| !entry.is_empty()) {
+    match value {
         None => Ok(0),
-        Some(raw) => raw.parse::<usize>().map_err(|_| {
-            format!(
-                "Invalid cursor '{}'. Expected a non-negative integer offset.",
-                raw
-            )
-        }),
+        Some(raw) => {
+            let value = raw.trim();
+            if value.is_empty() {
+                return Err(format!(
+                    "Invalid cursor '{}'. Expected a non-negative integer offset.",
+                    raw
+                ));
+            }
+            raw.parse::<usize>().map_err(|_| {
+                format!(
+                    "Invalid cursor '{}'. Expected a non-negative integer offset.",
+                    raw
+                )
+            })
+        }
     }
 }
 
@@ -375,7 +384,7 @@ impl From<&GoogleCalendarEvent> for GoogleCalendarMcpEvent {
 #[cfg(test)]
 mod tests {
     use super::{
-        google_calendar_list_events_from_cache, GoogleCalendarListEventsRequest,
+        google_calendar_list_events_from_cache, parse_cursor, GoogleCalendarListEventsRequest,
         GoogleCalendarMcpEnvelope,
     };
     use crate::google_calendar::{CachedEvents, GoogleCalendarEvent};
@@ -427,6 +436,12 @@ mod tests {
 
     fn list(request: GoogleCalendarListEventsRequest) -> GoogleCalendarMcpEnvelope {
         google_calendar_list_events_from_cache(Some(sample_cache()), request).unwrap()
+    }
+
+    #[test]
+    fn parse_cursor_rejects_blank_values() {
+        assert_eq!(parse_cursor(None).unwrap(), 0);
+        assert!(parse_cursor(Some("   ")).is_err());
     }
 
     #[test]

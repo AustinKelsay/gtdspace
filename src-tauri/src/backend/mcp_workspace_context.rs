@@ -199,6 +199,9 @@ pub(crate) fn read_cached_context_pack(
         Ok(pack) => pack,
         Err(_) => return Ok(None),
     };
+    if pack.version != CONTEXT_PACK_VERSION || pack.fingerprint != *fingerprint {
+        return Ok(None);
+    }
     Ok(Some(CachedContextPack {
         pack,
         markdown,
@@ -360,6 +363,46 @@ mod tests {
 
         let cached = read_cached_context_pack(&cache_paths, &pack.fingerprint)?;
 
+        assert!(cached.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn cached_context_requires_matching_pack_version_and_fingerprint() -> Result<(), String> {
+        let temp_dir = tempfile::tempdir().map_err(|error| error.to_string())?;
+        let cache_paths = sample_cache_paths(temp_dir.path());
+        let mut pack = sample_pack();
+        let manifest = ContextPackManifest {
+            workspace_path_hash: "workspace".to_string(),
+            generated_at: pack.generated_at.clone(),
+            generator_version: CONTEXT_PACK_VERSION,
+            fingerprint: pack.fingerprint.clone(),
+        };
+
+        write_test_file(
+            &cache_paths.manifest,
+            &serde_json::to_string_pretty(&manifest).map_err(|error| error.to_string())?,
+        )?;
+        write_test_file(&cache_paths.markdown, "cached markdown")?;
+
+        pack.version = CONTEXT_PACK_VERSION + 1;
+        write_test_file(
+            &cache_paths.json,
+            &serde_json::to_string_pretty(&pack).map_err(|error| error.to_string())?,
+        )?;
+
+        let cached = read_cached_context_pack(&cache_paths, &sample_fingerprint())?;
+        assert!(cached.is_none());
+
+        let mut stale_fingerprint_pack = sample_pack();
+        stale_fingerprint_pack.fingerprint.aggregate_digest = "stale".to_string();
+        write_test_file(
+            &cache_paths.json,
+            &serde_json::to_string_pretty(&stale_fingerprint_pack)
+                .map_err(|error| error.to_string())?,
+        )?;
+
+        let cached = read_cached_context_pack(&cache_paths, &sample_fingerprint())?;
         assert!(cached.is_none());
         Ok(())
     }

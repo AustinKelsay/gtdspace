@@ -403,8 +403,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
 
                   // Get ALL entries for this date
                   const entries = selectedHabit.history?.filter(h => h.date === dateStr) || [];
-                  // Check if ANY entry for this date shows completed
-                  const hasCompletion = entries.some(e => e.completed);
+                  const hasCompletion = isHabitCompletedOnDate(selectedHabit, dateStr, todayStr);
                   const entryCount = entries.length;
 
                   return (

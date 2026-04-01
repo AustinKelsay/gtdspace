@@ -91,6 +91,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 }) => {
   const [includeActions, setIncludeActions] = React.useState(true);
   const [onlyOverdue, setOnlyOverdue] = React.useState(false);
+  const todayStr = localISODate(new Date());
   // Calculate project statistics with enhanced metadata
   const projectStats = React.useMemo(() => {
     const active = projects.filter(p => p.status === 'in-progress').length;
@@ -128,7 +129,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   // Calculate enhanced habit statistics
   const habitStats = React.useMemo(() => {
-    const todayStr = localISODate(new Date());
     const completedToday = countHabitsCompletedOnDate(habits, todayStr, todayStr);
     const completionRate = habits.length > 0 ? Math.round((completedToday / habits.length) * 100) : 0;
     
@@ -162,7 +162,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       improving,
       declining
     };
-  }, [habits]);
+  }, [habits, todayStr]);
 
   // Calculate overall system health score with enhanced metrics
   const systemHealth = React.useMemo(() => {

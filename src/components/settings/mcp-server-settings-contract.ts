@@ -68,7 +68,7 @@ export type WorkspaceResolutionSource =
 export type InvokeWithHandling = <T>(
   command: string,
   args?: Record<string, unknown>,
-  options?: { errorMessage?: string }
+  options?: { errorMessage?: string; fallback?: T | null }
 ) => Promise<T | null>;
 
 const isWindowsPlatform = () => {

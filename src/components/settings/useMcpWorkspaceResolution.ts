@@ -56,6 +56,7 @@ export const useMcpWorkspaceResolution = ({
   const [resolvedWorkspaceIsValid, setResolvedWorkspaceIsValid] = React.useState<boolean | null>(null);
   const [validationError, setValidationError] = React.useState<string | null>(null);
   const workspaceValidationRequestRef = React.useRef(0);
+  const trimmedWorkspaceOverride = workspaceOverride?.trim() || null;
 
   const fallbackWorkspaceCandidates = React.useMemo<WorkspaceFallbackCandidate[]>(
     () =>
@@ -79,11 +80,14 @@ export const useMcpWorkspaceResolution = ({
     let isActive = true;
 
     const validateWorkspace = async () => {
-      if (workspaceOverride) {
-        setWorkspaceResolution({ path: workspaceOverride, source: 'override' });
+      if (trimmedWorkspaceOverride) {
+        setWorkspaceResolution({ path: trimmedWorkspaceOverride, source: 'override' });
         setIsCheckingWorkspace(true);
         setValidationError(null);
-        const resolvedPath = await isValidWorkspaceCandidate(workspaceOverride, invokeWithHandling);
+        const resolvedPath = await isValidWorkspaceCandidate(
+          trimmedWorkspaceOverride,
+          invokeWithHandling
+        );
 
         if (!isActive || workspaceValidationRequestRef.current !== requestId) {
           return;
@@ -150,7 +154,7 @@ export const useMcpWorkspaceResolution = ({
     return () => {
       isActive = false;
     };
-  }, [fallbackWorkspaceCandidates, invokeWithHandling, workspaceOverride]);
+  }, [fallbackWorkspaceCandidates, invokeWithHandling, trimmedWorkspaceOverride]);
 
   return {
     workspaceResolution,

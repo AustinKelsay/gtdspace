@@ -9,17 +9,28 @@ use crate::backend::mcp_workspace::{
     GtdItemReferenceSummary, GtdItemSummary, GtdItemType, WorkspaceFingerprint,
 };
 use crate::commands::filesystem::{read_file, MarkdownFile};
-use crate::commands::gtd_projects::{list_gtd_projects, GTDProject};
+use crate::commands::gtd_projects::list_gtd_projects;
 
 pub(crate) fn build_fingerprint(root: &Path, files: &[MarkdownFile]) -> WorkspaceFingerprint {
     let mut latest_modified_unix = 0_u64;
     let mut hasher = Sha256::new();
+    let mut entries = Vec::with_capacity(files.len());
 
     for file in files {
         latest_modified_unix = latest_modified_unix.max(file.last_modified);
-        let relative = normalize_absolute_to_relative(root, &file.path);
-        hasher.update(relative.as_bytes());
-        hasher.update(file.last_modified.to_string().as_bytes());
+        entries.push((
+            normalize_absolute_to_relative(root, &file.path),
+            file.last_modified,
+        ));
+    }
+
+    entries.sort_by(|left, right| left.0.cmp(&right.0).then(left.1.cmp(&right.1)));
+
+    for (relative, last_modified) in entries {
+        let relative_bytes = relative.as_bytes();
+        hasher.update((relative_bytes.len() as u64).to_le_bytes());
+        hasher.update(relative_bytes);
+        hasher.update(last_modified.to_le_bytes());
     }
 
     WorkspaceFingerprint {
@@ -36,11 +47,18 @@ pub(crate) fn build_item_summaries(
 ) -> Result<Vec<GtdItemSummary>, String> {
     let project_paths = list_gtd_projects(normalize_path(root))?
         .into_iter()
-        .map(|project| {
-            (
-                normalize_path(Path::new(&project.path).join("README.md")),
-                project,
-            )
+        .flat_map(|project| {
+            let project_path = project.path;
+            [
+                (
+                    normalize_path(Path::new(&project_path).join("README.md")),
+                    project_path.clone(),
+                ),
+                (
+                    normalize_path(Path::new(&project_path).join("README.markdown")),
+                    project_path,
+                ),
+            ]
         })
         .collect::<HashMap<_, _>>();
 
@@ -80,8 +98,10 @@ pub(crate) fn normalize_path_components(path: &Path) -> PathBuf {
 }
 
 pub(crate) fn path_is_within_workspace(path: &Path, root: &Path) -> bool {
-    let normalized_root = normalize_path(root).trim_end_matches('/').to_string();
-    let normalized_path = normalize_path(path);
+    let normalized_root = normalize_path(normalize_path_components(root))
+        .trim_end_matches('/')
+        .to_string();
+    let normalized_path = normalize_path(normalize_path_components(path));
     #[cfg(target_os = "windows")]
     let normalized_root = normalized_root.to_lowercase();
     #[cfg(target_os = "windows")]
@@ -246,7 +266,7 @@ pub(crate) fn parse_reference_note(content: &str) -> (String, String) {
 fn parse_item_summary(
     root: &Path,
     file: &MarkdownFile,
-    project_readmes: &HashMap<String, GTDProject>,
+    project_readmes: &HashMap<String, String>,
 ) -> Result<Option<GtdItemSummary>, String> {
     let relative_path = normalize_absolute_to_relative(root, &file.path);
     let normalized = relative_path.replace('\\', "/");
@@ -292,7 +312,7 @@ fn parse_item_summary(
             effort: None,
             created_date_time: extract_datetime(&content, "created_date_time").or(created_fallback),
             parent_project_path: project
-                .map(|entry| normalize_absolute_to_relative(root, &entry.path)),
+                .map(|project_path| normalize_absolute_to_relative(root, project_path)),
             description: extract_section_body(&content, "Desired Outcome")
                 .or_else(|| extract_section_body(&content, "Description")),
             references,
@@ -602,11 +622,138 @@ fn unix_to_rfc3339(timestamp: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_relative_input;
+    use super::{
+        build_fingerprint, build_item_summaries, normalize_relative_input, path_is_within_workspace,
+    };
+    use crate::commands::filesystem::MarkdownFile;
+    use crate::test_utils::write_test_file;
+    use std::path::Path;
 
     #[test]
     fn normalize_relative_input_strips_windows_relative_prefix() {
         assert_eq!(normalize_relative_input(r".\foo\bar"), "foo/bar");
         assert_eq!(normalize_relative_input("./foo/bar"), "foo/bar");
+    }
+
+    #[test]
+    fn fingerprint_digest_is_stable_across_file_ordering() {
+        let root = Path::new("/tmp/workspace");
+        let files = vec![
+            MarkdownFile {
+                id: "b".to_string(),
+                name: "B.md".to_string(),
+                path: "/tmp/workspace/B.md".to_string(),
+                size: 1,
+                last_modified: 20,
+                extension: ".md".to_string(),
+            },
+            MarkdownFile {
+                id: "a".to_string(),
+                name: "A.md".to_string(),
+                path: "/tmp/workspace/A.md".to_string(),
+                size: 1,
+                last_modified: 10,
+                extension: ".md".to_string(),
+            },
+        ];
+
+        let forward = build_fingerprint(root, &files);
+        let reverse = build_fingerprint(root, &files.iter().cloned().rev().collect::<Vec<_>>());
+
+        assert_eq!(forward.aggregate_digest, reverse.aggregate_digest);
+    }
+
+    #[test]
+    fn fingerprint_digest_uses_unambiguous_components() {
+        let root = Path::new("/tmp/workspace");
+        let left = build_fingerprint(
+            root,
+            &[
+                MarkdownFile {
+                    id: "1".to_string(),
+                    name: "a.md".to_string(),
+                    path: "/tmp/workspace/a.md".to_string(),
+                    size: 1,
+                    last_modified: 12,
+                    extension: ".md".to_string(),
+                },
+                MarkdownFile {
+                    id: "2".to_string(),
+                    name: "b.md".to_string(),
+                    path: "/tmp/workspace/b.md".to_string(),
+                    size: 1,
+                    last_modified: 3,
+                    extension: ".md".to_string(),
+                },
+            ],
+        );
+        let right = build_fingerprint(
+            root,
+            &[
+                MarkdownFile {
+                    id: "3".to_string(),
+                    name: "a1.md".to_string(),
+                    path: "/tmp/workspace/a1.md".to_string(),
+                    size: 1,
+                    last_modified: 2,
+                    extension: ".md".to_string(),
+                },
+                MarkdownFile {
+                    id: "4".to_string(),
+                    name: "b.md".to_string(),
+                    path: "/tmp/workspace/b.md".to_string(),
+                    size: 1,
+                    last_modified: 3,
+                    extension: ".md".to_string(),
+                },
+            ],
+        );
+
+        assert_ne!(left.aggregate_digest, right.aggregate_digest);
+    }
+
+    #[test]
+    fn project_readme_markdown_files_resolve_to_their_parent_project() -> Result<(), String> {
+        let temp_dir = tempfile::tempdir().map_err(|error| error.to_string())?;
+        let workspace = temp_dir.path();
+        let project_dir = workspace.join("Projects/Alpha Project");
+        let readme = project_dir.join("README.markdown");
+        write_test_file(
+            &readme,
+            "# Alpha Project\n\n## Desired Outcome\n\nShip it.\n",
+        )?;
+
+        let summaries = build_item_summaries(
+            workspace,
+            vec![MarkdownFile {
+                id: "alpha".to_string(),
+                name: "README.markdown".to_string(),
+                path: readme.to_string_lossy().to_string(),
+                size: 1,
+                last_modified: 10,
+                extension: ".markdown".to_string(),
+            }],
+        )?;
+
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(
+            summaries[0].parent_project_path.as_deref(),
+            Some("Projects/Alpha Project")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn path_is_within_workspace_rejects_parent_traversal_segments() {
+        let root = Path::new("/tmp/workspace");
+
+        assert!(path_is_within_workspace(
+            Path::new("/tmp/workspace/Projects/Alpha/../README.md"),
+            root,
+        ));
+        assert!(!path_is_within_workspace(
+            Path::new("/tmp/workspace/Projects/../../outside.md"),
+            root,
+        ));
     }
 }

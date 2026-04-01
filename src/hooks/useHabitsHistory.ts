@@ -449,9 +449,10 @@ ${newRow}
       throw err;
     }
   }, [refresh]);
+
+  const today = localISODate(new Date());
   
   const summary = useMemo(() => {
-    const today = localISODate(new Date());
     const completedToday = countHabitsCompletedOnDate(habits, today, today);
 
     const streaksActive = habits.filter(h => h.currentStreak > 0).length;
@@ -470,7 +471,7 @@ ${newRow}
       averageSuccessRate,
       needingAttention
     };
-  }, [habits]);
+  }, [habits, today]);
   
   const analytics = useMemo(() => {
     if (habits.length === 0) {

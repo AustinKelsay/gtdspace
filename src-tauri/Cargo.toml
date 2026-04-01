@@ -52,6 +52,8 @@ uuid = { version = "1.23", features = ["v4"] }
 tempfile = "3.27"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 warp = "0.3"
+# pbkdf2 v0.12 still depends on sha2 ^0.10, so keep the sha2_010 alias for that
+# path while using sha2 0.11 everywhere else to avoid accidental unification.
 sha2 = "0.11"
 sha2_010 = { package = "sha2", version = "0.10" }
 strsim = "0.11"

@@ -428,7 +428,14 @@ fn encode_reference_array(values: &[String]) -> String {
     } else {
         serde_json::to_string(&normalized)
             .map(|json| urlencoding::encode(&json).into_owned())
-            .unwrap_or_default()
+            .unwrap_or_else(|error| {
+                log::warn!(
+                    "Failed to encode normalized reference array {:?}: {}",
+                    normalized,
+                    error
+                );
+                String::new()
+            })
     }
 }
 

@@ -24,17 +24,8 @@ pub(crate) fn resolve_workspace(cli_workspace: Option<String>) -> Result<PathBuf
     }
 
     if let Some(settings) = load_saved_user_settings() {
-        if let Some(candidate) = settings.mcp_server_workspace_path {
-            return validate_workspace_candidate(Path::new(&candidate));
-        }
-
-        for candidate in [settings.last_folder, settings.default_space_path]
-            .into_iter()
-            .flatten()
-        {
-            if let Ok(path) = validate_workspace_candidate(Path::new(&candidate)) {
-                return Ok(path);
-            }
+        if let Some(path) = resolve_saved_workspace(&settings) {
+            return Ok(path);
         }
     }
 
@@ -82,4 +73,53 @@ fn load_saved_user_settings() -> Option<UserSettings> {
     let settings = load_saved_settings()?;
     let user_settings = settings.get("user_settings")?;
     parse_user_settings_value(user_settings).ok()
+}
+
+fn resolve_saved_workspace(settings: &UserSettings) -> Option<PathBuf> {
+    if let Some(candidate) = settings.mcp_server_workspace_path.as_deref() {
+        if let Ok(path) = validate_workspace_candidate(Path::new(candidate)) {
+            return Some(path);
+        }
+    }
+
+    for candidate in [
+        settings.last_folder.as_deref(),
+        settings.default_space_path.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Ok(path) = validate_workspace_candidate(Path::new(candidate)) {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_saved_workspace;
+    use crate::commands::settings::get_default_settings;
+    use crate::test_utils::seed_test_workspace;
+    use std::fs;
+
+    #[test]
+    fn invalid_saved_override_falls_back_to_other_saved_candidates() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        let mut settings = get_default_settings();
+        settings.mcp_server_workspace_path = Some("/tmp/not-a-workspace".to_string());
+        settings.last_folder = Some(
+            workspace
+                .path()
+                .join("Projects/Alpha Project")
+                .to_string_lossy()
+                .to_string(),
+        );
+
+        let resolved = resolve_saved_workspace(&settings).expect("saved fallback should resolve");
+
+        assert_eq!(resolved, fs::canonicalize(workspace.path()).unwrap());
+        Ok(())
+    }
 }

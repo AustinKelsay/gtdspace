@@ -911,7 +911,7 @@ impl GtdWorkspaceService {
             general_references: request.general_references,
             created_date_time: Utc::now().to_rfc3339(),
             additional_content: None,
-        });
+        })?;
         self.store_change_set(
             "project_create",
             format!("Create project '{}'", title),
@@ -958,7 +958,7 @@ impl GtdWorkspaceService {
                 .unwrap_or(parsed.general_references),
             created_date_time: parsed.created_date_time,
             additional_content: parsed.additional_content,
-        });
+        })?;
         self.store_change_set(
             "project_update",
             format!("Update project '{}'", item.title),

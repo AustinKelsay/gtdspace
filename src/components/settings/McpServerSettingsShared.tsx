@@ -3,11 +3,13 @@ import { Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export const DetailCard: React.FC<{
+export interface DetailCardProps {
   label: string;
   value: string;
   muted?: boolean;
-}> = ({ label, value, muted = false }) => (
+}
+
+export const DetailCard: React.FC<DetailCardProps> = ({ label, value, muted = false }) => (
   <div className="rounded-lg border bg-muted/20 p-4">
     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
       {label}
@@ -18,11 +20,13 @@ export const DetailCard: React.FC<{
   </div>
 );
 
-export const CodeBlock: React.FC<{
+export interface CodeBlockProps {
   label: string;
   value: string;
   onCopy: () => void;
-}> = ({ label, value, onCopy }) => (
+}
+
+export const CodeBlock: React.FC<CodeBlockProps> = ({ label, value, onCopy }) => (
   <div className="rounded-lg border bg-muted/20 p-4">
     <div className="mb-2 flex items-center justify-between gap-3">
       <p className="text-sm font-medium">{label}</p>
@@ -37,11 +41,17 @@ export const CodeBlock: React.FC<{
   </div>
 );
 
-export const ToolChipSection: React.FC<{
+export interface ToolChipSectionProps {
   title: string;
   description: string;
   items: readonly string[];
-}> = ({ title, description, items }) => (
+}
+
+export const ToolChipSection: React.FC<ToolChipSectionProps> = ({
+  title,
+  description,
+  items,
+}) => (
   <div className="space-y-3">
     <div>
       <p className="text-sm font-semibold">{title}</p>

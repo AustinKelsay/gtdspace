@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   countHabitsCompletedOnDate,
+  getLatestHabitEntryForDate,
   isHabitCompletedOnDate,
   type HabitCompletionLike,
 } from '@/utils/habit-progress';
@@ -48,5 +49,16 @@ describe('habit progress helpers', () => {
     ];
 
     expect(countHabitsCompletedOnDate(habits, TODAY, TODAY)).toBe(2);
+  });
+
+  it('preserves source order when timestamps cannot be parsed', () => {
+    const habit = buildHabit({
+      history: [
+        { date: 'not-a-date', time: '12:00 PM', completed: false },
+        { date: 'not-a-date', time: '01:00 AM', completed: true },
+      ],
+    });
+
+    expect(getLatestHabitEntryForDate(habit, 'not-a-date')).toEqual(habit.history?.[0]);
   });
 });

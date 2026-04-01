@@ -68,8 +68,12 @@ Path notes for MCP responses:
 Pagination notes:
 
 - `workspace_list_items` accepts optional `cursor` and `limit` inputs and returns `nextCursor` when more items are available.
-- `workspace_search` accepts optional `cursor`, `limit`, and legacy `maxResults` inputs and returns `nextCursor` when more matches are available.
-- `google_calendar_list_events` accepts optional `cursor`, `limit`, and legacy `maxResults` inputs and returns `nextCursor` when more cached events are available.
+- Returns `nextCursor` when more matches are available; `workspace_search` accepts optional `cursor`, `limit`, and legacy `maxResults` inputs so older clients can continue paginating.
+- When more cached events are available, `google_calendar_list_events`, which accepts optional `cursor`, `limit`, and legacy `maxResults` inputs, returns `nextCursor`.
+
+Compatibility note:
+
+- `gtdspace://item/*` resource URIs are no longer listed by `list_resources`. Clients that previously dereferenced them should call `workspace_get_item` for structured metadata, use `workspace_read_markdown` for file contents, and regenerate candidate paths with `workspace_list_items` or `workspace_search`.
 
 Google Calendar access is cache-only in MCP v1. The desktop app remains responsible for OAuth and sync. The MCP server reads the persisted `google_calendar_cache.json` file from the app-data directory on demand and never calls the Google API directly.
 

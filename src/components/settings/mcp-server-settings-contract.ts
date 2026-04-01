@@ -87,7 +87,7 @@ export const shellQuote = (value: string) => {
   if (isWindowsPlatform()) {
     return `"${value.replace(/"/g, '\\"')}"`;
   }
-  return `"${value.replace(/["\\$`]/g, '\\$&')}"`;
+  return `'${value.replace(/'/g, "'\\''")}'`;
 };
 
 export const getWorkspaceResolutionLabel = (source: WorkspaceResolutionSource) => {

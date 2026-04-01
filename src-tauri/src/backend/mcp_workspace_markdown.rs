@@ -151,16 +151,24 @@ pub(super) fn resolve_project_readme_in_directory(project_dir: &Path) -> Option<
     None
 }
 
-pub(super) fn build_project_markdown(input: ProjectBuildInput) -> String {
+pub(super) fn build_project_markdown(input: ProjectBuildInput) -> Result<String, String> {
+    let areas_refs = encode_reference_array(&input.areas)
+        .map_err(|error| format!("Failed to encode project references: {}", error))?;
+    let goals_refs = encode_reference_array(&input.goals)
+        .map_err(|error| format!("Failed to encode project references: {}", error))?;
+    let vision_refs = encode_reference_array(&input.vision)
+        .map_err(|error| format!("Failed to encode project references: {}", error))?;
+    let purpose_refs = encode_reference_array(&input.purpose)
+        .map_err(|error| format!("Failed to encode project references: {}", error))?;
     let mut content = generate_project_readme_with_refs(ProjectReadmeParams {
         name: &input.title,
         description: &input.description,
         due_date: input.due_date.clone(),
         status: &input.status,
-        areas_refs: &encode_reference_array(&input.areas),
-        goals_refs: &encode_reference_array(&input.goals),
-        vision_refs: &encode_reference_array(&input.vision),
-        purpose_refs: &encode_reference_array(&input.purpose),
+        areas_refs: &areas_refs,
+        goals_refs: &goals_refs,
+        vision_refs: &vision_refs,
+        purpose_refs: &purpose_refs,
         general_refs: &encode_reference_csv(&input.general_references),
     });
     content = replace_datetime_marker(content, "created_date_time", &input.created_date_time);
@@ -172,7 +180,7 @@ pub(super) fn build_project_markdown(input: ProjectBuildInput) -> String {
         content.push_str(extra.trim());
         content.push('\n');
     }
-    content
+    Ok(content)
 }
 
 pub(super) fn build_action_markdown(input: ActionBuildInput) -> String {
@@ -202,6 +210,16 @@ pub(super) fn build_action_markdown(input: ActionBuildInput) -> String {
 }
 
 pub(super) fn build_habit_markdown(input: HabitBuildInput) -> Result<String, String> {
+    let projects = encode_reference_array(&input.projects)
+        .map_err(|error| format!("Failed to encode habit references: {}", error))?;
+    let areas = encode_reference_array(&input.areas)
+        .map_err(|error| format!("Failed to encode habit references: {}", error))?;
+    let goals = encode_reference_array(&input.goals)
+        .map_err(|error| format!("Failed to encode habit references: {}", error))?;
+    let vision = encode_reference_array(&input.vision)
+        .map_err(|error| format!("Failed to encode habit references: {}", error))?;
+    let purpose = encode_reference_array(&input.purpose)
+        .map_err(|error| format!("Failed to encode habit references: {}", error))?;
     let focus_section = if let Some(time) = input.focus_time.as_deref() {
         format!(
             "\n## Focus Date\n[!datetime:focus_date:{}T{}:00]\n",
@@ -217,11 +235,11 @@ pub(super) fn build_habit_markdown(input: HabitBuildInput) -> Result<String, Str
         title = input.title,
         frequency = input.frequency,
         focus = focus_section,
-        projects = encode_reference_array(&input.projects),
-        areas = encode_reference_array(&input.areas),
-        goals = encode_reference_array(&input.goals),
-        vision = encode_reference_array(&input.vision),
-        purpose = encode_reference_array(&input.purpose),
+        projects = projects,
+        areas = areas,
+        goals = goals,
+        vision = vision,
+        purpose = purpose,
         created = input.created_date_time,
         history = DEFAULT_HISTORY_TEMPLATE
     ))
@@ -233,6 +251,12 @@ pub(super) fn build_horizon_markdown(
 ) -> Result<String, String> {
     let content = match page_type {
         HorizonPageType::Area => {
+            let goals_refs = encode_reference_array(&input.goals)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            let vision_refs = encode_reference_array(&input.vision)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            let purpose_refs = encode_reference_array(&input.purpose)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
             let mut body = generate_area_of_focus_template_with_refs(
                 &input.title,
                 input
@@ -240,9 +264,9 @@ pub(super) fn build_horizon_markdown(
                     .as_deref()
                     .unwrap_or("Define the standard for this area."),
                 "",
-                &encode_reference_array(&input.goals),
-                &encode_reference_array(&input.vision),
-                &encode_reference_array(&input.purpose),
+                &goals_refs,
+                &vision_refs,
+                &purpose_refs,
             );
             body = replace_marker(
                 body,
@@ -256,12 +280,19 @@ pub(super) fn build_horizon_markdown(
                     .review_cadence
                     .unwrap_or_else(|| "monthly".to_string()),
             );
-            body = replace_reference_marker(body, "projects-references", &input.projects);
-            body = replace_reference_marker(body, "areas-references", &input.areas);
-            body = replace_reference_marker(body, "references", &input.general_references);
+            body = replace_reference_marker(body, "projects-references", &input.projects)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            body = replace_reference_marker(body, "areas-references", &input.areas)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            body = replace_reference_marker(body, "references", &input.general_references)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
             body
         }
         HorizonPageType::Goal => {
+            let vision_refs = encode_reference_array(&input.vision)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            let purpose_refs = encode_reference_array(&input.purpose)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
             let mut body = generate_goal_template_with_refs(
                 &input.title,
                 input.target_date.as_deref(),
@@ -269,57 +300,76 @@ pub(super) fn build_horizon_markdown(
                     .description
                     .as_deref()
                     .unwrap_or("Describe the desired outcome for this goal."),
-                &encode_reference_array(&input.vision),
-                &encode_reference_array(&input.purpose),
+                &vision_refs,
+                &purpose_refs,
             );
             body = replace_marker(
                 body,
                 "[!singleselect:goal-status:",
                 &input.status.unwrap_or_else(|| "in-progress".to_string()),
             );
-            body = replace_reference_marker(body, "projects-references", &input.projects);
-            body = replace_reference_marker(body, "areas-references", &input.areas);
-            body = replace_reference_marker(body, "references", &input.general_references);
+            body = replace_reference_marker(body, "projects-references", &input.projects)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            body = replace_reference_marker(body, "areas-references", &input.areas)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            body = replace_reference_marker(body, "references", &input.general_references)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
             body
         }
         HorizonPageType::Vision => {
-            let mut body =
-                generate_vision_document_template_with_refs(&encode_reference_array(&input.purpose));
+            let purpose_refs = encode_reference_array(&input.purpose)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            let mut body = generate_vision_document_template_with_refs(&purpose_refs);
             body = replace_h1(body, &input.title);
             body = replace_marker(
                 body,
                 "[!singleselect:vision-horizon:",
                 &input.horizon.unwrap_or_else(|| "3-years".to_string()),
             );
-            body = replace_reference_marker(body, "projects-references", &input.projects);
-            body = replace_reference_marker(body, "goals-references", &input.goals);
-            body = replace_reference_marker(body, "areas-references", &input.areas);
-            body = replace_reference_marker(body, "references", &input.general_references);
+            body = replace_reference_marker(body, "projects-references", &input.projects)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            body = replace_reference_marker(body, "goals-references", &input.goals)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            body = replace_reference_marker(body, "areas-references", &input.areas)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            body = replace_reference_marker(body, "references", &input.general_references)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
             if let Some(narrative) = input.description {
                 body = replace_section_body(body, "Narrative", &narrative);
             }
             body
         }
-        HorizonPageType::Purpose => format!(
-            "# {}\n\n## Projects References\n[!projects-references:{}]\n\n## Goals References\n[!goals-references:{}]\n\n## Vision References\n[!vision-references:{}]\n{}\n## References (optional)\n[!references:{}]\n\n## Created\n[!datetime:created_date_time:{}]\n\n## Description\n{}\n",
-            input.title,
-            encode_reference_array(&input.projects),
-            encode_reference_array(&input.goals),
-            encode_reference_array(&input.vision),
-            if input.areas.is_empty() {
+        HorizonPageType::Purpose => {
+            let projects_refs = encode_reference_array(&input.projects)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            let goals_refs = encode_reference_array(&input.goals)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            let vision_refs = encode_reference_array(&input.vision)
+                .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
+            let areas_section = if input.areas.is_empty() {
                 String::new()
             } else {
+                let areas_refs = encode_reference_array(&input.areas)
+                    .map_err(|error| format!("Failed to encode horizon references: {}", error))?;
                 format!(
                     "## Areas References (optional)\n[!areas-references:{}]\n\n",
-                    encode_reference_array(&input.areas)
+                    areas_refs
                 )
-            },
-            encode_reference_csv(&input.general_references),
-            input.created_date_time,
-            input
-                .description
-                .unwrap_or_else(|| "Describe your purpose and principles.".to_string())
-        ),
+            };
+            format!(
+                "# {}\n\n## Projects References\n[!projects-references:{}]\n\n## Goals References\n[!goals-references:{}]\n\n## Vision References\n[!vision-references:{}]\n{}\n## References (optional)\n[!references:{}]\n\n## Created\n[!datetime:created_date_time:{}]\n\n## Description\n{}\n",
+                input.title,
+                projects_refs,
+                goals_refs,
+                vision_refs,
+                areas_section,
+                encode_reference_csv(&input.general_references),
+                input.created_date_time,
+                input
+                    .description
+                    .unwrap_or_else(|| "Describe your purpose and principles.".to_string())
+            )
+        }
     };
 
     let mut content =
@@ -421,21 +471,12 @@ pub(super) fn parse_horizon_update_seed(
     }
 }
 
-fn encode_reference_array(values: &[String]) -> String {
+fn encode_reference_array(values: &[String]) -> Result<String, serde_json::Error> {
     let normalized = normalize_reference_list(values.to_vec());
     if normalized.is_empty() {
-        String::new()
+        Ok(String::new())
     } else {
-        serde_json::to_string(&normalized)
-            .map(|json| urlencoding::encode(&json).into_owned())
-            .unwrap_or_else(|error| {
-                log::warn!(
-                    "Failed to encode normalized reference array {:?}: {}",
-                    normalized,
-                    error
-                );
-                String::new()
-            })
+        serde_json::to_string(&normalized).map(|json| urlencoding::encode(&json).into_owned())
     }
 }
 
@@ -454,13 +495,17 @@ fn replace_marker(mut content: String, prefix: &str, value: &str) -> String {
     content
 }
 
-fn replace_reference_marker(content: String, tag: &str, values: &[String]) -> String {
+fn replace_reference_marker(
+    content: String,
+    tag: &str,
+    values: &[String],
+) -> Result<String, serde_json::Error> {
     let encoded = if tag == "references" {
         encode_reference_csv(values)
     } else {
-        encode_reference_array(values)
+        encode_reference_array(values)?
     };
-    replace_marker(content, &format!("[!{}:", tag), &encoded)
+    Ok(replace_marker(content, &format!("[!{}:", tag), &encoded))
 }
 
 fn replace_datetime_marker(content: String, field: &str, value: &str) -> String {

@@ -184,13 +184,13 @@ fn parse_cursor(value: Option<&str>) -> Result<usize, String> {
             if value.is_empty() {
                 return Err(format!(
                     "Invalid cursor '{}'. Expected a non-negative integer offset.",
-                    raw
+                    value
                 ));
             }
-            raw.parse::<usize>().map_err(|_| {
+            value.parse::<usize>().map_err(|_| {
                 format!(
                     "Invalid cursor '{}'. Expected a non-negative integer offset.",
-                    raw
+                    value
                 )
             })
         }
@@ -441,6 +441,7 @@ mod tests {
     #[test]
     fn parse_cursor_rejects_blank_values() {
         assert_eq!(parse_cursor(None).unwrap(), 0);
+        assert_eq!(parse_cursor(Some(" 5 ")).unwrap(), 5);
         assert!(parse_cursor(Some("   ")).is_err());
     }
 

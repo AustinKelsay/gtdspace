@@ -634,20 +634,20 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
                       const frequency = selectedFrequency.value;
 
-                      try {
-                        const habitPath = await withErrorHandling(async () => {
-                          const createdPath = await invoke<string>('create_gtd_habit', {
-                            spacePath: gtdSpace.root_path,
-                            habitName: sanitizedHabitName,
-                            frequency,
-                            focusTime: null
-                          });
-                          return createdPath;
-                        }, 'Failed to create habit');
-                        if (!habitPath) {
-                          return;
-                        }
+                      const habitPath = await withErrorHandling(async () => {
+                        const createdPath = await invoke<string>('create_gtd_habit', {
+                          spacePath: gtdSpace.root_path,
+                          habitName: sanitizedHabitName,
+                          frequency,
+                          focusTime: null
+                        });
+                        return createdPath;
+                      }, 'Failed to create habit');
+                      if (!habitPath) {
+                        return;
+                      }
 
+                      try {
                         // Open the new habit file
                         if (onSelectFile) {
                           const normalizedHabitPath = norm(habitPath) ?? habitPath;
@@ -666,9 +666,9 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
                         // Reload habits
                         await loadHabits(gtdSpace.root_path);
                       } catch (error) {
-                        log.error('Failed to create habit', error);
+                        log.error('Failed to reload habits or select created habit', error);
                         toast({
-                          title: 'Create habit failed',
+                          title: 'Reloading habits or file selection failed',
                           description: String(error),
                           variant: 'destructive',
                         });

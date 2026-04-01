@@ -10,17 +10,23 @@ describe('useMcpWorkspaceResolution', () => {
       async (
         command: string,
         args?: Record<string, unknown>,
-        _options?: { errorMessage?: string }
+        _options?: { errorMessage?: string; fallback?: unknown | null }
       ) => {
-      if (command !== 'check_is_gtd_space') {
-        return null;
-      }
+        if (command !== 'check_is_gtd_space') {
+          return null;
+        }
 
-      return args?.path === '/spaces/fallback';
+        return args?.path === '/spaces/fallback';
       }
     );
-    const invokeWithHandling = ((command, args, options) =>
-      invokeMock(command, args, options)) as InvokeWithHandling;
+    const invokeWithHandling: InvokeWithHandling = async <T,>(
+      command: string,
+      args?: Record<string, unknown>,
+      options?: { errorMessage?: string; fallback?: T | null }
+    ): Promise<T | null> => {
+      const result = await invokeMock(command, args, options);
+      return (result ?? options?.fallback ?? null) as T | null;
+    };
 
     const { result } = renderHook(() =>
       useMcpWorkspaceResolution({

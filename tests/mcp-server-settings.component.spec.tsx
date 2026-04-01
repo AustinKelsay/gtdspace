@@ -29,6 +29,7 @@ vi.mock('@/utils/tauri-ready', () => ({
 }));
 
 import McpServerSettings from '@/components/settings/McpServerSettings';
+import { shellQuote } from '@/components/settings/mcp-server-settings-contract';
 
 const buildSettings = (overrides: Partial<UserSettings> = {}): UserSettings => ({
   theme: 'dark',
@@ -120,7 +121,7 @@ describe('McpServerSettings component', () => {
     expect(screen.getByText('Resolved GTD workspace ancestor')).toBeInTheDocument();
     expect(
       screen.getByText((content) =>
-        content.includes('npm run mcp:dev -- --workspace "/spaces/work" --read-only --log-level debug')
+        content.includes("npm run mcp:dev -- --workspace '/spaces/work' --read-only --log-level debug")
       )
     ).toBeInTheDocument();
     expect(screen.getByText('Project Discovery')).toBeInTheDocument();
@@ -179,6 +180,15 @@ describe('McpServerSettings component', () => {
         content.includes('--workspace "C:\\\\Users\\\\me\\\\GTD Space"')
       )
     ).not.toBeInTheDocument();
+  });
+
+  it('quotes POSIX values with single quotes and escapes embedded single quotes', () => {
+    Object.defineProperty(window.navigator, 'platform', {
+      configurable: true,
+      value: 'MacIntel',
+    });
+
+    expect(shellQuote("/tmp/it's\nhere")).toBe("'/tmp/it'\\''s\nhere'");
   });
 
   it('accepts an ancestor GTD workspace when the selected path is nested beneath it', async () => {

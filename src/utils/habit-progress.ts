@@ -30,7 +30,7 @@ function compareEntriesDescending(
     return 1;
   }
 
-  return (right.time ?? '').localeCompare(left.time ?? '');
+  return 0;
 }
 
 export function getLatestHabitEntryForDate(

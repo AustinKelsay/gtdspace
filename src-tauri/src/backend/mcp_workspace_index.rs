@@ -525,9 +525,13 @@ fn is_horizon_overview(path: &str) -> bool {
     matches!(
         path,
         "Areas of Focus/README.md"
+            | "Areas of Focus/README.markdown"
             | "Goals/README.md"
+            | "Goals/README.markdown"
             | "Vision/README.md"
+            | "Vision/README.markdown"
             | "Purpose & Principles/README.md"
+            | "Purpose & Principles/README.markdown"
     )
 }
 
@@ -739,6 +743,37 @@ mod tests {
         assert_eq!(
             summaries[0].parent_project_path.as_deref(),
             Some("Projects/Alpha Project")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn horizon_overview_markdown_files_are_recognized() -> Result<(), String> {
+        let temp_dir = tempfile::tempdir().map_err(|error| error.to_string())?;
+        let workspace = temp_dir.path();
+        std::fs::create_dir_all(workspace.join("Projects")).map_err(|error| error.to_string())?;
+        let readme = workspace.join("Goals/README.markdown");
+        write_test_file(
+            &readme,
+            "# Goals\n\n## How to work this horizon in GTD Space\n\nReview this weekly.\n",
+        )?;
+
+        let summaries = build_item_summaries(
+            workspace,
+            vec![MarkdownFile {
+                id: "goals".to_string(),
+                name: "README.markdown".to_string(),
+                path: readme.to_string_lossy().to_string(),
+                size: 1,
+                last_modified: 10,
+                extension: ".markdown".to_string(),
+            }],
+        )?;
+
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(
+            summaries[0].item_type,
+            crate::backend::mcp_workspace::GtdItemType::HorizonOverview
         );
         Ok(())
     }

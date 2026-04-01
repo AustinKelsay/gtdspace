@@ -37,7 +37,7 @@ import {
   READ_TOOLS,
   shellQuote,
 } from './mcp-server-settings-contract';
-import { CodeBlock, DetailCard, ToolChipSection } from './mcp-server-settings-shared';
+import { CodeBlock, DetailCard, ToolChipSection } from './McpServerSettingsShared';
 import { useMcpWorkspaceResolution } from './useMcpWorkspaceResolution';
 
 export const McpServerSettings: React.FC = () => {

@@ -157,6 +157,7 @@ export const App: React.FC = () => {
     saveAllTabs,
     reorderTabs,
     reloadTabFromDisk,
+    syncTabWithExternalContent,
   } = useTabManager({
     workspacePath: activeWorkspacePath,
     maxTabs: settings.max_tabs,
@@ -883,15 +884,20 @@ export const App: React.FC = () => {
   // Listen for habit status updates to refresh the editor
   React.useEffect(() => {
     const handleHabitStatusUpdate = (
-      event: CustomEvent<{ habitPath: string }>
+      event: CustomEvent<{ habitPath?: string; filePath?: string }>
     ) => {
+      const habitPath = event.detail.habitPath ?? event.detail.filePath;
+      if (!habitPath) {
+        return;
+      }
+
       // Check if the updated habit is currently open in the editor
-      if (activeTab?.id && pathsEqual(activeTab.file.path, event.detail.habitPath)) {
+      if (activeTab?.id && pathsEqual(activeTab.file.path, habitPath)) {
         void reloadTabFromDisk(activeTab.id);
       }
 
       // Also refresh the sidebar to show updated status
-      if (isHabitPath(event.detail.habitPath)) {
+      if (isHabitPath(habitPath)) {
         refreshGTDSpace();
       }
     };
@@ -904,7 +910,17 @@ export const App: React.FC = () => {
 
       // If the changed file is the currently active tab, reload its content
       if (activeTab?.id && pathsEqual(activeTab.file.path, filePath)) {
-        void reloadTabFromDisk(activeTab.id);
+        void (async () => {
+          const latestContent = await safeInvoke<string>('read_file', { path: filePath }, null);
+          if (latestContent == null) {
+            return;
+          }
+
+          const synced = syncTabWithExternalContent(activeTab.id, latestContent);
+          if (!synced) {
+            await reloadTabFromDisk(activeTab.id);
+          }
+        })();
       }
     };
 
@@ -927,7 +943,13 @@ export const App: React.FC = () => {
         handleHabitContentChanged as EventListener
       );
     };
-  }, [activeTab?.file.path, activeTab?.id, reloadTabFromDisk, refreshGTDSpace]);
+  }, [
+    activeTab?.file.path,
+    activeTab?.id,
+    reloadTabFromDisk,
+    refreshGTDSpace,
+    syncTabWithExternalContent,
+  ]);
 
   // === HABIT RESET SCHEDULER ===
   // Store refs to avoid re-running effect when functions change

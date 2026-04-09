@@ -275,6 +275,121 @@ describe('useTabManager integration', () => {
     expect(reloaded).toBe(false);
   });
 
+  it('merges external habit rewrites into a dirty tab before save so history is not lost', async () => {
+    const originalHabit = `# Morning Walk
+
+## Status
+[!checkbox:habit-status:false]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Projects References
+[!projects-references:]
+
+## Areas References
+[!areas-references:]
+
+## Goals References
+[!goals-references:]
+
+## Vision References
+[!vision-references:]
+
+## Purpose & Principles References
+[!purpose-references:]
+
+## References
+[!references:]
+
+## Created
+[!datetime:created_date_time:2026-04-01T07:00:00Z]
+
+## Notes
+Start easy.
+
+## History
+*Track your habit completions below:*
+
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+`;
+    const locallyEditedHabit = originalHabit
+      .replace('[!checkbox:habit-status:false]', '[!checkbox:habit-status:true]')
+      .replace('Start easy.', 'Start easy.\nRemember water.');
+    const externallyUpdatedHabit = originalHabit
+      .replace('[!checkbox:habit-status:false]', '[!checkbox:habit-status:true]')
+      .replace(
+        '|------|------|--------|--------|---------|\n',
+        '|------|------|--------|--------|---------|\n| 2026-04-08 | 7:30 AM | Complete | Manual | Changed from To Do |\n',
+      );
+
+    mocks.safeInvoke.mockImplementation(async (command: string) => {
+      if (command === 'read_file') return originalHabit;
+      if (command === 'save_file') return 'ok';
+      return null;
+    });
+
+    const { getCurrent } = renderTabManagerHook();
+    const file = buildFile('f-habit-merge', '/mock/workspace/Habits/Morning Walk.md');
+
+    let tabId = '';
+    await act(async () => {
+      tabId = await getCurrent().openTab(file);
+    });
+
+    act(() => {
+      getCurrent().updateTabContent(tabId, locallyEditedHabit);
+    });
+
+    await waitFor(() => {
+      expect(getCurrent().tabState.openTabs[0]?.hasUnsavedChanges).toBe(true);
+    });
+
+    let synced = false;
+    await act(async () => {
+      synced = getCurrent().syncTabWithExternalContent(tabId, externallyUpdatedHabit);
+    });
+
+    expect(synced).toBe(true);
+    await waitFor(() => {
+      const tab = getCurrent().tabState.openTabs[0];
+      expect(tab?.content).toContain('Remember water.');
+      expect(tab?.content).toContain(
+        '| 2026-04-08 | 7:30 AM | Complete | Manual | Changed from To Do |',
+      );
+      expect(tab?.originalContent).toBe(externallyUpdatedHabit);
+      expect(tab?.hasUnsavedChanges).toBe(true);
+    });
+
+    mocks.safeInvoke.mockClear();
+
+    let saved = false;
+    await act(async () => {
+      saved = await getCurrent().saveTab(tabId);
+    });
+
+    expect(saved).toBe(true);
+    expect(mocks.safeInvoke).toHaveBeenCalledWith(
+      'save_file',
+      expect.objectContaining({
+        path: '/mock/workspace/Habits/Morning Walk.md',
+        content: expect.stringContaining('Remember water.'),
+      }),
+      null,
+    );
+    expect(mocks.safeInvoke).toHaveBeenCalledWith(
+      'save_file',
+      expect.objectContaining({
+        path: '/mock/workspace/Habits/Morning Walk.md',
+        content: expect.stringContaining(
+          '| 2026-04-08 | 7:30 AM | Complete | Manual | Changed from To Do |',
+        ),
+      }),
+      null,
+    );
+  });
+
   it('saves keep-local conflict resolution using the dirty editor content', async () => {
     const { getCurrent } = renderTabManagerHook();
     const file = buildFile('f-conflict', '/mock/workspace/Projects/Alpha/Conflict.md');

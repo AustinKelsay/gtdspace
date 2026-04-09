@@ -11,6 +11,7 @@ Use the scripted release commands from `package.json`:
 - `npm run release:major`
 
 These scripts run the release checks, validate the matching release notes file, create the release commit and tag, and push the result.
+They now also run the dedicated release-path end-to-end suite via `npm run test:release:e2e`.
 
 ## Before Releasing
 
@@ -19,6 +20,7 @@ Run the normal quality checks:
 - `npm run lint`
 - `npm run type-check`
 - `npm run test:run`
+- `npm run test:release:e2e`
 - `cd src-tauri && cargo test --bins --tests`
 - `npm run tauri:dev` when UI or GTD behavior changed materially
 

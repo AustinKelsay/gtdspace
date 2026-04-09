@@ -59,6 +59,7 @@ const mocks = vi.hoisted(() => {
       saveAllTabs: vi.fn(),
       reorderTabs: vi.fn(),
       reloadTabFromDisk: vi.fn(),
+      syncTabWithExternalContent: vi.fn(),
     },
     fileWatcher: {
       state: {
@@ -392,6 +393,7 @@ describe('App integration workflows', () => {
     mocks.tabManager.activateTab.mockResolvedValue(undefined);
     mocks.tabManager.closeTab.mockResolvedValue(undefined);
     mocks.tabManager.reloadTabFromDisk.mockResolvedValue(false);
+    mocks.tabManager.syncTabWithExternalContent.mockReturnValue(false);
     mocks.tabManager.saveTab.mockResolvedValue(false);
     mocks.tabManager.saveAllTabs.mockResolvedValue(undefined);
 
@@ -919,7 +921,7 @@ describe('App integration workflows', () => {
     });
   });
 
-  it('reacts to habit status/content events by reloading active habit tab content', async () => {
+  it('reacts to habit status/content events by syncing and reloading active habit tab content', async () => {
     const habitPath = '/mock/workspace/Habits/Daily.md';
     const activeHabitTab = {
       id: 'tab-habit',
@@ -965,6 +967,7 @@ describe('App integration workflows', () => {
     });
 
     mocks.tabManager.reloadTabFromDisk.mockClear();
+    mocks.tabManager.syncTabWithExternalContent.mockClear();
     act(() => {
       window.dispatchEvent(
         new CustomEvent('habit-content-changed', { detail: { filePath: habitPath } })
@@ -972,6 +975,10 @@ describe('App integration workflows', () => {
     });
 
     await waitFor(() => {
+      expect(mocks.tabManager.syncTabWithExternalContent).toHaveBeenCalledWith(
+        'tab-habit',
+        '# Refreshed habit content',
+      );
       expect(mocks.tabManager.reloadTabFromDisk).toHaveBeenCalledWith('tab-habit');
     });
   });

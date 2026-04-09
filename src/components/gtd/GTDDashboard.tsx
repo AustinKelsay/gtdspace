@@ -28,6 +28,7 @@ import { safeInvoke } from '@/utils/safe-invoke';
 import { useToast } from '@/hooks/use-toast';
 import { ACTION_TOAST_DURATION_MS } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
+import { onContentSaved, onMetadataChange } from '@/utils/content-event-bus';
 import {
   DashboardOverview,
   DashboardActions,
@@ -93,7 +94,8 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     summary: _habitsSummary,
     analytics: _habitsAnalytics,
     loadHabits,
-    updateHabitStatus
+    updateHabitStatus,
+    refresh: refreshHabits
   } = useHabitsHistory({ historyDays: 90, includeInactive: true });
 
   const {
@@ -247,6 +249,90 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     loadActions,
     loadHorizons
   ]);
+
+  React.useEffect(() => {
+    const rootPath = gtdSpace?.root_path;
+    if (!rootPath) {
+      return;
+    }
+
+    const normalizedRoot = (norm(rootPath) ?? rootPath).replace(/\\/g, '/').toLowerCase();
+    let reloadTimer: number | null = null;
+
+    const isHabitPathForCurrentSpace = (candidatePath?: string | null): boolean => {
+      if (!candidatePath) return false;
+      const normalizedPath = (norm(candidatePath) ?? candidatePath)
+        .replace(/\\/g, '/')
+        .toLowerCase();
+      return (
+        normalizedPath.startsWith(normalizedRoot) &&
+        normalizedPath.includes('/habits/')
+      );
+    };
+
+    const scheduleHabitsRefresh = (filePath?: string | null) => {
+      if (filePath && !isHabitPathForCurrentSpace(filePath)) {
+        return;
+      }
+
+      if (reloadTimer !== null) {
+        window.clearTimeout(reloadTimer);
+      }
+
+      reloadTimer = window.setTimeout(() => {
+        void refreshHabits();
+        reloadTimer = null;
+      }, 100);
+    };
+
+    const savedUnsubscribe = onContentSaved((event) => {
+      scheduleHabitsRefresh(event.filePath);
+    });
+
+    const metadataUnsubscribe = onMetadataChange((event) => {
+      if (!isHabitPathForCurrentSpace(event.filePath)) {
+        return;
+      }
+
+      const changedFields = event.changedFields;
+      if (!changedFields) {
+        return;
+      }
+
+      const hasHabitFieldChange = Object.keys(changedFields).some((key) => {
+        const normalizedKey = key.toLowerCase();
+        return normalizedKey.includes('habit') || normalizedKey.includes('frequency');
+      });
+
+      if (hasHabitFieldChange) {
+        scheduleHabitsRefresh(event.filePath);
+      }
+    });
+
+    const handleHabitContentChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ filePath?: string; habitPath?: string }>).detail;
+      scheduleHabitsRefresh(detail?.filePath ?? detail?.habitPath);
+    };
+
+    const handleHabitsRefreshed = () => {
+      scheduleHabitsRefresh();
+    };
+
+    window.addEventListener('habit-content-changed', handleHabitContentChanged);
+    window.addEventListener('habit-status-updated', handleHabitContentChanged);
+    window.addEventListener('habits-refreshed', handleHabitsRefreshed);
+
+    return () => {
+      savedUnsubscribe?.();
+      metadataUnsubscribe?.();
+      window.removeEventListener('habit-content-changed', handleHabitContentChanged);
+      window.removeEventListener('habit-status-updated', handleHabitContentChanged);
+      window.removeEventListener('habits-refreshed', handleHabitsRefreshed);
+      if (reloadTimer !== null) {
+        window.clearTimeout(reloadTimer);
+      }
+    };
+  }, [gtdSpace?.root_path, refreshHabits]);
 
   // Handle habit toggle
   const handleHabitToggle = async (habit: typeof habitsWithHistory[0]) => {

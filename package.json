@@ -11,6 +11,7 @@
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run",
+    "test:release:e2e": "vitest run tests/app.integration.spec.tsx tests/use-tab-manager.integration.spec.tsx tests/gtd-dashboard.component.spec.tsx",
     "test:coverage": "vitest run --coverage",
     "vitest": "vitest",
     "dev": "vite",

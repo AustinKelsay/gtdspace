@@ -48,6 +48,9 @@ jobs:
       - name: Run frontend tests with coverage
         run: npm run test:coverage
 
+      - name: Run release E2E regression suite
+        run: npm run test:release:e2e
+
   test-build:
     needs: [lint-and-typecheck]
     runs-on: ${{ matrix.platform }}

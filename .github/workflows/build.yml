@@ -28,9 +28,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  preflight-release-e2e:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'staging'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run release E2E tests
+        run: npm run test:release:e2e
+
   create-release:
     # Only run on main or staging branches for workflow_dispatch
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'staging'))
+    needs: preflight-release-e2e
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -72,7 +92,7 @@ jobs:
   build-tauri:
     # Only run on main or staging branches for workflow_dispatch
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'staging'))
-    needs: create-release
+    needs: [preflight-release-e2e, create-release]
     environment: prod
     permissions:
       contents: write

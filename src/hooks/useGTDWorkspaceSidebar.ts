@@ -24,6 +24,7 @@ import { useSidebarDataLoaders } from '@/hooks/sidebar/useSidebarDataLoaders';
 import { useSidebarEventBridge } from '@/hooks/sidebar/useSidebarEventBridge';
 import {
   buildSectionPath as buildCanonicalSectionPath,
+  classifySidebarPath,
   normalizeSidebarPath,
 } from '@/hooks/sidebar/path-classification';
 import { useSidebarOverlays } from '@/hooks/sidebar/useSidebarOverlays';
@@ -415,15 +416,30 @@ export function useGTDWorkspaceSidebar({
             });
             overlays.removeActionOverlay(normalizedDeletePath);
 
-            const projectMatch = normalizedDeletePath.match(
-              /^(.*\/Projects)\/([^/]+)\/.+\.(md|markdown)$/i
-            );
-            const projectPath = projectMatch
-              ? buildCanonicalSectionPath(projectMatch[1], projectMatch[2])
-              : normalizedDeletePath.substring(
+            const actionPathMatch = classifySidebarPath(normalizedDeletePath);
+            const projectPath = (() => {
+              if (
+                actionPathMatch.kind === 'project-action' &&
+                actionPathMatch.projectPath
+              ) {
+                const projectName = actionPathMatch.projectPath
+                  .split('/')
+                  .filter(Boolean)
+                  .pop();
+                const projectRoot = actionPathMatch.projectPath.substring(
                   0,
-                  normalizedDeletePath.lastIndexOf('/')
+                  actionPathMatch.projectPath.lastIndexOf('/')
                 );
+                if (projectName && projectRoot) {
+                  return buildCanonicalSectionPath(projectRoot, projectName);
+                }
+              }
+
+              return normalizedDeletePath.substring(
+                0,
+                normalizedDeletePath.lastIndexOf('/')
+              );
+            })();
             setProjectActions((prev) => ({
               ...prev,
               [projectPath]:

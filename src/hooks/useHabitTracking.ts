@@ -49,7 +49,7 @@ export function useHabitTracking() {
         window.dispatchEvent(
           new CustomEvent('habit-status-updated', {
             detail: {
-              filePath: normalizedPath,
+              habitPath: normalizedPath,
               fileName,
               habitStatus: newStatus,
             },
@@ -58,7 +58,7 @@ export function useHabitTracking() {
         window.dispatchEvent(
           new CustomEvent('habit-content-changed', {
             detail: {
-              filePath: normalizedPath,
+              habitPath: normalizedPath,
               fileName,
               habitStatus: newStatus,
             },

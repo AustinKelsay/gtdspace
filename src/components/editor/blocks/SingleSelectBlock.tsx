@@ -204,7 +204,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                 window.dispatchEvent(
                   new CustomEvent('habit-status-updated', {
                     detail: {
-                      filePath: normalizedHabitPath,
+                      habitPath: normalizedHabitPath,
                       fileName,
                       habitStatus: selectedValue,
                     },
@@ -213,7 +213,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                 window.dispatchEvent(
                   new CustomEvent('habit-content-changed', {
                     detail: {
-                      filePath: normalizedHabitPath,
+                      habitPath: normalizedHabitPath,
                       fileName,
                       habitStatus: selectedValue,
                     },

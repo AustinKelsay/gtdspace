@@ -85,10 +85,11 @@ impl HabitStatus {
         }
     }
 
-    pub(crate) fn from_history_label(value: &str) -> Self {
+    pub(crate) fn from_history_label(value: &str) -> Option<Self> {
         match value.trim().to_lowercase().as_str() {
-            "complete" | "completed" | "done" => Self::Completed,
-            _ => Self::Todo,
+            "complete" | "completed" | "done" => Some(Self::Completed),
+            "todo" | "to do" | "to-do" | "pending" => Some(Self::Todo),
+            _ => None,
         }
     }
 }
@@ -528,29 +529,41 @@ fn migrate_legacy_history_list_rows_in_content(content: &str) -> (String, bool) 
         .collect();
 
     if !has_table_header {
-        new_lines.push(String::new());
+        let first_legacy_index = history_lines
+            .iter()
+            .position(|line| convert_list_to_table_row(line).is_some())
+            .unwrap_or(history_lines.len());
+
+        let prefix_lines = &history_lines[..first_legacy_index];
+        for line in prefix_lines {
+            new_lines.push((*line).to_string());
+        }
+
         if !has_tracking_note {
+            if new_lines.last().is_some_and(|line| !line.trim().is_empty()) {
+                new_lines.push(String::new());
+            }
             new_lines.push("*Track your habit completions below:*".to_string());
             new_lines.push(String::new());
         }
+
         new_lines.push("| Date | Time | Status | Action | Details |".to_string());
         new_lines.push("|------|------|--------|--------|---------|".to_string());
-    }
 
-    for line in history_lines {
-        let trimmed = line.trim();
-        if !has_table_header
-            && (trimmed.is_empty()
-                || trimmed.starts_with("*Track your habit completions")
-                || trimmed.starts_with("*Track your habit"))
-        {
-            continue;
+        for line in &history_lines[first_legacy_index..] {
+            if let Some(table_row) = convert_list_to_table_row(line) {
+                new_lines.push(table_row);
+            } else {
+                new_lines.push((*line).to_string());
+            }
         }
-
-        if let Some(table_row) = convert_list_to_table_row(line) {
-            new_lines.push(table_row);
-        } else {
-            new_lines.push((*line).to_string());
+    } else {
+        for line in history_lines {
+            if let Some(table_row) = convert_list_to_table_row(line) {
+                new_lines.push(table_row);
+            } else {
+                new_lines.push((*line).to_string());
+            }
         }
     }
 
@@ -589,7 +602,10 @@ fn normalize_reset_rows_in_content(content: &str) -> (String, bool) {
 
             if let Some(row) = parse_history_row_from_table(line) {
                 if is_reset_action(&row.action)
-                    && HabitStatus::from_history_label(&row.status) != HabitStatus::Todo
+                    && matches!(
+                        HabitStatus::from_history_label(&row.status),
+                        Some(HabitStatus::Completed)
+                    )
                 {
                     if let Some(mut cells) = split_history_table_cells(line) {
                         if cells.len() >= 5 {
@@ -617,7 +633,7 @@ fn normalize_reset_rows_in_content(content: &str) -> (String, bool) {
 fn derive_latest_history_status(rows: &[ParsedHistoryRow], fallback: HabitStatus) -> HabitStatus {
     rows.iter()
         .max_by_key(|row| row.timestamp)
-        .map(|row| HabitStatus::from_history_label(&row.status))
+        .and_then(|row| HabitStatus::from_history_label(&row.status))
         .unwrap_or(fallback)
 }
 
@@ -1231,6 +1247,37 @@ Still here
         assert!(repaired.contains(DEFAULT_HISTORY_TEMPLATE));
         assert!(repaired.contains("| 2026-03-03 | 7:30 PM | Complete | Manual | Done |"));
         assert!(repaired.contains("[!checkbox:habit-status:true]"));
+    }
+
+    #[test]
+    fn repair_habit_history_content_preserves_existing_tracking_note_during_migration() {
+        let content = r#"# Habit
+
+## Status
+[!checkbox:habit-status:false]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-01T09:00:00Z]
+
+## History
+*Track your habit completions below:*
+
+- **2026-03-03** at **7:30 PM**: Complete (Manual - Done)
+"#;
+
+        let repaired = repair_habit_history_content(content).unwrap().unwrap();
+
+        assert!(repaired.contains("*Track your habit completions below:*"));
+        assert!(repaired.contains("| Date | Time | Status | Action | Details |"));
+        assert_eq!(
+            repaired
+                .matches("*Track your habit completions below:*")
+                .count(),
+            1
+        );
     }
 
     #[test]

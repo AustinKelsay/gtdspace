@@ -19,10 +19,10 @@
 ## Verification
 
 - Baseline for code changes: `npm run type-check`, `npm run lint`, and `cd src-tauri && cargo fmt --check && cargo clippy -- -D warnings`.
-- If you touch app integration flows, run `npx vitest run tests/app.integration.spec.tsx`.
-- If you touch MCP settings or settings validation, run `npx vitest run tests/settings-validation.spec.ts`.
-- If you touch dashboard actions, overview, or projects, run `npx vitest run tests/dashboard-actions.component.spec.tsx tests/dashboard-projects.component.spec.tsx tests/date-formatting.spec.ts`.
-- If you touch Rust settings parsing, workspace resolution, or MCP server paths, run the targeted `cargo test --manifest-path ...` commands already documented in the repo and rerun them after any formatter rewrite.
+- When modifying app integration flows, run `npx vitest run tests/app.integration.spec.tsx`.
+- For changes to MCP settings or settings validation, run `npx vitest run tests/settings-validation.spec.ts`.
+- Run `npx vitest run tests/dashboard-actions.component.spec.tsx tests/dashboard-projects.component.spec.tsx tests/date-formatting.spec.ts` for dashboard actions, overview, or projects changes.
+- For Rust settings parsing, workspace resolution, or MCP server path updates, run the targeted `cargo test --manifest-path ...` commands already documented in the repo and rerun them after any formatter rewrite.
 
 ## PR Rules
 

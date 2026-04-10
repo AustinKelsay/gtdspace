@@ -898,12 +898,15 @@ export const App: React.FC = () => {
 
     // Handle real-time content changes for habits
     const handleHabitContentChanged = (
-      event: CustomEvent<{ filePath: string }>
+      event: CustomEvent<{ filePath?: string; habitPath?: string }>
     ) => {
-      const { filePath } = event.detail;
+      const changedPath = event.detail.habitPath ?? event.detail.filePath;
+      if (!changedPath) {
+        return;
+      }
 
       // If the changed file is the currently active tab, reload its content
-      if (activeTab?.id && pathsEqual(activeTab.file.path, filePath)) {
+      if (activeTab?.id && pathsEqual(activeTab.file.path, changedPath)) {
         void reloadTabFromDisk(activeTab.id);
       }
     };

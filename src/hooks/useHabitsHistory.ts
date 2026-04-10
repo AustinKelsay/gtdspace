@@ -11,6 +11,7 @@ import type { GTDHabit, MarkdownFile } from '@/types';
 import { createScopedLogger } from '@/utils/logger';
 import { countHabitsCompletedOnDate } from '@/utils/habit-progress';
 import { emitMetadataChange } from '@/utils/content-event-bus';
+import { norm } from '@/utils/path';
 import {
   calculateNextHabitReset,
   isHabitHistoryStatusCompleted,
@@ -399,10 +400,10 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
       }
 
       if (updated) {
-        const normalizedPath = habitPath.replace(/\\/g, '/');
+        const normalizedPath = norm(habitPath) ?? habitPath;
         const fileName = normalizedPath.split('/').pop() || '';
         emitMetadataChange({
-          filePath: habitPath,
+          filePath: normalizedPath,
           fileName,
           content: '',
           metadata: { habitStatus: nextStatus },
@@ -411,7 +412,7 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
         window.dispatchEvent(
           new CustomEvent('habit-status-updated', {
             detail: {
-              filePath: habitPath,
+              habitPath: normalizedPath,
               fileName,
               habitStatus: nextStatus,
             },
@@ -420,7 +421,7 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
         window.dispatchEvent(
           new CustomEvent('habit-content-changed', {
             detail: {
-              filePath: habitPath,
+              habitPath: normalizedPath,
               fileName,
               habitStatus: nextStatus,
             },

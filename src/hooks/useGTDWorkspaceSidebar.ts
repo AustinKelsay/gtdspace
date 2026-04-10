@@ -415,15 +415,21 @@ export function useGTDWorkspaceSidebar({
             });
             overlays.removeActionOverlay(normalizedDeletePath);
 
-            const projectPath = normalizedDeletePath.substring(
-              0,
-              normalizedDeletePath.lastIndexOf('/')
+            const projectMatch = normalizedDeletePath.match(
+              /^(.*\/Projects)\/([^/]+)\/.+\.(md|markdown)$/i
             );
+            const projectPath = projectMatch
+              ? buildCanonicalSectionPath(projectMatch[1], projectMatch[2])
+              : normalizedDeletePath.substring(
+                  0,
+                  normalizedDeletePath.lastIndexOf('/')
+                );
             setProjectActions((prev) => ({
               ...prev,
               [projectPath]:
                 prev[projectPath]?.filter(
-                  (action) => action.path !== normalizedDeletePath
+                  (action) =>
+                    (norm(action.path) ?? action.path) !== normalizedDeletePath
                 ) || [],
             }));
             await loadProjectActions(projectPath);
@@ -437,7 +443,8 @@ export function useGTDWorkspaceSidebar({
               ...prev,
               [sectionPath]:
                 prev[sectionPath]?.filter(
-                  (file) => file.path !== normalizedDeletePath
+                  (file) =>
+                    (norm(file.path) ?? file.path) !== normalizedDeletePath
                 ) || [],
             }));
             await loadSectionFiles(sectionPath, true);

@@ -177,7 +177,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                     safeInvoke<boolean>(
                       'update_habit_status',
                       {
-                        habitPath: currentPath,
+                        habitPath: normalizedHabitPath,
                         newStatus: selectedValue,
                       },
                       null
@@ -191,12 +191,11 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                 
                 // Mark update as successfully applied
                 updateApplied = true;
-
+                
                 // Emit initial status change event
-                const normalizedForName = currentPath.replace(/\\/g, '/');
-                const fileName = normalizedForName.split('/').pop() || '';
+                const fileName = normalizedHabitPath.split('/').pop() || '';
                 emitMetadataChange({
-                  filePath: currentPath,
+                  filePath: normalizedHabitPath,
                   fileName,
                   content: '', // Content not directly changed
                   metadata: { habitStatus: selectedValue },
@@ -205,7 +204,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                 window.dispatchEvent(
                   new CustomEvent('habit-status-updated', {
                     detail: {
-                      filePath: currentPath,
+                      filePath: normalizedHabitPath,
                       fileName,
                       habitStatus: selectedValue,
                     },
@@ -214,7 +213,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                 window.dispatchEvent(
                   new CustomEvent('habit-content-changed', {
                     detail: {
-                      filePath: currentPath,
+                      filePath: normalizedHabitPath,
                       fileName,
                       habitStatus: selectedValue,
                     },
@@ -231,10 +230,9 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                 });
                 
                 // Emit revert event
-                const normalizedForName = currentPath.replace(/\\/g, '/');
-                const fileName = normalizedForName.split('/').pop() || '';
+                const fileName = normalizedHabitPath.split('/').pop() || '';
                 emitMetadataChange({
-                  filePath: currentPath,
+                  filePath: normalizedHabitPath,
                   fileName,
                   content: '',
                   metadata: { habitStatus: previousValue },
@@ -252,10 +250,9 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
               });
               
               // Emit revert event so consumers see the persisted state
-              const normalizedForName = currentPath.replace(/\\/g, '/');
-              const fileName = normalizedForName.split('/').pop() || '';
+              const fileName = normalizedHabitPath.split('/').pop() || '';
               emitMetadataChange({
-                filePath: currentPath,
+                filePath: normalizedHabitPath,
                 fileName,
                 content: '',
                 metadata: { habitStatus: previousValue },

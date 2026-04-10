@@ -18,7 +18,7 @@ import {
 import type { GTDProject, MarkdownFile } from '@/types';
 import { norm, isUnder } from '@/utils/path';
 
-type UseSidebarDataLoadersResult = SidebarDataState & {
+interface UseSidebarDataLoadersResult extends SidebarDataState {
   resolveReadmeFile: (folderPath: string) => Promise<MarkdownFile>;
   resolveSectionLoadPaths: (
     sectionIds: readonly string[],
@@ -26,7 +26,7 @@ type UseSidebarDataLoadersResult = SidebarDataState & {
   ) => Promise<string[]>;
   loadSectionFiles: (sectionPath: string, force?: boolean) => Promise<MarkdownFile[]>;
   loadProjectActions: (projectPath: string) => Promise<void>;
-};
+}
 
 export function useSidebarDataLoaders({
   rootPath,

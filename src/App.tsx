@@ -949,24 +949,40 @@ export const App: React.FC = () => {
     if (!currentSpacePath) {
       return;
     }
+    const currentSpaceKey = pathKey(currentSpacePath);
+    if (!currentSpaceKey) {
+      return;
+    }
 
     let isCancelled = false;
 
     const repairHabitHistory = async () => {
-      if (!currentSpacePath || repairedHabitSpacesRef.current.has(currentSpacePath)) {
+      if (!currentSpacePath || repairedHabitSpacesRef.current.has(currentSpaceKey)) {
         return [];
       }
 
-      const repairedHabits =
-        (await safeInvoke<string[]>(
-          "repair_habit_history",
-          {
-            spacePath: currentSpacePath,
-          },
-          []
-        )) ?? [];
+      const repairedHabits = await withErrorHandling(
+        async () => {
+          const result = await safeInvoke<string[]>(
+            "repair_habit_history",
+            {
+              spacePath: currentSpacePath,
+            },
+            null
+          );
+          if (result === null) {
+            throw new Error("Failed to repair habit history");
+          }
+          return result;
+        },
+        "Failed to repair habit history",
+        "habit"
+      );
+      if (repairedHabits === null) {
+        return [];
+      }
 
-      repairedHabitSpacesRef.current.add(currentSpacePath);
+      repairedHabitSpacesRef.current.add(currentSpaceKey);
 
       if (isCancelled || repairedHabits.length === 0) {
         return repairedHabits;
@@ -1067,7 +1083,7 @@ export const App: React.FC = () => {
       isCancelled = true;
       clearInterval(interval);
     };
-  }, [gtdSpace?.root_path, toast]); // Only depend on root_path, use refs for everything else
+  }, [gtdSpace?.root_path, toast, withErrorHandling]); // Only depend on root_path, use refs for everything else
 
   // Show loading screen while app is initializing
   if (isAppInitializing) {

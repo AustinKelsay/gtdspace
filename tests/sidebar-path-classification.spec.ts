@@ -42,6 +42,24 @@ describe('sidebar path classification', () => {
     });
   });
 
+  it('rejects nested and root-level project README files', () => {
+    const rootReadmePath = `${rootPath}/Projects/README.md`;
+    const nestedReadmePath = `${rootPath}/Projects/Project Alpha/Docs/README.md`;
+
+    expect(isProjectReadmePath(rootReadmePath, rootPath)).toBe(false);
+    expect(isProjectReadmePath(nestedReadmePath, rootPath)).toBe(false);
+    expect(extractProjectPathFromReadme(rootReadmePath, rootPath)).toBeNull();
+    expect(extractProjectPathFromReadme(nestedReadmePath, rootPath)).toBeNull();
+    expect(classifySidebarPath(rootReadmePath, rootPath)).toMatchObject({
+      kind: 'other',
+      normalizedPath: rootReadmePath,
+    });
+    expect(classifySidebarPath(nestedReadmePath, rootPath)).toMatchObject({
+      kind: 'other',
+      normalizedPath: nestedReadmePath,
+    });
+  });
+
   it('classifies section files across canonical and alias section folders', () => {
     const canonicalPath = `${rootPath}/Purpose & Principles/Focus.md`;
     const aliasPath = `${rootPath}/Purpose and Principles/Focus.markdown`;

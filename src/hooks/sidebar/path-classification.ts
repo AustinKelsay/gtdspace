@@ -77,11 +77,34 @@ export function extractParentFolder(path?: string | null): string | null {
   return normalizedPath.slice(0, lastSlashIndex);
 }
 
-export function extractProjectPathFromReadme(path?: string | null): string | null {
-  if (!isReadmePath(path)) {
+export function extractProjectPathFromReadme(
+  path?: string | null,
+  rootPath?: string | null
+): string | null {
+  const normalizedPath = normalizeSidebarPath(path);
+  if (!normalizedPath || !isReadmePath(normalizedPath)) {
     return null;
   }
-  return extractParentFolder(path);
+
+  if (rootPath) {
+    const projectRoot = getProjectSectionRoot(rootPath);
+    if (!projectRoot || !isUnder(normalizedPath, projectRoot)) {
+      return null;
+    }
+
+    const relative = normalizedPath.slice(projectRoot.length).replace(/^\/+/, '');
+    const segments = relative.split('/').filter(Boolean);
+    if (
+      segments.length !== 2 ||
+      !/^README\.(md|markdown)$/i.test(segments[1])
+    ) {
+      return null;
+    }
+
+    return normalizeSidebarPath(`${projectRoot}/${segments[0]}`) ?? `${projectRoot}/${segments[0]}`;
+  }
+
+  return normalizedPath.match(/^(.*\/Projects\/[^/]+)\/README\.(md|markdown)$/i)?.[1] ?? null;
 }
 
 function getProjectSectionRoot(rootPath?: string | null): string | null {
@@ -180,17 +203,7 @@ export function isProjectReadmePath(
   path?: string | null,
   rootPath?: string | null
 ): boolean {
-  const normalizedPath = normalizeSidebarPath(path);
-  if (!normalizedPath || !isReadmePath(normalizedPath)) {
-    return false;
-  }
-
-  if (rootPath) {
-    const projectRoot = getProjectSectionRoot(rootPath);
-    return Boolean(projectRoot && isUnder(normalizedPath, projectRoot));
-  }
-
-  return /\/Projects\/.+\/README\.(md|markdown)$/i.test(normalizedPath);
+  return extractProjectPathFromReadme(path, rootPath) !== null;
 }
 
 export function isProjectActionPath(
@@ -249,7 +262,7 @@ export function classifySidebarPath(
     return {
       kind: 'project-readme',
       normalizedPath,
-      projectPath: extractProjectPathFromReadme(normalizedPath) ?? undefined,
+      projectPath: extractProjectPathFromReadme(normalizedPath, rootPath) ?? undefined,
     };
   }
 

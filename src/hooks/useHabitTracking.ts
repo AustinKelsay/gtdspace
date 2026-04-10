@@ -7,6 +7,7 @@
 import { useCallback } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { emitMetadataChange } from '@/utils/content-event-bus';
+import { norm } from '@/utils/path';
 import { useErrorHandler } from './useErrorHandler';
 import { useToast } from './useToast';
 
@@ -36,10 +37,10 @@ export function useHabitTracking() {
       );
 
       if (result === true) {
-        const normalizedPath = habitPath.replace(/\\/g, '/');
+        const normalizedPath = norm(habitPath) ?? habitPath;
         const fileName = normalizedPath.split('/').pop() || '';
         emitMetadataChange({
-          filePath: habitPath,
+          filePath: normalizedPath,
           fileName,
           content: '',
           metadata: { habitStatus: newStatus },
@@ -48,7 +49,7 @@ export function useHabitTracking() {
         window.dispatchEvent(
           new CustomEvent('habit-status-updated', {
             detail: {
-              filePath: habitPath,
+              filePath: normalizedPath,
               fileName,
               habitStatus: newStatus,
             },
@@ -57,7 +58,7 @@ export function useHabitTracking() {
         window.dispatchEvent(
           new CustomEvent('habit-content-changed', {
             detail: {
-              filePath: habitPath,
+              filePath: normalizedPath,
               fileName,
               habitStatus: newStatus,
             },

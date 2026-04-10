@@ -32,6 +32,7 @@ vi.mock('@/hooks/useFileManager', () => ({
 const rootPath = '/tmp/gtd-space';
 const projectPath = `${rootPath}/Projects/Project Alpha`;
 const actionPath = `${projectPath}/Write spec.md`;
+const nestedActionPath = `${projectPath}/Docs/Write spec.md`;
 const sectionFilePath = `${rootPath}/Habits/Morning Run.md`;
 
 const gtdSpace: GTDSpace = {
@@ -378,5 +379,51 @@ describe('sidebar event bridge', () => {
     });
 
     fileDeleted.dispose();
+  });
+
+  it('reloads deleted actions against the project root path', async () => {
+    safeInvokeMock.mockImplementation(
+      async (
+        command: string,
+        args?: { path?: string; projectPath?: string },
+        fallback?: unknown
+      ) => {
+        if (command === 'delete_file') {
+          return { success: true, path: nestedActionPath };
+        }
+        if (command === 'list_project_actions') {
+          return [];
+        }
+        if (command === 'list_markdown_files') {
+          return [];
+        }
+        if (command === 'check_directory_exists') {
+          return true;
+        }
+        return args?.path ?? fallback ?? null;
+      }
+    );
+
+    render(<SidebarHookHarness />);
+
+    await act(async () => {
+      latestSidebar?.setDeleteItem({
+        type: 'action',
+        path: nestedActionPath,
+        name: 'Write spec',
+      });
+    });
+
+    await act(async () => {
+      await latestSidebar?.handleDelete();
+    });
+
+    await waitFor(() => {
+      expect(safeInvokeMock).toHaveBeenCalledWith(
+        'list_project_actions',
+        { projectPath },
+        null
+      );
+    });
   });
 });

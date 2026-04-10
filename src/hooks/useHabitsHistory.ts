@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { localISODate, toISOStringFromEpoch } from '@/utils/time';
 import type { GTDHabit, MarkdownFile } from '@/types';
 import { createScopedLogger } from '@/utils/logger';
@@ -231,7 +232,8 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
     historyDays = 90,
     includeInactive = true
   } = options;
-  
+  const { withErrorHandling } = useErrorHandler();
+
   const [habits, setHabits] = useState<HabitWithHistory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -381,10 +383,15 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
   ) => {
     try {
       const nextStatus = completed ? 'completed' : 'todo';
-      const updated = await safeInvoke<boolean>(
-        'update_habit_status',
-        { habitPath, newStatus: nextStatus },
-        null
+      const updated = await withErrorHandling(
+        async () =>
+          safeInvoke<boolean>(
+            'update_habit_status',
+            { habitPath, newStatus: nextStatus },
+            null
+          ),
+        'Failed to update habit status',
+        'habit'
       );
       if (updated === null) {
         habitsLog.error('[updateHabitStatus] Failed to update habit status');
@@ -427,7 +434,7 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
       habitsLog.error('Failed to update habit status', err);
       throw err;
     }
-  }, [refresh]);
+  }, [refresh, withErrorHandling]);
 
   const today = localISODate(new Date());
   

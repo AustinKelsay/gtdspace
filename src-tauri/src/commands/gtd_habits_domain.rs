@@ -276,6 +276,17 @@ fn parse_history_record_from_legacy_list(line: &str) -> Option<HistoryRecord> {
     Some(HistoryRecord { timestamp, action })
 }
 
+fn convert_list_to_table_row(list_entry: &str) -> Option<String> {
+    let captures = LIST_TO_TABLE_REGEX.captures(list_entry)?;
+    let escaped_status = escape_history_cell(captures[3].trim());
+    let escaped_action = escape_history_cell(captures[4].trim());
+    let escaped_details = escape_history_cell(captures[5].trim());
+    Some(format!(
+        "| {} | {} | {} | {} | {} |",
+        &captures[1], &captures[2], escaped_status, escaped_action, escaped_details
+    ))
+}
+
 fn is_history_table_row_line(line: &str) -> bool {
     let trimmed = line.trim_start();
     trimmed.starts_with('|') && trimmed.matches('|').count() >= 2
@@ -473,6 +484,89 @@ fn rebuild_history_table_line(cells: &[String]) -> String {
     format!("| {} |", cells.join(" | "))
 }
 
+fn migrate_legacy_history_list_rows_in_content(content: &str) -> (String, bool) {
+    let lines: Vec<&str> = content.lines().collect();
+    let Some(history_index) = lines.iter().position(|line| is_history_heading_line(line)) else {
+        return (content.to_string(), false);
+    };
+
+    let history_end = lines
+        .iter()
+        .enumerate()
+        .skip(history_index + 1)
+        .find_map(|(idx, line)| {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() && trimmed.starts_with('#') {
+                Some(idx)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(lines.len());
+
+    let history_lines = &lines[history_index + 1..history_end];
+    let has_legacy_rows = history_lines
+        .iter()
+        .any(|line| convert_list_to_table_row(line).is_some());
+    if !has_legacy_rows {
+        return (content.to_string(), false);
+    }
+
+    let has_table_header = history_lines.iter().any(|line| {
+        let trimmed = line.trim_start();
+        trimmed.contains("| Date") && trimmed.contains("| Time")
+    });
+    let has_tracking_note = history_lines.iter().any(|line| {
+        let trimmed = line.trim_start();
+        trimmed.starts_with("*Track your habit completions")
+            || trimmed.starts_with("*Track your habit")
+    });
+
+    let mut new_lines: Vec<String> = lines[..=history_index]
+        .iter()
+        .map(|line| (*line).to_string())
+        .collect();
+
+    if !has_table_header {
+        new_lines.push(String::new());
+        if !has_tracking_note {
+            new_lines.push("*Track your habit completions below:*".to_string());
+            new_lines.push(String::new());
+        }
+        new_lines.push("| Date | Time | Status | Action | Details |".to_string());
+        new_lines.push("|------|------|--------|--------|---------|".to_string());
+    }
+
+    for line in history_lines {
+        let trimmed = line.trim();
+        if !has_table_header
+            && (trimmed.is_empty()
+                || trimmed.starts_with("*Track your habit completions")
+                || trimmed.starts_with("*Track your habit"))
+        {
+            continue;
+        }
+
+        if let Some(table_row) = convert_list_to_table_row(line) {
+            new_lines.push(table_row);
+        } else {
+            new_lines.push((*line).to_string());
+        }
+    }
+
+    if history_end < lines.len() {
+        new_lines.extend(lines[history_end..].iter().map(|line| (*line).to_string()));
+    }
+
+    let mut migrated = new_lines.join("\n");
+    if content.ends_with('\n') {
+        migrated.push('\n');
+    }
+
+    let changed = migrated != content;
+    (migrated, changed)
+}
+
 fn normalize_reset_rows_in_content(content: &str) -> (String, bool) {
     let mut in_history_section = false;
     let mut changed = false;
@@ -550,9 +644,12 @@ pub(crate) fn apply_status_marker(
 
 pub(crate) fn repair_habit_history_content(content: &str) -> Result<Option<String>, String> {
     let parsed = parse_habit_state(content)?;
-    parse_history_rows_strict(content)?;
+    let (migrated_content, migrated_legacy_rows) =
+        migrate_legacy_history_list_rows_in_content(content);
+    parse_history_rows_strict(&migrated_content)?;
 
-    let (normalized_content, normalized_reset_rows) = normalize_reset_rows_in_content(content);
+    let (normalized_content, normalized_reset_rows) =
+        normalize_reset_rows_in_content(&migrated_content);
     let normalized_rows = parse_history_rows_strict(&normalized_content)?;
     let effective_status = derive_latest_history_status(&normalized_rows, parsed.status);
 
@@ -562,7 +659,7 @@ pub(crate) fn repair_habit_history_content(content: &str) -> Result<Option<Strin
         normalized_content
     };
 
-    if normalized_reset_rows || final_content != content {
+    if migrated_legacy_rows || normalized_reset_rows || final_content != content {
         Ok(Some(final_content))
     } else {
         Ok(None)
@@ -611,17 +708,6 @@ pub(crate) fn insert_history_entry(content: &str, entry: &str) -> Result<String,
                 }
             }
         }
-    }
-
-    fn convert_list_to_table_row(list_entry: &str) -> Option<String> {
-        let captures = LIST_TO_TABLE_REGEX.captures(list_entry)?;
-        let escaped_status = escape_history_cell(captures[3].trim());
-        let escaped_action = escape_history_cell(captures[4].trim());
-        let escaped_details = escape_history_cell(captures[5].trim());
-        Some(format!(
-            "| {} | {} | {} | {} | {} |",
-            &captures[1], &captures[2], escaped_status, escaped_action, escaped_details
-        ))
     }
 
     let result = if has_old_list_format && !has_table_header {
@@ -1121,6 +1207,30 @@ Still here
 
         assert!(repaired.contains("[!checkbox:habit-status:true]"));
         assert!(repaired.contains("| 2026-03-03 | 7:30 PM | Complete | Manual | Done |"));
+    }
+
+    #[test]
+    fn repair_habit_history_content_migrates_legacy_list_rows_before_strict_parse() {
+        let content = r#"# Habit
+
+## Status
+[!checkbox:habit-status:false]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-01T09:00:00Z]
+
+## History
+- **2026-03-03** at **7:30 PM**: Complete (Manual - Done)
+"#;
+
+        let repaired = repair_habit_history_content(content).unwrap().unwrap();
+
+        assert!(repaired.contains(DEFAULT_HISTORY_TEMPLATE));
+        assert!(repaired.contains("| 2026-03-03 | 7:30 PM | Complete | Manual | Done |"));
+        assert!(repaired.contains("[!checkbox:habit-status:true]"));
     }
 
     #[test]

@@ -56,6 +56,9 @@ jobs:
       - name: Run tests
         run: npm run test:run --if-present
 
+      - name: Run release E2E tests
+        run: npm run test:release:e2e
+
       - name: Lint
         run: npm run lint
 

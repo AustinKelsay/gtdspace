@@ -18,6 +18,30 @@ function writeFile(filePath, content) {
   fs.writeFileSync(filePath, content, 'utf8');
 }
 
+function syncCargoLockVersion(lockPath, packageName, newVersion) {
+  if (!fs.existsSync(lockPath)) {
+    return false;
+  }
+
+  const lockContent = readFile(lockPath);
+  const packageBlockRegex = new RegExp(
+    `(\\[\\[package\\]\\]\\nname = "${packageName}"\\nversion = ")[^"]+(")`,
+    'm'
+  );
+
+  if (!packageBlockRegex.test(lockContent)) {
+    return false;
+  }
+
+  const updatedLockContent = lockContent.replace(packageBlockRegex, `$1${newVersion}$2`);
+  if (updatedLockContent === lockContent) {
+    return false;
+  }
+
+  writeFile(lockPath, updatedLockContent);
+  return true;
+}
+
 export function bumpVersion(currentVersion, type) {
   const sanitize = (v) => String(v).trim().replace(/^v/i, '');
   const base = (v) => sanitize(v).replace(/[+-].*$/, ''); // strip prerelease/build for bump math
@@ -114,6 +138,24 @@ function main() {
   writeFile(tauriConfPath, JSON.stringify(tauriConf, null, 2) + '\n');
   console.log(`✓ Updated src-tauri/tauri.conf.json to version ${newVersion}`);
 
+  const syncedRootCargoLock = syncCargoLockVersion(
+    path.join(repoRoot, 'src-tauri', 'Cargo.lock'),
+    'gtdspace',
+    newVersion
+  );
+  if (syncedRootCargoLock) {
+    console.log(`✓ Updated src-tauri/Cargo.lock to version ${newVersion}`);
+  }
+
+  const syncedMcpCargoLock = syncCargoLockVersion(
+    path.join(repoRoot, 'src-tauri', 'mcp-server', 'Cargo.lock'),
+    'gtdspace',
+    newVersion
+  );
+  if (syncedMcpCargoLock) {
+    console.log(`✓ Updated src-tauri/mcp-server/Cargo.lock to version ${newVersion}`);
+  }
+
   const commitMessage = `chore: bump version to v${newVersion}`;
   const tagName = `v${newVersion}`;
 
@@ -132,6 +174,8 @@ function main() {
       'package.json',
       'src-tauri/Cargo.toml',
       'src-tauri/tauri.conf.json',
+      'src-tauri/Cargo.lock',
+      'src-tauri/mcp-server/Cargo.lock',
     ];
 
     if (fs.existsSync(path.join(repoRoot, 'package-lock.json'))) {
@@ -180,7 +224,7 @@ function main() {
   } catch (error) {
     console.error('Failed to create git commit/tag:', error.message);
     console.log('\nYou can manually commit and tag the changes:');
-    console.log(`  git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/tauri.conf.json`);
+    console.log(`  git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/tauri.conf.json src-tauri/Cargo.lock src-tauri/mcp-server/Cargo.lock`);
     console.log(`  git commit -m "${commitMessage}"`);
     console.log(`  git tag -a ${tagName} -m "Release ${tagName}"`);
   }

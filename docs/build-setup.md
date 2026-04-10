@@ -42,6 +42,7 @@ Before building a release candidate, run:
 - `npm run lint`
 - `npm run type-check`
 - `npm run test:run`
+- `npm run test:release:e2e`
 - `npm run tauri:dev` for a quick manual smoke test when UI behavior changed
 
 ## Related Docs

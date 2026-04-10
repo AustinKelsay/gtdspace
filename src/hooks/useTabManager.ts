@@ -16,6 +16,13 @@ import type {
 } from '@/types';
 import { extractMetadata, getMetadataChanges } from '@/utils/metadata-extractor';
 import { emitContentChange, emitMetadataChange } from '@/utils/content-event-bus';
+import { buildHabitMarkdown } from '@/utils/gtd-markdown-helpers';
+import {
+  normalizeForCanonicalComparison,
+  parseHabitContent,
+  reconstructHabitHistory,
+  type HabitHistoryRow,
+} from '@/utils/gtd-habit-markdown';
 import { createScopedLogger } from '@/utils/logger';
 import { norm } from '@/utils/path';
 import { CALENDAR_FILE_ID } from '@/utils/special-files';
@@ -45,6 +52,101 @@ type MetadataProcessingEntry = {
   initialBaseline: string;
   debounced: ReturnType<typeof debounce>;
 };
+
+function isHabitMarkdownFile(filePath: string, content: string): boolean {
+  const normalizedPath = (norm(filePath) ?? filePath).replace(/\\/g, '/').toLowerCase();
+  return (
+    normalizedPath.includes('/habits/') ||
+    /\[!checkbox:habit-status:/i.test(content) ||
+    /\[!singleselect:habit-frequency:/i.test(content)
+  );
+}
+
+function buildHistoryRowKey(row: HabitHistoryRow): string {
+  return JSON.stringify([
+    row.date,
+    row.time,
+    row.status,
+    row.action,
+    row.details,
+    row.extraCells ?? [],
+  ]);
+}
+
+function mergeHabitHistorySections(
+  originalContent: string,
+  currentContent: string,
+  externalContent: string
+): string {
+  const original = parseHabitContent(originalContent);
+  const local = parseHabitContent(currentContent);
+  const external = parseHabitContent(externalContent);
+
+  const normalizedOriginal = normalizeForCanonicalComparison(original.history);
+  const normalizedLocal = normalizeForCanonicalComparison(local.history);
+  const normalizedExternal = normalizeForCanonicalComparison(external.history);
+
+  if (normalizedLocal === normalizedOriginal) {
+    return external.history;
+  }
+
+  if (normalizedExternal === normalizedOriginal) {
+    return local.history;
+  }
+
+  if (normalizedLocal === normalizedExternal) {
+    return external.history;
+  }
+
+  const mergedRows = [...external.historyRows];
+  const seenRows = new Set(mergedRows.map(buildHistoryRowKey));
+
+  for (const row of local.historyRows) {
+    const key = buildHistoryRowKey(row);
+    if (!seenRows.has(key)) {
+      mergedRows.push(row);
+      seenRows.add(key);
+    }
+  }
+
+  return reconstructHabitHistory(
+    external.historyIntro.length > 0 ? external.historyIntro : local.historyIntro,
+    external.historyHeader.length > 0 ? external.historyHeader : local.historyHeader,
+    mergedRows,
+    external.historyOutro.length > 0 ? external.historyOutro : local.historyOutro
+  );
+}
+
+function mergeHabitExternalContent(
+  originalContent: string,
+  currentContent: string,
+  externalContent: string
+): string {
+  try {
+    const local = parseHabitContent(currentContent);
+    const external = parseHabitContent(externalContent);
+
+    const merged = buildHabitMarkdown({
+      title: local.title,
+      status: external.status,
+      frequency: local.frequency,
+      focusDateTime: local.focusDateTime || external.focusDateTime,
+      references: local.references,
+      generalReferences: local.generalReferences,
+      createdDateTime: external.createdDateTime || local.createdDateTime,
+      notes: local.notes,
+      history: mergeHabitHistorySections(originalContent, currentContent, externalContent),
+    });
+
+    return normalizeForCanonicalComparison(merged) ===
+      normalizeForCanonicalComparison(externalContent)
+      ? externalContent
+      : merged;
+  } catch (error) {
+    log.warn('Failed to merge external habit content, falling back to disk version', error);
+    return externalContent;
+  }
+}
 
 function sanitizeMaxTabs(maxTabs?: number | null): number {
   return typeof maxTabs === 'number' && maxTabs > 0 ? maxTabs : DEFAULT_MAX_TABS;
@@ -406,6 +508,48 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
       log.error('Failed to reload tab from disk', error);
       return false;
     }
+  }, [cleanupTabResources, findTabById]);
+
+  const syncTabWithExternalContent = useCallback((
+    tabId: string,
+    externalContent: string
+  ): boolean => {
+    const currentTab = findTabById(tabId);
+    if (!currentTab || currentTab.file.path === CALENDAR_FILE_ID) {
+      return false;
+    }
+
+    const currentContent = pendingContentRef.current.get(tabId) ?? currentTab.content ?? '';
+    const originalContent = currentTab.originalContent ?? currentTab.content ?? '';
+    const isDirty =
+      normalizeForCanonicalComparison(currentContent) !==
+      normalizeForCanonicalComparison(originalContent);
+
+    let nextContent = externalContent;
+    if (isDirty) {
+      if (!isHabitMarkdownFile(currentTab.file.path, currentContent)) {
+        return false;
+      }
+
+      nextContent = mergeHabitExternalContent(
+        originalContent,
+        currentContent,
+        externalContent
+      );
+    }
+
+    cleanupTabResources(tabId);
+    dispatch({
+      type: 'replace-tab-content',
+      tabId,
+      content: nextContent,
+      originalContent: externalContent,
+      hasUnsavedChanges:
+        normalizeForCanonicalComparison(nextContent) !==
+        normalizeForCanonicalComparison(externalContent),
+    });
+
+    return true;
   }, [cleanupTabResources, findTabById]);
 
   const resolveConflict = useCallback(
@@ -780,6 +924,7 @@ export const useTabManager = (config: TabManagerConfig = {}) => {
     getExternalContent,
     resolveConflict,
     reloadTabFromDisk,
+    syncTabWithExternalContent,
     findTabByFile,
     clearPersistedTabs: clearPersistedTabStorage,
   };

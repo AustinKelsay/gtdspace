@@ -76,6 +76,18 @@ function resolveTestCommand(packageJson) {
   return '';
 }
 
+function resolveReleaseE2ECommand(packageJson) {
+  if (!packageJson.scripts) {
+    return '';
+  }
+
+  if (packageJson.scripts['test:release:e2e']) {
+    return 'npm run test:release:e2e';
+  }
+
+  return '';
+}
+
 async function main() {
   // Parse command line arguments
   const rawArgs = process.argv.slice(2);
@@ -216,6 +228,17 @@ async function main() {
       exitWithError(
         "No 'test' script found. In non-interactive environments, a release requires tests. Add tests and a 'test' script, or re-run with the '--no-tests' flag to bypass explicitly."
       );
+    }
+  }
+
+  const releaseE2ECommand = resolveReleaseE2ECommand(packageJson);
+  if (releaseE2ECommand) {
+    log('\n🧭 Running release E2E suite...', 'yellow');
+    try {
+      execCommand(releaseE2ECommand);
+      log('✓ Release E2E suite passed', 'green');
+    } catch (error) {
+      exitWithError('Release E2E suite failed. Please fix all failing release-path tests before releasing');
     }
   }
 

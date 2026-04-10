@@ -3,6 +3,7 @@ import type { GTDProject } from '@/types';
 import type {
   SidebarDataState,
   SidebarOverlayState,
+  SidebarProjectActionLoadOptions,
 } from '@/hooks/sidebar/types';
 import { normalizeSidebarPath } from '@/hooks/sidebar/path-classification';
 import { norm } from '@/utils/path';
@@ -21,7 +22,10 @@ type UseSidebarWorkspaceLifecycleArgs = {
   projects: GTDProject[] | null | undefined;
   checkGTDSpace: (path: string) => Promise<boolean>;
   loadProjects: (path: string) => Promise<GTDProject[]>;
-  loadProjectActions: (projectPath: string) => Promise<void>;
+  loadProjectActions: (
+    projectPath: string,
+    options?: SidebarProjectActionLoadOptions
+  ) => Promise<void>;
   resolveSectionLoadPaths: (
     sectionIds: readonly string[],
     root: string

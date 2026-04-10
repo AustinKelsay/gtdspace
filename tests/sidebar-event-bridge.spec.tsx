@@ -4,7 +4,7 @@ import { act, render, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { emitContentSaved, emitMetadataChange } from '@/utils/content-event-bus';
 import { useGTDWorkspaceSidebar } from '@/hooks/useGTDWorkspaceSidebar';
-import type { GTDProject, GTDSpace } from '@/types';
+import type { GTDProject, GTDSpace, MarkdownFile } from '@/types';
 
 const safeInvokeMock = vi.fn();
 const readFileTextMock = vi.fn();
@@ -424,6 +424,83 @@ describe('sidebar event bridge', () => {
         { projectPath },
         null
       );
+    });
+  });
+
+  it('forces deleted action reloads past an in-flight project load', async () => {
+    let resolveFirstLoad: ((value: MarkdownFile[]) => void) | null = null;
+    let projectActionLoads = 0;
+
+    safeInvokeMock.mockImplementation(
+      async (
+        command: string,
+        args?: { path?: string; projectPath?: string },
+        fallback?: unknown
+      ) => {
+        if (command === 'delete_file') {
+          return { success: true, path: actionPath };
+        }
+        if (command === 'list_project_actions') {
+          projectActionLoads += 1;
+          if (projectActionLoads === 1) {
+            return new Promise<MarkdownFile[]>((resolve) => {
+              resolveFirstLoad = resolve;
+            });
+          }
+          return [];
+        }
+        if (command === 'list_markdown_files') {
+          return [];
+        }
+        if (command === 'check_directory_exists') {
+          return true;
+        }
+        return args?.path ?? fallback ?? null;
+      }
+    );
+
+    render(<SidebarHookHarness />);
+
+    let initialLoadPromise: Promise<void> | undefined;
+    await act(async () => {
+      initialLoadPromise = latestSidebar?.loadProjectActions(projectPath);
+    });
+
+    await waitFor(() => {
+      expect(projectActionLoads).toBe(1);
+      expect(latestSidebar?.projectLoading[projectPath]).toBe(true);
+    });
+
+    await act(async () => {
+      latestSidebar?.setDeleteItem({
+        type: 'action',
+        path: actionPath,
+        name: 'Write spec',
+      });
+    });
+
+    await act(async () => {
+      await latestSidebar?.handleDelete();
+    });
+
+    await waitFor(() => {
+      expect(projectActionLoads).toBe(2);
+    });
+
+    await act(async () => {
+      resolveFirstLoad?.([
+        {
+          name: 'Write spec.md',
+          path: actionPath,
+          last_modified: 1,
+        } as MarkdownFile,
+      ]);
+      await initialLoadPromise;
+    });
+
+    await waitFor(() => {
+      expect(latestSidebar?.projectActions[projectPath]).toEqual([]);
+      expect(latestSidebar?.projectLoading[projectPath]).toBeUndefined();
     });
   });
 });

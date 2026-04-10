@@ -658,15 +658,55 @@ pub(crate) fn apply_status_marker(
     }
 }
 
+fn history_section_has_plain_prose_lines(content: &str) -> bool {
+    let Some(history_index) = content.lines().position(is_history_heading_line) else {
+        return false;
+    };
+
+    for line in content.lines().skip(history_index + 1) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.starts_with('#') {
+            break;
+        }
+        if trimmed.starts_with("*Track your habit completions")
+            || trimmed.starts_with("*Track your habit")
+        {
+            continue;
+        }
+        if trimmed.starts_with('|') || convert_list_to_table_row(line).is_some() {
+            continue;
+        }
+
+        return true;
+    }
+
+    false
+}
+
 pub(crate) fn repair_habit_history_content(content: &str) -> Result<Option<String>, String> {
     let parsed = parse_habit_state(content)?;
     let (migrated_content, migrated_legacy_rows) =
         migrate_legacy_history_list_rows_in_content(content);
-    parse_history_rows_strict(&migrated_content)?;
+    if !history_section_has_plain_prose_lines(&migrated_content) {
+        parse_history_rows_strict(&migrated_content)?;
+    }
 
     let (normalized_content, normalized_reset_rows) =
         normalize_reset_rows_in_content(&migrated_content);
-    let normalized_rows = parse_history_rows_strict(&normalized_content)?;
+    let normalized_rows = match parse_history_rows_strict(&normalized_content) {
+        Ok(rows) => rows,
+        Err(error) if history_section_has_plain_prose_lines(&normalized_content) => {
+            let rows = parse_history_rows(&normalized_content);
+            if rows.is_empty() {
+                return Err(error);
+            }
+            rows
+        }
+        Err(error) => return Err(error),
+    };
     let effective_status = derive_latest_history_status(&normalized_rows, parsed.status);
 
     let final_content = if effective_status != parsed.status {
@@ -1247,6 +1287,35 @@ Still here
         assert!(repaired.contains(DEFAULT_HISTORY_TEMPLATE));
         assert!(repaired.contains("| 2026-03-03 | 7:30 PM | Complete | Manual | Done |"));
         assert!(repaired.contains("[!checkbox:habit-status:true]"));
+    }
+
+    #[test]
+    fn repair_habit_history_content_preserves_plain_legacy_history_lines() {
+        let content = r#"# Habit
+
+## Status
+[!checkbox:habit-status:true]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-01T09:00:00Z]
+
+## History
+
+Reminder: keep this note with the migrated history.
+- **2026-03-01** at **7:30 AM**: Complete (Manual - Done)
+
+## Notes
+Still here
+"#;
+
+        let repaired = repair_habit_history_content(content).unwrap().unwrap();
+
+        assert!(repaired.contains("Reminder: keep this note with the migrated history."));
+        assert!(repaired.contains("| 2026-03-01 | 7:30 AM | Complete | Manual | Done |"));
+        assert!(repaired.contains("## Notes\nStill here"));
     }
 
     #[test]

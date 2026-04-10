@@ -30,6 +30,7 @@ import {
 import { useSidebarOverlays } from '@/hooks/sidebar/useSidebarOverlays';
 import { useSidebarUiState } from '@/hooks/sidebar/useSidebarUiState';
 import { useSidebarWorkspaceLifecycle } from '@/hooks/sidebar/useSidebarWorkspaceLifecycle';
+import type { SidebarProjectActionLoadOptions } from '@/hooks/sidebar/types';
 import type { GTDProject, GTDSpace, MarkdownFile } from '@/types';
 import { norm } from '@/utils/path';
 
@@ -78,7 +79,10 @@ type UseGTDWorkspaceSidebarResult = {
   cancelledProjects: GTDProject[];
   isPathActive: (candidatePath?: string | null) => boolean;
   loadSectionFiles: (sectionPath: string, force?: boolean) => Promise<MarkdownFile[]>;
-  loadProjectActions: (projectPath: string) => Promise<void>;
+  loadProjectActions: (
+    projectPath: string,
+    options?: SidebarProjectActionLoadOptions
+  ) => Promise<void>;
   handleProjectClick: (project: GTDProject) => Promise<void>;
   openHorizonReadme: (folderPath: string) => void;
   handleCreatePage: (sectionId: string) => void;
@@ -448,7 +452,7 @@ export function useGTDWorkspaceSidebar({
                     (norm(action.path) ?? action.path) !== normalizedDeletePath
                 ) || [],
             }));
-            await loadProjectActions(projectPath);
+            await loadProjectActions(projectPath, { force: true });
           } else {
             overlays.removeSectionFileOverlay(normalizedDeletePath);
             const sectionPath = normalizedDeletePath.substring(

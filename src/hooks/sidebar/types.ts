@@ -115,6 +115,10 @@ export type SidebarPathMatch = {
 
 export type SidebarWithErrorHandling = UseErrorHandlerReturn['withErrorHandling'];
 
+export interface SidebarProjectActionLoadOptions {
+  force?: boolean;
+}
+
 export type SidebarLoaderDeps = {
   rootPath: string | null;
   withErrorHandling: SidebarWithErrorHandling;
@@ -128,7 +132,10 @@ export type SidebarEventBridgeDeps = {
   rootPath: string | null;
   withErrorHandling: SidebarWithErrorHandling;
   loadProjects: (path: string) => Promise<GTDProject[]>;
-  loadProjectActions: (projectPath: string) => Promise<void>;
+  loadProjectActions: (
+    projectPath: string,
+    options?: SidebarProjectActionLoadOptions
+  ) => Promise<void>;
   loadSectionFiles: (sectionPath: string, force?: boolean) => Promise<MarkdownFile[]>;
   overlays: Pick<
     SidebarOverlayState,

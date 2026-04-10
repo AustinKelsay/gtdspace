@@ -9,7 +9,11 @@ import {
 import { parseActionMarkdown } from '@/utils/gtd-action-markdown';
 import { GTD_SECTIONS, HORIZON_FOLDER_TO_TYPE } from '@/components/gtd/sidebar/constants';
 import { getFolderName, sortMarkdownFiles } from '@/components/gtd/sidebar/utils';
-import type { SidebarLoaderDeps, SidebarDataState } from '@/hooks/sidebar/types';
+import type {
+  SidebarLoaderDeps,
+  SidebarDataState,
+  SidebarProjectActionLoadOptions,
+} from '@/hooks/sidebar/types';
 import {
   buildSectionPathCandidates,
   inferSectionContextFromPath,
@@ -25,7 +29,10 @@ interface UseSidebarDataLoadersResult extends SidebarDataState {
     root: string
   ) => Promise<string[]>;
   loadSectionFiles: (sectionPath: string, force?: boolean) => Promise<MarkdownFile[]>;
-  loadProjectActions: (projectPath: string) => Promise<void>;
+  loadProjectActions: (
+    projectPath: string,
+    options?: SidebarProjectActionLoadOptions
+  ) => Promise<void>;
 }
 
 export function useSidebarDataLoaders({
@@ -53,6 +60,7 @@ export function useSidebarDataLoaders({
   const sectionFilesRef = React.useRef<Record<string, MarkdownFile[]>>({});
   const projectActionsRef = React.useRef<Record<string, MarkdownFile[]>>({});
   const projectLoadingRef = React.useRef<Record<string, boolean>>({});
+  const projectLoadVersionsRef = React.useRef<Record<string, number>>({});
   const loadingSectionsRef = React.useRef<Set<string>>(new Set());
   const lastRootRef = React.useRef<string | null>(null);
   const projectsHydratedRef = React.useRef(false);
@@ -79,6 +87,7 @@ export function useSidebarDataLoaders({
     projectActionsRef.current = {};
     setProjectLoading({});
     projectLoadingRef.current = {};
+    projectLoadVersionsRef.current = {};
     setLoadingSections(new Set());
     loadingSectionsRef.current = new Set();
     setPendingProjects([]);
@@ -357,13 +366,24 @@ export function useSidebarDataLoaders({
   );
 
   const loadProjectActions = React.useCallback(
-    async (projectPath: string) => {
+    async (
+      projectPath: string,
+      options: SidebarProjectActionLoadOptions = {}
+    ) => {
       const generationAtStart = workspaceGenerationRef.current;
+      const forceReload = options.force ?? false;
       const normalizedKey =
         normalizeSidebarPath(projectPath) ?? projectPath.replace(/\\/g, '/');
-      if (projectLoadingRef.current[normalizedKey]) {
+      if (!forceReload && projectLoadingRef.current[normalizedKey]) {
         return;
       }
+
+      const requestVersion =
+        (projectLoadVersionsRef.current[normalizedKey] ?? 0) + 1;
+      projectLoadVersionsRef.current = {
+        ...projectLoadVersionsRef.current,
+        [normalizedKey]: requestVersion,
+      };
 
       projectLoadingRef.current = {
         ...projectLoadingRef.current,
@@ -398,7 +418,10 @@ export function useSidebarDataLoaders({
           files = (all ?? []).filter((file) => !/^README\.(md|markdown)$/i.test(file.name));
         }
 
-        if (workspaceGenerationRef.current !== generationAtStart) {
+        if (
+          workspaceGenerationRef.current !== generationAtStart ||
+          projectLoadVersionsRef.current[normalizedKey] !== requestVersion
+        ) {
           return;
         }
 
@@ -432,7 +455,10 @@ export function useSidebarDataLoaders({
           })
         );
 
-        if (workspaceGenerationRef.current !== generationAtStart) {
+        if (
+          workspaceGenerationRef.current !== generationAtStart ||
+          projectLoadVersionsRef.current[normalizedKey] !== requestVersion
+        ) {
           return;
         }
 
@@ -473,7 +499,10 @@ export function useSidebarDataLoaders({
       } catch {
         // Keep existing project action state when a refresh fails.
       } finally {
-        if (workspaceGenerationRef.current === generationAtStart) {
+        if (
+          workspaceGenerationRef.current === generationAtStart &&
+          projectLoadVersionsRef.current[normalizedKey] === requestVersion
+        ) {
           projectLoadingRef.current = Object.fromEntries(
             Object.entries(projectLoadingRef.current).filter(([path]) => path !== normalizedKey)
           );

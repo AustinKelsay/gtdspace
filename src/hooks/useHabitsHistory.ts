@@ -72,7 +72,10 @@ interface UseHabitsHistoryReturn {
     mostConsistent?: HabitWithHistory;
   };
   loadHabits: (spacePath: string) => Promise<void>;
-  updateHabitStatus: (habitPath: string, completed: boolean) => Promise<void>;
+  updateHabitStatus: (
+    habitPath: string,
+    next: 'completed' | 'todo'
+  ) => Promise<boolean | null>;
   refresh: () => Promise<void>;
 }
 
@@ -280,7 +283,14 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
       const loadedHabits = await Promise.all(
         habitFiles.map(async (file) => {
           try {
-            const content = await safeInvoke<string>('read_file', { path: file.path }, '');
+            const content = await withErrorHandling(
+              () => safeInvoke<string>('read_file', { path: file.path }, ''),
+              'Failed to read habit file',
+              'habit'
+            );
+            if (content === null) {
+              return null;
+            }
             const parsedHabit = parseHabitContent(content);
             const periodHistory = toHabitPeriodHistory(parsedHabit.historyRows);
             const history = toAnalyticsHistory(parsedHabit.historyRows);
@@ -370,7 +380,7 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
     } finally {
       setIsLoading(false);
     }
-  }, [historyDays, includeInactive]);
+  }, [historyDays, includeInactive, withErrorHandling]);
   
   const refresh = useCallback(async () => {
     if (cachedSpacePath) {
@@ -380,15 +390,16 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
   
   const updateHabitStatus = useCallback(async (
     habitPath: string,
-    completed: boolean
-  ) => {
+    next: 'completed' | 'todo'
+  ): Promise<boolean | null> => {
     try {
-      const nextStatus = completed ? 'completed' : 'todo';
+      const normalizedPath = norm(habitPath) ?? habitPath;
+      const nextStatus = next === 'completed' ? 'completed' : 'todo';
       const updated = await withErrorHandling(
         async () =>
           safeInvoke<boolean>(
             'update_habit_status',
-            { habitPath, newStatus: nextStatus },
+            { habitPath: normalizedPath, newStatus: nextStatus },
             null
           ),
         'Failed to update habit status',
@@ -396,11 +407,10 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
       );
       if (updated === null) {
         habitsLog.error('[updateHabitStatus] Failed to update habit status');
-        throw new Error('Failed to save habit changes');
+        return null;
       }
 
       if (updated) {
-        const normalizedPath = norm(habitPath) ?? habitPath;
         const fileName = normalizedPath.split('/').pop() || '';
         emitMetadataChange({
           filePath: normalizedPath,
@@ -431,9 +441,10 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
 
       // Reload to get updated analytics
       await refresh();
+      return updated;
     } catch (err) {
       habitsLog.error('Failed to update habit status', err);
-      throw err;
+      return null;
     }
   }, [refresh, withErrorHandling]);
 

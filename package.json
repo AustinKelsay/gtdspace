@@ -1,7 +1,7 @@
 {
   "name": "gtdspace",
   "private": true,
-  "version": "2.5.1",
+  "version": "2.6.0",
   "description": "GTD-first productivity system with integrated markdown editing",
   "type": "module",
   "engines": {

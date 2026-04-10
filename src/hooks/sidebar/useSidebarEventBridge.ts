@@ -178,20 +178,30 @@ export function useSidebarEventBridge({
                   path === pathMatch.projectPath ? normalizedNewProjectPath : path
                 )
               );
-              setProjectActions((prev) =>
-                prev[pathMatch.projectPath]
-                  ? {
-                      ...prev,
-                    }
-                  : prev
-              );
+              setProjectActions((prev) => {
+                if (!prev[pathMatch.projectPath]) {
+                  return prev;
+                }
+
+                const {
+                  [pathMatch.projectPath]: existingActions,
+                  ...rest
+                } = prev;
+
+                return {
+                  ...rest,
+                  [normalizedNewProjectPath]: existingActions,
+                };
+              });
 
               if (rootPath) {
                 await loadProjects(rootPath);
                 removeProjectOverlay(pathMatch.projectPath);
                 setProjectActions((prev) => {
                   const next = { ...prev };
-                  delete next[pathMatch.projectPath!];
+                  if (pathMatch.projectPath !== normalizedNewProjectPath) {
+                    delete next[pathMatch.projectPath!];
+                  }
                   return next;
                 });
               }

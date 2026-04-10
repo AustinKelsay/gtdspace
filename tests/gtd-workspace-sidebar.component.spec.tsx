@@ -740,6 +740,138 @@ describe('GTDWorkspaceSidebar component', () => {
     });
   });
 
+  it('does not reload an empty workspace after project hydration completes', async () => {
+    const emptySpace: GTDSpace = {
+      root_path: rootPath,
+      is_initialized: true,
+      isGTDSpace: true,
+      projects: [],
+      total_actions: 0,
+    };
+
+    safeInvokeMock.mockImplementation(
+      async (command: string, _args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
+        if (command === 'check_directory_exists') {
+          return true;
+        }
+
+        if (command === 'list_markdown_files') {
+          return [];
+        }
+
+        if (command === 'read_file') return '# README';
+        if (command === 'save_file') return 'ok';
+        return fallback ?? null;
+      }
+    );
+
+    const loadProjects = vi.fn().mockResolvedValue([]);
+    const { rerender } = render(
+      <GTDWorkspaceSidebar
+        currentFolder={rootPath}
+        gtdSpace={emptySpace}
+        checkGTDSpace={vi.fn().mockResolvedValue(true)}
+        loadProjects={loadProjects}
+        onFolderSelect={vi.fn()}
+        onFileSelect={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(loadProjects).toHaveBeenCalledTimes(1);
+    });
+
+    rerender(
+      <GTDWorkspaceSidebar
+        currentFolder={rootPath}
+        gtdSpace={{ ...emptySpace, projects: [] }}
+        checkGTDSpace={vi.fn().mockResolvedValue(true)}
+        loadProjects={loadProjects}
+        onFolderSelect={vi.fn()}
+        onFileSelect={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(loadProjects).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not treat equivalent root paths as a new workspace generation', async () => {
+    const windowsRoot = 'C:\\tmp\\gtd-space';
+    const normalizedRoot = 'C:/tmp/gtd-space';
+    const firstSpace: GTDSpace = {
+      root_path: windowsRoot,
+      is_initialized: true,
+      isGTDSpace: true,
+      projects: [],
+      total_actions: 0,
+    };
+    const secondSpace: GTDSpace = {
+      root_path: normalizedRoot,
+      is_initialized: true,
+      isGTDSpace: true,
+      projects: [],
+      total_actions: 0,
+    };
+
+    safeInvokeMock.mockImplementation(
+      async (command: string, _args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
+        if (command === 'check_directory_exists') {
+          return true;
+        }
+
+        if (command === 'list_markdown_files') {
+          return [];
+        }
+
+        if (command === 'read_file') return '# README';
+        if (command === 'save_file') return 'ok';
+        return fallback ?? null;
+      }
+    );
+
+    const loadProjects = vi.fn().mockResolvedValue([]);
+    const { rerender } = render(
+      <GTDWorkspaceSidebar
+        currentFolder={windowsRoot}
+        gtdSpace={firstSpace}
+        checkGTDSpace={vi.fn().mockResolvedValue(true)}
+        loadProjects={loadProjects}
+        onFolderSelect={vi.fn()}
+        onFileSelect={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(loadProjects).toHaveBeenCalledTimes(1);
+    });
+
+    rerender(
+      <GTDWorkspaceSidebar
+        currentFolder={normalizedRoot}
+        gtdSpace={secondSpace}
+        checkGTDSpace={vi.fn().mockResolvedValue(true)}
+        loadProjects={loadProjects}
+        onFolderSelect={vi.fn()}
+        onFileSelect={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(loadProjects).toHaveBeenCalledTimes(1);
+  });
   it('renders project due-date overlays before the project reload settles after README saves', async () => {
     let resolveProjects: ((projects: GTDProject[]) => void) | undefined;
 
@@ -807,7 +939,9 @@ describe('GTDWorkspaceSidebar component', () => {
       });
     });
 
-    expect(await screen.findByText(/2026/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(new Date(2026, 3, 20).toLocaleDateString())
+    ).toBeInTheDocument();
     expect(loadProjects).toHaveBeenCalledWith(rootPath);
 
     await act(async () => {

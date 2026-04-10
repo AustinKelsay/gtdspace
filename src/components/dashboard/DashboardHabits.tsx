@@ -147,8 +147,8 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
   // Calculate next reset time for a habit
   const getNextResetTime = useCallback((habit: HabitWithHistory) => {
     // Find the most recent history entry by date
-    const lastUpdate = habit.history && habit.history.length > 0
-      ? new Date(`${habit.history.reduce((latest, entry) =>
+    const lastUpdate = habit.periodHistory && habit.periodHistory.length > 0
+      ? new Date(`${habit.periodHistory.reduce((latest, entry) =>
         entry.date > latest.date ? entry : latest
       ).date}T00:00:00`)
       : undefined;
@@ -402,7 +402,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
                   const dateStr = localISODate(date);
 
                   // Get ALL entries for this date
-                  const entries = selectedHabit.history?.filter(h => h.date === dateStr) || [];
+                  const entries = selectedHabit.periodHistory?.filter(h => h.date === dateStr) || [];
                   const hasCompletion = isHabitCompletedOnDate(selectedHabit, dateStr, todayStr);
                   const entryCount = entries.length;
 

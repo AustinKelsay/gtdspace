@@ -4,6 +4,8 @@
  * @created 2025-01-17
  */
 
+/* eslint-disable react-refresh/only-export-components */
+
 import React, { useState, useMemo, useEffect } from 'react';
 // import { Card } from '@/components/ui/card';  // Removed: unused
 import { Button } from '@/components/ui/button';
@@ -25,7 +27,7 @@ import {
   isThursday, isFriday, setHours
 } from 'date-fns';
 import { checkTauriContextAsync } from '@/utils/tauri-ready';
-import { useCalendarData } from '@/hooks/useCalendarData';
+import { useCalendarData, type CalendarItem } from '@/hooks/useCalendarData';
 import type { MarkdownFile, GTDSpace } from '@/types';
 import type { GoogleCalendarSyncStatus, SyncStatus, CalendarItemStatus } from '@/types/google-calendar';
 import { mapGoogleCalendarSyncStatus } from '@/types/google-calendar';
@@ -58,6 +60,8 @@ import {
 } from '@/utils/update-markdown-fields';
 import { useToast } from '@/hooks/use-toast';
 import { syncGoogleCalendarEvents } from '@/utils/google-calendar';
+import { isHabitCompletedOnDate } from '@/utils/habit-progress';
+import { localISODate } from '@/utils/time';
 
 // Helper to detect if a date has a time component
 // - For strings: return false when the time portion is zero (e.g., "T00:00:00", with optional fractional seconds and timezone)
@@ -303,6 +307,207 @@ const generateHabitDates = (
 };
 
 type ViewMode = 'month' | 'week';
+
+export function buildCalendarEvents(
+  items: CalendarItem[],
+  currentMonth: Date,
+  viewMode: ViewMode,
+  todayStr = localISODate(new Date())
+): CalendarEvent[] {
+  const events: CalendarEvent[] = [];
+
+  const viewStart = viewMode === 'week'
+    ? startOfWeek(currentMonth)
+    : startOfWeek(startOfMonth(currentMonth));
+  const viewEnd = viewMode === 'week'
+    ? endOfWeek(currentMonth)
+    : endOfWeek(endOfMonth(currentMonth));
+
+  items.forEach((item) => {
+    if (item.type === 'google-event') {
+      const startDate = item.focusDate || item.dueDate;
+      const endDate = item.endDate || item.dueDate;
+
+      if (startDate) {
+        const date = typeof startDate === 'string' ? parseISO(startDate) : startDate;
+        const end = endDate ? (typeof endDate === 'string' ? parseISO(endDate) : endDate) : null;
+
+        if (isValid(date)) {
+          let formattedTime: string | undefined;
+          if (hasTimeComponent(startDate)) {
+            const hours = date.getHours();
+            const minutes = date.getMinutes();
+            const period = hours >= 12 ? 'PM' : 'AM';
+            const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+            formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+          }
+
+          let duration: number | undefined;
+          let endTimeFormatted: string | undefined;
+          if (end && isValid(end)) {
+            duration = Math.round((end.getTime() - date.getTime()) / (1000 * 60));
+
+            if (endDate && hasTimeComponent(endDate)) {
+              const endHours = end.getHours();
+              const endMinutes = end.getMinutes();
+              const endPeriod = endHours >= 12 ? 'PM' : 'AM';
+              const displayEndHours = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours;
+              endTimeFormatted = `${displayEndHours}:${endMinutes.toString().padStart(2, '0')} ${endPeriod}`;
+            }
+          }
+
+          events.push({
+            id: item.id,
+            title: item.name,
+            type: 'google-event',
+            status: item.status,
+            eventType: 'google',
+            date,
+            time: formattedTime,
+            endDate: end || undefined,
+            endTime: endTimeFormatted,
+            duration,
+            path: item.path,
+            location: item.location,
+            attendees: item.attendees,
+            meetingLink: item.meetingLink,
+            description: item.description,
+          });
+        }
+      }
+      return;
+    }
+
+    if (item.type === 'habit' && item.frequency && item.createdDateTime) {
+      const habitDates = generateHabitDates(item.createdDateTime, item.frequency, viewStart, viewEnd);
+
+      let timeString: string | undefined;
+      let formattedTime: string | undefined;
+      if (item.focusDate && hasTimeComponent(item.focusDate)) {
+        const focusDate = parseISO(item.focusDate);
+        if (isValid(focusDate)) {
+          const hours = focusDate.getHours();
+          const minutes = focusDate.getMinutes();
+          timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+          const period = hours >= 12 ? 'PM' : 'AM';
+          const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+          formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+        }
+      }
+
+      habitDates.forEach((date, index) => {
+        let eventDate = date;
+        if (timeString) {
+          const [hours, minutes] = timeString.split(':').map(Number);
+          eventDate = new Date(date);
+          eventDate.setHours(hours, minutes, 0, 0);
+        }
+
+        const eventStatus = isHabitCompletedOnDate(
+          {
+            status: item.status === 'completed' ? 'completed' : 'todo',
+            periodHistory: item.habitPeriodHistory,
+          },
+          localISODate(eventDate),
+          todayStr
+        )
+          ? 'completed'
+          : 'todo';
+
+        events.push({
+          id: `${item.path}-habit-${index}-${date.getTime()}`,
+          title: item.name,
+          type: 'habit',
+          status: eventStatus,
+          eventType: 'habit',
+          date: eventDate,
+          path: item.path,
+          projectName: undefined,
+          frequency: item.frequency,
+          time: formattedTime,
+        });
+      });
+      return;
+    }
+
+    if (item.dueDate) {
+      const dueDate = typeof item.dueDate === 'string' ? parseISO(item.dueDate) : item.dueDate;
+      if (isValid(dueDate)) {
+        let formattedTime: string | undefined;
+        if (item.dueDate && hasTimeComponent(item.dueDate)) {
+          const hours = dueDate.getHours();
+          const minutes = dueDate.getMinutes();
+          const period = hours >= 12 ? 'PM' : 'AM';
+          const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+          formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+        }
+        events.push({
+          id: `${item.path}-due`,
+          title: item.name,
+          type: item.type,
+          status: item.status,
+          eventType: 'due',
+          date: dueDate,
+          time: formattedTime,
+          path: item.path,
+          projectName: item.projectName
+        });
+      }
+    }
+
+    if (item.focusDate) {
+      const focusDate = typeof item.focusDate === 'string' ? parseISO(item.focusDate) : item.focusDate;
+      if (isValid(focusDate)) {
+        let formattedTime: string | undefined;
+        if (item.focusDate && hasTimeComponent(item.focusDate)) {
+          const hours = focusDate.getHours();
+          const minutes = focusDate.getMinutes();
+          const period = hours >= 12 ? 'PM' : 'AM';
+          const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+          formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+        }
+
+        let duration: number | undefined;
+        let endDate: Date | undefined;
+        let endTimeFormatted: string | undefined;
+
+        if (item.type === 'action' && item.effort) {
+          duration = getEffortDuration(item.effort);
+          endDate = new Date(focusDate.getTime() + duration * 60 * 1000);
+
+          const endHours = endDate.getHours();
+          const endMinutes = endDate.getMinutes();
+          const endPeriod = endHours >= 12 ? 'PM' : 'AM';
+          const displayEndHours = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours;
+          endTimeFormatted = `${displayEndHours}:${endMinutes.toString().padStart(2, '0')} ${endPeriod}`;
+        }
+
+        events.push({
+          id: `${item.path}-focus`,
+          title: item.name,
+          type: item.type,
+          status: item.status,
+          eventType: 'focus',
+          date: focusDate,
+          time: formattedTime,
+          endDate,
+          endTime: endTimeFormatted,
+          duration,
+          path: item.path,
+          projectName: item.projectName,
+          effort: item.effort
+        });
+      }
+    }
+  });
+
+  return events;
+}
+
+// Expose event generation for regression tests without rendering the full calendar UI.
+export const __calendarViewInternals = {
+  buildCalendarEvents,
+};
 
 // Resizable Event Component
 interface ResizableEventProps {
@@ -573,6 +778,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     const interval = setInterval(updateTime, 60000); // Update every minute
     return () => clearInterval(interval);
   }, []);
+  const todayStr = localISODate(currentTime);
 
   // Auto-scroll to 7am when week view loads
   useEffect(() => {
@@ -603,207 +809,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   }, [viewMode, currentMonth]); // Re-scroll when changing weeks or switching to week view
 
   // Process items into calendar events
-  const calendarEvents = useMemo(() => {
-    const events: CalendarEvent[] = [];
-
-    // Calculate view range for habit generation based on view mode
-    const viewStart = viewMode === 'week'
-      ? startOfWeek(currentMonth)
-      : startOfWeek(startOfMonth(currentMonth));
-    const viewEnd = viewMode === 'week'
-      ? endOfWeek(currentMonth)
-      : endOfWeek(endOfMonth(currentMonth));
-
-    items.forEach(item => {
-      // Handle Google Calendar events
-      if (item.type === 'google-event') {
-        const startDate = item.focusDate || item.dueDate;
-        const endDate = item.endDate || item.dueDate;  // Use end_date or fallback to due_date
-
-        if (startDate) {
-          const date = typeof startDate === 'string' ? parseISO(startDate) : startDate;
-          const end = endDate ? (typeof endDate === 'string' ? parseISO(endDate) : endDate) : null;
-
-          if (isValid(date)) {
-            // Format time from the Date object to get local time, not UTC
-            let formattedTime: string | undefined;
-            // Check if this has a time component (not just a date)
-            if (hasTimeComponent(startDate)) {
-              const hours = date.getHours();
-              const minutes = date.getMinutes();
-              const period = hours >= 12 ? 'PM' : 'AM';
-              const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-              formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
-            }
-
-            // Calculate duration in minutes if we have an end time
-            let duration: number | undefined;
-            let endTimeFormatted: string | undefined;
-            if (end && isValid(end)) {
-              duration = Math.round((end.getTime() - date.getTime()) / (1000 * 60)); // Duration in minutes
-
-              // Format end time from Date object for local time
-              if (endDate && hasTimeComponent(endDate)) {
-                const endHours = end.getHours();
-                const endMinutes = end.getMinutes();
-                const endPeriod = endHours >= 12 ? 'PM' : 'AM';
-                const displayEndHours = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours;
-                endTimeFormatted = `${displayEndHours}:${endMinutes.toString().padStart(2, '0')} ${endPeriod}`;
-              }
-            }
-
-            events.push({
-              id: item.id,
-              title: item.name,
-              type: 'google-event',
-              status: item.status,
-              eventType: 'google',
-              date: date,
-              time: formattedTime,
-              endDate: end || undefined,
-              endTime: endTimeFormatted,
-              duration: duration,
-              path: item.path,
-              location: item.location,
-              attendees: item.attendees,
-              meetingLink: item.meetingLink,
-              description: item.description
-            });
-          }
-        }
-        return; // Skip to next item
-      }
-
-      // Handle habits separately - generate recurring events
-      if (item.type === 'habit' && item.frequency && item.createdDateTime) {
-        // Generate dates only for the current view window
-        const habitDates = generateHabitDates(item.createdDateTime, item.frequency, viewStart, viewEnd);
-
-        // Extract time from focus_date if available
-        let timeString: string | undefined;
-        let formattedTime: string | undefined;
-        if (item.focusDate && hasTimeComponent(item.focusDate)) {
-          // Parse the date to get local time
-          const focusDate = parseISO(item.focusDate);
-          if (isValid(focusDate)) {
-            const hours = focusDate.getHours();
-            const minutes = focusDate.getMinutes();
-            timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-            // Convert to 12-hour format for display
-            const period = hours >= 12 ? 'PM' : 'AM';
-            const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-            formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
-          }
-        }
-
-        // Process the generated dates (already filtered to view window)
-        habitDates
-          .forEach((date, _index) => {
-            // Apply the time to the date if available
-            let eventDate = date;
-            if (timeString) {
-              const [hours, minutes] = timeString.split(':').map(Number);
-              eventDate = new Date(date);
-              eventDate.setHours(hours, minutes, 0, 0);
-            }
-
-            events.push({
-              id: `${item.path}-habit-${_index}-${date.getTime()}`,
-              title: item.name,
-              type: 'habit',
-              status: item.status,
-              eventType: 'habit',
-              date: eventDate,
-              path: item.path,
-              projectName: undefined,
-              frequency: item.frequency,
-              time: formattedTime // Include the formatted time for display
-            });
-          });
-      } else {
-        // Handle projects and actions
-        if (item.dueDate) {
-          const dueDate = typeof item.dueDate === 'string' ? parseISO(item.dueDate) : item.dueDate;
-          if (isValid(dueDate)) {
-            // Format time from the Date object to get local time, not UTC
-            let formattedTime: string | undefined;
-            // Check if this has a time component (not just a date)
-            if (item.dueDate && hasTimeComponent(item.dueDate)) {
-              const hours = dueDate.getHours();
-              const minutes = dueDate.getMinutes();
-              const period = hours >= 12 ? 'PM' : 'AM';
-              const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-              formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
-            }
-            events.push({
-              id: `${item.path}-due`,
-              title: item.name,
-              type: item.type,
-              status: item.status,
-              eventType: 'due',
-              date: dueDate,
-              time: formattedTime,
-              path: item.path,
-              projectName: item.projectName
-            });
-          }
-        }
-
-        if (item.focusDate) {
-          const focusDate = typeof item.focusDate === 'string' ? parseISO(item.focusDate) : item.focusDate;
-          if (isValid(focusDate)) {
-            // Format time from the Date object to get local time, not UTC
-            let formattedTime: string | undefined;
-            // Check if this has a time component (not just a date)
-            if (item.focusDate && hasTimeComponent(item.focusDate)) {
-              const hours = focusDate.getHours();
-              const minutes = focusDate.getMinutes();
-              const period = hours >= 12 ? 'PM' : 'AM';
-              const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-              formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
-            }
-
-            // Calculate duration based on effort for actions with focus dates
-            let duration: number | undefined;
-            let endDate: Date | undefined;
-            let endTimeFormatted: string | undefined;
-
-            if (item.type === 'action' && item.effort) {
-              duration = getEffortDuration(item.effort);
-
-              // Calculate end date/time based on duration
-              endDate = new Date(focusDate.getTime() + duration * 60 * 1000);
-
-              // Format end time from Date object for local time
-              const endHours = endDate.getHours();
-              const endMinutes = endDate.getMinutes();
-              const endPeriod = endHours >= 12 ? 'PM' : 'AM';
-              const displayEndHours = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours;
-              endTimeFormatted = `${displayEndHours}:${endMinutes.toString().padStart(2, '0')} ${endPeriod}`;
-            }
-
-            events.push({
-              id: `${item.path}-focus`,
-              title: item.name,
-              type: item.type,
-              status: item.status,
-              eventType: 'focus',
-              date: focusDate,
-              time: formattedTime,
-              endDate: endDate,
-              endTime: endTimeFormatted,
-              duration: duration,
-              path: item.path,
-              projectName: item.projectName,
-              effort: item.effort
-            });
-          }
-        }
-      }
-    });
-
-    return events;
-  }, [items, currentMonth, viewMode]);
+  const calendarEvents = useMemo(
+    () => buildCalendarEvents(items, currentMonth, viewMode, todayStr),
+    [items, currentMonth, viewMode, todayStr]
+  );
 
   // Get calendar days for current view
   const calendarDays = useMemo(() => {

@@ -202,10 +202,10 @@ export function useGTDWorkspaceSidebar({
         !projectActionsRef.current[normalizedProjectPath] &&
         !projectLoadingRef.current[normalizedProjectPath]
       ) {
-        await loadProjectActions(project.path);
+        await loadProjectActions(normalizedProjectPath);
       }
 
-      onFileSelect(await resolveReadmeFile(project.path));
+      onFileSelect(await resolveReadmeFile(normalizedProjectPath));
     },
     [loadProjectActions, onFileSelect, projectActionsRef, projectLoadingRef, resolveReadmeFile, ui]
   );

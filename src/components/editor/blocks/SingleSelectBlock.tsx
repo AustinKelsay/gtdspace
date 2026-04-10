@@ -21,6 +21,7 @@ import { useFilePath } from '@/components/editor/FilePathContext';
 import { emitMetadataChange } from '@/utils/content-event-bus';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { norm } from '@/utils/path';
+import { safeInvoke } from '@/utils/safe-invoke';
 
 // Define status options for GTD
 const GTD_STATUS_OPTIONS = [
@@ -171,13 +172,18 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
               const inTauriContext = await checkTauriContextAsync();
               
               if (inTauriContext) {
-                const result = await withErrorHandling(async () => {
-                  const { invoke } = await import('@tauri-apps/api/core');
-                  return invoke('updateHabitStatus', {
-                    habitPath: currentPath,
-                    newStatus: selectedValue,
-                  });
-                }, 'Failed to update habit status');
+                const result = await withErrorHandling(
+                  async () =>
+                    safeInvoke<boolean>(
+                      'update_habit_status',
+                      {
+                        habitPath: currentPath,
+                        newStatus: selectedValue,
+                      },
+                      null
+                    ),
+                  'Failed to update habit status'
+                );
 
                 if (result === null) {
                   throw new Error('Failed to update habit status');

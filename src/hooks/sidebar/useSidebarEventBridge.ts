@@ -33,8 +33,18 @@ function getDueDateFromMetadata(metadata: Record<string, unknown>): string | und
     return dueDate;
   }
 
-  const snakeCase = metadata.due_date;
-  return typeof snakeCase === 'string' ? snakeCase : undefined;
+  const dueDateSnakeCase = metadata.due_date;
+  if (typeof dueDateSnakeCase === 'string') {
+    return dueDateSnakeCase;
+  }
+
+  const datetime = metadata.datetime;
+  if (typeof datetime === 'string') {
+    return datetime;
+  }
+
+  const datetimeSnakeCase = metadata.date_time;
+  return typeof datetimeSnakeCase === 'string' ? datetimeSnakeCase : undefined;
 }
 
 export function useSidebarEventBridge({
@@ -74,7 +84,12 @@ export function useSidebarEventBridge({
           }
         }
 
-        if (changedFields?.due_date || changedFields?.dueDate || changedFields?.datetime) {
+        if (
+          changedFields?.due_date ||
+          changedFields?.dueDate ||
+          changedFields?.datetime ||
+          changedFields?.date_time
+        ) {
           const nextDue = getDueDateFromMetadata(metadata as Record<string, unknown>);
           if (typeof nextDue === 'string') {
             updateProjectOverlay(pathMatch.projectPath, { due_date: nextDue });
@@ -101,7 +116,12 @@ export function useSidebarEventBridge({
           });
         }
 
-        if (changedFields?.due_date || changedFields?.dueDate || changedFields?.datetime) {
+        if (
+          changedFields?.due_date ||
+          changedFields?.dueDate ||
+          changedFields?.datetime ||
+          changedFields?.date_time
+        ) {
           const nextDue = getDueDateFromMetadata(metadata as Record<string, unknown>);
           updateActionOverlay(pathMatch.normalizedPath, {
             due_date: typeof nextDue === 'string' ? nextDue : undefined,
@@ -127,7 +147,12 @@ export function useSidebarEventBridge({
       const pathMatch = classifySidebarPath(filePath, rootPath);
 
       if (pathMatch.kind === 'project-readme' && pathMatch.projectPath) {
-        if (changedFields?.dueDate || changedFields?.due_date || changedFields?.datetime) {
+        if (
+          changedFields?.dueDate ||
+          changedFields?.due_date ||
+          changedFields?.datetime ||
+          changedFields?.date_time
+        ) {
           const nextDue = getDueDateFromMetadata(metadata as Record<string, unknown>);
           if (typeof nextDue === 'string') {
             updateProjectOverlay(pathMatch.projectPath, { due_date: nextDue });
@@ -143,6 +168,7 @@ export function useSidebarEventBridge({
       const pathMatch = classifySidebarPath(filePath, rootPath);
 
       if (pathMatch.kind === 'project-readme' && pathMatch.projectPath) {
+        let effectiveProjectPath = pathMatch.projectPath;
         const nextTitle = metadata.title;
 
         if (nextTitle) {
@@ -164,6 +190,7 @@ export function useSidebarEventBridge({
 
               const normalizedNewProjectPath =
                 normalizeSidebarPath(newProjectPath) ?? newProjectPath;
+              effectiveProjectPath = normalizedNewProjectPath;
               updateProjectOverlay(pathMatch.projectPath, {
                 title: String(nextTitle),
                 currentPath: normalizedNewProjectPath,
@@ -194,14 +221,11 @@ export function useSidebarEventBridge({
                 };
               });
 
-              if (rootPath) {
-                await loadProjects(rootPath);
+              if (pathMatch.projectPath !== normalizedNewProjectPath) {
                 removeProjectOverlay(pathMatch.projectPath);
                 setProjectActions((prev) => {
                   const next = { ...prev };
-                  if (pathMatch.projectPath !== normalizedNewProjectPath) {
-                    delete next[pathMatch.projectPath!];
-                  }
+                  delete next[pathMatch.projectPath!];
                   return next;
                 });
               }
@@ -221,9 +245,9 @@ export function useSidebarEventBridge({
 
         const nextDue = getDueDateFromMetadata(metadata as Record<string, unknown>);
         if (typeof nextDue === 'string') {
-          updateProjectOverlay(pathMatch.projectPath, { due_date: nextDue });
+          updateProjectOverlay(effectiveProjectPath, { due_date: nextDue });
         } else {
-          updateProjectOverlay(pathMatch.projectPath, { due_date: undefined });
+          updateProjectOverlay(effectiveProjectPath, { due_date: undefined });
         }
 
         if (rootPath) {
@@ -360,57 +384,65 @@ export function useSidebarEventBridge({
     });
 
     const handleProjectCreated = async (event: Event) => {
-      const customEvent = event as CustomEvent<{
-        projectPath?: string;
-        projectName?: string;
-      }>;
-      const { projectPath, projectName } = customEvent.detail ?? {};
+      try {
+        const customEvent = event as CustomEvent<{
+          projectPath?: string;
+          projectName?: string;
+        }>;
+        const { projectPath, projectName } = customEvent.detail ?? {};
 
-      if (projectPath && projectName) {
-        const optimistic: GTDProject = {
-          name: projectName,
-          description: '',
-          dueDate: undefined,
-          status: 'in-progress',
-          path: projectPath,
-          createdDateTime: new Date().toISOString(),
-          action_count: 0,
-        };
+        if (projectPath && projectName) {
+          const optimistic: GTDProject = {
+            name: projectName,
+            description: '',
+            dueDate: undefined,
+            status: 'in-progress',
+            path: projectPath,
+            createdDateTime: new Date().toISOString(),
+            action_count: 0,
+          };
 
-        setPendingProjects((prev) =>
-          prev.some(
-            (project) =>
-              (norm(project.path) ?? project.path) ===
-              (norm(optimistic.path) ?? optimistic.path)
-          )
-            ? prev
-            : [...prev, optimistic]
-        );
-      }
+          setPendingProjects((prev) =>
+            prev.some(
+              (project) =>
+                (norm(project.path) ?? project.path) ===
+                (norm(optimistic.path) ?? optimistic.path)
+            )
+              ? prev
+              : [...prev, optimistic]
+          );
+        }
 
-      if (rootPath) {
-        const projects = await loadProjects(rootPath);
-        setPendingProjects((prev) =>
-          prev.filter(
-            (project) =>
-              !projects.some(
-                (loaded) =>
-                  (norm(loaded.path) ?? loaded.path) ===
-                  (norm(project.path) ?? project.path)
-              )
-          )
-        );
+        if (rootPath) {
+          const projects = await loadProjects(rootPath);
+          setPendingProjects((prev) =>
+            prev.filter(
+              (project) =>
+                !projects.some(
+                  (loaded) =>
+                    (norm(loaded.path) ?? loaded.path) ===
+                    (norm(project.path) ?? project.path)
+                )
+            )
+          );
+        }
+      } catch (error) {
+        console.error('handleProjectCreated error:', error);
       }
     };
 
     const handleActionCreated = async (event: Event) => {
-      const customEvent = event as CustomEvent<{ projectPath?: string }>;
-      const projectPath = customEvent.detail?.projectPath;
-      if (!projectPath) return;
+      try {
+        const customEvent = event as CustomEvent<{ projectPath?: string }>;
+        const projectPath = customEvent.detail?.projectPath;
+        if (!projectPath) return;
 
-      await loadProjectActions(projectPath);
-      if (rootPath) {
-        await loadProjects(rootPath);
+        await loadProjectActions(projectPath);
+        if (rootPath) {
+          await loadProjects(rootPath);
+        }
+      } catch (error) {
+        console.error('handleActionCreated error:', error);
       }
     };
 

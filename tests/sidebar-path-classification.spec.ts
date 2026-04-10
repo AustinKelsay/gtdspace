@@ -31,9 +31,11 @@ describe('sidebar path classification', () => {
   it('classifies project action files and excludes README files', () => {
     const actionPath = `${rootPath}/Projects/Project Alpha/Write spec.md`;
     const readmePath = `${rootPath}/Projects/Project Alpha/README.md`;
+    const rootLevelProjectFile = `${rootPath}/Projects/notes.md`;
 
     expect(isProjectActionPath(actionPath, rootPath)).toBe(true);
     expect(isProjectActionPath(readmePath, rootPath)).toBe(false);
+    expect(isProjectActionPath(rootLevelProjectFile, rootPath)).toBe(false);
     expect(classifySidebarPath(actionPath, rootPath)).toMatchObject({
       kind: 'project-action',
       projectPath: `${rootPath}/Projects/Project Alpha`,

@@ -55,6 +55,7 @@ export function useSidebarDataLoaders({
   const projectLoadingRef = React.useRef<Record<string, boolean>>({});
   const loadingSectionsRef = React.useRef<Set<string>>(new Set());
   const lastRootRef = React.useRef<string | null>(null);
+  const projectsHydratedRef = React.useRef(false);
   const preloadedRef = React.useRef(false);
   const workspaceGenerationRef = React.useRef(0);
 
@@ -81,6 +82,7 @@ export function useSidebarDataLoaders({
     setLoadingSections(new Set());
     loadingSectionsRef.current = new Set();
     setPendingProjects([]);
+    projectsHydratedRef.current = false;
   }, [setPendingProjects]);
 
   const resolveReadmeFile = React.useCallback(
@@ -507,6 +509,7 @@ export function useSidebarDataLoaders({
     pendingProjects,
     setPendingProjects,
     lastRootRef,
+    projectsHydratedRef,
     preloadedRef,
     workspaceGenerationRef,
     resetDataState,

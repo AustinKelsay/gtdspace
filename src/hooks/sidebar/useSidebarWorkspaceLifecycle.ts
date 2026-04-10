@@ -5,6 +5,7 @@ import type {
   SidebarOverlayState,
 } from '@/hooks/sidebar/types';
 import { normalizeSidebarPath } from '@/hooks/sidebar/path-classification';
+import { norm } from '@/utils/path';
 
 const PRELOAD_PRIORITY_SECTION_IDS = ['habits', 'areas', 'goals'] as const;
 const PRELOAD_SECONDARY_SECTION_IDS = [
@@ -32,6 +33,7 @@ type UseSidebarWorkspaceLifecycleArgs = {
     | 'projectLoading'
     | 'resetDataState'
     | 'lastRootRef'
+    | 'projectsHydratedRef'
     | 'preloadedRef'
     | 'workspaceGenerationRef'
   >;
@@ -55,6 +57,7 @@ export function useSidebarWorkspaceLifecycle({
     projectLoading,
     resetDataState,
     lastRootRef,
+    projectsHydratedRef,
     preloadedRef,
     workspaceGenerationRef,
   } = data;
@@ -62,7 +65,7 @@ export function useSidebarWorkspaceLifecycle({
 
   React.useEffect(() => {
     const pathToCheck = rootPath;
-    const normalizedRoot = normalizeSidebarPath(pathToCheck);
+    const normalizedRoot = norm(pathToCheck) ?? null;
     const normalizedCurrent = normalizeSidebarPath(currentFolder);
     const normalizedRootWithSlash = normalizedRoot?.endsWith('/')
       ? normalizedRoot
@@ -82,10 +85,10 @@ export function useSidebarWorkspaceLifecycle({
     let cancelled = false;
 
     const preload = async () => {
-      if (lastRootRef.current !== pathToCheck) {
+      if (lastRootRef.current !== normalizedRoot) {
         workspaceGenerationRef.current += 1;
         preloadedRef.current = false;
-        lastRootRef.current = pathToCheck;
+        lastRootRef.current = normalizedRoot;
         resetDataState();
         resetOverlays();
       }
@@ -93,14 +96,26 @@ export function useSidebarWorkspaceLifecycle({
       const isGTD = await checkGTDSpace(pathToCheck);
       if (!isGTD || cancelled) return;
 
-      if (!projects || projects.length === 0) {
-        await loadProjects(pathToCheck);
+      if ((projects?.length ?? 0) > 0) {
+        projectsHydratedRef.current = true;
+      }
+
+      if (!projects || !projectsHydratedRef.current) {
+        let projectsLoadFailed = false;
+        try {
+          await loadProjects(pathToCheck);
+        } catch {
+          projectsLoadFailed = true;
+        } finally {
+          if (!cancelled) {
+            projectsHydratedRef.current = true;
+          }
+        }
         if (cancelled) return;
+        if (projectsLoadFailed) return;
       }
 
       if (!preloadedRef.current) {
-        preloadedRef.current = true;
-
         const priorityPaths = await resolveSectionLoadPaths(
           PRELOAD_PRIORITY_SECTION_IDS,
           pathToCheck
@@ -114,6 +129,9 @@ export function useSidebarWorkspaceLifecycle({
         if (cancelled) return;
 
         await Promise.allSettled(secondaryPaths.map((path) => loadSectionFiles(path)));
+        if (cancelled) return;
+
+        preloadedRef.current = true;
       }
     };
 
@@ -130,6 +148,7 @@ export function useSidebarWorkspaceLifecycle({
     loadSectionFiles,
     preloadedRef,
     projects,
+    projectsHydratedRef,
     resetDataState,
     resetOverlays,
     resolveSectionLoadPaths,

@@ -6,6 +6,7 @@
 
 import { useCallback } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
+import { emitMetadataChange } from '@/utils/content-event-bus';
 import { useErrorHandler } from './useErrorHandler';
 import { useToast } from './useToast';
 
@@ -35,6 +36,33 @@ export function useHabitTracking() {
       );
 
       if (result === true) {
+        const normalizedPath = habitPath.replace(/\\/g, '/');
+        const fileName = normalizedPath.split('/').pop() || '';
+        emitMetadataChange({
+          filePath: habitPath,
+          fileName,
+          content: '',
+          metadata: { habitStatus: newStatus },
+          changedFields: { habitStatus: newStatus }
+        });
+        window.dispatchEvent(
+          new CustomEvent('habit-status-updated', {
+            detail: {
+              filePath: habitPath,
+              fileName,
+              habitStatus: newStatus,
+            },
+          })
+        );
+        window.dispatchEvent(
+          new CustomEvent('habit-content-changed', {
+            detail: {
+              filePath: habitPath,
+              fileName,
+              habitStatus: newStatus,
+            },
+          })
+        );
         showSuccess(`Habit marked as ${newStatus === 'completed' ? 'completed' : 'to do'}`);
       }
 

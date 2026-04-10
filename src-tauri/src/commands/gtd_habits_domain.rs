@@ -84,6 +84,13 @@ impl HabitStatus {
             Self::Completed => "Complete",
         }
     }
+
+    pub(crate) fn from_history_label(value: &str) -> Self {
+        match value.trim().to_lowercase().as_str() {
+            "complete" | "completed" | "done" => Self::Completed,
+            _ => Self::Todo,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -448,6 +455,78 @@ pub(crate) fn format_history_time(timestamp: NaiveDateTime) -> String {
     }
 }
 
+fn split_history_table_cells(line: &str) -> Option<Vec<String>> {
+    if !line.trim_start().starts_with('|') {
+        return None;
+    }
+
+    Some(
+        line.trim()
+            .trim_matches('|')
+            .split('|')
+            .map(|part| part.trim().to_string())
+            .collect(),
+    )
+}
+
+fn rebuild_history_table_line(cells: &[String]) -> String {
+    format!("| {} |", cells.join(" | "))
+}
+
+fn normalize_reset_rows_in_content(content: &str) -> (String, bool) {
+    let mut in_history_section = false;
+    let mut changed = false;
+    let mut new_lines = Vec::new();
+
+    for line in content.lines() {
+        if is_history_heading_line(line) {
+            in_history_section = true;
+            new_lines.push(line.to_string());
+            continue;
+        }
+
+        if in_history_section {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() && trimmed.starts_with('#') {
+                in_history_section = false;
+                new_lines.push(line.to_string());
+                continue;
+            }
+
+            if let Some(row) = parse_history_row_from_table(line) {
+                if is_reset_action(&row.action)
+                    && HabitStatus::from_history_label(&row.status) != HabitStatus::Todo
+                {
+                    if let Some(mut cells) = split_history_table_cells(line) {
+                        if cells.len() >= 5 {
+                            cells[2] = HabitStatus::Todo.history_label().to_string();
+                            new_lines.push(rebuild_history_table_line(&cells));
+                            changed = true;
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+
+        new_lines.push(line.to_string());
+    }
+
+    let mut normalized = new_lines.join("\n");
+    if content.ends_with('\n') {
+        normalized.push('\n');
+    }
+
+    (normalized, changed)
+}
+
+fn derive_latest_history_status(rows: &[ParsedHistoryRow], fallback: HabitStatus) -> HabitStatus {
+    rows.iter()
+        .max_by_key(|row| row.timestamp)
+        .map(|row| HabitStatus::from_history_label(&row.status))
+        .unwrap_or(fallback)
+}
+
 pub(crate) fn apply_status_marker(
     content: &str,
     status: HabitStatus,
@@ -466,6 +545,27 @@ pub(crate) fn apply_status_marker(
                 format!("[!singleselect:habit-status:{}]", status.marker_token()).as_str(),
             )
             .to_string(),
+    }
+}
+
+pub(crate) fn repair_habit_history_content(content: &str) -> Result<Option<String>, String> {
+    let parsed = parse_habit_state(content)?;
+    parse_history_rows_strict(content)?;
+
+    let (normalized_content, normalized_reset_rows) = normalize_reset_rows_in_content(content);
+    let normalized_rows = parse_history_rows_strict(&normalized_content)?;
+    let effective_status = derive_latest_history_status(&normalized_rows, parsed.status);
+
+    let final_content = if effective_status != parsed.status {
+        apply_status_marker(&normalized_content, effective_status, parsed.status_format)
+    } else {
+        normalized_content
+    };
+
+    if normalized_reset_rows || final_content != content {
+        Ok(Some(final_content))
+    } else {
+        Ok(None)
     }
 }
 
@@ -969,5 +1069,87 @@ Still here
         assert!(updated.contains("## History"));
         assert!(updated.contains(DEFAULT_HISTORY_TEMPLATE));
         assert!(updated.contains("| 2026-03-02 | 12:00 AM | To Do | Auto-Reset | New period |"));
+    }
+
+    #[test]
+    fn repair_habit_history_content_normalizes_legacy_auto_reset_rows_and_marker() {
+        let content = r#"# Habit
+
+## Status
+[!checkbox:habit-status:true]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-01T09:00:00Z]
+
+## History
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2026-03-02 | 7:30 PM | Complete | Manual | Done |
+| 2026-03-03 | 12:00 AM | Complete | Auto-Reset | New period |
+"#;
+
+        let repaired = repair_habit_history_content(content).unwrap().unwrap();
+
+        assert!(repaired.contains("[!checkbox:habit-status:false]"));
+        assert!(repaired.contains("| 2026-03-02 | 7:30 PM | Complete | Manual | Done |"));
+        assert!(repaired.contains("| 2026-03-03 | 12:00 AM | To Do | Auto-Reset | New period |"));
+    }
+
+    #[test]
+    fn repair_habit_history_content_syncs_marker_with_latest_history_row() {
+        let content = r#"# Habit
+
+## Status
+[!checkbox:habit-status:false]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-01T09:00:00Z]
+
+## History
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2026-03-03 | 7:30 PM | Complete | Manual | Done |
+"#;
+
+        let repaired = repair_habit_history_content(content).unwrap().unwrap();
+
+        assert!(repaired.contains("[!checkbox:habit-status:true]"));
+        assert!(repaired.contains("| 2026-03-03 | 7:30 PM | Complete | Manual | Done |"));
+    }
+
+    #[test]
+    fn repair_habit_history_content_is_idempotent_and_preserves_notes() {
+        let content = r#"# Habit
+
+## Status
+[!checkbox:habit-status:true]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-01T09:00:00Z]
+
+## History
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2026-03-02 | 7:30 PM | Complete | Manual | Done |
+| 2026-03-03 | 12:00 AM | Complete | Auto-Reset | New period |
+
+## Notes
+Still here
+"#;
+
+        let repaired = repair_habit_history_content(content).unwrap().unwrap();
+        let second_pass = repair_habit_history_content(&repaired).unwrap();
+
+        assert!(repaired.contains("## Notes\nStill here"));
+        assert!(second_pass.is_none());
     }
 }

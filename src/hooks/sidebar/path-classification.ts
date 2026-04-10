@@ -51,7 +51,7 @@ export function getSectionPathVariants(
     if (rootPath) {
       return buildSectionPath(rootPath, name);
     }
-    return normalizeSidebarPath(`/${name}/`) ?? `/${name}/`;
+    return normalizeSidebarPath(`/${name}`) ?? `/${name}`;
   });
 }
 
@@ -107,8 +107,9 @@ function extractProjectPathFromAction(
       return null;
     }
     const relative = normalizedPath.slice(projectRoot.length).replace(/^\/+/, '');
-    const firstSegment = relative.split('/')[0];
-    if (!firstSegment) {
+    const segments = relative.split('/').filter(Boolean);
+    const [firstSegment] = segments;
+    if (!firstSegment || segments.length < 2) {
       return null;
     }
     return normalizeSidebarPath(`${projectRoot}/${firstSegment}`) ?? `${projectRoot}/${firstSegment}`;
@@ -202,11 +203,10 @@ export function isProjectActionPath(
   }
 
   if (rootPath) {
-    const projectRoot = getProjectSectionRoot(rootPath);
-    return Boolean(projectRoot && isUnder(normalizedPath, projectRoot));
+    return extractProjectPathFromAction(normalizedPath, rootPath) !== null;
   }
 
-  return /\/Projects\/.+\.(md|markdown)$/i.test(normalizedPath);
+  return /\/Projects\/[^/]+\/.+\.(md|markdown)$/i.test(normalizedPath);
 }
 
 export function isSectionFilePath(

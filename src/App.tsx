@@ -935,6 +935,7 @@ export const App: React.FC = () => {
   const loadProjectsRef = React.useRef(loadProjects);
   const reloadTabFromDiskRef = React.useRef(reloadTabFromDisk);
   const activeTabRef = React.useRef(activeTab);
+  const repairedHabitSpacesRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
     checkGTDSpaceRef.current = checkGTDSpace;
@@ -948,6 +949,44 @@ export const App: React.FC = () => {
     if (!currentSpacePath) {
       return;
     }
+
+    let isCancelled = false;
+
+    const repairHabitHistory = async () => {
+      if (!currentSpacePath || repairedHabitSpacesRef.current.has(currentSpacePath)) {
+        return [];
+      }
+
+      const repairedHabits =
+        (await safeInvoke<string[]>(
+          "repair_habit_history",
+          {
+            spacePath: currentSpacePath,
+          },
+          []
+        )) ?? [];
+
+      repairedHabitSpacesRef.current.add(currentSpacePath);
+
+      if (isCancelled || repairedHabits.length === 0) {
+        return repairedHabits;
+      }
+
+      toast({
+        title: "Repaired habit history",
+        description: `Normalized ${repairedHabits.length} habit file${repairedHabits.length === 1 ? "" : "s"} in this space.`,
+      });
+
+      await checkGTDSpaceRef.current(currentSpacePath);
+      await loadProjectsRef.current(currentSpacePath);
+
+      const currentTab = activeTabRef.current;
+      if (isHabitPath(currentTab?.file.path) && currentTab?.id) {
+        await reloadTabFromDiskRef.current(currentTab.id);
+      }
+
+      return repairedHabits;
+    };
 
     // Function to check and reset habits
     const checkHabits = async () => {
@@ -993,6 +1032,8 @@ export const App: React.FC = () => {
           return; // Skip invocation if no valid space path
         }
 
+        await repairHabitHistory();
+
         const resetHabits =
           (await safeInvoke<string[]>(
             "check_and_reset_habits",
@@ -1023,9 +1064,10 @@ export const App: React.FC = () => {
     }, 60000); // 1 minute interval
 
     return () => {
+      isCancelled = true;
       clearInterval(interval);
     };
-  }, [gtdSpace?.root_path]); // Only depend on root_path, use refs for everything else
+  }, [gtdSpace?.root_path, toast]); // Only depend on root_path, use refs for everything else
 
   // Show loading screen while app is initializing
   if (isAppInitializing) {

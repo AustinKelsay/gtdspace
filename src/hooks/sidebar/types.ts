@@ -93,10 +93,11 @@ export type SidebarDataState = {
   pendingProjects: GTDProject[];
   setPendingProjects: React.Dispatch<React.SetStateAction<GTDProject[]>>;
   lastRootRef: React.MutableRefObject<string | null>;
+  projectsHydratedRef: React.MutableRefObject<boolean>;
   preloadedRef: React.MutableRefObject<boolean>;
   workspaceGenerationRef: React.MutableRefObject<number>;
   resetDataState: () => void;
-};
+}
 
 export type SidebarPathKind =
   | 'project-readme'

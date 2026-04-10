@@ -2,7 +2,8 @@
 
 use super::gtd_habits_domain::{
     apply_status_marker, calculate_missed_periods, format_history_entry, insert_history_entry,
-    parse_habit_state, should_reset_habit, HabitFrequency, HabitStatus, DEFAULT_HISTORY_TEMPLATE,
+    parse_habit_state, repair_habit_history_content, should_reset_habit, HabitFrequency,
+    HabitStatus, DEFAULT_HISTORY_TEMPLATE,
 };
 use super::utils::sanitize_markdown_file_stem;
 use chrono::{Local, NaiveTime};
@@ -367,4 +368,165 @@ pub fn check_and_reset_habits(space_path: String) -> Result<Vec<String>, String>
     }
 
     Ok(reset_habits)
+}
+
+#[tauri::command]
+pub fn repair_habit_history(space_path: String) -> Result<Vec<String>, String> {
+    let habits_path = Path::new(&space_path).join("Habits");
+    if !habits_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let entries = fs::read_dir(&habits_path)
+        .map_err(|error| format!("Failed to read Habits directory: {}", error))?;
+    let mut repaired_habits = Vec::new();
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                log::warn!(
+                    "Skipping unreadable directory entry in {:?}: {}",
+                    habits_path,
+                    error
+                );
+                continue;
+            }
+        };
+        let path = entry.path();
+
+        let is_markdown = path
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(|value| matches!(value.to_ascii_lowercase().as_str(), "md" | "markdown"))
+            .unwrap_or(false);
+        if !is_markdown {
+            continue;
+        }
+
+        let content = match fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(error) => {
+                log::warn!("Skipping habit {:?}: {}", path, error);
+                continue;
+            }
+        };
+
+        let Some(repaired_content) = (match repair_habit_history_content(&content) {
+            Ok(result) => result,
+            Err(error) => {
+                log::warn!("Skipping habit {:?}: {}", path, error);
+                continue;
+            }
+        }) else {
+            continue;
+        };
+
+        if let Err(error) = atomic_write_habit_file(&path, &repaired_content) {
+            log::warn!("Skipping habit {:?}: {}", path, error);
+            continue;
+        }
+
+        repaired_habits.push(
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("unknown")
+                .to_string(),
+        );
+    }
+
+    Ok(repaired_habits)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::{seed_test_workspace, write_test_file};
+
+    #[test]
+    fn repair_habit_history_repairs_only_changed_habits() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        write_test_file(
+            workspace.path().join("Habits/Add 5 Brolls.md"),
+            r#"# Add 5 Brolls
+
+## Status
+[!checkbox:habit-status:true]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-01T09:00:00Z]
+
+## History
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2026-03-02 | 7:30 PM | Complete | Manual | Done |
+| 2026-03-03 | 12:00 AM | Complete | Auto-Reset | New period |
+"#,
+        )?;
+        write_test_file(
+            workspace.path().join("Habits/Clean Habit.md"),
+            r#"# Clean Habit
+
+## Status
+[!checkbox:habit-status:false]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-01T09:00:00Z]
+
+## History
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2026-03-03 | 12:00 AM | To Do | Auto-Reset | New period |
+"#,
+        )?;
+
+        let repaired = repair_habit_history(workspace.path().to_string_lossy().to_string())?;
+        assert_eq!(repaired, vec!["Add 5 Brolls.md".to_string()]);
+
+        let repaired_content = fs::read_to_string(workspace.path().join("Habits/Add 5 Brolls.md"))
+            .map_err(|error| error.to_string())?;
+        assert!(repaired_content.contains("[!checkbox:habit-status:false]"));
+        assert!(repaired_content
+            .contains("| 2026-03-03 | 12:00 AM | To Do | Auto-Reset | New period |"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn repair_habit_history_is_idempotent() -> Result<(), String> {
+        let workspace = seed_test_workspace()?;
+        write_test_file(
+            workspace.path().join("Habits/Add 5 Brolls.md"),
+            r#"# Add 5 Brolls
+
+## Status
+[!checkbox:habit-status:true]
+
+## Frequency
+[!singleselect:habit-frequency:daily]
+
+## Created
+[!datetime:created_date_time:2026-03-01T09:00:00Z]
+
+## History
+| Date | Time | Status | Action | Details |
+|------|------|--------|--------|---------|
+| 2026-03-03 | 12:00 AM | Complete | Auto-Reset | New period |
+"#,
+        )?;
+
+        let first = repair_habit_history(workspace.path().to_string_lossy().to_string())?;
+        let second = repair_habit_history(workspace.path().to_string_lossy().to_string())?;
+
+        assert_eq!(first, vec!["Add 5 Brolls.md".to_string()]);
+        assert!(second.is_empty());
+
+        Ok(())
+    }
 }

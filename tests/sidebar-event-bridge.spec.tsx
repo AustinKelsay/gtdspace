@@ -145,6 +145,46 @@ describe('sidebar event bridge', () => {
     });
   });
 
+  it('maps datetime metadata fields into due-date overlays', async () => {
+    render(<SidebarHookHarness />);
+
+    act(() => {
+      emitMetadataChange({
+        filePath: `${projectPath}/README.markdown`,
+        fileName: 'README.markdown',
+        content: '# Project Alpha',
+        metadata: {
+          datetime: '2026-04-30',
+        } as never,
+        changedFields: {
+          datetime: '2026-04-30',
+        } as never,
+      });
+    });
+
+    act(() => {
+      emitMetadataChange({
+        filePath: actionPath,
+        fileName: 'Write spec.md',
+        content: '# Write spec',
+        metadata: {
+          date_time: '2026-05-01',
+        } as never,
+        changedFields: {
+          datetime: '2026-05-01',
+        } as never,
+      });
+    });
+
+    await waitFor(() => {
+      expect(latestSidebar?.projectMetadata[projectPath]).toMatchObject({
+        due_date: '2026-04-30',
+      });
+      expect(latestSidebar?.actionMetadata[actionPath]).toMatchObject({
+        due_date: '2026-05-01',
+      });
+    });
+  });
   it('dispatches project rename events with normalized paths', async () => {
     const loadProjects = vi.fn().mockResolvedValue([]);
     const projectRenamed = listenForEvent<{
@@ -184,6 +224,7 @@ describe('sidebar event bridge', () => {
       ]);
     });
 
+    expect(loadProjects).toHaveBeenCalledTimes(1);
     expect(loadProjects).toHaveBeenCalledWith(rootPath);
     projectRenamed.dispose();
   });

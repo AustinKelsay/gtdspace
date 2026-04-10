@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { GTDWorkspaceSidebar } from '@/components/gtd/GTDWorkspaceSidebar';
-import { emitMetadataChange } from '@/utils/content-event-bus';
+import { emitContentSaved, emitMetadataChange } from '@/utils/content-event-bus';
 import type { GTDProject, GTDSpace, MarkdownFile } from '@/types';
 
 const safeInvokeMock = vi.fn();
@@ -636,5 +636,182 @@ describe('GTDWorkspaceSidebar component', () => {
     );
 
     expect(aliasListCalls).toHaveLength(0);
+  });
+
+  it('does not let stale section loads overwrite the next workspace after a root switch', async () => {
+    const firstRoot = '/tmp/gtd-space-a';
+    const secondRoot = '/tmp/gtd-space-b';
+    const firstSpace: GTDSpace = {
+      root_path: firstRoot,
+      is_initialized: true,
+      isGTDSpace: true,
+      projects: [],
+      total_actions: 0,
+    };
+    const secondSpace: GTDSpace = {
+      root_path: secondRoot,
+      is_initialized: true,
+      isGTDSpace: true,
+      projects: [],
+      total_actions: 0,
+    };
+    let resolveFirstHabits:
+      | ((files: MarkdownFile[]) => void)
+      | undefined;
+
+    safeInvokeMock.mockImplementation(
+      async (command: string, args?: { path?: string }, fallback?: unknown) => {
+        if (command === 'check_directory_exists') {
+          return true;
+        }
+
+        if (command === 'list_markdown_files') {
+          switch (args?.path) {
+            case `${firstRoot}/Habits`:
+              return new Promise<MarkdownFile[]>((resolve) => {
+                resolveFirstHabits = resolve;
+              });
+            case `${secondRoot}/Habits`:
+              return [markdownFile(`${secondRoot}/Habits/Second Habit.md`, 'Second Habit.md')];
+            case `${firstRoot}/Areas of Focus`:
+            case `${firstRoot}/Goals`:
+            case `${firstRoot}/Vision`:
+            case `${firstRoot}/Purpose & Principles`:
+            case `${firstRoot}/Someday Maybe`:
+            case `${firstRoot}/Cabinet`:
+            case `${secondRoot}/Areas of Focus`:
+            case `${secondRoot}/Goals`:
+            case `${secondRoot}/Vision`:
+            case `${secondRoot}/Purpose & Principles`:
+            case `${secondRoot}/Someday Maybe`:
+            case `${secondRoot}/Cabinet`:
+              return [];
+            default:
+              return fallback ?? [];
+          }
+        }
+
+        if (command === 'read_file') return '# README';
+        if (command === 'save_file') return 'ok';
+        return fallback ?? null;
+      }
+    );
+
+    const loadProjects = vi.fn().mockResolvedValue([]);
+    const { rerender } = render(
+      <GTDWorkspaceSidebar
+        currentFolder={firstRoot}
+        gtdSpace={firstSpace}
+        checkGTDSpace={vi.fn().mockResolvedValue(true)}
+        loadProjects={loadProjects}
+        onFolderSelect={vi.fn()}
+        onFileSelect={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(resolveFirstHabits).toBeTypeOf('function');
+    });
+
+    rerender(
+      <GTDWorkspaceSidebar
+        currentFolder={secondRoot}
+        gtdSpace={secondSpace}
+        checkGTDSpace={vi.fn().mockResolvedValue(true)}
+        loadProjects={loadProjects}
+        onFolderSelect={vi.fn()}
+        onFileSelect={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByText('Second Habit')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveFirstHabits?.([
+        markdownFile(`${firstRoot}/Habits/First Habit.md`, 'First Habit.md'),
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Second Habit')).toBeInTheDocument();
+      expect(screen.queryByText('First Habit')).not.toBeInTheDocument();
+    });
+  });
+
+  it('renders project due-date overlays before the project reload settles after README saves', async () => {
+    let resolveProjects: ((projects: GTDProject[]) => void) | undefined;
+
+    safeInvokeMock.mockImplementation(
+      async (command: string, args?: { path?: string; projectPath?: string }, fallback?: unknown) => {
+        if (command === 'check_directory_exists') {
+          return true;
+        }
+
+        if (command === 'list_project_actions' && args?.projectPath === activeProject.path) {
+          return projectActions;
+        }
+
+        if (command === 'list_markdown_files') {
+          switch (args?.path) {
+            case `${rootPath}/Habits`:
+            case `${rootPath}/Areas of Focus`:
+            case `${rootPath}/Goals`:
+            case `${rootPath}/Vision`:
+            case `${rootPath}/Purpose & Principles`:
+            case `${rootPath}/Someday Maybe`:
+            case `${rootPath}/Cabinet`:
+              return [];
+            default:
+              return fallback ?? [];
+          }
+        }
+
+        if (command === 'read_file') return '# README';
+        if (command === 'save_file') return 'ok';
+        return fallback ?? null;
+      }
+    );
+
+    const loadProjects = vi.fn().mockImplementation(
+      async () =>
+        new Promise<GTDProject[]>((resolve) => {
+          resolveProjects = resolve;
+        })
+    );
+
+    render(
+      <GTDWorkspaceSidebar
+        currentFolder={rootPath}
+        gtdSpace={gtdSpace}
+        checkGTDSpace={vi.fn().mockResolvedValue(true)}
+        loadProjects={loadProjects}
+        onFolderSelect={vi.fn()}
+        onFileSelect={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByText('Project Alpha')).toBeInTheDocument();
+
+    act(() => {
+      emitContentSaved({
+        filePath: `${activeProject.path}/README.markdown`,
+        fileName: 'README.markdown',
+        content: '# Project Alpha',
+        metadata: {
+          title: 'Project Alpha',
+          due_date: '2026-04-20',
+        } as never,
+      });
+    });
+
+    expect(await screen.findByText(/2026/)).toBeInTheDocument();
+    expect(loadProjects).toHaveBeenCalledWith(rootPath);
+
+    await act(async () => {
+      resolveProjects?.(gtdSpace.projects || []);
+    });
   });
 });

@@ -4,6 +4,11 @@ import {
   CircleDot,
   XCircle,
 } from 'lucide-react';
+import {
+  buildSectionPath,
+  buildSectionPathCandidates,
+  normalizeSidebarPath,
+} from '@/hooks/sidebar/path-classification';
 import { normalizeStatus } from '@/utils/gtd-status';
 import { norm } from '@/utils/path';
 import { CALENDAR_FILE_ID } from '@/utils/special-files';
@@ -21,9 +26,7 @@ export const getFolderName = (fullPath: string): string => {
   return segments[segments.length - 1] ?? '';
 };
 
-export const normalizePath = (path?: string | null): string | null => {
-  return norm(path) ?? null;
-};
+export const normalizePath = normalizeSidebarPath;
 
 export const isPathDescendant = (
   parent?: string | null,
@@ -124,24 +127,7 @@ export const getStatusIcon = (statusInput: string) => {
 
 export const getDisplayName = (name: string): string => name.replace(/\.(?:md|markdown)$/i, '');
 
-export const buildSectionPath = (
-  rootPath: string | null | undefined,
-  sectionPath: string
-): string => {
-  const base = (rootPath ?? '').replace(/[\\/]+$/, '');
-  if (!base) return norm(sectionPath) ?? sectionPath;
-  const separator = base.includes('\\') ? '\\' : '/';
-  return norm(`${base}${separator}${sectionPath}`) ?? `${base}${separator}${sectionPath}`;
-};
-
-export const buildSectionPathCandidates = (
-  rootPath: string | null | undefined,
-  section: Pick<GTDSection, 'path' | 'aliases'>
-): string[] => {
-  const candidates = [section.path, ...(section.aliases ?? [])]
-    .map((candidate) => buildSectionPath(rootPath, candidate));
-  return [...new Set(candidates)];
-};
+export { buildSectionPath, buildSectionPathCandidates };
 
 export const createCalendarFile = (): MarkdownFile => ({
   id: CALENDAR_FILE_ID,

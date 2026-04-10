@@ -336,8 +336,8 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
 
   // Handle habit toggle
   const handleHabitToggle = async (habit: typeof habitsWithHistory[0]) => {
-    const newStatus = habit.status === 'completed';
-    await updateHabitStatus(habit.path, !newStatus);
+    const nextStatus = habit.status === 'completed' ? 'todo' : 'completed';
+    await updateHabitStatus(habit.path, nextStatus);
   };
 
   // Handle action status update

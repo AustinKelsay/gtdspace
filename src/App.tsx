@@ -904,14 +904,21 @@ export const App: React.FC = () => {
 
     // Handle real-time content changes for habits
     const handleHabitContentChanged = (
-      event: CustomEvent<{ filePath: string }>
+      event: CustomEvent<{ filePath?: string; habitPath?: string }>
     ) => {
-      const { filePath } = event.detail;
+      const changedPath = event.detail.habitPath ?? event.detail.filePath;
+      if (!changedPath) {
+        return;
+      }
 
-      // If the changed file is the currently active tab, reload its content
-      if (activeTab?.id && pathsEqual(activeTab.file.path, filePath)) {
+      // If the changed file is the currently active tab, reload or sync its content
+      if (activeTab?.id && pathsEqual(activeTab.file.path, changedPath)) {
         void (async () => {
-          const latestContent = await safeInvoke<string>('read_file', { path: filePath }, null);
+          const latestContent = await safeInvoke<string>(
+            'read_file',
+            { path: changedPath },
+            null
+          );
           if (latestContent == null) {
             return;
           }
@@ -957,6 +964,7 @@ export const App: React.FC = () => {
   const loadProjectsRef = React.useRef(loadProjects);
   const reloadTabFromDiskRef = React.useRef(reloadTabFromDisk);
   const activeTabRef = React.useRef(activeTab);
+  const repairedHabitSpacesRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
     checkGTDSpaceRef.current = checkGTDSpace;
@@ -970,6 +978,60 @@ export const App: React.FC = () => {
     if (!currentSpacePath) {
       return;
     }
+    const currentSpaceKey = pathKey(currentSpacePath);
+    if (!currentSpaceKey) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const repairHabitHistory = async () => {
+      if (!currentSpacePath || repairedHabitSpacesRef.current.has(currentSpaceKey)) {
+        return [];
+      }
+
+      const repairedHabits = await withErrorHandling(
+        async () => {
+          const result = await safeInvoke<string[]>(
+            "repair_habit_history",
+            {
+              spacePath: currentSpacePath,
+            },
+            null
+          );
+          if (result === null) {
+            throw new Error("Failed to repair habit history");
+          }
+          return result;
+        },
+        "Failed to repair habit history",
+        "habit"
+      );
+      if (repairedHabits === null) {
+        return [];
+      }
+
+      repairedHabitSpacesRef.current.add(currentSpaceKey);
+
+      if (isCancelled || repairedHabits.length === 0) {
+        return repairedHabits;
+      }
+
+      toast({
+        title: "Repaired habit history",
+        description: `Normalized ${repairedHabits.length} habit file${repairedHabits.length === 1 ? "" : "s"} in this space.`,
+      });
+
+      await checkGTDSpaceRef.current(currentSpacePath);
+      await loadProjectsRef.current(currentSpacePath);
+
+      const currentTab = activeTabRef.current;
+      if (isHabitPath(currentTab?.file.path) && currentTab?.id) {
+        await reloadTabFromDiskRef.current(currentTab.id);
+      }
+
+      return repairedHabits;
+    };
 
     // Function to check and reset habits
     const checkHabits = async () => {
@@ -1015,6 +1077,8 @@ export const App: React.FC = () => {
           return; // Skip invocation if no valid space path
         }
 
+        await repairHabitHistory();
+
         const resetHabits =
           (await safeInvoke<string[]>(
             "check_and_reset_habits",
@@ -1045,9 +1109,10 @@ export const App: React.FC = () => {
     }, 60000); // 1 minute interval
 
     return () => {
+      isCancelled = true;
       clearInterval(interval);
     };
-  }, [gtdSpace?.root_path]); // Only depend on root_path, use refs for everything else
+  }, [gtdSpace?.root_path, toast, withErrorHandling]); // Only depend on root_path, use refs for everything else
 
   // Show loading screen while app is initializing
   if (isAppInitializing) {

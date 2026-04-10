@@ -21,6 +21,7 @@ import { useFilePath } from '@/components/editor/FilePathContext';
 import { emitMetadataChange } from '@/utils/content-event-bus';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { norm } from '@/utils/path';
+import { safeInvoke } from '@/utils/safe-invoke';
 
 // Define status options for GTD
 const GTD_STATUS_OPTIONS = [
@@ -171,13 +172,18 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
               const inTauriContext = await checkTauriContextAsync();
               
               if (inTauriContext) {
-                const result = await withErrorHandling(async () => {
-                  const { invoke } = await import('@tauri-apps/api/core');
-                  return invoke('updateHabitStatus', {
-                    habitPath: currentPath,
-                    newStatus: selectedValue,
-                  });
-                }, 'Failed to update habit status');
+                const result = await withErrorHandling(
+                  async () =>
+                    safeInvoke<boolean>(
+                      'update_habit_status',
+                      {
+                        habitPath: normalizedHabitPath,
+                        newStatus: selectedValue,
+                      },
+                      null
+                    ),
+                  'Failed to update habit status'
+                );
 
                 if (result === null) {
                   throw new Error('Failed to update habit status');
@@ -185,12 +191,11 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                 
                 // Mark update as successfully applied
                 updateApplied = true;
-
+                
                 // Emit initial status change event
-                const normalizedForName = currentPath.replace(/\\/g, '/');
-                const fileName = normalizedForName.split('/').pop() || '';
+                const fileName = normalizedHabitPath.split('/').pop() || '';
                 emitMetadataChange({
-                  filePath: currentPath,
+                  filePath: normalizedHabitPath,
                   fileName,
                   content: '', // Content not directly changed
                   metadata: { habitStatus: selectedValue },
@@ -199,7 +204,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                 window.dispatchEvent(
                   new CustomEvent('habit-status-updated', {
                     detail: {
-                      filePath: currentPath,
+                      habitPath: normalizedHabitPath,
                       fileName,
                       habitStatus: selectedValue,
                     },
@@ -208,7 +213,7 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                 window.dispatchEvent(
                   new CustomEvent('habit-content-changed', {
                     detail: {
-                      filePath: currentPath,
+                      habitPath: normalizedHabitPath,
                       fileName,
                       habitStatus: selectedValue,
                     },
@@ -225,10 +230,9 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
                 });
                 
                 // Emit revert event
-                const normalizedForName = currentPath.replace(/\\/g, '/');
-                const fileName = normalizedForName.split('/').pop() || '';
+                const fileName = normalizedHabitPath.split('/').pop() || '';
                 emitMetadataChange({
-                  filePath: currentPath,
+                  filePath: normalizedHabitPath,
                   fileName,
                   content: '',
                   metadata: { habitStatus: previousValue },
@@ -246,10 +250,9 @@ const SingleSelectRenderer = React.memo(function SingleSelectRenderer(props: {
               });
               
               // Emit revert event so consumers see the persisted state
-              const normalizedForName = currentPath.replace(/\\/g, '/');
-              const fileName = normalizedForName.split('/').pop() || '';
+              const fileName = normalizedHabitPath.split('/').pop() || '';
               emitMetadataChange({
-                filePath: currentPath,
+                filePath: normalizedHabitPath,
                 fileName,
                 content: '',
                 metadata: { habitStatus: previousValue },

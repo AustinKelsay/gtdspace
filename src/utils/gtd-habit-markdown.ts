@@ -320,6 +320,22 @@ export function splitHabitHistory(raw?: string): {
   };
 }
 
+export function isHabitHistoryStatusCompleted(status?: string): boolean {
+  return /^complete(?:d)?$/i.test((status ?? '').trim());
+}
+
+export function toHabitPeriodHistory(
+  rows: HabitHistoryRow[]
+): Array<{ date: string; time?: string; completed: boolean; action?: string; note?: string }> {
+  return rows.map((row) => ({
+    date: row.date,
+    time: row.time || undefined,
+    completed: isHabitHistoryStatusCompleted(row.status),
+    action: row.action || undefined,
+    note: row.details || row.action || undefined,
+  }));
+}
+
 export function habitHistoryRowToDate(row: { date?: string; time?: string }): Date | null {
   if (!row.date) {
     return null;
@@ -403,7 +419,7 @@ export function findLastHabitCompletionDate(rows: HabitHistoryRow[]): Date | nul
   let latestCompletion: Date | null = null;
 
   for (const row of rows) {
-    if (!/^complete(?:d)?$/i.test((row.status ?? '').trim())) {
+    if (!isHabitHistoryStatusCompleted(row.status)) {
       continue;
     }
 

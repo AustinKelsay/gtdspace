@@ -5,15 +5,19 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
-import { readFileText } from './useFileManager';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { localISODate, toISOStringFromEpoch } from '@/utils/time';
 import type { GTDHabit, MarkdownFile } from '@/types';
 import { createScopedLogger } from '@/utils/logger';
 import { countHabitsCompletedOnDate } from '@/utils/habit-progress';
+import { emitMetadataChange } from '@/utils/content-event-bus';
+import { norm } from '@/utils/path';
 import {
   calculateNextHabitReset,
+  isHabitHistoryStatusCompleted,
   isHabitResetAction,
   parseHabitContent,
+  toHabitPeriodHistory,
 } from '@/utils/gtd-habit-markdown';
 
 export interface HabitHistoryEntry {
@@ -26,6 +30,7 @@ export interface HabitHistoryEntry {
 
 export interface HabitWithHistory extends GTDHabit {
   history: HabitHistoryEntry[];
+  periodHistory: HabitHistoryEntry[];
   currentStreak: number;
   bestStreak: number;
   averageStreak: number;
@@ -67,7 +72,10 @@ interface UseHabitsHistoryReturn {
     mostConsistent?: HabitWithHistory;
   };
   loadHabits: (spacePath: string) => Promise<void>;
-  updateHabitStatus: (habitPath: string, completed: boolean, note?: string) => Promise<void>;
+  updateHabitStatus: (
+    habitPath: string,
+    next: 'completed' | 'todo'
+  ) => Promise<boolean | null>;
   refresh: () => Promise<void>;
 }
 
@@ -92,7 +100,7 @@ export function toAnalyticsHistory(
     .map((row) => ({
       date: row.date,
       time: row.time,
-      completed: /^complete(?:d)?$/i.test((row.status ?? '').trim()),
+      completed: isHabitHistoryStatusCompleted(row.status),
       action: row.action,
       note: row.details || row.action || undefined,
     }));
@@ -228,7 +236,8 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
     historyDays = 90,
     includeInactive = true
   } = options;
-  
+  const { withErrorHandling } = useErrorHandler();
+
   const [habits, setHabits] = useState<HabitWithHistory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -274,13 +283,24 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
       const loadedHabits = await Promise.all(
         habitFiles.map(async (file) => {
           try {
-            const content = await readFileText(file.path);
+            const content = await withErrorHandling(
+              () => safeInvoke<string>('read_file', { path: file.path }, ''),
+              'Failed to read habit file',
+              'habit'
+            );
+            if (content === null) {
+              return null;
+            }
             const parsedHabit = parseHabitContent(content);
+            const periodHistory = toHabitPeriodHistory(parsedHabit.historyRows);
             const history = toAnalyticsHistory(parsedHabit.historyRows);
-            habitsLog.debug(`Habit "${file.name}" history entries`, history.length);
+            habitsLog.debug(`Habit "${file.name}" history entries`, {
+              analytics: history.length,
+              periods: periodHistory.length,
+            });
 
             // Filter inactive if needed
-            if (!includeInactive && history.length === 0) {
+            if (!includeInactive && periodHistory.length === 0) {
               habitsLog.debug(`Filtering out inactive habit: ${file.name}`);
               return null;
             }
@@ -321,6 +341,7 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
               last_updated: toISOStringFromEpoch(file.last_modified),
               createdDateTime,
               history,
+              periodHistory,
               currentStreak: patterns.currentStreak,
               bestStreak: patterns.bestStreak,
               averageStreak: patterns.averageStreak,
@@ -359,7 +380,7 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
     } finally {
       setIsLoading(false);
     }
-  }, [historyDays, includeInactive]);
+  }, [historyDays, includeInactive, withErrorHandling]);
   
   const refresh = useCallback(async () => {
     if (cachedSpacePath) {
@@ -369,86 +390,63 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
   
   const updateHabitStatus = useCallback(async (
     habitPath: string,
-    completed: boolean,
-    note?: string
-  ) => {
+    next: 'completed' | 'todo'
+  ): Promise<boolean | null> => {
     try {
-      let content = await readFileText(habitPath);
-      const now = new Date();
-      // Use local date format to match history entries
-      const date = localISODate(now);
-      const time = now.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      });
-      
-      // Update status field
-      if (content.includes('[!checkbox:habit-status:')) {
-        content = content.replace(
-          /\[!checkbox:habit-status:(true|false)\]/,
-          `[!checkbox:habit-status:${completed}]`
-        );
-      } else if (content.includes('[!singleselect:habit-status:')) {
-        content = content.replace(
-          /\[!singleselect:habit-status:[^\]]+\]/,
-          `[!singleselect:habit-status:${completed ? 'completed' : 'todo'}]`
-        );
+      const normalizedPath = norm(habitPath) ?? habitPath;
+      const nextStatus = next === 'completed' ? 'completed' : 'todo';
+      const updated = await withErrorHandling(
+        async () =>
+          safeInvoke<boolean>(
+            'update_habit_status',
+            { habitPath: normalizedPath, newStatus: nextStatus },
+            null
+          ),
+        'Failed to update habit status',
+        'habit'
+      );
+      if (updated === null) {
+        habitsLog.error('[updateHabitStatus] Failed to update habit status');
+        return null;
       }
-      
-      // Add to history table
-      const newRow = `| ${date} | ${time} | ${completed ? 'Complete' : 'Incomplete'} | Manual | ${note || 'Status updated'} |`;
-      
-      // Find or create history table
-      if (content.includes('| Date | Time | Status |')) {
-        // Insert after header
-        const lines = content.split('\n');
-        let inserted = false;
-        
-        for (let i = 0; i < lines.length; i++) {
-          if (/^\|\s*-+\s*\|\s*-+\s*\|\s*-+\s*\|\s*-+\s*\|\s*-+\s*\|$/.test(lines[i].trim())) {
-            lines.splice(i + 1, 0, newRow);
-            inserted = true;
-            break;
-          }
-        }
-        
-        if (!inserted) {
-          // Append at end if table structure not found
-          lines.push(newRow);
-        }
-        
-        content = lines.join('\n');
-      } else {
-        // Create new history table
-        const historyTable = `
-## History
 
-| Date | Time | Status | Action | Details |
-| --- | --- | --- | --- | --- |
-${newRow}
-`;
-        content += historyTable;
-      }
-      
-      const writeResult = await safeInvoke('save_file', {
-        path: habitPath,
-        content
-      }, null);
-
-      // Check if write succeeded
-      if (!writeResult) {
-        habitsLog.error('[updateHabitStatus] Failed to write file');
-        throw new Error('Failed to save habit changes');
+      if (updated) {
+        const fileName = normalizedPath.split('/').pop() || '';
+        emitMetadataChange({
+          filePath: normalizedPath,
+          fileName,
+          content: '',
+          metadata: { habitStatus: nextStatus },
+          changedFields: { habitStatus: nextStatus },
+        });
+        window.dispatchEvent(
+          new CustomEvent('habit-status-updated', {
+            detail: {
+              habitPath: normalizedPath,
+              fileName,
+              habitStatus: nextStatus,
+            },
+          })
+        );
+        window.dispatchEvent(
+          new CustomEvent('habit-content-changed', {
+            detail: {
+              habitPath: normalizedPath,
+              fileName,
+              habitStatus: nextStatus,
+            },
+          })
+        );
       }
 
       // Reload to get updated analytics
       await refresh();
+      return updated;
     } catch (err) {
       habitsLog.error('Failed to update habit status', err);
-      throw err;
+      return null;
     }
-  }, [refresh]);
+  }, [refresh, withErrorHandling]);
 
   const today = localISODate(new Date());
   

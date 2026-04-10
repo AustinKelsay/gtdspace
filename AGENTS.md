@@ -1,46 +1,36 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+## Structure
 
-GTD Space is split between a React frontend in `src/` and a Tauri desktop backend in `src-tauri/`. The frontend organizes UI code into `components/`, stateful hooks in `hooks/`, shared logic in `utils/`, data contracts in `types/`, and Tailwind helpers in `styles/`. Desktop-specific Rust code, commands, and capability configs live under `src-tauri/src/` with project metadata in `Cargo.toml` and runtime settings in `tauri.conf.json`. Shared assets sit in `public/`, while production builds land in `dist/`. End-to-end and exploratory docs belong in `docs/`, and automation scripts (e.g., `icons-generate.mjs`) stay inside `scripts/`.
+- React frontend lives in `src/`.
+- Tauri backend and capabilities live in `src-tauri/`.
+- Shared assets live in `public/`; longer docs live in `docs/`; scripts live in `scripts/`.
 
-## Build, Test, and Development Commands
+## Commands
 
-Use `npm run dev` for the Vite frontend and `npm run tauri:dev` when you need the full desktop shell. Run `npm run build` to type-check and emit optimized assets to `dist/`, and `npm run preview` to inspect that output. Desktop installers ship via `npm run tauri:build`. Lint with `npm run lint` or auto-fix via `npm run lint:fix`; `npm run type-check` validates pure TypeScript without bundling.
+- `npm run dev`
+- `npm run tauri:dev`
+- `npm run build`
+- `npm run preview`
+- `npm run lint`
+- `npm run type-check`
+- `npm run test`
 
-## Coding Style & Naming Conventions
+## Verification
 
-Author React 18 components with TypeScript, two-space indentation, and semicolons. Component files in `src/components` use PascalCase, hooks in `src/hooks` use the `useThing` pattern, and utilities in `src/utils` adopt kebab-case filenames. Tailwind is the default styling approach; global overrides live in `src/styles`. ESLint (configured in `eslint.config.js`) governs formatting and React Hooks rules—there is no Prettier step.
+- Baseline for code changes: `npm run type-check`, `npm run lint`, and `cd src-tauri && cargo fmt --check && cargo clippy -- -D warnings`.
+- When modifying app integration flows, run `npx vitest run tests/app.integration.spec.tsx`.
+- For changes to MCP settings or settings validation, run `npx vitest run tests/settings-validation.spec.ts`.
+- Run `npx vitest run tests/dashboard-actions.component.spec.tsx tests/dashboard-projects.component.spec.tsx tests/date-formatting.spec.ts` for dashboard actions, overview, or projects changes.
+- For Rust settings parsing, workspace resolution, or MCP server path updates, run the targeted `cargo test --manifest-path ...` commands already documented in the repo and rerun them after any formatter rewrite.
 
-## Testing Guidelines
+## PR Rules
 
-Vitest with React Testing Library underpins unit and component coverage. Place specs in `/tests` with the `*.test.ts` or `*.test.tsx` suffix. Run suites through `npm run vitest` (watch) or `npm run test` (CI modes). Before opening a PR, pair automated tests with `npm run lint` and `npm run type-check`, and spot-check new UI through `npm run tauri:dev`.
+- Use scope-focused imperative commits.
+- Include screenshots for UI changes and note relevant test coverage.
+- Unless instructed otherwise, attempt to run the CodeRabbit CLI on unstaged changes before committing and pushing.
 
-## Pre-Commit Checklist
+## Security
 
-Run the relevant local checks before every commit, not just before PR merge.
-Run the relevant local checks again before every push if you changed code after the last successful run.
-
-- Baseline checks for any code change:
-  - `npm run type-check`
-  - `npm run lint`
-  - `cd src-tauri && cargo fmt --check && cargo clippy -- -D warnings`
-- When changing `src/App.tsx`, file watcher handling, reload toasts, or integration flows:
-  - `npx vitest run tests/app.integration.spec.tsx`
-- When changing MCP server, Rust settings parsing, workspace resolution, or path handling:
-  - `cargo test --manifest-path src-tauri/mcp-server/Cargo.toml --test gtdspace_mcp_stdio -- --nocapture`
-  - `cargo test --manifest-path src-tauri/Cargo.toml parse_user_settings_value_accepts_partial_saved_settings -- --nocapture`
-- When changing frontend settings validation or MCP settings UI:
-  - `npx vitest run tests/settings-validation.spec.ts`
-- When changing dashboard actions, overview, or projects:
-  - `npx vitest run tests/dashboard-actions.component.spec.tsx tests/dashboard-projects.component.spec.tsx tests/date-formatting.spec.ts`
-- If `cargo fmt` rewrites any Rust files, review the diff and rerun the affected tests/checks before committing.
-- Do not push if any required local check for the touched area has not been rerun after the latest edits.
-
-## Commit & Pull Request Guidelines
-
-Write imperative, scope-focused commit messages referencing issues when applicable, e.g., `feat: add GTD calendar week view (#123)`. Pull requests should outline motivation, include screenshots for UI-facing updates, note test coverage, and link issues. Confirm linting, type-checks, and relevant Vitest suites pass, and update `docs/` when behavior or workflows change.
-
-## Security & Configuration Tips
-
-Guard credentials: store API keys in `.env` and exclude from Git. Review any changes to `src-tauri/capabilities/` carefully, and avoid relaxing the default Tauri CSP without consultation. When integrating remote content, prefer local bundling to preserve offline operation and security posture.
+- Keep API keys in `.env`.
+- Review `src-tauri/capabilities/` and CSP changes carefully.

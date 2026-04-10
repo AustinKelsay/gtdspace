@@ -6,11 +6,14 @@ export interface HabitCompletionEntryLike {
   date: string;
   time?: string;
   completed: boolean;
+  action?: string;
+  note?: string;
 }
 
 export interface HabitCompletionLike {
   status?: GTDHabitStatus;
   history?: HabitCompletionEntryLike[];
+  periodHistory?: HabitCompletionEntryLike[];
 }
 
 function compareEntriesDescending(
@@ -37,8 +40,11 @@ export function getLatestHabitEntryForDate(
   habit: HabitCompletionLike,
   date: string
 ): HabitCompletionEntryLike | undefined {
-  const entries = Array.isArray(habit.history)
-    ? habit.history.filter((entry) => entry.date === date)
+  const sourceEntries = Array.isArray(habit.periodHistory) && habit.periodHistory.length > 0
+    ? habit.periodHistory
+    : habit.history;
+  const entries = Array.isArray(sourceEntries)
+    ? sourceEntries.filter((entry) => entry.date === date)
     : [];
 
   if (entries.length === 0) {

@@ -9,6 +9,7 @@ import { safeInvoke } from '@/utils/safe-invoke';
 import type { GTDSpace, MarkdownFile } from '@/types';
 import { migrateMarkdownContent, needsMigration } from '@/utils/data-migration';
 import { onMetadataChange, onContentSaved } from '@/utils/content-event-bus';
+import { parseHabitContent, toHabitPeriodHistory } from '@/utils/gtd-habit-markdown';
 
 export interface CalendarItem {
   id: string;
@@ -23,6 +24,7 @@ export interface CalendarItem {
   projectName?: string;
   frequency?: string; // For habits
   createdDateTime?: string; // For habits
+  habitPeriodHistory?: Array<{ date: string; time?: string; completed: boolean; action?: string; note?: string }>;
   effort?: string; // For actions
   // Google Calendar specific fields
   googleEventId?: string;
@@ -60,7 +62,6 @@ interface GoogleEvent {
 // Pre-compile regex patterns for better performance
 const DATETIME_REGEX_CACHE = new Map<string, RegExp>();
 const SINGLESELECT_REGEX_CACHE = new Map<string, RegExp>();
-const CHECKBOX_REGEX_CACHE = new Map<string, RegExp>();
 
 // Get or create regex for datetime field
 const getDateTimeRegex = (fieldName: string): RegExp => {
@@ -78,16 +79,10 @@ const getSingleSelectRegex = (fieldName: string): RegExp => {
   return SINGLESELECT_REGEX_CACHE.get(fieldName)!;
 };
 
-// Get or create regex for checkbox field
-const getCheckboxRegex = (fieldName: string): RegExp => {
-  if (!CHECKBOX_REGEX_CACHE.has(fieldName)) {
-    CHECKBOX_REGEX_CACHE.set(fieldName, new RegExp(`\\[!checkbox:${fieldName}:(true|false)\\]`, 'i'));
-  }
-  return CHECKBOX_REGEX_CACHE.get(fieldName)!;
-};
-
 const normalizeFsPath = (value: string | undefined | null): string =>
   (value ?? '').replace(/\\/g, '/');
+
+const CREATED_AT_FALLBACK_WINDOW_MS = 5_000;
 
 // Parse datetime field from markdown content
 const parseDateTimeField = (content: string, fieldName: string): string | undefined => {
@@ -103,13 +98,6 @@ const parseSingleSelectField = (content: string, fieldName: string): string | un
   const match = content.match(regex);
   if (!match || !match[1] || match[1].trim() === '') return undefined;
   return match[1];
-};
-
-// Parse checkbox field from markdown content
-const parseCheckboxField = (content: string, fieldName: string): boolean => {
-  const regex = getCheckboxRegex(fieldName);
-  const match = content.match(regex);
-  return match ? match[1] === 'true' : false;
 };
 
 // Helper function to convert file.last_modified to ISO string
@@ -342,30 +330,21 @@ export const useCalendarData = (
                 // Note: Migration is applied for display only, not saved to disk
               }
               
-              const habitName = normalizedPath.split('/').pop()?.replace('.md', '') || '';
-              
-              // Parse habit fields
-              // First check if habit-status is a singleselect field (newer format)
-              let habitStatus: 'completed' | 'todo' = 'todo';
-              const singleSelectStatus = parseSingleSelectField(content, 'habit-status');
-              if (singleSelectStatus) {
-                // Normalize singleselect values to 'completed' or 'todo'
-                // Accept both 'complete' and 'completed' for backward compatibility
-                habitStatus = (singleSelectStatus.toLowerCase() === 'complete' || singleSelectStatus.toLowerCase() === 'completed') ? 'completed' : 'todo';
-              } else {
-                // Fall back to checkbox field (older format)
-                habitStatus = parseCheckboxField(content, 'habit-status') ? 'completed' : 'todo';
-              }
-              const frequency = parseSingleSelectField(content, 'habit-frequency') || 'daily';
-              
-              // Parse focus date for the habit (can include time)
-              const focusDate = parseDateTimeField(content, 'focus_date');
-              
-              // Parse created date using the existing DateTime parser
+              const fallbackName = normalizedPath.split('/').pop()?.replace(/\.(md|markdown)$/i, '') || '';
+              const parsedHabit = parseHabitContent(content);
+              const habitName =
+                parsedHabit.title && parsedHabit.title !== 'Untitled'
+                  ? parsedHabit.title
+                  : fallbackName;
+              const habitStatus = parsedHabit.status;
+              const frequency = parsedHabit.frequency;
+              const focusDate = parsedHabit.focusDateTime || undefined;
+              const habitPeriodHistory = toHabitPeriodHistory(parsedHabit.historyRows);
+
+              // Parse created date using the parsed habit content first, then normalize to ISO.
               let createdDateTime: string | undefined;
-              const createdDateTimeRaw = parseDateTimeField(content, 'created_date_time');
+              const createdDateTimeRaw = parsedHabit.createdDateTime;
               if (createdDateTimeRaw) {
-                // Parse and normalize to ISO format
                 try {
                   let parsed: Date;
                   
@@ -390,9 +369,16 @@ export const useCalendarData = (
                   }
                     
                   if (!isNaN(parsed.getTime())) {
-                    createdDateTime = parsed.toISOString();
+                    if (Math.abs(Date.now() - parsed.getTime()) <= CREATED_AT_FALLBACK_WINDOW_MS) {
+                      const maybeLastModified = fileLastModifiedToISO(
+                        file.last_modified,
+                        habitName
+                      );
+                      createdDateTime = maybeLastModified ?? parsed.toISOString();
+                    } else {
+                      createdDateTime = parsed.toISOString();
+                    }
                   } else {
-                    // Invalid date - log warning and use file.last_modified
                     console.warn(`[CalendarData] Invalid created_date_time value in habit "${habitName}": "${createdDateTimeRaw}" - using file.last_modified`);
                     const fallback = fileLastModifiedToISO(file.last_modified, habitName);
                     if (fallback) {
@@ -408,69 +394,9 @@ export const useCalendarData = (
                   }
                 }
               } else {
-                // Try to parse from ## Created header as fallback
-                const createdHeaderMatch = content.match(/##\s*Created\s*\r?\n\s*(\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)?)/i);
-                if (createdHeaderMatch && createdHeaderMatch[1]) {
-                  try {
-                    const dateStr = createdHeaderMatch[1].trim();
-                    
-                    // Parse date components explicitly for cross-browser consistency
-                    // Format: YYYY-MM-DD [HH:MM [AM/PM]]
-                    const dateTimeRegex = /^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{1,2}):(\d{2})(?:\s*(AM|PM))?)?$/i;
-                    const match = dateStr.match(dateTimeRegex);
-                    
-                    if (!match) {
-                      throw new Error('Invalid date format');
-                    }
-                    
-                    const year = parseInt(match[1], 10);
-                    const month = parseInt(match[2], 10);
-                    const day = parseInt(match[3], 10);
-                    let hour = match[4] ? parseInt(match[4], 10) : 0;
-                    const minute = match[5] ? parseInt(match[5], 10) : 0;
-                    const meridiem = match[6]?.toUpperCase();
-                    
-                    // Validate ranges
-                    if (year < 1900 || year > 2100 || 
-                        month < 1 || month > 12 || 
-                        day < 1 || day > 31 ||
-                        hour < 0 || hour > 23 ||
-                        minute < 0 || minute > 59) {
-                      throw new Error('Invalid date components');
-                    }
-                    
-                    // Convert 12-hour to 24-hour format if AM/PM is present
-                    if (meridiem) {
-                      if (hour < 1 || hour > 12) {
-                        throw new Error('Invalid hour for 12-hour format');
-                      }
-                      if (meridiem === 'PM' && hour !== 12) {
-                        hour += 12;
-                      } else if (meridiem === 'AM' && hour === 12) {
-                        hour = 0;
-                      }
-                    }
-                    
-                    // Create date using UTC to ensure consistency
-                    const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
-                    if (isNaN(utcDate.getTime())) {
-                      throw new Error('Invalid date');
-                    }
-                    
-                    createdDateTime = utcDate.toISOString();
-                  } catch {
-                    // If parsing fails, use file.last_modified
-                    const fallback = fileLastModifiedToISO(file.last_modified, habitName);
-                    if (fallback) {
-                      createdDateTime = fallback;
-                    }
-                  }
-                } else {
-                  // No created date found in content, use file.last_modified
-                  const fallback = fileLastModifiedToISO(file.last_modified, habitName);
-                  if (fallback) {
-                    createdDateTime = fallback;
-                  }
+                const fallback = fileLastModifiedToISO(file.last_modified, habitName);
+                if (fallback) {
+                  createdDateTime = fallback;
                 }
               }
 
@@ -487,7 +413,8 @@ export const useCalendarData = (
                   focusDate: focusDate, // Can include time if specified
                   projectName: undefined,
                   frequency: frequency,
-                  createdDateTime: createdDateTime
+                  createdDateTime: createdDateTime,
+                  habitPeriodHistory
                 });
               }
             } catch (err) {

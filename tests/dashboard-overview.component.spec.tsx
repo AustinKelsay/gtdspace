@@ -13,6 +13,7 @@ const buildHabit = (overrides: Partial<HabitWithHistory> = {}): HabitWithHistory
   createdDateTime: '2026-01-01T08:00:00Z',
   last_updated: '2026-03-31T08:00:00Z',
   history: [],
+  periodHistory: [],
   currentStreak: 0,
   bestStreak: 0,
   averageStreak: 0,
@@ -77,7 +78,7 @@ describe('DashboardOverview habits stat', () => {
       buildHabit({
         name: 'Habit 1',
         status: 'todo',
-        history: [{ date: '2026-03-31', time: '08:00', completed: true }],
+        periodHistory: [{ date: '2026-03-31', time: '08:00', completed: true }],
       }),
       buildHabit({
         name: 'Habit 2',
@@ -124,5 +125,40 @@ describe('DashboardOverview habits stat', () => {
 
     expect(screen.getByText('0/2')).toBeInTheDocument();
     expect(screen.getByText('0% completed today')).toBeInTheDocument();
+  });
+
+  it('counts today completions from period history even when analytics history excludes reset rows', () => {
+    render(
+      <DashboardOverview
+        gtdSpace={gtdSpace}
+        projects={[]}
+        habits={[
+          buildHabit({
+            name: 'Reset-derived Habit',
+            status: 'todo',
+            history: [],
+            periodHistory: [{ date: '2026-03-31', time: '12:00 AM', completed: true, action: 'Manual' }],
+          }),
+          buildHabit({
+            name: 'Pending Habit',
+            path: '/space/Habits/2.md',
+            status: 'todo',
+            history: [],
+            periodHistory: [{ date: '2026-03-31', time: '12:00 AM', completed: false, action: 'Auto-Reset' }],
+          }),
+        ]}
+        actions={[]}
+        actionSummary={{
+          total: 0,
+          inProgress: 0,
+          completed: 0,
+          waiting: 0,
+        }}
+        horizonCounts={{}}
+      />
+    );
+
+    expect(screen.getByText('1/2')).toBeInTheDocument();
+    expect(screen.getByText('50% completed today')).toBeInTheDocument();
   });
 });

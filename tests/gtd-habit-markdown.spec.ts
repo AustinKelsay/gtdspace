@@ -5,6 +5,7 @@ import {
   findLastHabitCompletionDate,
   parseHabitContent,
   parseHabitStatus,
+  toHabitPeriodHistory,
 } from '@/utils/gtd-habit-markdown';
 
 describe('gtd habit markdown utilities', () => {
@@ -48,6 +49,42 @@ describe('gtd habit markdown utilities', () => {
     expect(parsed.generalReferences).toEqual(['/Space/Cabinet/Article.md']);
     expect(parsed.notes).toBe('Review the active list.');
     expect(parsed.historyRows).toHaveLength(2);
+  });
+
+  it('converts parsed history rows into period history without filtering reset rows', () => {
+    const rows = [
+      {
+        date: '2026-03-01',
+        time: '8:15 AM',
+        status: 'Complete',
+        action: 'Manual',
+        details: 'Wrapped up',
+      },
+      {
+        date: '2026-03-03',
+        time: '12:00 AM',
+        status: 'To Do',
+        action: 'Auto-Reset',
+        details: 'New period',
+      },
+    ];
+
+    expect(toHabitPeriodHistory(rows)).toEqual([
+      {
+        date: '2026-03-01',
+        time: '8:15 AM',
+        completed: true,
+        action: 'Manual',
+        note: 'Wrapped up',
+      },
+      {
+        date: '2026-03-03',
+        time: '12:00 AM',
+        completed: false,
+        action: 'Auto-Reset',
+        note: 'New period',
+      },
+    ]);
   });
 
   it('treats legacy singleselect complete values as completed', () => {

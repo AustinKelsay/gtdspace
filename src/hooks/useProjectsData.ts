@@ -93,6 +93,7 @@ const updateProjectDueDateInMarkdown = (content: string, dueDate: string): strin
 };
 
 export interface ProjectWithMetadata extends GTDProject {
+  modifiedDate?: string;
   linkedAreas?: string[];
   linkedGoals?: string[];
   linkedVision?: string[];
@@ -196,6 +197,23 @@ const resolveProjectReadme = async (projectPath: string): Promise<string | null>
   }
 
   return null;
+};
+
+const resolveProjectReadmeFile = async (projectPath: string): Promise<MarkdownFile | null> => {
+  try {
+    const files = await safeInvoke<MarkdownFile[]>(
+      'list_markdown_files',
+      { path: projectPath },
+      []
+    );
+    return files.find((file) => {
+      const normalizedFilePath = norm(file.path) ?? file.path;
+      return /\/README\.(md|markdown)$/i.test(normalizedFilePath);
+    }) ?? null;
+  } catch (error) {
+    console.error('[resolveProjectReadmeFile] Failed to locate README metadata:', error);
+    return null;
+  }
 };
 
 export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjectsDataReturn {
@@ -316,9 +334,13 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
       const enhancedProjects = await Promise.all(
         filteredProjects.map(async (project) => {
           try {
-            const readmePath = await resolveProjectReadme(project.path);
+            const readmeFile = await resolveProjectReadmeFile(project.path);
+            const readmePath = readmeFile?.path || await resolveProjectReadme(project.path);
             let parsedProject = null as ReturnType<typeof parseProjectMarkdown> | null;
             let outcomes: string[] = [];
+            const modifiedDate = readmeFile
+              ? toISOStringFromEpoch(readmeFile.last_modified)
+              : project.createdDateTime;
 
             if (readmePath) {
               const content = await readFileText(readmePath);
@@ -382,6 +404,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
               linkedGoals: parsedProject?.horizonReferences.goals ?? [],
               linkedVision: parsedProject?.horizonReferences.vision ?? [],
               linkedPurpose: parsedProject?.horizonReferences.purpose ?? [],
+              modifiedDate,
               completionPercentage,
               actionStats,
               effort: undefined,
@@ -521,6 +544,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
               : project.name,
           status: nextParsedProject.status,
           dueDate: nextParsedProject.dueDate || null,
+          modifiedDate: new Date().toISOString(),
         };
       }));
     } catch (err) {

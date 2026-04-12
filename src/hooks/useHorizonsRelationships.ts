@@ -8,6 +8,7 @@ import { safeInvoke } from '@/utils/safe-invoke';
 import { extractMetadata, extractHorizonReferences as extractHorizonReferencesUtil } from '@/utils/metadata-extractor';
 import { readFileText } from './useFileManager';
 import type { GTDProject, MarkdownFile } from '@/types';
+import { toISOStringFromEpoch } from '@/utils/time';
 
 export interface HorizonFile extends MarkdownFile {
   horizonLevel: string;
@@ -17,6 +18,7 @@ export interface HorizonFile extends MarkdownFile {
   tags?: string[];
   status?: string;
   dueDate?: string;
+  createdDateTime?: string;
 }
 
 export interface HorizonRelationship {
@@ -363,7 +365,12 @@ export function useHorizonsRelationships(
                       content: project.description || extractContentPreview(content),
                       tags: Array.isArray(metadata.tags) ? metadata.tags : [],
                       status: project.status ?? deriveStatusForLevel('Projects', metadata),
-                      dueDate: project.dueDate || undefined
+                      dueDate: project.dueDate || undefined,
+                      createdDateTime:
+                        typeof (metadata as { createdDateTime?: unknown }).createdDateTime === 'string' &&
+                        (metadata as { createdDateTime: string }).createdDateTime.trim().length > 0
+                          ? (metadata as { createdDateTime: string }).createdDateTime.trim()
+                          : project.createdDateTime,
                     };
                     
                     return file;
@@ -426,7 +433,12 @@ export function useHorizonsRelationships(
                       content: extractContentPreview(content),
                       tags: Array.isArray(metadata.tags) ? metadata.tags : [],
                       status: derivedStatus,
-                      dueDate: derivedDueDate
+                      dueDate: derivedDueDate,
+                      createdDateTime:
+                        typeof (metadata as { createdDateTime?: unknown }).createdDateTime === 'string' &&
+                        (metadata as { createdDateTime: string }).createdDateTime.trim().length > 0
+                          ? (metadata as { createdDateTime: string }).createdDateTime.trim()
+                          : toISOStringFromEpoch(mdFile.last_modified),
                     };
                     
                     return file;

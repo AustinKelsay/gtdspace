@@ -6,7 +6,7 @@
 
 /* eslint-disable react-refresh/only-export-components */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 // import { Card } from '@/components/ui/card';  // Removed: unused
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -631,24 +631,58 @@ const ResizableEvent: React.FC<ResizableEventProps> = ({
   onResize,
   isResizable = false 
 }) => {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const originalEventHeightRef = useRef<string | null>(null);
   const [isResizing, setIsResizing] = useState(false);
   const [startY, setStartY] = useState(0);
   const [startHeight, setStartHeight] = useState(0);
   const [currentHeight, setCurrentHeight] = useState<number | null>(null);
   const [showHandle, setShowHandle] = useState(false);
+
+  const getRenderedEventBox = () =>
+    wrapperRef.current?.querySelector<HTMLElement>('[data-calendar-event-box="true"]') ?? null;
   
   const handleResizeStart = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     setIsResizing(true);
     setStartY(e.clientY);
-    const element = (e.target as HTMLElement).parentElement;
-    if (element) {
-      const height = element.offsetHeight;
+    const eventBox = getRenderedEventBox();
+    const fallbackElement = e.currentTarget.parentElement;
+    const height = eventBox?.getBoundingClientRect().height ?? fallbackElement?.getBoundingClientRect().height ?? 0;
+    if (height > 0) {
       setStartHeight(height);
       setCurrentHeight(height);
     }
   };
+
+  useEffect(() => {
+    const eventBox = getRenderedEventBox();
+    if (!eventBox) return;
+
+    if (!isResizing || currentHeight === null) {
+      if (originalEventHeightRef.current !== null) {
+        eventBox.style.height = originalEventHeightRef.current;
+        originalEventHeightRef.current = null;
+      }
+      return;
+    }
+
+    if (originalEventHeightRef.current === null) {
+      originalEventHeightRef.current = eventBox.style.height;
+    }
+
+    eventBox.style.height = `${currentHeight}px`;
+  }, [isResizing, currentHeight]);
+
+  useEffect(() => {
+    return () => {
+      const eventBox = getRenderedEventBox();
+      if (eventBox && originalEventHeightRef.current !== null) {
+        eventBox.style.height = originalEventHeightRef.current;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!isResizing) return;
@@ -679,6 +713,7 @@ const ResizableEvent: React.FC<ResizableEventProps> = ({
 
   return (
     <div 
+      ref={wrapperRef}
       className="relative"
       style={{ 
         height: currentHeight || undefined,
@@ -757,9 +792,20 @@ const DraggableEvent: React.FC<DraggableEventProps> = ({ event, children }) => {
 interface DroppableCellProps extends React.HTMLAttributes<HTMLDivElement> {
   id: string;
   children: React.ReactNode;
+  onActivate?: () => void;
 }
 
-const DroppableCell: React.FC<DroppableCellProps> = ({ id, children, className, ...props }) => {
+const DroppableCell: React.FC<DroppableCellProps> = ({
+  id,
+  children,
+  className,
+  onActivate,
+  onClick,
+  onKeyDown,
+  role,
+  tabIndex,
+  ...props
+}) => {
   const {
     isOver,
     setNodeRef,
@@ -767,9 +813,33 @@ const DroppableCell: React.FC<DroppableCellProps> = ({ id, children, className, 
     id,
   });
 
+  const isInteractive = typeof onActivate === 'function' || typeof onClick === 'function';
+
+  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    onClick?.(event);
+    onActivate?.();
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    onKeyDown?.(event);
+
+    if (event.defaultPrevented || !isInteractive) {
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      event.currentTarget.click();
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      role={isInteractive ? role ?? 'button' : role}
+      tabIndex={isInteractive ? tabIndex ?? 0 : tabIndex}
       {...props}
       className={cn(
         className,
@@ -1377,6 +1447,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                   >
                                     <DraggableEvent event={event}>
                                       <div
+                                        data-calendar-event-box="true"
                                         onClick={() => handleEventClick(event)}
                                         className={cn(
                                           "absolute px-2 py-1 rounded text-xs overflow-hidden h-full",
@@ -1581,7 +1652,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     key={day.toISOString()}
                     id={dropId}
                     data-testid={`month-day-cell-${dateKey}`}
-                    onClick={() => handleDayDrillIn(day)}
+                    onActivate={() => handleDayDrillIn(day)}
+                    aria-label={`Open ${format(day, 'EEEE, MMM d, yyyy')} in day view`}
                     className={cn(
                       "border-r border-b last:border-r-0 p-1 overflow-hidden",
                       "hover:bg-accent/5 transition-colors cursor-pointer",

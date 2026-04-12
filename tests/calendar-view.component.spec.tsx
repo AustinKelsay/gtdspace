@@ -105,6 +105,20 @@ describe('CalendarView day mode', () => {
     expect(screen.getByText('Wednesday, Apr 15, 2026')).toBeInTheDocument();
   });
 
+  it('supports keyboard drill-in from month cells', () => {
+    renderCalendar([timedFocusItem, untimedDueItem]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Month' }));
+
+    const dayCell = screen.getByTestId('month-day-cell-2026-04-15');
+    expect(dayCell).toHaveAttribute('role', 'button');
+    expect(dayCell).toHaveAttribute('tabindex', '0');
+    expect(dayCell).toHaveAttribute('aria-label', 'Open Wednesday, Apr 15, 2026 in day view');
+
+    fireEvent.keyDown(dayCell, { key: 'Enter' });
+    expect(screen.getByText('Wednesday, Apr 15, 2026')).toBeInTheDocument();
+  });
+
   it('navigates day view one day at a time and separates timed vs untimed events', () => {
     renderCalendar([timedFocusItem, untimedDueItem]);
 

@@ -21,10 +21,10 @@ import {
 } from 'lucide-react';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval,
-  isSameDay, parseISO, isValid, startOfWeek, endOfWeek,
+  parseISO, isValid, startOfWeek, endOfWeek,
   isSameMonth, isToday, addDays, addWeeks, addMonths,
   isMonday, isTuesday, isWednesday,
-  isThursday, isFriday, setHours
+  isThursday, isFriday, setHours, startOfDay, endOfDay
 } from 'date-fns';
 import { checkTauriContextAsync } from '@/utils/tauri-ready';
 import { useCalendarData, type CalendarItem } from '@/hooks/useCalendarData';
@@ -108,6 +108,18 @@ interface CalendarEvent {
   attendees?: string[];
   meetingLink?: string;
   description?: string;
+}
+
+type ViewMode = 'day' | 'month' | 'week';
+
+interface ViewWindow {
+  start: Date;
+  end: Date;
+}
+
+interface DropTargetResolution {
+  newDate: Date;
+  includeTime: boolean;
 }
 
 // Lazy-load Tauri invoke only in Tauri context
@@ -306,22 +318,113 @@ const generateHabitDates = (
   return dates;
 };
 
-type ViewMode = 'month' | 'week';
+const getViewWindow = (viewDate: Date, viewMode: ViewMode): ViewWindow => {
+  switch (viewMode) {
+    case 'day':
+      return {
+        start: startOfDay(viewDate),
+        end: endOfDay(viewDate),
+      };
+    case 'week':
+      return {
+        start: startOfWeek(viewDate),
+        end: endOfWeek(viewDate),
+      };
+    case 'month':
+    default:
+      return {
+        start: startOfWeek(startOfMonth(viewDate)),
+        end: endOfWeek(endOfMonth(viewDate)),
+      };
+  }
+};
+
+const getDisplayDays = (viewDate: Date, viewMode: ViewMode): Date[] => {
+  if (viewMode === 'day') {
+    return [startOfDay(viewDate)];
+  }
+
+  const { start, end } = getViewWindow(viewDate, viewMode);
+  return eachDayOfInterval({ start, end });
+};
+
+const getViewTitle = (viewDate: Date, viewMode: ViewMode): string => {
+  switch (viewMode) {
+    case 'day':
+      return format(viewDate, 'EEEE, MMM d, yyyy');
+    case 'week':
+      return `Week of ${format(startOfWeek(viewDate), 'MMM d, yyyy')}`;
+    case 'month':
+    default:
+      return format(viewDate, 'MMMM yyyy');
+  }
+};
+
+const getNextViewDate = (
+  viewDate: Date,
+  viewMode: ViewMode,
+  direction: 'prev' | 'next'
+): Date => {
+  const delta = direction === 'prev' ? -1 : 1;
+
+  switch (viewMode) {
+    case 'day':
+      return addDays(viewDate, delta);
+    case 'week':
+      return addWeeks(viewDate, delta);
+    case 'month':
+    default:
+      return addMonths(viewDate, delta);
+  }
+};
+
+const resolveDropTargetDate = (
+  dropTargetId: string,
+  viewMode: ViewMode,
+  activeEventDate: Date,
+  activeEventHasTime: boolean
+): DropTargetResolution | null => {
+  const dropParts = dropTargetId.split('-');
+  if (dropParts[0] !== 'drop' || dropParts.length < 4) {
+    return null;
+  }
+
+  const year = parseInt(dropParts[1], 10);
+  const month = parseInt(dropParts[2], 10) - 1;
+  const day = parseInt(dropParts[3], 10);
+  const hour = dropParts.length > 4 ? parseInt(dropParts[4], 10) : undefined;
+
+  if ([year, month, day].some((part) => Number.isNaN(part))) {
+    return null;
+  }
+  if (hour !== undefined && Number.isNaN(hour)) {
+    return null;
+  }
+
+  const newDate = new Date(year, month, day);
+  const includeTime = hour !== undefined && (viewMode === 'day' || viewMode === 'week');
+
+  if (includeTime) {
+    newDate.setHours(hour, 0, 0, 0);
+  } else if (activeEventHasTime && viewMode === 'month') {
+    newDate.setHours(activeEventDate.getHours(), activeEventDate.getMinutes(), 0, 0);
+  }
+
+  return {
+    newDate,
+    includeTime,
+  };
+};
 
 export function buildCalendarEvents(
   items: CalendarItem[],
-  currentMonth: Date,
+  viewDate: Date,
   viewMode: ViewMode,
   todayStr = localISODate(new Date())
 ): CalendarEvent[] {
   const events: CalendarEvent[] = [];
 
-  const viewStart = viewMode === 'week'
-    ? startOfWeek(currentMonth)
-    : startOfWeek(startOfMonth(currentMonth));
-  const viewEnd = viewMode === 'week'
-    ? endOfWeek(currentMonth)
-    : endOfWeek(endOfMonth(currentMonth));
+  const { start: viewStart, end: viewEnd } = getViewWindow(viewDate, viewMode);
 
   items.forEach((item) => {
     if (item.type === 'google-event') {
@@ -504,9 +607,14 @@ export function buildCalendarEvents(
   return events;
 }
 
-// Expose event generation for regression tests without rendering the full calendar UI.
+// Expose key calendar helpers for regression tests without rendering the full UI.
 export const __calendarViewInternals = {
   buildCalendarEvents,
+  getDisplayDays,
+  getNextViewDate,
+  getViewTitle,
+  getViewWindow,
+  resolveDropTargetDate,
 };
 
 // Resizable Event Component
@@ -646,13 +754,12 @@ const DraggableEvent: React.FC<DraggableEventProps> = ({ event, children }) => {
 };
 
 // Droppable Cell Component
-interface DroppableCellProps {
+interface DroppableCellProps extends React.HTMLAttributes<HTMLDivElement> {
   id: string;
   children: React.ReactNode;
-  className?: string;
 }
 
-const DroppableCell: React.FC<DroppableCellProps> = ({ id, children, className }) => {
+const DroppableCell: React.FC<DroppableCellProps> = ({ id, children, className, ...props }) => {
   const {
     isOver,
     setNodeRef,
@@ -663,6 +770,7 @@ const DroppableCell: React.FC<DroppableCellProps> = ({ id, children, className }
   return (
     <div
       ref={setNodeRef}
+      {...props}
       className={cn(
         className,
         isOver && "bg-blue-100/30 dark:bg-blue-900/20 ring-2 ring-blue-400 dark:ring-blue-600"
@@ -679,8 +787,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   gtdSpace,
   files
 }) => {
-  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [viewDate, setViewDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [googleSyncStatus, setGoogleSyncStatus] = useState<SyncStatus | null>(null);
@@ -780,16 +887,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   }, []);
   const todayStr = localISODate(currentTime);
 
-  // Auto-scroll to 7am when week view loads
+  // Auto-scroll to 7am when timed views load
   useEffect(() => {
-    if (viewMode === 'week') {
-      // Find the ScrollArea's viewport element specifically in the week time grid
+    if (viewMode === 'day' || viewMode === 'week') {
+      // Find the ScrollArea's viewport element specifically in the timed grid
       // ScrollArea creates a div with data-radix-scroll-area-viewport
       const scrollToMorning = () => {
-        // More specific selector to target the week grid ScrollArea
-        const weekGrid = document.getElementById('week-time-grid');
-        if (weekGrid) {
-          const scrollViewport = weekGrid.querySelector('[data-radix-scroll-area-viewport]');
+        const timedGrid = document.getElementById('timed-calendar-grid');
+        if (timedGrid) {
+          const scrollViewport = timedGrid.querySelector('[data-radix-scroll-area-viewport]');
 
           if (scrollViewport && scrollViewport instanceof HTMLElement) {
             // Each hour row is 80px (h-20), scroll to 7am
@@ -806,26 +912,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         setTimeout(scrollToMorning, 200);
       });
     }
-  }, [viewMode, currentMonth]); // Re-scroll when changing weeks or switching to week view
+  }, [viewMode, viewDate]); // Re-scroll when changing periods or switching timed views
 
   // Process items into calendar events
   const calendarEvents = useMemo(
-    () => buildCalendarEvents(items, currentMonth, viewMode, todayStr),
-    [items, currentMonth, viewMode, todayStr]
+    () => buildCalendarEvents(items, viewDate, viewMode, todayStr),
+    [items, viewDate, viewMode, todayStr]
   );
 
   // Get calendar days for current view
-  const calendarDays = useMemo(() => {
-    if (viewMode === 'week') {
-      const start = startOfWeek(currentMonth);
-      const end = endOfWeek(currentMonth);
-      return eachDayOfInterval({ start, end });
-    } else {
-      const start = startOfWeek(startOfMonth(currentMonth));
-      const end = endOfWeek(endOfMonth(currentMonth));
-      return eachDayOfInterval({ start, end });
-    }
-  }, [currentMonth, viewMode]);
+  const calendarDays = useMemo(() => getDisplayDays(viewDate, viewMode), [viewDate, viewMode]);
+
+  const timedGridTemplate = useMemo(
+    () => ({ gridTemplateColumns: `4rem repeat(${calendarDays.length}, minmax(0, 1fr))` }),
+    [calendarDays.length]
+  );
 
   // Get hours for weekly view
   const weekHours = useMemo(() => {
@@ -890,6 +991,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     setIsModalOpen(false);
   };
 
+  const handleDayDrillIn = (day: Date) => {
+    setViewDate(new Date(day));
+    setViewMode('day');
+  };
+
   // Find the active event being dragged
   const activeEvent = useMemo(() => {
     if (!activeId) return null;
@@ -919,40 +1025,26 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     }
 
     const droppedOnId = over.id as string;
-    
-    // Parse the drop target ID to get the date
-    // Format: "drop-YYYY-MM-DD" for month view or "drop-YYYY-MM-DD-HH" for week view
-    const dropParts = droppedOnId.split('-');
-    if (dropParts[0] !== 'drop' || dropParts.length < 4) {
+    const resolvedDropTarget = resolveDropTargetDate(
+      droppedOnId,
+      viewMode,
+      activeEvent.date,
+      Boolean(activeEvent.time)
+    );
+
+    if (!resolvedDropTarget) {
       setActiveId(null);
       setOverId(null);
       return;
     }
 
-    const year = parseInt(dropParts[1]);
-    const month = parseInt(dropParts[2]) - 1; // JavaScript months are 0-indexed
-    const day = parseInt(dropParts[3]);
-    const hour = dropParts.length > 4 ? parseInt(dropParts[4]) : undefined;
+    const { newDate, includeTime } = resolvedDropTarget;
 
-    // Create the new date
-    const newDate = new Date(year, month, day);
-    const includeTime = hour !== undefined && viewMode === 'week';
-    
-    if (includeTime) {
-      // If dropping in week view on a specific hour, set the time
-      newDate.setHours(hour, 0, 0, 0);
-    } else if (activeEvent.time && viewMode === 'month') {
-      // Preserve existing time when dropping in month view if event had time
-      const oldDate = activeEvent.date;
-      newDate.setHours(oldDate.getHours(), oldDate.getMinutes(), 0, 0);
-    }
+    const preserveExistingTime = viewMode === 'month' && Boolean(activeEvent.time);
+    const currentFormattedDate = formatDateForMarkdown(activeEvent.date, Boolean(activeEvent.time));
+    const formattedDate = formatDateForMarkdown(newDate, includeTime || preserveExistingTime);
 
-    // Check if actually moving to a different date
-    const oldDateStr = formatDateForMarkdown(activeEvent.date, false);
-    const newDateStr = formatDateForMarkdown(newDate, false);
-    
-    if (oldDateStr === newDateStr && !includeTime) {
-      // Same date and not updating time
+    if (currentFormattedDate === formattedDate) {
       setActiveId(null);
       setOverId(null);
       return;
@@ -970,9 +1062,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
       // Determine which field to update
       const fieldType = getDateFieldForEventType(activeEvent.eventType);
-      
-      // Format the new date for markdown
-      const formattedDate = formatDateForMarkdown(newDate, includeTime || !!activeEvent.time);
       
       // Update the markdown content
       const updatedContent = updateMarkdownDate(fileContent, fieldType, formattedDate);
@@ -1058,30 +1147,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
 
   const navigate = (direction: 'prev' | 'next') => {
-    setCurrentMonth(prev => {
-      const newDate = new Date(prev);
-      if (viewMode === 'week') {
-        // Navigate by week
-        if (direction === 'prev') {
-          return addWeeks(newDate, -1);
-        } else {
-          return addWeeks(newDate, 1);
-        }
-      } else {
-        // Navigate by month
-        if (direction === 'prev') {
-          newDate.setMonth(newDate.getMonth() - 1);
-        } else {
-          newDate.setMonth(newDate.getMonth() + 1);
-        }
-        return newDate;
-      }
-    });
+    setViewDate(prev => getNextViewDate(prev, viewMode, direction));
   };
 
   const goToToday = () => {
-    setCurrentMonth(new Date());
-    setSelectedDate(new Date());
+    setViewDate(new Date());
   };
 
   // Custom collision detection for better accuracy
@@ -1096,6 +1166,275 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     
     return pointerCollisions;
   };
+
+  const renderTimedGrid = () => (
+    <div className="h-full bg-card rounded-lg border overflow-hidden flex flex-col">
+      <div className="grid border-b bg-card z-10" style={timedGridTemplate}>
+        <div className="p-2 text-xs font-medium text-muted-foreground border-r">
+          {/* Empty corner for time column */}
+        </div>
+        {calendarDays.map(day => {
+          const headerContent = (
+            <>
+              <div className="text-xs text-muted-foreground">
+                {format(day, viewMode === 'day' ? 'EEEE' : 'EEE')}
+              </div>
+              <div className={cn(
+                "text-lg font-medium",
+                isToday(day) && "text-blue-600 dark:text-blue-400"
+              )}>
+                {format(day, 'd')}
+              </div>
+            </>
+          );
+
+          const headerClassName = cn(
+            "p-2 text-center border-r last:border-r-0",
+            isToday(day) && "bg-blue-50/50 dark:bg-blue-950/20"
+          );
+
+          if (viewMode === 'week') {
+            return (
+              <button
+                key={day.toISOString()}
+                type="button"
+                data-testid={`week-day-header-${format(day, 'yyyy-MM-dd')}`}
+                className={cn(
+                  headerClassName,
+                  "bg-transparent hover:bg-accent/5 transition-colors"
+                )}
+                onClick={() => handleDayDrillIn(day)}
+              >
+                {headerContent}
+              </button>
+            );
+          }
+
+          return (
+            <div key={day.toISOString()} className={headerClassName}>
+              {headerContent}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid border-b min-h-[3rem] bg-muted/30" style={timedGridTemplate}>
+        <div className="p-2 text-xs text-muted-foreground border-r">
+          No time
+        </div>
+        {calendarDays.map(day => {
+          const dateKey = format(day, 'yyyy-MM-dd');
+          const dayEvents = eventsByDate.get(dateKey) || [];
+          const allDayEvents = dayEvents.filter(event => !event.time);
+
+          return (
+            <DroppableCell
+              key={`${day.toISOString()}-allday`}
+              id={`drop-${dateKey}`}
+              className={cn(
+                "border-r last:border-r-0 p-1",
+                isToday(day) && "bg-blue-50/30 dark:bg-blue-950/10"
+              )}
+            >
+              <div className="space-y-1" data-testid={`untimed-cell-${dateKey}`}>
+                {allDayEvents.map(event => (
+                  <DraggableEvent key={event.id} event={event}>
+                    <div
+                      onClick={() => handleEventClick(event)}
+                      className={cn(
+                        "px-2 py-1 rounded text-xs",
+                        "border transition-all hover:shadow-md hover:scale-105",
+                        getEventColorClass(event.type, event.eventType, event.status === 'completed')
+                      )}
+                      title={`${event.title}${event.projectName ? ` (${event.projectName})` : ''}`}
+                    >
+                      <div className="font-medium truncate flex items-center gap-1">
+                        {event.status === 'completed' && (
+                          <CheckCircle2 className="h-3 w-3 shrink-0" />
+                        )}
+                        <span>{event.title}</span>
+                      </div>
+                    </div>
+                  </DraggableEvent>
+                ))}
+              </div>
+            </DroppableCell>
+          );
+        })}
+      </div>
+
+      <ScrollArea className="flex-1 h-full" id="timed-calendar-grid">
+        <div className="relative">
+          {(() => {
+            const now = currentTime;
+            const currentHour = now.getHours();
+            const currentMinutes = now.getMinutes();
+            const topPosition = (currentHour * 80) + (currentMinutes / 60 * 80);
+            const todayIndex = calendarDays.findIndex(day => isToday(day));
+
+            if (todayIndex >= 0 && currentHour >= 0 && currentHour < 24) {
+              const dayColumnLeft = `calc(4rem + ${todayIndex} * ((100% - 4rem) / ${calendarDays.length}))`;
+              const dayColumnWidth = `calc((100% - 4rem) / ${calendarDays.length})`;
+
+              return (
+                <div
+                  className="absolute z-20 pointer-events-none"
+                  style={{
+                    top: `${topPosition}px`,
+                    left: dayColumnLeft,
+                    width: dayColumnWidth,
+                    transform: 'translateY(-50%)',
+                  }}
+                >
+                  <span className="absolute -left-14 top-1/2 -translate-y-1/2 text-xs font-medium text-red-500 bg-background px-1 rounded whitespace-nowrap">
+                    {format(now, 'h:mm a')}
+                  </span>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-red-500 rounded-full" />
+                    <div className="flex-1 h-0.5 bg-red-500" />
+                  </div>
+                </div>
+              );
+            }
+
+            return null;
+          })()}
+          {weekHours.map(hour => (
+            <div key={hour} className="grid border-b h-20" style={timedGridTemplate}>
+              <div className="p-2 text-xs text-muted-foreground border-r">
+                {format(setHours(new Date(), hour), 'ha')}
+              </div>
+              {calendarDays.map(day => {
+                const dateKey = format(day, 'yyyy-MM-dd');
+                const dayEvents = eventsByDate.get(dateKey) || [];
+                const hourEvents = dayEvents.filter(event => {
+                  if (!event.time) return false;
+                  const eventStartHour = event.date.getHours();
+                  const eventEndHour = event.endDate ? event.endDate.getHours() : eventStartHour;
+                  const eventEndMinute = event.endDate ? event.endDate.getMinutes() : event.date.getMinutes();
+
+                  if (eventStartHour === hour) {
+                    return true;
+                  }
+
+                  if (event.duration && eventStartHour < hour) {
+                    const endHour = eventEndMinute > 0 ? eventEndHour : eventEndHour - 1;
+                    return hour <= endHour;
+                  }
+
+                  return false;
+                });
+
+                return (
+                  <DroppableCell
+                    key={`${day.toISOString()}-${hour}`}
+                    id={`drop-${dateKey}-${hour}`}
+                    className={cn(
+                      "relative border-r last:border-r-0 p-1",
+                      "hover:bg-accent/5 transition-colors",
+                      isToday(day) && "bg-blue-50/30 dark:bg-blue-950/10"
+                    )}
+                  >
+                    <div data-testid={`hour-cell-${dateKey}-${hour}`}>
+                      {(() => {
+                        const startingEvents = hourEvents.filter(ev => ev.date.getHours() === hour);
+                        const groupsByMinute = new Map<number, typeof startingEvents>();
+                        for (const ev of startingEvents) {
+                          const minute = ev.date.getMinutes();
+                          const arr = groupsByMinute.get(minute) || [];
+                          arr.push(ev);
+                          groupsByMinute.set(minute, arr);
+                        }
+                        const minuteKeys = Array.from(groupsByMinute.keys()).sort((a, b) => a - b);
+
+                        return (
+                          <>
+                            {minuteKeys.map((min) => {
+                              const group = groupsByMinute.get(min)!;
+                              return group.map((event, index) => {
+                                let eventHeight = 'auto';
+                                const minuteOffset = (min / 60) * 80;
+
+                                if (event.duration) {
+                                  const heightInPixels = (event.duration / 60) * 80;
+                                  eventHeight = `${Math.max(20, heightInPixels)}px`;
+                                }
+
+                                const width = group.length > 1 ? `${100 / group.length}%` : '100%';
+                                const left = group.length > 1 ? `${(100 / group.length) * index}%` : '0';
+
+                                const isResizable = event.type === 'action' &&
+                                  event.eventType === 'focus' &&
+                                  event.effort &&
+                                  event.status !== 'completed';
+
+                                return (
+                                  <ResizableEvent
+                                    key={event.id}
+                                    event={event}
+                                    isResizable={isResizable}
+                                    onResize={(newEffort) => handleEffortResize(event, newEffort)}
+                                  >
+                                    <DraggableEvent event={event}>
+                                      <div
+                                        onClick={() => handleEventClick(event)}
+                                        className={cn(
+                                          "absolute px-2 py-1 rounded text-xs overflow-hidden h-full",
+                                          "border transition-all hover:shadow-md hover:scale-105 hover:z-10",
+                                          getEventColorClass(event.type, event.eventType, event.status === 'completed')
+                                        )}
+                                        style={{
+                                          top: `${minuteOffset}px`,
+                                          height: eventHeight,
+                                          minHeight: '20px',
+                                          left,
+                                          width,
+                                          right: index === group.length - 1 ? '4px' : 'auto'
+                                        }}
+                                        title={`${event.time || ''} ${event.title}${event.projectName ? ` (${event.projectName})` : ''}${event.endTime ? ` - ${event.endTime}` : ''}`}
+                                      >
+                                        <div className="flex items-center gap-1 min-w-0">
+                                          {event.status === 'completed' && (
+                                            <CheckCircle2 className="h-3 w-3 shrink-0" />
+                                          )}
+                                          {event.time && (
+                                            <span className="font-medium shrink-0 text-[10px]">
+                                              {event.time}
+                                            </span>
+                                          )}
+                                          <span className="truncate font-medium">
+                                            {event.title}
+                                          </span>
+                                        </div>
+                                        {event.endTime && event.duration && event.duration > 30 && (
+                                          <div className="text-[10px] opacity-75">
+                                            {event.endTime}
+                                          </div>
+                                        )}
+                                        {event.projectName && event.duration && event.duration > 45 && (
+                                          <div className="text-[10px] opacity-75 truncate">
+                                            {event.projectName}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </DraggableEvent>
+                                  </ResizableEvent>
+                                );
+                              });
+                            })}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </DroppableCell>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  );
 
   return (
     <DndContext
@@ -1121,14 +1460,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               size="icon"
               onClick={() => navigate('prev')}
               className="h-8 w-8"
+              aria-label={`Previous ${viewMode}`}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
 
-            <h2 className="text-lg font-medium w-48 text-center">
-              {viewMode === 'week'
-                ? `Week of ${format(startOfWeek(currentMonth), 'MMM d, yyyy')}`
-                : format(currentMonth, 'MMMM yyyy')}
+            <h2 className="text-lg font-medium min-w-[16rem] text-center">
+              {getViewTitle(viewDate, viewMode)}
             </h2>
 
             <Button
@@ -1136,6 +1474,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               size="icon"
               onClick={() => navigate('next')}
               className="h-8 w-8"
+              aria-label={`Next ${viewMode}`}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -1168,12 +1507,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
           <div className="flex rounded-lg border bg-muted p-1">
             <Button
-              variant={viewMode === 'month' ? 'default' : 'ghost'}
+              variant={viewMode === 'day' ? 'default' : 'ghost'}
               size="sm"
-              onClick={() => setViewMode('month')}
+              onClick={() => setViewMode('day')}
               className="h-7 px-3"
             >
-              Month
+              Day
             </Button>
             <Button
               variant={viewMode === 'week' ? 'default' : 'ghost'}
@@ -1182,6 +1521,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               className="h-7 px-3"
             >
               Week
+            </Button>
+            <Button
+              variant={viewMode === 'month' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('month')}
+              className="h-7 px-3"
+            >
+              Month
             </Button>
           </div>
 
@@ -1224,8 +1571,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               {calendarDays.map((day) => {
                 const dateKey = format(day, 'yyyy-MM-dd');
                 const dayEvents = eventsByDate.get(dateKey) || [];
-                const isCurrentMonth = isSameMonth(day, currentMonth);
-                const isSelectedDay = selectedDate && isSameDay(day, selectedDate);
+                const isCurrentMonth = isSameMonth(day, viewDate);
                 const isTodayDate = isToday(day);
 
                 const dropId = `drop-${format(day, 'yyyy-MM-dd')}`;
@@ -1234,15 +1580,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   <DroppableCell
                     key={day.toISOString()}
                     id={dropId}
+                    data-testid={`month-day-cell-${dateKey}`}
+                    onClick={() => handleDayDrillIn(day)}
                     className={cn(
                       "border-r border-b last:border-r-0 p-1 overflow-hidden",
                       "hover:bg-accent/5 transition-colors cursor-pointer",
                       !isCurrentMonth && "bg-muted/30",
-                      isSelectedDay && "bg-accent/10",
                       isTodayDate && "bg-blue-50/50 dark:bg-blue-950/20"
                     )}
                   >
-                    <div onClick={() => setSelectedDate(day)}>
+                    <div>
                       {/* Day Number */}
                       <div className={cn(
                         "text-sm font-medium mb-1 px-1",
@@ -1297,282 +1644,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               })}
             </div>
           </div>
-        ) : (
-          /* Week View */
-          <div className="h-full bg-card rounded-lg border overflow-hidden flex flex-col">
-            {/* Week Day Headers */}
-            <div className="grid grid-cols-8 border-b bg-card z-10">
-              <div className="p-2 text-xs font-medium text-muted-foreground border-r">
-                {/* Empty corner for time column */}
-              </div>
-              {calendarDays.map(day => (
-                <div
-                  key={day.toISOString()}
-                  className={cn(
-                    "p-2 text-center border-r last:border-r-0",
-                    isToday(day) && "bg-blue-50/50 dark:bg-blue-950/20"
-                  )}
-                >
-                  <div className="text-xs text-muted-foreground">
-                    {format(day, 'EEE')}
-                  </div>
-                  <div className={cn(
-                    "text-lg font-medium",
-                    isToday(day) && "text-blue-600 dark:text-blue-400"
-                  )}>
-                    {format(day, 'd')}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* No time events row */}
-            <div className="grid grid-cols-8 border-b min-h-[3rem] bg-muted/30">
-              <div className="p-2 text-xs text-muted-foreground border-r">
-                No time
-              </div>
-              {calendarDays.map(day => {
-                const dateKey = format(day, 'yyyy-MM-dd');
-                const dayEvents = eventsByDate.get(dateKey) || [];
-                const allDayEvents = dayEvents.filter(event => !event.time);
-
-                const allDayDropId = `drop-${format(day, 'yyyy-MM-dd')}`;
-                
-                return (
-                  <DroppableCell
-                    key={`${day.toISOString()}-allday`}
-                    id={allDayDropId}
-                    className={cn(
-                      "border-r last:border-r-0 p-1",
-                      isToday(day) && "bg-blue-50/30 dark:bg-blue-950/10"
-                    )}
-                  >
-                    <div className="space-y-1">
-                      {allDayEvents.map(event => (
-                        <DraggableEvent key={event.id} event={event}>
-                          <div
-                            onClick={() => handleEventClick(event)}
-                            className={cn(
-                              "px-2 py-1 rounded text-xs",
-                              "border transition-all hover:shadow-md hover:scale-105",
-                              getEventColorClass(event.type, event.eventType, event.status === 'completed')
-                            )}
-                            title={`${event.title}${event.projectName ? ` (${event.projectName})` : ''}`}
-                          >
-                            <div className="font-medium truncate flex items-center gap-1">
-                              {event.status === 'completed' && (
-                                <CheckCircle2 className="h-3 w-3 shrink-0" />
-                              )}
-                              <span>{event.title}</span>
-                            </div>
-                          </div>
-                        </DraggableEvent>
-                      ))}
-                    </div>
-                  </DroppableCell>
-                );
-              })}
-            </div>
-
-            {/* Time Grid */}
-            <ScrollArea className="flex-1 h-full" id="week-time-grid">
-              <div className="relative">
-                {/* Current Time Indicator */}
-                {(() => {
-                  const now = currentTime;
-                  const currentHour = now.getHours();
-                  const currentMinutes = now.getMinutes();
-                  // Each hour is 80px (h-20), calculate position
-                  const topPosition = (currentHour * 80) + (currentMinutes / 60 * 80);
-                  const todayIndex = calendarDays.findIndex(day => isToday(day));
-
-                  // Only show the indicator if today is in the current week view
-                  if (todayIndex >= 0 && currentHour >= 0 && currentHour < 24) {
-                    // Calculate the exact left position for today's column
-                    // First column is time (12.5%), then each day is 12.5%
-                    const leftPosition = (todayIndex + 1) * 12.5; // +1 to skip time column
-
-                    return (
-                      <>
-                        {/* Time label positioned close to the bar */}
-                        <div
-                          className="absolute z-20 pointer-events-none"
-                          style={{
-                            top: `${topPosition}px`,
-                            left: `calc(${leftPosition}% - 55px)`, // Closer to the bar
-                            transform: 'translateY(-50%)',
-                          }}
-                        >
-                          <span className="text-xs font-medium text-red-500 bg-background px-1 rounded whitespace-nowrap">
-                            {format(now, 'h:mm a')}
-                          </span>
-                        </div>
-
-                        {/* Line across today's column only */}
-                        <div
-                          className="absolute z-20 pointer-events-none"
-                          style={{
-                            top: `${topPosition}px`,
-                            left: `${leftPosition}%`,
-                            width: '12.5%',
-                            transform: 'translateY(-50%)', // Center the line vertically
-                          }}
-                        >
-                          <div className="flex items-center">
-                            <div className="w-3 h-3 bg-red-500 rounded-full" />
-                            <div className="flex-1 h-0.5 bg-red-500" />
-                          </div>
-                        </div>
-                      </>
-                    );
-                  }
-                  return null;
-                })()}
-                {weekHours.map(hour => (
-                  <div key={hour} className="grid grid-cols-8 border-b h-20">
-                    <div className="p-2 text-xs text-muted-foreground border-r">
-                      {format(setHours(new Date(), hour), 'ha')}
-                    </div>
-                    {calendarDays.map(day => {
-                      const dateKey = format(day, 'yyyy-MM-dd');
-                      const dayEvents = eventsByDate.get(dateKey) || [];
-                      const hourEvents = dayEvents.filter(event => {
-                        if (!event.time) return false; // All-day events handled separately
-                        const eventStartHour = event.date.getHours();
-                        const eventEndHour = event.endDate ? event.endDate.getHours() : eventStartHour;
-                        const eventEndMinute = event.endDate ? event.endDate.getMinutes() : event.date.getMinutes();
-
-                        // Check if this event starts in this hour or spans across this hour
-                        if (eventStartHour === hour) {
-                          return true; // Event starts in this hour
-                        }
-
-                        // Check if event spans across this hour (for multi-hour events)
-                        if (event.duration && eventStartHour < hour) {
-                          const endHour = eventEndMinute > 0 ? eventEndHour : eventEndHour - 1;
-                          return hour <= endHour;
-                        }
-
-                        return false;
-                      });
-
-                      const hourDropId = `drop-${format(day, 'yyyy-MM-dd')}-${hour}`;
-                      
-                      return (
-                        <DroppableCell
-                          key={`${day.toISOString()}-${hour}`}
-                          id={hourDropId}
-                          className={cn(
-                            "relative border-r last:border-r-0 p-1",
-                            "hover:bg-accent/5 transition-colors",
-                            isToday(day) && "bg-blue-50/30 dark:bg-blue-950/10"
-                          )}
-                        >
-                          {(() => {
-                            // Only render events that start in this hour (not spanning ones)
-                            const startingEvents = hourEvents.filter(ev => ev.date.getHours() === hour);
-
-                            // Group events by minute within this hour for side-by-side layout
-                            const groupsByMinute = new Map<number, typeof startingEvents>();
-                            for (const ev of startingEvents) {
-                              const minute = ev.date.getMinutes();
-                              const arr = groupsByMinute.get(minute) || [];
-                              arr.push(ev);
-                              groupsByMinute.set(minute, arr);
-                            }
-                            const minuteKeys = Array.from(groupsByMinute.keys()).sort((a, b) => a - b);
-
-                            return (
-                              <>
-                                {minuteKeys.map((min) => {
-                                  const group = groupsByMinute.get(min)!;
-                                  return group.map((event, index) => {
-                                    // Calculate event height based on duration
-                                    let eventHeight = 'auto';
-                                    const minuteOffset = (min / 60) * 80; // Convert minutes to pixels
-
-                                    if (event.duration) {
-                                      // Each hour slot is 80px (h-20), calculate height based on duration
-                                      const heightInPixels = (event.duration / 60) * 80;
-                                      eventHeight = `${Math.max(20, heightInPixels)}px`; // Min height of 20px
-                                    }
-
-                                    // Calculate left position for side-by-side events
-                                    const width = group.length > 1 ? `${100 / group.length}%` : '100%';
-                                    const left = group.length > 1 ? `${(100 / group.length) * index}%` : '0';
-
-                                    // Check if event is resizable (actions with effort and focus date, not completed)
-                                    const isResizable = event.type === 'action' && 
-                                                       event.eventType === 'focus' && 
-                                                       event.effort &&
-                                                       event.status !== 'completed';
-
-                                    return (
-                                      <ResizableEvent
-                                        key={event.id}
-                                        event={event}
-                                        isResizable={isResizable}
-                                        onResize={(newEffort) => handleEffortResize(event, newEffort)}
-                                      >
-                                        <DraggableEvent event={event}>
-                                          <div
-                                            onClick={() => handleEventClick(event)}
-                                            className={cn(
-                                              "absolute px-2 py-1 rounded text-xs overflow-hidden h-full",
-                                              "border transition-all hover:shadow-md hover:scale-105 hover:z-10",
-                                              getEventColorClass(event.type, event.eventType, event.status === 'completed')
-                                            )}
-                                            style={{
-                                              top: `${minuteOffset}px`,
-                                              height: eventHeight,
-                                              minHeight: '20px',
-                                              left: left,
-                                              width: width,
-                                              right: index === group.length - 1 ? '4px' : 'auto'
-                                            }}
-                                            title={`${event.time || ''} ${event.title}${event.projectName ? ` (${event.projectName})` : ''}${event.endTime ? ` - ${event.endTime}` : ''}`}
-                                          >
-                                            <div className="flex items-center gap-1 min-w-0">
-                                              {event.status === 'completed' && (
-                                                <CheckCircle2 className="h-3 w-3 shrink-0" />
-                                              )}
-                                              {event.time && (
-                                                <span className="font-medium shrink-0 text-[10px]">
-                                                  {event.time}
-                                                </span>
-                                              )}
-                                              <span className="truncate font-medium">
-                                                {event.title}
-                                              </span>
-                                            </div>
-                                            {event.endTime && event.duration && event.duration > 30 && (
-                                              <div className="text-[10px] opacity-75">
-                                                {event.endTime}
-                                              </div>
-                                            )}
-                                            {event.projectName && event.duration && event.duration > 45 && (
-                                              <div className="text-[10px] opacity-75 truncate">
-                                                {event.projectName}
-                                              </div>
-                                            )}
-                                          </div>
-                                        </DraggableEvent>
-                                      </ResizableEvent>
-                                    );
-                                  });
-                                })}
-                              </>
-                            );
-                          })()}
-                        </DroppableCell>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
-        )}
+        ) : renderTimedGrid()}
       </div>
 
       {/* Filter Checkboxes at Bottom */}

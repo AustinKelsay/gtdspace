@@ -76,4 +76,55 @@ describe('calendar habit event generation', () => {
 
     expect(todayEvent?.status).toBe('todo');
   });
+
+  it('limits daily habit occurrences to the active day window in day mode', () => {
+    const events = __calendarViewInternals.buildCalendarEvents(
+      [buildHabitItem()],
+      new Date('2026-04-10T12:00:00'),
+      'day',
+      '2026-04-10'
+    );
+
+    const habitDates = events
+      .filter((event) => event.type === 'habit')
+      .map((event) => localISODate(event.date));
+
+    expect(habitDates).toEqual(['2026-04-10']);
+  });
+});
+
+describe('calendar drop target resolution', () => {
+  it('treats day-view hour drops as timed updates', () => {
+    const resolved = __calendarViewInternals.resolveDropTargetDate(
+      'drop-2026-04-15-9',
+      'day',
+      new Date('2026-04-14T14:30:00'),
+      true
+    );
+
+    expect(resolved).not.toBeNull();
+    expect(resolved?.includeTime).toBe(true);
+    expect(resolved?.newDate.getFullYear()).toBe(2026);
+    expect(resolved?.newDate.getMonth()).toBe(3);
+    expect(resolved?.newDate.getDate()).toBe(15);
+    expect(resolved?.newDate.getHours()).toBe(9);
+    expect(resolved?.newDate.getMinutes()).toBe(0);
+  });
+
+  it('treats day-view no-time drops as date-only updates', () => {
+    const resolved = __calendarViewInternals.resolveDropTargetDate(
+      'drop-2026-04-15',
+      'day',
+      new Date('2026-04-14T14:30:00'),
+      true
+    );
+
+    expect(resolved).not.toBeNull();
+    expect(resolved?.includeTime).toBe(false);
+    expect(resolved?.newDate.getFullYear()).toBe(2026);
+    expect(resolved?.newDate.getMonth()).toBe(3);
+    expect(resolved?.newDate.getDate()).toBe(15);
+    expect(resolved?.newDate.getHours()).toBe(0);
+    expect(resolved?.newDate.getMinutes()).toBe(0);
+  });
 });

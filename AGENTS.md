@@ -36,6 +36,7 @@
 - Review `src-tauri/capabilities/` and CSP changes carefully.
 
 ## Engineering Principles
+
 **1. Think Before Coding**: State assumptions, surface uncertainty, and present tradeoffs.
 **2. Simplicity First**: Minimum code required. No speculative features or unnecessary abstractions.
 **3. Surgical Changes**: Touch only what is necessary. Match existing style.

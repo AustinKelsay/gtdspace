@@ -86,6 +86,65 @@ const HORIZON_DIR_MAP: Record<HorizonReferenceKey, string> = {
 const ABSOLUTE_PATH_REGEX = /^(?:[A-Za-z]:\/|\/)/;
 const VALID_REFERENCE_KEYS: HorizonReferenceKey[] = ['projects', 'areas', 'goals', 'vision', 'purpose'];
 
+const toUnixTimestampSeconds = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1_000_000_000_000 ? Math.floor(value / 1000) : Math.floor(value);
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const numericValue = Number(trimmed);
+    if (Number.isFinite(numericValue)) {
+      return numericValue > 1_000_000_000_000
+        ? Math.floor(numericValue / 1000)
+        : Math.floor(numericValue);
+    }
+
+    const parsed = Date.parse(trimmed);
+    return Number.isNaN(parsed) ? null : Math.floor(parsed / 1000);
+  }
+
+  if (value instanceof Date) {
+    return Math.floor(value.getTime() / 1000);
+  }
+
+  return null;
+};
+
+const resolveProjectLastModified = (
+  metadata: Record<string, unknown>,
+  project: GTDProject
+): number => {
+  const metadataKeys: Array<keyof typeof metadata> = ['mtime', 'modified', 'last_modified'];
+
+  for (const key of metadataKeys) {
+    const resolved = toUnixTimestampSeconds(metadata[key]);
+    if (resolved !== null) {
+      return resolved;
+    }
+  }
+
+  const projectWithMetadata = project as GTDProject & {
+    modifiedDate?: string | number | Date;
+  };
+
+  const projectModified = toUnixTimestampSeconds(projectWithMetadata.modifiedDate);
+  if (projectModified !== null) {
+    return projectModified;
+  }
+
+  const projectCreated = toUnixTimestampSeconds(project.createdDateTime);
+  if (projectCreated !== null) {
+    return projectCreated;
+  }
+
+  return Math.floor(Date.now() / 1000);
+};
+
 const joinPathPreservingUNC = (base: string, ...segments: string[]): string => {
   let acc = base;
   segments.forEach((segment) => {
@@ -357,7 +416,7 @@ export function useHorizonsRelationships(
                       name: project.name,
                       path: readmePath,
                       size: 0,
-                      last_modified: Math.floor(Date.now() / 1000),
+                      last_modified: resolveProjectLastModified(metadata as Record<string, unknown>, project),
                       extension: 'md',
                       horizonLevel: 'Projects',
                       linkedTo: Array.from(linkedSet),

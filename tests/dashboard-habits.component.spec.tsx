@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import DashboardHabits from '@/components/dashboard/DashboardHabits';
 import type { HabitWithHistory } from '@/hooks/useHabitsHistory';
@@ -29,6 +29,15 @@ const buildHabit = (overrides: Partial<HabitWithHistory> = {}): HabitWithHistory
 });
 
 describe('DashboardHabits', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-31T12:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('renders the 5-minute frequency label on habit cards', () => {
     render(
       <DashboardHabits
@@ -68,5 +77,6 @@ describe('DashboardHabits', () => {
     expect(screen.getAllByRole('combobox').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument();
     expect(screen.getByText('Stretch')).toBeInTheDocument();
+    expect(screen.getByText('Reset: 5m')).toBeInTheDocument();
   });
 });

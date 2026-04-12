@@ -75,6 +75,8 @@ const ROW_GAP = 72;
 const truncateLabel = (value: string, max = 24): string =>
   value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
+const isActivationKey = (key: string): boolean => key === 'Enter' || key === ' ';
+
 const sortFiles = (files: HookHorizonFile[] = []): HookHorizonFile[] =>
   [...files].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -371,7 +373,16 @@ export const HorizonRelationshipMap: React.FC<HorizonRelationshipMapProps> = ({
                           onSelectNode?.(file.path);
                           onOpenFile?.(file);
                         }}
+                        onKeyDown={(event) => {
+                          if (!isActivationKey(event.key)) {
+                            return;
+                          }
+                          event.preventDefault();
+                          onSelectNode?.(file.path);
+                          onOpenFile?.(file);
+                        }}
                         role="button"
+                        tabIndex={0}
                       >
                         <rect
                           x={position.x - NODE_WIDTH / 2}

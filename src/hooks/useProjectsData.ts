@@ -199,6 +199,14 @@ const resolveProjectReadme = async (projectPath: string): Promise<string | null>
   return null;
 };
 
+const getProjectRootReadmeCandidates = (projectPath: string): string[] => {
+  const normalizedProjectPath = norm(projectPath) ?? projectPath;
+  return [
+    `${normalizedProjectPath}/README.md`,
+    `${normalizedProjectPath}/README.markdown`,
+  ];
+};
+
 const resolveProjectReadmeFile = async (projectPath: string): Promise<MarkdownFile | null> => {
   try {
     const files = await safeInvoke<MarkdownFile[]>(
@@ -206,10 +214,19 @@ const resolveProjectReadmeFile = async (projectPath: string): Promise<MarkdownFi
       { path: projectPath },
       []
     );
-    return files.find((file) => {
-      const normalizedFilePath = norm(file.path) ?? file.path;
-      return /\/README\.(md|markdown)$/i.test(normalizedFilePath);
-    }) ?? null;
+    const rootCandidates = getProjectRootReadmeCandidates(projectPath).map((candidate) => candidate.toLowerCase());
+    const fileMap = new Map<string, MarkdownFile>();
+
+    files.forEach((file) => {
+      const normalizedFilePath = (norm(file.path) ?? file.path).toLowerCase();
+      fileMap.set(normalizedFilePath, file);
+    });
+
+    return (
+      fileMap.get(rootCandidates[0]) ??
+      fileMap.get(rootCandidates[1]) ??
+      null
+    );
   } catch (error) {
     console.error('[resolveProjectReadmeFile] Failed to locate README metadata:', error);
     return null;

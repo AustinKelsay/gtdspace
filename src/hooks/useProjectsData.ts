@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { readFileText } from './useFileManager';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import type { UseErrorHandlerReturn } from '@/hooks/useErrorHandler';
 import type { GTDProject, MarkdownFile } from '@/types';
 import { toISOStringFromEpoch } from '@/utils/time';
 import { parseLocalDate } from '@/utils/date-formatting';
@@ -93,6 +94,7 @@ const updateProjectDueDateInMarkdown = (content: string, dueDate: string): strin
 };
 
 export interface ProjectWithMetadata extends GTDProject {
+  modifiedDate?: string;
   linkedAreas?: string[];
   linkedGoals?: string[];
   linkedVision?: string[];
@@ -196,6 +198,51 @@ const resolveProjectReadme = async (projectPath: string): Promise<string | null>
   }
 
   return null;
+};
+
+const getProjectRootReadmeCandidates = (projectPath: string): string[] => {
+  const normalizedProjectPath = norm(projectPath) ?? projectPath;
+  return [
+    `${normalizedProjectPath}/README.md`,
+    `${normalizedProjectPath}/README.markdown`,
+  ];
+};
+
+type WithErrorHandling = UseErrorHandlerReturn['withErrorHandling'];
+
+const resolveProjectReadmeFile = async (
+  projectPath: string,
+  withErrorHandling: WithErrorHandling
+): Promise<MarkdownFile | null> => {
+  try {
+    const files = await withErrorHandling(
+      () => safeInvoke<MarkdownFile[]>(
+        'list_markdown_files',
+        { path: projectPath },
+        []
+      ),
+      'Failed to locate project README metadata'
+    );
+    if (!files) {
+      return null;
+    }
+    const rootCandidates = getProjectRootReadmeCandidates(projectPath).map((candidate) => candidate.toLowerCase());
+    const fileMap = new Map<string, MarkdownFile>();
+
+    files.forEach((file) => {
+      const normalizedFilePath = (norm(file.path) ?? file.path).toLowerCase();
+      fileMap.set(normalizedFilePath, file);
+    });
+
+    return (
+      fileMap.get(rootCandidates[0]) ??
+      fileMap.get(rootCandidates[1]) ??
+      null
+    );
+  } catch (error) {
+    console.error('[resolveProjectReadmeFile] Failed to locate README metadata:', error);
+    return null;
+  }
 };
 
 export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjectsDataReturn {
@@ -316,9 +363,13 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
       const enhancedProjects = await Promise.all(
         filteredProjects.map(async (project) => {
           try {
-            const readmePath = await resolveProjectReadme(project.path);
+            const readmeFile = await resolveProjectReadmeFile(project.path, withErrorHandling);
+            const readmePath = readmeFile?.path || await resolveProjectReadme(project.path);
             let parsedProject = null as ReturnType<typeof parseProjectMarkdown> | null;
             let outcomes: string[] = [];
+            const modifiedDate = readmeFile
+              ? toISOStringFromEpoch(readmeFile.last_modified)
+              : project.createdDateTime;
 
             if (readmePath) {
               const content = await readFileText(readmePath);
@@ -382,6 +433,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
               linkedGoals: parsedProject?.horizonReferences.goals ?? [],
               linkedVision: parsedProject?.horizonReferences.vision ?? [],
               linkedPurpose: parsedProject?.horizonReferences.purpose ?? [],
+              modifiedDate,
               completionPercentage,
               actionStats,
               effort: undefined,
@@ -405,7 +457,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
     } finally {
       setIsLoading(false);
     }
-  }, [includeArchived, loadActionStats]);
+  }, [includeArchived, loadActionStats, withErrorHandling]);
   
   const updateProject = useCallback(async (
     projectPath: string,
@@ -521,6 +573,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
               : project.name,
           status: nextParsedProject.status,
           dueDate: nextParsedProject.dueDate || null,
+          modifiedDate: new Date().toISOString(),
         };
       }));
     } catch (err) {

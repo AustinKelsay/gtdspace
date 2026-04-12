@@ -22,8 +22,12 @@ import {
 } from '@/hooks/useProjectsData';
 import { useHabitsHistory } from '@/hooks/useHabitsHistory';
 import { useHorizonsRelationships } from '@/hooks/useHorizonsRelationships';
-import { useErrorHandler } from '@/hooks/useErrorHandler';
-import { GTDProjectDialog, GTDActionDialog } from '@/components/gtd';
+import {
+  GTDProjectDialog,
+  GTDActionDialog,
+  CreatePageDialog,
+  CreateHabitDialog,
+} from '@/components/gtd';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { useToast } from '@/hooks/use-toast';
 import { ACTION_TOAST_DURATION_MS } from '@/hooks/use-toast';
@@ -41,9 +45,18 @@ import type { GTDActionStatus } from '@/types';
 import type { HorizonFile } from '@/hooks/useHorizonsRelationships';
 import { createScopedLogger } from '@/utils/logger';
 import { norm } from '@/utils/path';
-import { invoke } from '@tauri-apps/api/core';
+import { buildDashboardActivityFeed } from '@/utils/dashboard-activity';
 
 const log = createScopedLogger('GTDDashboard');
+
+type DashboardHorizonSectionId = 'purpose' | 'vision' | 'goals' | 'areas';
+
+type HorizonDialogConfig = {
+  directory: string;
+  directoryName: string;
+  sectionId: DashboardHorizonSectionId;
+  spacePath: string;
+};
 
 interface GTDDashboardProps {
   currentFolder: string | null;
@@ -101,9 +114,10 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   const {
     horizons,
     relationships,
+    graph,
     isLoading: horizonsLoading,
     loadHorizons,
-    findRelated: _findRelated
+    findRelated
   } = useHorizonsRelationships({
     includeProjects: true,
     includeCabinet: true,
@@ -113,35 +127,51 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
   // State for UI management
   const [showProjectDialog, setShowProjectDialog] = React.useState(false);
   const [showActionDialog, setShowActionDialog] = React.useState(false);
+  const [showHabitDialog, setShowHabitDialog] = React.useState(false);
   const [selectedProject, setSelectedProject] = React.useState<GTDProject | null>(null);
+  const [pageDialogConfig, setPageDialogConfig] = React.useState<HorizonDialogConfig | null>(null);
   const [activeTab, setActiveTab] = React.useState('overview');
+  const [selectedHorizonLevel, setSelectedHorizonLevel] = React.useState<string>('All');
 
   // Track if we've loaded data for current space
   const loadedPathRef = React.useRef<string | null>(null);
   const { toast } = useToast();
-  const { withErrorHandling } = useErrorHandler();
 
-  // Helper function to sanitize file names for security
-  const sanitizeFileName = (input: string): string | null => {
-    if (!input || input.trim() === '') return null;
+  const openMarkdownFile = React.useCallback((filePath: string) => {
+    const normalizedPath = norm(filePath) ?? filePath;
+    const derivedName =
+      normalizedPath.split('/').filter(Boolean).pop() || 'Untitled.md';
 
-    // Remove path traversal attempts and dangerous characters
-    let sanitized = input
-      .replace(/\.\.[/\\]/g, '') // Remove ../
-      .replace(/[/\\]/g, '-')     // Replace path separators with hyphens
-      .replace(/[^a-zA-Z0-9\s\-_]/g, '') // Keep only safe characters
-      .trim();
+    onSelectFile?.({
+      id: normalizedPath,
+      name: derivedName,
+      path: normalizedPath,
+      size: 0,
+      last_modified: Math.floor(Date.now() / 1000),
+      extension: derivedName.split('.').pop() || 'md',
+    });
+  }, [onSelectFile]);
 
-    // Reject if empty after sanitization
-    if (!sanitized) return null;
+  const openProjectReadme = React.useCallback((projectPath: string) => {
+    onSelectProject(projectPath);
 
-    // Limit length
-    if (sanitized.length > 100) {
-      sanitized = sanitized.substring(0, 100);
-    }
+    const candidates = [
+      `${projectPath}/README.md`,
+      `${projectPath}/README.markdown`,
+    ];
 
-    return sanitized;
-  };
+    void (async () => {
+      for (const candidate of candidates) {
+        const exists = await safeInvoke<boolean>('check_file_exists', { filePath: candidate }, false);
+        if (exists) {
+          openMarkdownFile(candidate);
+          return;
+        }
+      }
+
+      openMarkdownFile(candidates[0]);
+    })();
+  }, [onSelectProject, openMarkdownFile]);
 
   // Load initial data when GTD space root path changes
   React.useEffect(() => {
@@ -485,6 +515,55 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     await updateProject(projectPath, updates);
   };
 
+  const handleOpenAction = React.useCallback((actionPath: string) => {
+    openMarkdownFile(actionPath);
+  }, [openMarkdownFile]);
+
+  const handleOpenHabit = React.useCallback((habitPath: string) => {
+    openMarkdownFile(habitPath);
+  }, [openMarkdownFile]);
+
+  const handleOpenHorizonDialog = React.useCallback((horizon: string) => {
+    const rootPath = gtdSpace?.root_path;
+    if (!rootPath) {
+      return;
+    }
+
+    const configs: Record<string, Omit<HorizonDialogConfig, 'spacePath'>> = {
+      'Purpose & Principles': {
+        directory: `${rootPath}/Purpose & Principles`,
+        directoryName: 'Purpose & Principles',
+        sectionId: 'purpose',
+      },
+      'Vision': {
+        directory: `${rootPath}/Vision`,
+        directoryName: 'Vision',
+        sectionId: 'vision',
+      },
+      'Goals': {
+        directory: `${rootPath}/Goals`,
+        directoryName: 'Goals',
+        sectionId: 'goals',
+      },
+      'Areas of Focus': {
+        directory: `${rootPath}/Areas of Focus`,
+        directoryName: 'Areas of Focus',
+        sectionId: 'areas',
+      },
+    };
+
+    const nextConfig = configs[horizon];
+    if (!nextConfig) {
+      log.warn('Unsupported horizon dialog request', { horizon });
+      return;
+    }
+
+    setPageDialogConfig({
+      ...nextConfig,
+      spacePath: rootPath,
+    });
+  }, [gtdSpace?.root_path]);
+
   // Convert horizons to the format expected by DashboardHorizons
   const horizonFiles = React.useMemo(() => {
     const files: Record<string, HorizonFile[]> = {};
@@ -493,6 +572,15 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
     });
     return files;
   }, [horizons]);
+
+  const recentActivity = React.useMemo(() => (
+    buildDashboardActivityFeed({
+      actions,
+      projects: projectsWithMetadata,
+      habits: habitsWithHistory,
+      horizonFiles: Object.values(horizonFiles).flat(),
+    })
+  ), [actions, habitsWithHistory, horizonFiles, projectsWithMetadata]);
 
   if (!currentFolder || !gtdSpace?.isGTDSpace) {
     return (
@@ -564,27 +652,21 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
               horizonCounts={Object.fromEntries(
                 Object.entries(horizons).map(([name, level]) => [name, level.files.length])
               )}
+              recentActivity={recentActivity}
               isLoading={combinedLoading}
               onNewProject={() => setShowProjectDialog(true)}
-              onSelectProject={onSelectProject}
+              onSelectProject={openProjectReadme}
               onSelectHorizon={(name) => {
-                const level = horizons[name];
-                if (level && level.files.length > 0 && onSelectFile) {
-                  onSelectFile(level.files[0]);
-                }
+                setActiveTab('horizons');
+                setSelectedHorizonLevel(name);
               }}
-              onSelectAction={(actionPath) => {
-                if (onSelectFile) {
-                  const name = actionPath.split('/').pop() || 'Action.md';
-                  onSelectFile({
-                    id: actionPath,
-                    name,
-                    path: actionPath,
-                    size: 0,
-                    last_modified: Math.floor(Date.now() / 1000),
-                    extension: 'md'
-                  });
+              onSelectAction={handleOpenAction}
+              onSelectActivity={(item) => {
+                if (item.entityType === 'project') {
+                  openProjectReadme(item.path);
+                  return;
                 }
+                openMarkdownFile(item.path);
               }}
             />
           </TabsContent>
@@ -595,14 +677,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
               actions={actions}
               projects={gtdSpace.projects?.map(p => ({ name: p.name, path: p.path })) || []}
               isLoading={actionsLoading}
-              onSelectAction={(action) => onSelectFile?.({
-                id: action.id,
-                name: action.name,
-                path: action.path,
-                size: 0,
-                last_modified: Math.floor(Date.now() / 1000),
-                extension: 'md'
-              })}
+              onSelectAction={(action) => handleOpenAction(action.path)}
               onUpdateStatus={handleActionStatusUpdate}
               onBulkUpdate={handleBulkActionUpdate}
               onDeleteAction={handleDeleteAction}
@@ -615,33 +690,11 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
               projects={projectsWithMetadata}
               isLoading={projectsLoading}
               onSelectProject={(project) => {
-                onSelectProject(project.path);
-                if (onSelectFile) {
-                  const readmeFile: MarkdownFile = {
-                    id: `${project.path}/README.md`,
-                    name: 'README.md',
-                    path: `${project.path}/README.md`,
-                    size: 0,
-                    last_modified: Math.floor(Date.now() / 1000),
-                    extension: 'md'
-                  };
-                  onSelectFile(readmeFile);
-                }
+                void openProjectReadme(project.path);
               }}
               onCreateProject={() => setShowProjectDialog(true)}
               onEditProject={(project) => {
-                // Open the project's README file in the editor
-                if (onSelectFile) {
-                  const readmeFile: MarkdownFile = {
-                    id: `${project.path}/README.md`,
-                    name: 'README.md',
-                    path: `${project.path}/README.md`,
-                    size: 0,
-                    last_modified: Math.floor(Date.now() / 1000),
-                    extension: 'md'
-                  };
-                  onSelectFile(readmeFile);
-                }
+                void openProjectReadme(project.path);
               }}
               onCompleteProject={async (project) => {
                 await handleProjectUpdate(project.path, { status: 'completed' });
@@ -660,109 +713,9 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
               isLoading={habitsLoading}
               onToggleHabit={handleHabitToggle}
               onEditHabit={(habit) => {
-                if (onSelectFile) {
-                  onSelectFile({
-                    id: habit.path,
-                    name: habit.name,
-                    path: habit.path,
-                    size: 0,
-                    last_modified: Math.floor(Date.now() / 1000),
-                    extension: 'md'
-                  });
-                }
+                handleOpenHabit(habit.path);
               }}
-              onCreateHabit={async () => {
-                // Create a new habit file using the backend command
-                if (gtdSpace?.root_path) {
-                  const habitName = prompt('Enter habit name:');
-                  if (habitName) {
-                    const sanitizedHabitName = sanitizeFileName(habitName);
-                    if (!sanitizedHabitName) {
-                      toast({
-                        title: 'Invalid habit name',
-                        description: 'Please enter a valid habit name without special characters',
-                        variant: 'destructive'
-                      });
-                      return;
-                    }
-
-                    // Available frequencies: daily, weekdays, every-other-day, twice-weekly, weekly, biweekly, monthly
-                    const frequencyOptions = [
-                      { value: '5-minute', label: 'Every 5 Minutes (Testing)' },
-                      { value: 'daily', label: 'Daily' },
-                      { value: 'weekdays', label: 'Weekdays (Mon-Fri)' },
-                      { value: 'every-other-day', label: 'Every Other Day' },
-                      { value: 'twice-weekly', label: 'Twice a Week' },
-                      { value: 'weekly', label: 'Weekly' },
-                      { value: 'biweekly', label: 'Biweekly' },
-                      { value: 'monthly', label: 'Monthly' }
-                    ];
-
-                    const frequencyLabels = frequencyOptions.map(f => f.label).join('\n');
-                    const selectedLabel = prompt(`Select frequency:\n${frequencyLabels}`, 'Daily');
-
-                    if (selectedLabel) {
-                      const normalizedSelection = selectedLabel.trim().toLowerCase();
-                      const selectedFrequency = frequencyOptions.find(
-                        (f) =>
-                          f.label.trim().toLowerCase() === normalizedSelection ||
-                          f.value.trim().toLowerCase() === normalizedSelection
-                      );
-
-                      if (!selectedFrequency) {
-                        toast({
-                          title: 'Invalid frequency',
-                          description: 'Please choose one of the listed frequency options.',
-                          variant: 'destructive'
-                        });
-                        return;
-                      }
-
-                      const frequency = selectedFrequency.value;
-
-                      const habitPath = await withErrorHandling(async () => {
-                        const createdPath = await invoke<string>('create_gtd_habit', {
-                          spacePath: gtdSpace.root_path,
-                          habitName: sanitizedHabitName,
-                          frequency,
-                          focusTime: null
-                        });
-                        return createdPath;
-                      }, 'Failed to create habit');
-                      if (!habitPath) {
-                        return;
-                      }
-
-                      try {
-                        // Open the new habit file
-                        if (onSelectFile) {
-                          const normalizedHabitPath = norm(habitPath) ?? habitPath;
-                          const habitBaseName =
-                            normalizedHabitPath.split('/').filter(Boolean).pop() ||
-                            `${sanitizedHabitName}.md`;
-                          onSelectFile({
-                            id: normalizedHabitPath,
-                            name: habitBaseName,
-                            path: normalizedHabitPath,
-                            size: 0,
-                            last_modified: Math.floor(Date.now() / 1000),
-                            extension: 'md'
-                          });
-                        }
-                        // Reload habits
-                        await loadHabits(gtdSpace.root_path);
-                      } catch (error) {
-                        log.error('Failed to reload habits or select created habit', error);
-                        toast({
-                          title: 'Reloading habits or file selection failed',
-                          description: String(error),
-                          variant: 'destructive',
-                        });
-                      }
-                    }
-                  }
-                }
-              }}
+              onCreateHabit={() => setShowHabitDialog(true)}
             />
           </TabsContent>
 
@@ -772,85 +725,13 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
               horizonFiles={horizonFiles}
               projects={projectsWithMetadata}
               relationships={relationships}
+              graph={graph}
+              findRelated={findRelated}
+              selectedLevel={selectedHorizonLevel}
+              onSelectedLevelChange={setSelectedHorizonLevel}
               isLoading={horizonsLoading}
               onSelectFile={onSelectFile}
-              onCreateFile={async (horizon) => {
-                // Create a new file in the specified horizon
-                if (gtdSpace?.root_path) {
-                  const fileName = prompt(`Create new ${horizon} file:`);
-                  const sanitizedName = sanitizeFileName(fileName || '');
-
-                  if (!sanitizedName) {
-                    toast({
-                      title: 'Invalid file name',
-                      description: 'Please enter a valid file name without special characters',
-                      variant: 'destructive'
-                    });
-                    return;
-                  }
-
-                  // Ensure the file name ends with .md
-                  const fileNameWithExt = sanitizedName.endsWith('.md') ? sanitizedName : `${sanitizedName}.md`;
-                  const filePath = `${gtdSpace.root_path}/${horizon}/${fileNameWithExt}`;
-
-                  // Additional security check: ensure the resolved path is within the horizon directory
-                  const expectedPrefix = `${gtdSpace.root_path}/${horizon}/`;
-                  if (!filePath.startsWith(expectedPrefix)) {
-                    toast({
-                      title: 'Security error',
-                      description: 'Invalid file path detected',
-                      variant: 'destructive'
-                    });
-                    return;
-                  }
-
-                  const title = sanitizedName.replace('.md', '');
-
-                    // Create default content based on horizon type
-                    let defaultContent = `# ${title}\n\n`;
-
-                    // Add horizon-specific metadata fields
-                    if (horizon === 'Projects') {
-                      defaultContent += `[!singleselect:project-status:in-progress]\n[!datetime:due_date:]\n\n## Overview\n\n## Actions\n[!actions-list]\n`;
-                    } else if (horizon === 'Areas of Focus') {
-                      defaultContent += `## Description\n\n## Related Projects\n[!projects-references:]\n`;
-                    } else if (horizon === 'Goals') {
-                      defaultContent += `[!datetime:target_date:]\n\n## Objective\n\n## Related Areas\n[!areas-references:]\n`;
-                    } else if (horizon === 'Vision') {
-                      defaultContent += `## Vision Statement\n\n## Related Goals\n[!goals-references:]\n`;
-                    } else if (horizon === 'Purpose & Principles') {
-                      defaultContent += `## Core Purpose\n\n## Guiding Principles\n\n`;
-                    } else {
-                      defaultContent += `## Description\n\n`;
-                    }
-
-                    try {
-                      const writeResult = await safeInvoke('save_file', {
-                        path: filePath,
-                        content: defaultContent
-                      }, null);
-                      if (!writeResult) {
-                        log.error('Failed to create new file');
-                        return;
-                      }
-                      // Open the new file
-                      if (onSelectFile) {
-                        onSelectFile({
-                          id: filePath,
-                          name: fileNameWithExt,
-                          path: filePath,
-                          size: 0,
-                          last_modified: Math.floor(Date.now() / 1000),
-                          extension: 'md'
-                        });
-                      }
-                      // Reload horizons
-                      await loadHorizons(gtdSpace.root_path, gtdSpace.projects || []);
-                    } catch (error) {
-                      log.error('Failed to create file', error);
-                    }
-                  }
-              }}
+              onCreateFile={handleOpenHorizonDialog}
             />
           </TabsContent>
         </div>
@@ -865,6 +746,36 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
             spacePath={gtdSpace?.root_path || currentFolder || ''}
             onSuccess={() => loadProjects(currentFolder)}
           />
+
+          <CreateHabitDialog
+            isOpen={showHabitDialog}
+            onClose={() => setShowHabitDialog(false)}
+            spacePath={gtdSpace?.root_path || currentFolder || ''}
+            onSuccess={(habitPath) => {
+              void (async () => {
+                await loadHabits(gtdSpace?.root_path || currentFolder || '');
+                openMarkdownFile(habitPath);
+              })();
+            }}
+          />
+
+          {pageDialogConfig && (
+            <CreatePageDialog
+              isOpen={pageDialogConfig !== null}
+              onClose={() => setPageDialogConfig(null)}
+              directory={pageDialogConfig.directory}
+              directoryName={pageDialogConfig.directoryName}
+              sectionId={pageDialogConfig.sectionId}
+              spacePath={pageDialogConfig.spacePath}
+              onSuccess={(filePath) => {
+                void (async () => {
+                  await loadHorizons(pageDialogConfig.spacePath, gtdSpace?.projects || []);
+                  openMarkdownFile(filePath);
+                  setPageDialogConfig(null);
+                })();
+              }}
+            />
+          )}
 
           {selectedProject && (
             <GTDActionDialog

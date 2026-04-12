@@ -10,9 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Activity,
   AlertCircle,
-  Calendar,
   Clock,
-  FileText,
   FolderOpen,
   Layers,
   ListChecks,
@@ -32,15 +30,17 @@ import type { HabitWithHistory } from '@/hooks/useHabitsHistory';
 import { cn } from '@/lib/utils';
 import { countHabitsCompletedOnDate } from '@/utils/habit-progress';
 import { localISODate } from '@/utils/time';
-import { Switch } from '@/components/ui/switch';
 import {
   formatRelativeDate,
-  getDateFromNow,
-  isDateInRange,
   isDateOverdue,
-  parseLocalDate,
 } from '@/utils/date-formatting';
 import { QuestionMarkTooltip } from '@/components/ui/QuestionMarkTooltip';
+import { UpcomingDeadlinesCard } from '@/components/dashboard/UpcomingDeadlinesCard';
+import type {
+  DashboardActivityEntityType,
+  DashboardActivityItem,
+  DashboardActivityType,
+} from '@/utils/dashboard-activity';
 
 interface DashboardOverviewProps {
   gtdSpace: GTDSpace;
@@ -58,11 +58,13 @@ interface DashboardOverviewProps {
     dueThisWeek?: number;
   };
   horizonCounts: Record<string, number>;
+  recentActivity: DashboardActivityItem[];
   isLoading?: boolean;
   onNewProject?: () => void;
   onSelectProject?: (path: string) => void;
   onSelectHorizon?: (name: string) => void;
   onSelectAction?: (path: string) => void;
+  onSelectActivity?: (item: DashboardActivityItem) => void;
 }
 
 interface QuickStat {
@@ -83,15 +85,19 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   actions = [],
   actionSummary,
   horizonCounts,
+  recentActivity,
   isLoading = false,
   onNewProject,
   onSelectProject,
   onSelectHorizon,
-  onSelectAction
+  onSelectAction,
+  onSelectActivity,
 }) => {
-  const [includeActions, setIncludeActions] = React.useState(true);
-  const [onlyOverdue, setOnlyOverdue] = React.useState(false);
   const todayStr = localISODate(new Date());
+  const horizonOrder = React.useMemo(
+    () => ['Purpose & Principles', 'Vision', 'Goals', 'Areas of Focus', 'Projects'],
+    []
+  );
   // Calculate project statistics with enhanced metadata
   const projectStats = React.useMemo(() => {
     const active = projects.filter(p => p.status === 'in-progress').length;
@@ -210,11 +216,37 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     return 0;
   }, [projectStats, actionSummary, habitStats]);
 
-  // Calculate upcoming due items (this week excluding today)
   const upcomingDueCount = Math.max(
     (actionSummary.dueThisWeek ?? 0) - (actionSummary.dueToday ?? 0),
     0
   );
+
+  const getActivityEntityIcon = (entityType: DashboardActivityEntityType) => {
+    switch (entityType) {
+      case 'project':
+        return FolderOpen;
+      case 'action':
+        return ListChecks;
+      case 'habit':
+        return RefreshCw;
+      case 'horizon':
+        return Layers;
+      default:
+        return Activity;
+    }
+  };
+
+  const getActivityBadgeClassName = (activityType: DashboardActivityType) => {
+    switch (activityType) {
+      case 'completed':
+        return 'border-green-500/30 bg-green-500/10 text-green-600';
+      case 'updated':
+        return 'border-blue-500/30 bg-blue-500/10 text-blue-600';
+      case 'created':
+      default:
+        return 'border-orange-500/30 bg-orange-500/10 text-orange-600';
+    }
+  };
 
   const quickStats: QuickStat[] = [
     {
@@ -276,53 +308,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       description: `${habitStats.completionRate}% completed today`
     }
   ];
-
-  // Get upcoming items (next 7 days) with enhanced display
-  const upcomingItems = React.useMemo(() => {
-    const now = new Date();
-    const weekFromNow = getDateFromNow(7);
-    
-    const upcomingProjects = projects
-      .filter(p => {
-        if (!p.dueDate || p.status === 'completed' || p.status === 'cancelled') return false;
-        if (onlyOverdue) {
-          return isDateOverdue(p.dueDate);
-        }
-        return isDateInRange(p.dueDate, now, weekFromNow);
-      })
-      .map(p => ({
-        id: p.path,
-        name: p.name,
-        type: 'project' as const,
-        dueDate: p.dueDate!,
-        status: p.status,
-        completionPercentage: p.completionPercentage
-      }));
-
-    const upcomingActions = actions
-      .filter(a => {
-        if (!a.dueDate) return false;
-        if (a.status === 'completed' || a.status === 'cancelled') return false;
-        if (onlyOverdue) {
-          return isDateOverdue(a.dueDate);
-        }
-        return isDateInRange(a.dueDate, now, weekFromNow);
-      })
-      .map(a => ({
-        id: a.path,
-        name: a.name,
-        type: 'action' as const,
-        dueDate: a.dueDate!,
-        status: a.status,
-        completionPercentage: undefined as number | undefined
-      }));
-
-    // Sort combined by due date
-    const combined = includeActions ? [...upcomingProjects, ...upcomingActions] : upcomingProjects;
-    return combined
-      .sort((a, b) => parseLocalDate(a.dueDate).getTime() - parseLocalDate(b.dueDate).getTime())
-      .slice(0, 8);
-  }, [projects, actions, includeActions, onlyOverdue]);
 
   // Habits needing attention
   const habitsNeedingAttention = React.useMemo(() => {
@@ -558,9 +543,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             <CardContent>
               <div className="space-y-2">
                 {Object.entries(horizonCounts)
+                  .filter(([horizon]) => horizonOrder.includes(horizon))
                   .sort((a, b) => {
-                    const order = ['Purpose & Principles', 'Vision', 'Goals', 'Areas of Focus', 'Projects'];
-                    return order.indexOf(a[0]) - order.indexOf(b[0]);
+                    return horizonOrder.indexOf(a[0]) - horizonOrder.indexOf(b[0]);
                   })
                   .map(([horizon, count]) => (
                   <div
@@ -579,101 +564,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
         {/* Right Column */}
         <div className="space-y-6">
-          {/* Upcoming Deadlines */}
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Upcoming Deadlines
-                </CardTitle>
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    className={cn(
-                      'text-xs px-2 py-1 rounded border transition-colors',
-                      onlyOverdue
-                        ? 'bg-destructive/10 border-destructive text-destructive'
-                        : 'border-muted-foreground/30 text-muted-foreground hover:bg-accent'
-                    )}
-                    onClick={() => setOnlyOverdue(v => !v)}
-                    aria-pressed={onlyOverdue}
-                  >
-                    Only overdue
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <span id="upcoming-deadlines-include-actions" className="text-xs text-muted-foreground">
-                      Include actions
-                    </span>
-                    <Switch
-                      checked={includeActions}
-                      onCheckedChange={setIncludeActions}
-                      aria-labelledby="upcoming-deadlines-include-actions"
-                    />
-                  </div>
-                </div>
-              </div>
-              <CardDescription>{onlyOverdue ? 'Overdue' : 'Next 7 days'}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {upcomingItems.length === 0 ? (
-                <div className="text-center py-4 text-sm text-muted-foreground">
-                  {onlyOverdue ? 'No overdue items' : 'No upcoming deadlines this week'}
-                </div>
-              ) : (
-                <ScrollArea className="h-[200px]">
-                  <div className="space-y-2">
-                    {upcomingItems.map((item) => (
-                      <div
-                        key={item.id}
-                        className="cursor-pointer rounded-lg border border-border/70 p-3 transition-colors hover:bg-accent/30"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => item.type === 'action' ? onSelectAction?.(item.id) : onSelectProject?.(item.id)}
-                        onKeyDown={(event) => {
-                          if (event.key !== 'Enter' && event.key !== ' ') {
-                            return;
-                          }
-                          event.preventDefault();
-                          if (item.type === 'action') {
-                            onSelectAction?.(item.id);
-                          } else {
-                            onSelectProject?.(item.id);
-                          }
-                        }}
-                      >
-                        <div className="mb-1 flex items-center justify-between gap-3">
-                          <span className="flex items-center gap-2 truncate text-sm font-medium">
-                            {item.type === 'project' ? (
-                              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                            ) : (
-                              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                            )}
-                            {item.name}
-                          </span>
-                          <Badge variant="outline" className="text-xs">
-                            {formatRelativeDate(item.dueDate) || parseLocalDate(item.dueDate).toLocaleDateString()}
-                          </Badge>
-                        </div>
-                        {item.completionPercentage !== undefined && (
-                          <Progress value={item.completionPercentage} className="h-1" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
-              {/* Legend */}
-              <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <FolderOpen className="h-3.5 w-3.5" /> Project
-                </span>
-                <span className="flex items-center gap-1">
-                  <FileText className="h-3.5 w-3.5" /> Action
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+          <UpcomingDeadlinesCard
+            projects={projects}
+            actions={actions}
+            onSelectProject={onSelectProject}
+            onSelectAction={onSelectAction}
+          />
 
           {/* Enhanced Habit Consistency */}
           <Card>
@@ -779,20 +675,61 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </Card>
           )}
 
-          {/* Activity Summary - Placeholder for future implementation */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
-                Activity Summary
+                Recent Activity
               </CardTitle>
+              <CardDescription>Creates, updates, and completions across your workspace</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="rounded-lg border border-dashed border-border/70 bg-muted/20 py-5 text-center text-sm text-muted-foreground">
-                <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
-                Recent activity is on the way
-                <p className="text-xs mt-1">Track creates, updates, and completions</p>
-              </div>
+              {recentActivity.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border/70 bg-muted/20 py-5 text-center text-sm text-muted-foreground">
+                  <Activity className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
+                  No recent activity in the last 30 days
+                </div>
+              ) : (
+                <ScrollArea className="h-[280px]">
+                  <div className="space-y-2 pr-3">
+                    {recentActivity.map((item) => {
+                      const ItemIcon = getActivityEntityIcon(item.entityType);
+
+                      return (
+                        <button
+                          type="button"
+                          key={item.id}
+                          className="flex w-full items-start gap-3 rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-accent/30"
+                          onClick={() => onSelectActivity?.(item)}
+                        >
+                          <div className="rounded-md border border-border/60 bg-muted/30 p-2">
+                            <ItemIcon className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium">{item.title}</p>
+                                {item.context && (
+                                  <p className="mt-1 text-xs text-muted-foreground">{item.context}</p>
+                                )}
+                              </div>
+                              <Badge
+                                variant="outline"
+                                className={cn('shrink-0 text-[11px] capitalize', getActivityBadgeClassName(item.activityType))}
+                              >
+                                {item.activityType}
+                              </Badge>
+                            </div>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              {formatRelativeDate(item.timestamp) || item.timestamp}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              )}
             </CardContent>
           </Card>
         </div>

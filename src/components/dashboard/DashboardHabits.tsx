@@ -48,6 +48,7 @@ interface DashboardHabitsProps {
 
 // Frequency display mapping (must align with GTDHabitFrequency)
 const FREQUENCY_DISPLAY: Record<string, string> = {
+  '5-minute': 'Every 5 Minutes',
   'daily': 'Daily',
   'every-other-day': 'Every Other Day',
   'twice-weekly': 'Twice Weekly',

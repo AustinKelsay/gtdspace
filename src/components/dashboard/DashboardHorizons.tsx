@@ -2,7 +2,7 @@
  * @fileoverview Dashboard Horizons Tab - Hierarchical view of GTD levels with relationships
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,16 +31,15 @@ import {
   Mountain,
   Plus,
   Search,
-  Sparkles,
   Star,
   Target,
-  TreePine
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import type { GTDProject } from '@/types';
 import type { HorizonFile as HookHorizonFile, HorizonRelationship as HookHorizonRelationship } from '@/hooks/useHorizonsRelationships';
 import { mergeProjectInfoIntoHorizonFiles } from '@/utils/horizons';
 import { cn } from '@/lib/utils';
+import { HorizonRelationshipMap } from '@/components/dashboard/HorizonRelationshipMap';
 
 // Helper type for relationships with optional name properties
 type NamedRelationship = HookHorizonRelationship & { toName?: string; fromName?: string };
@@ -106,11 +105,23 @@ type HorizonFile = HookHorizonFile & {
 };
 
 type HorizonRelationship = HookHorizonRelationship;
+type HorizonGraph = {
+  nodes: Array<{ id: string; label: string; level: string; group: number }>;
+  edges: Array<{ from: string; to: string }>;
+};
 
 interface DashboardHorizonsProps {
   horizonFiles: Record<string, HorizonFile[]>;
   projects: GTDProject[];
   relationships?: HorizonRelationship[];
+  graph?: HorizonGraph;
+  findRelated?: (filePath: string) => {
+    parents: HorizonFile[];
+    children: HorizonFile[];
+    siblings: HorizonFile[];
+  };
+  selectedLevel?: string;
+  onSelectedLevelChange?: (value: string) => void;
   isLoading?: boolean;
   onSelectFile?: (file: HorizonFile) => void;
   onCreateFile?: (horizon: string) => void;
@@ -121,6 +132,10 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
   horizonFiles,
   projects,
   relationships = [],
+  graph = { nodes: [], edges: [] },
+  findRelated,
+  selectedLevel: controlledSelectedLevel,
+  onSelectedLevelChange,
   isLoading = false,
   onSelectFile,
   onCreateFile,
@@ -130,8 +145,18 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showOnlyLinked, setShowOnlyLinked] = useState(false);
-  const [selectedLevel, setSelectedLevel] = useState<string>('All');
+  const [uncontrolledSelectedLevel, setUncontrolledSelectedLevel] = useState<string>('All');
   const [sortBy, setSortBy] = useState<'name' | 'linked'>('name');
+  const [selectedNodePath, setSelectedNodePath] = useState<string | null>(null);
+  const isLevelControlled = controlledSelectedLevel !== undefined;
+  const selectedLevel = controlledSelectedLevel ?? uncontrolledSelectedLevel;
+
+  const setSelectedLevel = useCallback((value: string) => {
+    onSelectedLevelChange?.(value);
+    if (!isLevelControlled) {
+      setUncontrolledSelectedLevel(value);
+    }
+  }, [isLevelControlled, onSelectedLevelChange]);
 
   // Toggle level expansion
   const toggleLevel = useCallback((levelName: string) => {
@@ -159,38 +184,19 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
     });
   }, []);
 
-  // Filter files based on search
-  const filteredHorizonFiles = useMemo(() => {
-    if (!searchQuery && !showOnlyLinked) return horizonFiles;
+  const filesByLevel = useMemo(() => {
+    const next: Record<string, HorizonFile[]> = {};
 
-    const filtered: Record<string, HorizonFile[]> = {};
-    
-    Object.entries(horizonFiles).forEach(([level, files]) => {
-      let levelFiles = [...files];
-      
-      // Search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        levelFiles = levelFiles.filter(file =>
-          file.name.toLowerCase().includes(query)
-        );
-      }
-      
-      // Linked filter
-      if (showOnlyLinked) {
-        levelFiles = levelFiles.filter(file =>
-          (file.linkedTo && file.linkedTo.length > 0) ||
-          (file.linkedFrom && file.linkedFrom.length > 0)
-        );
-      }
-      
-      if (levelFiles.length > 0) {
-        filtered[level] = levelFiles;
-      }
+    HORIZON_LEVELS.forEach((level) => {
+      const rawFiles = (horizonFiles[level.name] as HorizonFile[]) || [];
+      next[level.name] =
+        level.name === 'Projects' && projects.length > 0
+          ? mergeProjectInfoIntoHorizonFiles(rawFiles, projects as any)
+          : rawFiles;
     });
-    
-    return filtered;
-  }, [horizonFiles, searchQuery, showOnlyLinked]);
+
+    return next;
+  }, [horizonFiles, projects]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -198,32 +204,15 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
     let linkedFiles = 0;
     const levelCounts: Record<string, number> = {};
 
-    const entries = Object.entries(horizonFiles);
-    const hasProjectsKey = entries.some(([level]) => level === 'Projects');
-
-    entries.forEach(([level, files]) => {
+    HORIZON_LEVELS.forEach((level) => {
+      const files = filesByLevel[level.name] ?? [];
       totalFiles += files.length;
       linkedFiles += files.filter(f =>
         (f.linkedTo && f.linkedTo.length > 0) ||
         (f.linkedFrom && f.linkedFrom.length > 0)
       ).length;
-      levelCounts[level] = files.length;
+      levelCounts[level.name] = files.length;
     });
-
-    // Only add projects from the separate projects array if the horizonFiles
-    // set does not already contain the Projects bucket.
-    if (!hasProjectsKey) {
-      levelCounts['Projects'] = projects.length;
-      totalFiles += projects.length;
-
-      // Estimate linked count from project metadata when adding projects here
-      linkedFiles += projects.filter((p: any) =>
-        (Array.isArray(p.linkedAreas) && p.linkedAreas.length > 0) ||
-        (Array.isArray(p.linkedGoals) && p.linkedGoals.length > 0) ||
-        (Array.isArray(p.linkedVision) && p.linkedVision.length > 0) ||
-        (Array.isArray(p.linkedPurpose) && p.linkedPurpose.length > 0)
-      ).length;
-    }
 
     return {
       totalFiles,
@@ -231,7 +220,7 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
       levelCounts,
       linkageRate: totalFiles > 0 ? Math.round((linkedFiles / totalFiles) * 100) : 0
     };
-  }, [horizonFiles, projects]);
+  }, [filesByLevel]);
 
   // Get relationships for a file
   const getFileRelationships = useCallback((filePath: string) => {
@@ -241,30 +230,78 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
     };
   }, [relationships]);
 
+  const filteredHorizonFiles = useMemo(() => {
+    const filtered: Record<string, HorizonFile[]> = {};
+    const query = searchQuery.trim().toLowerCase();
+
+    HORIZON_LEVELS.forEach((level) => {
+      let levelFiles = [...(filesByLevel[level.name] ?? [])];
+
+      if (query) {
+        levelFiles = levelFiles.filter((file) =>
+          file.name.toLowerCase().includes(query) ||
+          file.content?.toLowerCase().includes(query)
+        );
+      }
+
+      if (showOnlyLinked) {
+        levelFiles = levelFiles.filter((file) =>
+          (file.linkedTo && file.linkedTo.length > 0) ||
+          (file.linkedFrom && file.linkedFrom.length > 0)
+        );
+      }
+
+      filtered[level.name] = [...levelFiles].sort((a, b) => {
+        if (sortBy === 'linked') {
+          const aRel = getFileRelationships(a.path);
+          const bRel = getFileRelationships(b.path);
+          const aCount = aRel.linkedTo.length + aRel.linkedFrom.length;
+          const bCount = bRel.linkedTo.length + bRel.linkedFrom.length;
+          if (bCount !== aCount) return bCount - aCount;
+        }
+        return a.name.localeCompare(b.name);
+      });
+    });
+
+    return filtered;
+  }, [filesByLevel, getFileRelationships, searchQuery, showOnlyLinked, sortBy]);
+
+  const visiblePaths = useMemo(() => {
+    const next = new Set<string>();
+    Object.values(filteredHorizonFiles).forEach((files) => {
+      files.forEach((file) => next.add(file.path));
+    });
+    return next;
+  }, [filteredHorizonFiles]);
+
+  useEffect(() => {
+    if (selectedLevel !== 'All') {
+      setExpandedLevels((prev) => {
+        if (prev.has(selectedLevel)) {
+          return prev;
+        }
+        const next = new Set(prev);
+        next.add(selectedLevel);
+        return next;
+      });
+    }
+  }, [selectedLevel]);
+
+  useEffect(() => {
+    if (selectedNodePath && !visiblePaths.has(selectedNodePath)) {
+      setSelectedNodePath(null);
+    }
+  }, [selectedNodePath, visiblePaths]);
+
+  const handleSelectFile = useCallback((file: HorizonFile) => {
+    setSelectedNodePath(file.path);
+    onSelectFile?.(file);
+  }, [onSelectFile]);
+
   // Render horizon level
   const renderHorizonLevel = (level: HorizonLevel) => {
     const isExpanded = expandedLevels.has(level.name);
-    // Start with files provided for this level
-    let files: HorizonFile[] = (filteredHorizonFiles[level.name] as HorizonFile[]) || [];
-
-    // For Projects, enrich from `projects` prop where available (action counts, etc.)
-    if (level.name === 'Projects' && projects.length > 0) {
-      files = mergeProjectInfoIntoHorizonFiles(files, projects as any);
-
-      // Apply search and linked-only filters to projects too (already handled above via filteredHorizonFiles)
-    }
-
-    // Apply sorting
-    files = [...files].sort((a, b) => {
-      if (sortBy === 'linked') {
-        const aRel = getFileRelationships(a.path);
-        const bRel = getFileRelationships(b.path);
-        const aCount = aRel.linkedTo.length + aRel.linkedFrom.length;
-        const bCount = bRel.linkedTo.length + bRel.linkedFrom.length;
-        if (bCount !== aCount) return bCount - aCount;
-      }
-      return a.name.localeCompare(b.name);
-    });
+    const files: HorizonFile[] = filteredHorizonFiles[level.name] || [];
     const fileCount = files.length;
     const LevelIcon = level.icon;
 
@@ -356,6 +393,7 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
         key={file.path}
         className={cn(
           "border rounded-lg p-3 hover:bg-accent transition-colors",
+          selectedNodePath === file.path && "border-primary bg-primary/5",
           hasRelationships && "border-primary/30"
         )}
       >
@@ -378,7 +416,7 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
               <FileText className="h-4 w-4 text-muted-foreground" />
               <span 
                 className="font-medium cursor-pointer hover:text-primary"
-                onClick={() => onSelectFile?.(file)}
+                onClick={() => handleSelectFile(file)}
               >
                 {file.name.replace('.md', '')}
               </span>
@@ -550,7 +588,6 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
         </Select>
       </div>
 
-      {/* Horizon pyramid visualization */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -627,27 +664,16 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
         </CardContent>
       </Card>
 
-      {/* Relationship graph placeholder */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TreePine className="h-5 w-5" />
-            Relationship Map
-          </CardTitle>
-          <CardDescription>
-            Visual connections between your horizons
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-            <div className="text-center">
-              <Sparkles className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Interactive relationship graph</p>
-              <p className="text-xs mt-1">Coming soon...</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <HorizonRelationshipMap
+        allFilesByLevel={filesByLevel}
+        visibleFilesByLevel={filteredHorizonFiles}
+        graph={graph}
+        selectedLevel={selectedLevel}
+        selectedNodePath={selectedNodePath}
+        findRelated={findRelated}
+        onSelectNode={setSelectedNodePath}
+        onOpenFile={(file) => handleSelectFile(file as HorizonFile)}
+      />
     </div>
   );
 };

@@ -62,6 +62,11 @@ import { useToast } from '@/hooks/use-toast';
 import { syncGoogleCalendarEvents } from '@/utils/google-calendar';
 import { isHabitCompletedOnDate } from '@/utils/habit-progress';
 import { localISODate } from '@/utils/time';
+import {
+  formatAbsoluteDate,
+  formatAbsoluteTime,
+  formatCalendarViewTitle,
+} from '@/utils/date-formatting';
 
 // Helper to detect if a date has a time component
 // - For strings: return false when the time portion is zero (e.g., "T00:00:00", with optional fractional seconds and timezone)
@@ -349,15 +354,7 @@ const getDisplayDays = (viewDate: Date, viewMode: ViewMode): Date[] => {
 };
 
 const getViewTitle = (viewDate: Date, viewMode: ViewMode): string => {
-  switch (viewMode) {
-    case 'day':
-      return format(viewDate, 'EEEE, MMM d, yyyy');
-    case 'week':
-      return `Week of ${format(startOfWeek(viewDate), 'MMM d, yyyy')}`;
-    case 'month':
-    default:
-      return format(viewDate, 'MMMM yyyy');
-  }
+  return formatCalendarViewTitle(viewDate, viewMode);
 };
 
 const getNextViewDate = (
@@ -959,29 +956,38 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
   // Auto-scroll to 7am when timed views load
   useEffect(() => {
-    if (viewMode === 'day' || viewMode === 'week') {
-      // Find the ScrollArea's viewport element specifically in the timed grid
-      // ScrollArea creates a div with data-radix-scroll-area-viewport
-      const scrollToMorning = () => {
-        const timedGrid = document.getElementById('timed-calendar-grid');
-        if (timedGrid) {
-          const scrollViewport = timedGrid.querySelector('[data-radix-scroll-area-viewport]');
-
-          if (scrollViewport && scrollViewport instanceof HTMLElement) {
-            // Each hour row is 80px (h-20), scroll to 7am
-            const targetHour = 7;
-            const scrollPosition = targetHour * 80;
-            scrollViewport.scrollTop = scrollPosition;
-          }
-        }
-      };
-
-      // Use requestAnimationFrame to ensure DOM is painted
-      requestAnimationFrame(() => {
-        // Additional delay for ScrollArea to fully initialize
-        setTimeout(scrollToMorning, 200);
-      });
+    if (viewMode !== 'day' && viewMode !== 'week') {
+      return;
     }
+
+    // Find the ScrollArea's viewport element specifically in the timed grid
+    // ScrollArea creates a div with data-radix-scroll-area-viewport
+    const scrollToMorning = () => {
+      const timedGrid = document.getElementById('timed-calendar-grid');
+      if (timedGrid) {
+        const scrollViewport = timedGrid.querySelector('[data-radix-scroll-area-viewport]');
+
+        if (scrollViewport && scrollViewport instanceof HTMLElement) {
+          // Each hour row is 80px (h-20), scroll to 7am
+          const targetHour = 7;
+          const scrollPosition = targetHour * 80;
+          scrollViewport.scrollTop = scrollPosition;
+        }
+      }
+    };
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const rafId = requestAnimationFrame(() => {
+      // Additional delay for ScrollArea to fully initialize
+      timeoutId = setTimeout(scrollToMorning, 200);
+    });
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [viewMode, viewDate]); // Re-scroll when changing periods or switching timed views
 
   // Process items into calendar events
@@ -1247,13 +1253,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           const headerContent = (
             <>
               <div className="text-xs text-muted-foreground">
-                {format(day, viewMode === 'day' ? 'EEEE' : 'EEE')}
+                {formatAbsoluteDate(day, viewMode === 'day' ? 'EEEE' : 'EEE')}
               </div>
               <div className={cn(
                 "text-lg font-medium",
                 isToday(day) && "text-blue-600 dark:text-blue-400"
               )}>
-                {format(day, 'd')}
+                {formatAbsoluteDate(day, 'd')}
               </div>
             </>
           );
@@ -1357,7 +1363,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   }}
                 >
                   <span className="absolute -left-14 top-1/2 -translate-y-1/2 text-xs font-medium text-red-500 bg-background px-1 rounded whitespace-nowrap">
-                    {format(now, 'h:mm a')}
+                    {formatAbsoluteTime(now, 'h:mm a')}
                   </span>
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-red-500 rounded-full" />
@@ -1372,7 +1378,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           {weekHours.map(hour => (
             <div key={hour} className="grid border-b h-20" style={timedGridTemplate}>
               <div className="p-2 text-xs text-muted-foreground border-r">
-                {format(setHours(new Date(), hour), 'ha')}
+                {formatAbsoluteTime(setHours(new Date(), hour), 'ha')}
               </div>
               {calendarDays.map(day => {
                 const dateKey = format(day, 'yyyy-MM-dd');
@@ -1653,7 +1659,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     id={dropId}
                     data-testid={`month-day-cell-${dateKey}`}
                     onActivate={() => handleDayDrillIn(day)}
-                    aria-label={`Open ${format(day, 'EEEE, MMM d, yyyy')} in day view`}
+                    aria-label={`Open ${formatAbsoluteDate(day, 'EEEE, MMM d, yyyy')} in day view`}
                     className={cn(
                       "border-r border-b last:border-r-0 p-1 overflow-hidden",
                       "hover:bg-accent/5 transition-colors cursor-pointer",
@@ -1668,7 +1674,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                         !isCurrentMonth && "text-muted-foreground",
                         isTodayDate && "text-blue-600 dark:text-blue-400"
                       )}>
-                        {format(day, 'd')}
+                        {formatAbsoluteDate(day, 'd')}
                       </div>
 
                       {/* Events */}

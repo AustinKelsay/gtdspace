@@ -2,6 +2,116 @@
  * @fileoverview Date formatting utilities with proper timezone handling
  */
 
+import { startOfWeek } from 'date-fns';
+
+type AbsoluteDateInput = string | Date;
+type AbsoluteDatePattern =
+  | 'EEEE, MMM d, yyyy'
+  | 'MMM d, yyyy'
+  | 'MMMM yyyy'
+  | 'EEEE'
+  | 'EEE'
+  | 'd';
+type AbsoluteTimePattern = 'h:mm a' | 'ha';
+type CalendarViewMode = 'day' | 'week' | 'month';
+
+const DEFAULT_LOCALE = 'en-US';
+
+const normalizeAbsoluteDate = (input: AbsoluteDateInput): Date | null => {
+  if (input instanceof Date) {
+    return Number.isNaN(input.getTime()) ? null : input;
+  }
+
+  const parsed = parseLocalDate(input);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatWithIntl = (
+  date: Date,
+  options: Intl.DateTimeFormatOptions,
+  locale = DEFAULT_LOCALE
+): string => new Intl.DateTimeFormat(locale, options).format(date);
+
+export const formatAbsoluteDate = (
+  input: AbsoluteDateInput,
+  pattern: AbsoluteDatePattern,
+  locale = DEFAULT_LOCALE
+): string => {
+  const date = normalizeAbsoluteDate(input);
+  if (!date) {
+    return '';
+  }
+
+  switch (pattern) {
+    case 'EEEE, MMM d, yyyy':
+      return formatWithIntl(date, {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }, locale);
+    case 'MMM d, yyyy':
+      return formatWithIntl(date, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }, locale);
+    case 'MMMM yyyy':
+      return formatWithIntl(date, {
+        month: 'long',
+        year: 'numeric',
+      }, locale);
+    case 'EEEE':
+      return formatWithIntl(date, { weekday: 'long' }, locale);
+    case 'EEE':
+      return formatWithIntl(date, { weekday: 'short' }, locale);
+    case 'd':
+      return String(date.getDate());
+    default:
+      return '';
+  }
+};
+
+export const formatAbsoluteTime = (
+  input: AbsoluteDateInput,
+  pattern: AbsoluteTimePattern,
+  locale = DEFAULT_LOCALE
+): string => {
+  const date = normalizeAbsoluteDate(input);
+  if (!date) {
+    return '';
+  }
+
+  if (pattern === 'ha') {
+    return formatWithIntl(date, {
+      hour: 'numeric',
+      hour12: true,
+    }, locale).replace(/\s/g, '');
+  }
+
+  return formatWithIntl(date, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }, locale);
+};
+
+export const formatCalendarViewTitle = (
+  viewDate: Date,
+  viewMode: CalendarViewMode,
+  locale = DEFAULT_LOCALE
+): string => {
+  switch (viewMode) {
+    case 'day':
+      return formatAbsoluteDate(viewDate, 'EEEE, MMM d, yyyy', locale);
+    case 'week':
+      return `Week of ${formatAbsoluteDate(startOfWeek(viewDate), 'MMM d, yyyy', locale)}`;
+    case 'month':
+    default:
+      return formatAbsoluteDate(viewDate, 'MMMM yyyy', locale);
+  }
+};
+
 /**
  * Format a date string as a relative date (Today, Tomorrow, etc.)
  * Handles timezone issues by comparing dates at start of day

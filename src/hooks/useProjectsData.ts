@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { safeInvoke } from '@/utils/safe-invoke';
 import { readFileText } from './useFileManager';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import type { UseErrorHandlerReturn } from '@/hooks/useErrorHandler';
 import type { GTDProject, MarkdownFile } from '@/types';
 import { toISOStringFromEpoch } from '@/utils/time';
 import { parseLocalDate } from '@/utils/date-formatting';
@@ -207,13 +208,24 @@ const getProjectRootReadmeCandidates = (projectPath: string): string[] => {
   ];
 };
 
-const resolveProjectReadmeFile = async (projectPath: string): Promise<MarkdownFile | null> => {
+type WithErrorHandling = UseErrorHandlerReturn['withErrorHandling'];
+
+const resolveProjectReadmeFile = async (
+  projectPath: string,
+  withErrorHandling: WithErrorHandling
+): Promise<MarkdownFile | null> => {
   try {
-    const files = await safeInvoke<MarkdownFile[]>(
-      'list_markdown_files',
-      { path: projectPath },
-      []
+    const files = await withErrorHandling(
+      () => safeInvoke<MarkdownFile[]>(
+        'list_markdown_files',
+        { path: projectPath },
+        []
+      ),
+      'Failed to locate project README metadata'
     );
+    if (!files) {
+      return null;
+    }
     const rootCandidates = getProjectRootReadmeCandidates(projectPath).map((candidate) => candidate.toLowerCase());
     const fileMap = new Map<string, MarkdownFile>();
 
@@ -351,7 +363,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
       const enhancedProjects = await Promise.all(
         filteredProjects.map(async (project) => {
           try {
-            const readmeFile = await resolveProjectReadmeFile(project.path);
+            const readmeFile = await resolveProjectReadmeFile(project.path, withErrorHandling);
             const readmePath = readmeFile?.path || await resolveProjectReadme(project.path);
             let parsedProject = null as ReturnType<typeof parseProjectMarkdown> | null;
             let outcomes: string[] = [];
@@ -445,7 +457,7 @@ export function useProjectsData(options: UseProjectsDataOptions = {}): UseProjec
     } finally {
       setIsLoading(false);
     }
-  }, [includeArchived, loadActionStats]);
+  }, [includeArchived, loadActionStats, withErrorHandling]);
   
   const updateProject = useCallback(async (
     projectPath: string,

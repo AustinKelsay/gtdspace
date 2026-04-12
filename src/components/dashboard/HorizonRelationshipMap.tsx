@@ -5,18 +5,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { HorizonFile as HookHorizonFile } from '@/hooks/useHorizonsRelationships';
+import { norm } from '@/utils/path';
 import { Layers3, Link2, Network, Sparkles, Waypoints } from 'lucide-react';
 
-type HorizonGraph = {
+interface HorizonGraph {
   nodes: Array<{ id: string; label: string; level: string; group: number }>;
   edges: Array<{ from: string; to: string }>;
-};
+}
 
-type RelatedFiles = {
+interface RelatedFiles {
   parents: HookHorizonFile[];
   children: HookHorizonFile[];
   siblings: HookHorizonFile[];
-};
+}
 
 interface HorizonRelationshipMapProps {
   allFilesByLevel: Record<string, HookHorizonFile[]>;
@@ -76,6 +77,14 @@ const truncateLabel = (value: string, max = 24): string =>
   value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
 const isActivationKey = (key: string): boolean => key === 'Enter' || key === ' ';
+const normalizePathKey = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = norm(value);
+  return typeof normalized === 'string' ? normalized : value;
+};
 
 const sortFiles = (files: HookHorizonFile[] = []): HookHorizonFile[] =>
   [...files].sort((a, b) => a.name.localeCompare(b.name));
@@ -84,7 +93,10 @@ const buildFileLookup = (filesByLevel: Record<string, HookHorizonFile[]>): Map<s
   const lookup = new Map<string, HookHorizonFile>();
   LEVEL_ORDER.forEach((level) => {
     (filesByLevel[level] ?? []).forEach((file) => {
-      lookup.set(file.path, file);
+      const normalizedPath = normalizePathKey(file.path);
+      if (normalizedPath) {
+        lookup.set(normalizedPath, file);
+      }
     });
   });
   return lookup;
@@ -114,7 +126,8 @@ const renderInspectorSection = (
             variant="ghost"
             className="h-auto w-full justify-start rounded-lg border border-border/50 px-3 py-2 text-left"
             onClick={() => {
-              if (visiblePaths.has(item.path)) {
+              const normalizedItemPath = normalizePathKey(item.path);
+              if (normalizedItemPath && visiblePaths.has(normalizedItemPath)) {
                 onSelectNode?.(item.path);
               }
               onOpenFile?.(item);
@@ -143,18 +156,40 @@ export const HorizonRelationshipMap: React.FC<HorizonRelationshipMapProps> = ({
 }) => {
   const allLookup = React.useMemo(() => buildFileLookup(allFilesByLevel), [allFilesByLevel]);
   const visibleLookup = React.useMemo(() => buildFileLookup(visibleFilesByLevel), [visibleFilesByLevel]);
+  const normalizedSelectedNodePath = React.useMemo(
+    () => normalizePathKey(selectedNodePath),
+    [selectedNodePath]
+  );
 
   const allPaths = React.useMemo(() => new Set(allLookup.keys()), [allLookup]);
   const visiblePaths = React.useMemo(() => new Set(visibleLookup.keys()), [visibleLookup]);
+  const visibleSelectedNodePath = React.useMemo(
+    () =>
+      normalizedSelectedNodePath && visiblePaths.has(normalizedSelectedNodePath)
+        ? normalizedSelectedNodePath
+        : null,
+    [normalizedSelectedNodePath, visiblePaths]
+  );
+
+  const normalizedEdges = React.useMemo(
+    () =>
+      graph.edges
+        .map((edge) => ({
+          from: normalizePathKey(edge.from),
+          to: normalizePathKey(edge.to),
+        }))
+        .filter((edge): edge is { from: string; to: string } => !!edge.from && !!edge.to),
+    [graph.edges]
+  );
 
   const allEdges = React.useMemo(
-    () => graph.edges.filter((edge) => allPaths.has(edge.from) && allPaths.has(edge.to)),
-    [allPaths, graph.edges]
+    () => normalizedEdges.filter((edge) => allPaths.has(edge.from) && allPaths.has(edge.to)),
+    [allPaths, normalizedEdges]
   );
 
   const visibleEdges = React.useMemo(
-    () => graph.edges.filter((edge) => visiblePaths.has(edge.from) && visiblePaths.has(edge.to)),
-    [graph.edges, visiblePaths]
+    () => normalizedEdges.filter((edge) => visiblePaths.has(edge.from) && visiblePaths.has(edge.to)),
+    [normalizedEdges, visiblePaths]
   );
 
   const positions = React.useMemo(() => {
@@ -169,11 +204,14 @@ export const HorizonRelationshipMap: React.FC<HorizonRelationshipMapProps> = ({
       const columnHeight = Math.max(files.length - 1, 0) * ROW_GAP;
       const offsetY = PADDING_Y + ((maxRows - 1) * ROW_GAP - columnHeight) / 2;
       files.forEach((file, rowIndex) => {
-        next.set(file.path, {
-          x: PADDING_X + columnIndex * COLUMN_WIDTH + COLUMN_WIDTH / 2,
-          y: offsetY + rowIndex * ROW_GAP,
-          level,
-        });
+        const normalizedPath = normalizePathKey(file.path);
+        if (normalizedPath) {
+          next.set(normalizedPath, {
+            x: PADDING_X + columnIndex * COLUMN_WIDTH + COLUMN_WIDTH / 2,
+            y: offsetY + rowIndex * ROW_GAP,
+            level,
+          });
+        }
       });
     });
 
@@ -187,8 +225,8 @@ export const HorizonRelationshipMap: React.FC<HorizonRelationshipMapProps> = ({
   const svgWidth = PADDING_X * 2 + LEVEL_ORDER.length * COLUMN_WIDTH;
   const svgHeight = Math.max(340, PADDING_Y * 2 + NODE_HEIGHT + Math.max(maxRows - 1, 0) * ROW_GAP);
 
-  const selectedFile = selectedNodePath ? allLookup.get(selectedNodePath) ?? null : null;
-  const related = selectedNodePath && findRelated ? findRelated(selectedNodePath) : null;
+  const selectedFile = normalizedSelectedNodePath ? allLookup.get(normalizedSelectedNodePath) ?? null : null;
+  const related = normalizedSelectedNodePath && findRelated ? findRelated(normalizedSelectedNodePath) : null;
 
   if (allEdges.length === 0) {
     return (
@@ -315,8 +353,8 @@ export const HorizonRelationshipMap: React.FC<HorizonRelationshipMapProps> = ({
                   }
 
                   const isSelectedEdge =
-                    selectedNodePath != null &&
-                    (edge.from === selectedNodePath || edge.to === selectedNodePath);
+                    visibleSelectedNodePath != null &&
+                    (edge.from === visibleSelectedNodePath || edge.to === visibleSelectedNodePath);
                   const touchesFocusedLevel =
                     selectedLevel === 'All' ||
                     from.level === selectedLevel ||
@@ -332,7 +370,7 @@ export const HorizonRelationshipMap: React.FC<HorizonRelationshipMapProps> = ({
                       d={`M ${startX} ${from.y} C ${startX + (leftToRight ? controlOffset : -controlOffset)} ${from.y}, ${endX - (leftToRight ? controlOffset : -controlOffset)} ${to.y}, ${endX} ${to.y}`}
                       fill="none"
                       stroke={isSelectedEdge ? '#38bdf8' : '#64748b'}
-                      strokeOpacity={selectedNodePath ? (isSelectedEdge ? 0.9 : 0.12) : (touchesFocusedLevel ? 0.44 : 0.14)}
+                      strokeOpacity={visibleSelectedNodePath ? (isSelectedEdge ? 0.9 : 0.12) : (touchesFocusedLevel ? 0.44 : 0.14)}
                       strokeWidth={isSelectedEdge ? 3 : 1.5}
                     />
                   );
@@ -341,18 +379,23 @@ export const HorizonRelationshipMap: React.FC<HorizonRelationshipMapProps> = ({
                 {LEVEL_ORDER.flatMap((level) => {
                   const meta = LEVEL_META[level];
                   return sortFiles(visibleFilesByLevel[level]).map((file) => {
-                    const position = positions.get(file.path);
+                    const normalizedFilePath = normalizePathKey(file.path);
+                    if (!normalizedFilePath) {
+                      return null;
+                    }
+
+                    const position = positions.get(normalizedFilePath);
                     if (!position) {
                       return null;
                     }
 
-                    const isSelected = selectedNodePath === file.path;
+                    const isSelected = visibleSelectedNodePath === normalizedFilePath;
                     const isConnected =
-                      !!selectedNodePath &&
+                      !!visibleSelectedNodePath &&
                       visibleEdges.some(
                         (edge) =>
-                          (edge.from === selectedNodePath && edge.to === file.path) ||
-                          (edge.to === selectedNodePath && edge.from === file.path)
+                          (edge.from === visibleSelectedNodePath && edge.to === normalizedFilePath) ||
+                          (edge.to === visibleSelectedNodePath && edge.from === normalizedFilePath)
                       );
                     const dimmed = selectedLevel !== 'All' && selectedLevel !== level;
                     const fill = isSelected
@@ -391,7 +434,7 @@ export const HorizonRelationshipMap: React.FC<HorizonRelationshipMapProps> = ({
                           height={NODE_HEIGHT}
                           rx={14}
                           fill={fill}
-                          opacity={selectedNodePath ? (isSelected || isConnected ? 1 : 0.68) : (dimmed ? 0.52 : 0.95)}
+                          opacity={visibleSelectedNodePath ? (isSelected || isConnected ? 1 : 0.68) : (dimmed ? 0.52 : 0.95)}
                           stroke={stroke}
                           strokeWidth={isSelected ? 2.5 : 1.2}
                         />
@@ -402,7 +445,7 @@ export const HorizonRelationshipMap: React.FC<HorizonRelationshipMapProps> = ({
                           fontSize="12.5"
                           fontWeight={isSelected ? '700' : '600'}
                           fill={isSelected ? 'hsl(var(--background))' : 'hsl(var(--foreground))'}
-                          opacity={selectedNodePath ? (isSelected || isConnected ? 1 : 0.62) : (dimmed ? 0.58 : 0.92)}
+                          opacity={visibleSelectedNodePath ? (isSelected || isConnected ? 1 : 0.62) : (dimmed ? 0.58 : 0.92)}
                         >
                           {truncateLabel(file.name.replace(/\.(md|markdown)$/i, ''))}
                         </text>

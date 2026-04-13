@@ -720,7 +720,7 @@ const GTDDashboardComponent: React.FC<GTDDashboardProps> = ({
           </TabsContent>
 
           {/* Horizons Tab - Enhanced with relationships */}
-          <TabsContent value="horizons" className="h-full overflow-auto px-4 py-4 sm:px-6 sm:py-6">
+          <TabsContent value="horizons" className="h-full overflow-auto px-4 py-5 sm:px-6 sm:py-6 xl:px-8 xl:py-8">
             <DashboardHorizons
               horizonFiles={horizonFiles}
               projects={projectsWithMetadata}

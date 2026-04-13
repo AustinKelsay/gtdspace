@@ -80,7 +80,7 @@ jobs:
       - name: Create draft release
         id: create-release
         if: github.event_name == 'push' || github.event.inputs.version != ''
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ steps.get-version.outputs.version }}
@@ -458,7 +458,7 @@ jobs:
           path: artifacts-download
 
       - name: Upload release assets and Publish
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '')
         with:
           files: artifacts-download/**/*

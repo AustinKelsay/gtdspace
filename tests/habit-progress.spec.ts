@@ -76,6 +76,85 @@ describe('habit progress helpers', () => {
     expect(isHabitEligibleOnDate(habit, MONDAY)).toBe(true);
   });
 
+  it('respects anchored periodic cadences beyond weekdays', () => {
+    expect(
+      isHabitEligibleOnDate(
+        buildHabit({
+          frequency: 'every-other-day',
+          createdDateTime: '2026-04-01T08:00:00Z',
+        }),
+        '2026-04-03'
+      )
+    ).toBe(true);
+    expect(
+      isHabitEligibleOnDate(
+        buildHabit({
+          frequency: 'every-other-day',
+          createdDateTime: '2026-04-01T08:00:00Z',
+        }),
+        '2026-04-04'
+      )
+    ).toBe(false);
+
+    expect(
+      isHabitEligibleOnDate(
+        buildHabit({
+          frequency: 'twice-weekly',
+          createdDateTime: '2026-04-01T08:00:00Z',
+        }),
+        '2026-04-04'
+      )
+    ).toBe(true);
+
+    expect(
+      isHabitEligibleOnDate(
+        buildHabit({
+          frequency: 'weekly',
+          createdDateTime: '2026-04-01T08:00:00Z',
+        }),
+        '2026-04-08'
+      )
+    ).toBe(true);
+    expect(
+      isHabitEligibleOnDate(
+        buildHabit({
+          frequency: 'weekly',
+          createdDateTime: '2026-04-01T08:00:00Z',
+        }),
+        '2026-04-09'
+      )
+    ).toBe(false);
+
+    expect(
+      isHabitEligibleOnDate(
+        buildHabit({
+          frequency: 'biweekly',
+          createdDateTime: '2026-04-01T08:00:00Z',
+        }),
+        '2026-04-15'
+      )
+    ).toBe(true);
+    expect(
+      isHabitEligibleOnDate(
+        buildHabit({
+          frequency: 'biweekly',
+          createdDateTime: '2026-04-01T08:00:00Z',
+        }),
+        '2026-04-08'
+      )
+    ).toBe(false);
+
+    expect(
+      isHabitEligibleOnDate(
+        buildHabit({
+          frequency: 'monthly',
+          createdDateTime: '2026-01-31T08:00:00Z',
+        }),
+        '2026-02-28'
+      )
+    ).toBe(true);
+  });
+
   it('excludes habits created after the target date from today eligibility', () => {
     const habits = [
       buildHabit({ status: 'completed' }),

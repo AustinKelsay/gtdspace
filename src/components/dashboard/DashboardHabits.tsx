@@ -38,13 +38,15 @@ import {
   summarizeHabitProgressOnDate,
 } from '@/utils/habit-progress';
 
+type HabitStatusFilter = 'all' | 'completed' | 'pending';
+
 interface DashboardHabitsProps {
   habits: HabitWithHistory[];
   isLoading?: boolean;
   onToggleHabit?: (habit: HabitWithHistory) => void;
   onEditHabit?: (habit: HabitWithHistory) => void;
   onCreateHabit?: () => void;
-  initialStatusFilter?: string;
+  initialStatusFilter?: HabitStatusFilter;
   className?: string;
 }
 
@@ -71,7 +73,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
 }) => {
   const [activeView, setActiveView] = useState<'current' | 'history' | 'analytics'>('current');
   const [frequencyFilter, setFrequencyFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter);
+  const [statusFilter, setStatusFilter] = useState<HabitStatusFilter>(initialStatusFilter);
   const [sortBy, setSortBy] = useState<'name' | 'frequency' | 'streak' | 'success'>('name');
   const [selectedHabit, setSelectedHabit] = useState<HabitWithHistory | null>(null);
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('month');
@@ -523,7 +525,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
           </SelectContent>
         </Select>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as HabitStatusFilter)}>
           <SelectTrigger className="w-[150px]">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>

@@ -591,7 +591,7 @@ export function buildCalendarEvents(
         let endDate: Date | undefined;
         let endTimeFormatted: string | undefined;
 
-        if (item.type === 'action' && item.effort) {
+        if (item.type === 'action' && item.effort && focusEndDate) {
           endDate = focusEndDate;
 
           const endHours = endDate.getHours();

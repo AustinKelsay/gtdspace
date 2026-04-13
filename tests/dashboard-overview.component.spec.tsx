@@ -146,6 +146,28 @@ describe('DashboardOverview', () => {
     expect(screen.getByText('71% completed today')).toBeInTheDocument();
   });
 
+  it('renders a no-denominator state when no habits are due today', () => {
+    vi.setSystemTime(new Date('2026-04-12T12:00:00'));
+
+    renderOverview({
+      habits: [
+        buildHabit({
+          name: 'Weekday Habit 1',
+          frequency: 'weekdays',
+          path: '/space/Habits/weekday-1.md',
+        }),
+        buildHabit({
+          name: 'Weekday Habit 2',
+          frequency: 'weekdays',
+          path: '/space/Habits/weekday-2.md',
+        }),
+      ],
+    });
+
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.getByText('No habits due today')).toBeInTheDocument();
+  });
+
   it('recomputes today habit stats after midnight when the component rerenders', () => {
     const habits = [
       buildHabit({

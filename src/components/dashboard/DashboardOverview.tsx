@@ -200,8 +200,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
     // Factor 4: Habit consistency and streaks (25%)
     if (habitStats.total > 0) {
-      const habitScore = (habitStats.avgSuccessRate / 100) * 0.7 +
-                        (habitStats.completionRate / 100) * 0.3;
+      const habitScore = habitStats.completionRate === null
+        ? habitStats.avgSuccessRate / 100
+        : (habitStats.avgSuccessRate / 100) * 0.7 +
+          (habitStats.completionRate / 100) * 0.3;
       score += habitScore * 25;
       factors++;
     }
@@ -302,10 +304,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     },
     {
       label: "Today's Habits",
-      value: `${habitStats.completedToday}/${habitStats.eligibleToday}`,
+      value: habitStats.eligibleToday > 0
+        ? `${habitStats.completedToday}/${habitStats.eligibleToday}`
+        : '—',
       icon: RefreshCw,
       color: 'text-green-500',
-      description: `${habitStats.completionRate}% completed today`
+      description: habitStats.completionRate === null
+        ? 'No habits due today'
+        : `${habitStats.completionRate}% completed today`
     }
   ];
 

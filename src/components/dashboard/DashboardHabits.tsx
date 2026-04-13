@@ -455,10 +455,16 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-2">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
-              <span className="text-2xl font-bold">{stats.completedToday}/{stats.eligibleToday}</span>
+              <span className="text-2xl font-bold">
+                {stats.eligibleToday > 0 ? `${stats.completedToday}/${stats.eligibleToday}` : '—'}
+              </span>
             </div>
             <p className="text-sm font-medium">Completed Today</p>
-            <Progress value={stats.completionRate} className="mt-2 h-2" />
+            {stats.completionRate === null ? (
+              <p className="text-xs text-muted-foreground mt-2">No habits due today</p>
+            ) : (
+              <Progress value={stats.completionRate} className="mt-2 h-2" />
+            )}
           </CardContent>
         </Card>
 

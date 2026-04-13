@@ -117,6 +117,20 @@ describe('habit progress helpers', () => {
     });
   });
 
+  it('returns a null completion rate when no habits are eligible that day', () => {
+    const habits = [
+      buildHabit({ frequency: 'weekdays' }),
+      buildHabit({ frequency: 'weekdays' }),
+    ];
+
+    expect(summarizeHabitProgressOnDate(habits, SUNDAY, SUNDAY)).toEqual({
+      totalCount: 2,
+      eligibleCount: 0,
+      completedCount: 0,
+      completionRate: null,
+    });
+  });
+
   it('preserves source order when timestamps cannot be parsed', () => {
     const habit = buildHabit({
       history: [

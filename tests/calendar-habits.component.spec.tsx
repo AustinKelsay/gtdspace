@@ -94,6 +94,32 @@ describe('calendar habit event generation', () => {
 });
 
 describe('calendar drop target resolution', () => {
+  it('uses the precomputed action effort duration for focus event end times', () => {
+    const events = __calendarViewInternals.buildCalendarEvents(
+      [
+        {
+          id: 'action-inside',
+          name: 'Inside focus',
+          path: '/space/Projects/inside/task.md',
+          type: 'action',
+          status: 'in-progress',
+          focusDate: '2026-04-10T09:00:00',
+          effort: 'medium',
+        },
+      ],
+      new Date('2026-04-10T12:00:00'),
+      'day',
+      '2026-04-10'
+    );
+
+    const focusEvent = events.find((event) => event.id === '/space/Projects/inside/task.md-focus');
+
+    expect(focusEvent?.duration).toBe(60);
+    expect(focusEvent?.endTime).toBe('10:00 AM');
+    expect(focusEvent?.endDate?.getHours()).toBe(10);
+    expect(focusEvent?.endDate?.getMinutes()).toBe(0);
+  });
+
   it('treats day-view hour drops as timed updates', () => {
     const resolved = __calendarViewInternals.resolveDropTargetDate(
       'drop-2026-04-15-9',

@@ -22,7 +22,7 @@ export interface HabitProgressSummary {
   totalCount: number;
   eligibleCount: number;
   completedCount: number;
-  completionRate: number;
+  completionRate: number | null;
 }
 
 function compareEntriesDescending(
@@ -151,6 +151,6 @@ export function summarizeHabitProgressOnDate(
     completedCount,
     completionRate: eligibleCount > 0
       ? Math.round((completedCount / eligibleCount) * 100)
-      : 0,
+      : null,
   };
 }

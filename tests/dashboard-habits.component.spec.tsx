@@ -109,6 +109,31 @@ describe('DashboardHabits', () => {
     expect(screen.getByText('5/5')).toBeInTheDocument();
   });
 
+  it('renders a no-denominator state when no habits are due today', () => {
+    vi.setSystemTime(new Date('2026-04-12T12:00:00.000Z'));
+
+    render(
+      <DashboardHabits
+        habits={[
+          buildHabit({
+            name: 'Weekday Habit 1',
+            frequency: 'weekdays',
+            path: '/space/Habits/weekday-1.md',
+          }),
+          buildHabit({
+            name: 'Weekday Habit 2',
+            frequency: 'weekdays',
+            path: '/space/Habits/weekday-2.md',
+          }),
+        ]}
+        onCreateHabit={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.getByText('No habits due today')).toBeInTheDocument();
+  });
+
   it('excludes ineligible weekend weekday habits from completed and pending filters', () => {
     vi.setSystemTime(new Date('2026-04-12T12:00:00.000Z'));
 

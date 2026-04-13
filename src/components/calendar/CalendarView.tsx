@@ -565,14 +565,15 @@ export function buildCalendarEvents(
       }
     }
 
-    if (item.focusDate) {
-      const focusDate = typeof item.focusDate === 'string' ? parseISO(item.focusDate) : item.focusDate;
-      if (isValid(focusDate)) {
-        let focusEndDate: Date | undefined;
-        if (item.type === 'action' && item.effort) {
-          const duration = getEffortDuration(item.effort);
-          focusEndDate = new Date(focusDate.getTime() + duration * 60 * 1000);
-        }
+      if (item.focusDate) {
+        const focusDate = typeof item.focusDate === 'string' ? parseISO(item.focusDate) : item.focusDate;
+        if (isValid(focusDate)) {
+          let duration: number | undefined;
+          let focusEndDate: Date | undefined;
+          if (item.type === 'action' && item.effort) {
+            duration = getEffortDuration(item.effort);
+            focusEndDate = new Date(focusDate.getTime() + duration * 60 * 1000);
+          }
 
         if (!intersectsViewWindow(focusDate, viewStart, viewEnd, focusEndDate)) {
           return;
@@ -587,13 +588,11 @@ export function buildCalendarEvents(
           formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
         }
 
-        let duration: number | undefined;
         let endDate: Date | undefined;
         let endTimeFormatted: string | undefined;
 
         if (item.type === 'action' && item.effort) {
-          duration = getEffortDuration(item.effort);
-          endDate = focusEndDate ?? new Date(focusDate.getTime() + duration * 60 * 1000);
+          endDate = focusEndDate;
 
           const endHours = endDate.getHours();
           const endMinutes = endDate.getMinutes();
@@ -691,15 +690,6 @@ const ResizableEvent: React.FC<ResizableEventProps> = ({
 
     eventBox.style.height = `${currentHeight}px`;
   }, [isResizing, currentHeight]);
-
-  useEffect(() => {
-    return () => {
-      const eventBox = getRenderedEventBox();
-      if (eventBox && originalEventHeightRef.current !== null) {
-        eventBox.style.height = originalEventHeightRef.current;
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!isResizing) return;

@@ -79,4 +79,82 @@ describe('DashboardHabits', () => {
     expect(screen.getByText('Stretch')).toBeInTheDocument();
     expect(screen.getByText('Reset: 5m')).toBeInTheDocument();
   });
+
+  it('uses the cadence-aware denominator for the completed today header', () => {
+    vi.setSystemTime(new Date('2026-04-12T12:00:00.000Z'));
+
+    render(
+      <DashboardHabits
+        habits={[
+          buildHabit({ name: 'Habit 1', status: 'completed' }),
+          buildHabit({ name: 'Habit 2', status: 'completed', path: '/space/Habits/2.md' }),
+          buildHabit({ name: 'Habit 3', status: 'completed', path: '/space/Habits/3.md' }),
+          buildHabit({ name: 'Habit 4', status: 'completed', path: '/space/Habits/4.md' }),
+          buildHabit({ name: 'Habit 5', status: 'completed', path: '/space/Habits/5.md' }),
+          buildHabit({
+            name: 'Weekday Habit 1',
+            frequency: 'weekdays',
+            path: '/space/Habits/weekday-1.md',
+          }),
+          buildHabit({
+            name: 'Weekday Habit 2',
+            frequency: 'weekdays',
+            path: '/space/Habits/weekday-2.md',
+          }),
+        ]}
+        onCreateHabit={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('5/5')).toBeInTheDocument();
+  });
+
+  it('excludes ineligible weekend weekday habits from completed and pending filters', () => {
+    vi.setSystemTime(new Date('2026-04-12T12:00:00.000Z'));
+
+    const habits = [
+      buildHabit({ name: 'Daily Completed', status: 'completed', path: '/space/Habits/daily-completed.md' }),
+      buildHabit({ name: 'Daily Pending', status: 'todo', path: '/space/Habits/daily-pending.md' }),
+      buildHabit({
+        name: 'Weekday Completed',
+        frequency: 'weekdays',
+        status: 'completed',
+        path: '/space/Habits/weekday-completed.md',
+      }),
+      buildHabit({
+        name: 'Weekday Pending',
+        frequency: 'weekdays',
+        status: 'todo',
+        path: '/space/Habits/weekday-pending.md',
+      }),
+    ];
+
+    const { unmount } = render(
+      <DashboardHabits
+        habits={habits}
+        initialStatusFilter="pending"
+        onCreateHabit={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Daily Pending')).toBeInTheDocument();
+    expect(screen.queryByText('Daily Completed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Weekday Completed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Weekday Pending')).not.toBeInTheDocument();
+
+    unmount();
+
+    render(
+      <DashboardHabits
+        habits={habits}
+        initialStatusFilter="completed"
+        onCreateHabit={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Daily Completed')).toBeInTheDocument();
+    expect(screen.queryByText('Daily Pending')).not.toBeInTheDocument();
+    expect(screen.queryByText('Weekday Completed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Weekday Pending')).not.toBeInTheDocument();
+  });
 });

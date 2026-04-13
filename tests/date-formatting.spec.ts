@@ -55,6 +55,13 @@ describe('date-formatting helpers', () => {
     expect(formatAbsoluteTime(sample, 'ha')).toBe('10AM');
   });
 
+  it('formats day-of-month with the provided locale', () => {
+    const sample = new Date(2026, 3, 15, 10, 30);
+    const expected = new Intl.DateTimeFormat('ar-EG', { day: 'numeric' }).format(sample);
+
+    expect(formatAbsoluteDate(sample, 'd', 'ar-EG')).toBe(expected);
+  });
+
   it('builds calendar view titles through the shared formatter', () => {
     const sample = new Date(2026, 3, 15, 10, 30);
 

@@ -9,7 +9,7 @@ import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { localISODate, toISOStringFromEpoch } from '@/utils/time';
 import type { GTDHabit, MarkdownFile } from '@/types';
 import { createScopedLogger } from '@/utils/logger';
-import { countHabitsCompletedOnDate } from '@/utils/habit-progress';
+import { summarizeHabitProgressOnDate } from '@/utils/habit-progress';
 import { emitMetadataChange } from '@/utils/content-event-bus';
 import { norm } from '@/utils/path';
 import {
@@ -61,6 +61,7 @@ interface UseHabitsHistoryReturn {
   error: string | null;
   summary: {
     total: number;
+    eligibleToday: number;
     completedToday: number;
     streaksActive: number;
     averageSuccessRate: number;
@@ -451,7 +452,7 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
   const today = localISODate(new Date());
   
   const summary = useMemo(() => {
-    const completedToday = countHabitsCompletedOnDate(habits, today, today);
+    const todayProgress = summarizeHabitProgressOnDate(habits, today, today);
 
     const streaksActive = habits.filter(h => h.currentStreak > 0).length;
     const averageSuccessRate = habits.length > 0
@@ -464,7 +465,8 @@ export function useHabitsHistory(options: UseHabitsHistoryOptions = {}): UseHabi
 
     return {
       total: habits.length,
-      completedToday,
+      eligibleToday: todayProgress.eligibleCount,
+      completedToday: todayProgress.completedCount,
       streaksActive,
       averageSuccessRate,
       needingAttention

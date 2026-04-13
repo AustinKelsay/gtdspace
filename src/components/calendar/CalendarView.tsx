@@ -413,6 +413,16 @@ const resolveDropTargetDate = (
   };
 };
 
+const intersectsViewWindow = (
+  eventStart: Date,
+  viewStart: Date,
+  viewEnd: Date,
+  eventEnd?: Date | null
+): boolean => {
+  const resolvedEnd = eventEnd ?? eventStart;
+  return eventStart <= viewEnd && resolvedEnd >= viewStart;
+};
+
 export function buildCalendarEvents(
   items: CalendarItem[],
   viewDate: Date,
@@ -432,7 +442,7 @@ export function buildCalendarEvents(
         const date = typeof startDate === 'string' ? parseISO(startDate) : startDate;
         const end = endDate ? (typeof endDate === 'string' ? parseISO(endDate) : endDate) : null;
 
-        if (isValid(date)) {
+        if (isValid(date) && intersectsViewWindow(date, viewStart, viewEnd, end && isValid(end) ? end : undefined)) {
           let formattedTime: string | undefined;
           if (hasTimeComponent(startDate)) {
             const hours = date.getHours();
@@ -532,7 +542,7 @@ export function buildCalendarEvents(
 
     if (item.dueDate) {
       const dueDate = typeof item.dueDate === 'string' ? parseISO(item.dueDate) : item.dueDate;
-      if (isValid(dueDate)) {
+      if (isValid(dueDate) && intersectsViewWindow(dueDate, viewStart, viewEnd)) {
         let formattedTime: string | undefined;
         if (item.dueDate && hasTimeComponent(item.dueDate)) {
           const hours = dueDate.getHours();
@@ -558,6 +568,16 @@ export function buildCalendarEvents(
     if (item.focusDate) {
       const focusDate = typeof item.focusDate === 'string' ? parseISO(item.focusDate) : item.focusDate;
       if (isValid(focusDate)) {
+        let focusEndDate: Date | undefined;
+        if (item.type === 'action' && item.effort) {
+          const duration = getEffortDuration(item.effort);
+          focusEndDate = new Date(focusDate.getTime() + duration * 60 * 1000);
+        }
+
+        if (!intersectsViewWindow(focusDate, viewStart, viewEnd, focusEndDate)) {
+          return;
+        }
+
         let formattedTime: string | undefined;
         if (item.focusDate && hasTimeComponent(item.focusDate)) {
           const hours = focusDate.getHours();
@@ -573,7 +593,7 @@ export function buildCalendarEvents(
 
         if (item.type === 'action' && item.effort) {
           duration = getEffortDuration(item.effort);
-          endDate = new Date(focusDate.getTime() + duration * 60 * 1000);
+          endDate = focusEndDate ?? new Date(focusDate.getTime() + duration * 60 * 1000);
 
           const endHours = endDate.getHours();
           const endMinutes = endDate.getMinutes();

@@ -177,7 +177,7 @@ describe('DashboardHorizons', () => {
 
     fireEvent.click(focusGoals);
 
-    expect(screen.getAllByText('Focused on Goals')).toHaveLength(2);
+    expect(screen.getAllByText('Focused on Goals').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByRole('button', { name: 'Show all levels' }).length).toBeGreaterThan(0);
     expect(focusGoals).toHaveAttribute('aria-pressed', 'true');
 

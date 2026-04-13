@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
+  countHabitsEligibleOnDate,
   countHabitsCompletedOnDate,
   getLatestHabitEntryForDate,
   isHabitCompletedOnDate,
+  isHabitEligibleOnDate,
+  summarizeHabitProgressOnDate,
   type HabitCompletionLike,
 } from '@/utils/habit-progress';
 
 const TODAY = '2026-03-31';
+const SUNDAY = '2026-04-12';
+const MONDAY = '2026-04-13';
 
 const buildHabit = (overrides: Partial<HabitCompletionLike> = {}): HabitCompletionLike => ({
   status: 'todo',
+  frequency: 'daily',
+  createdDateTime: '2026-01-01T08:00:00Z',
   history: [],
   periodHistory: [],
   ...overrides,
@@ -60,6 +67,54 @@ describe('habit progress helpers', () => {
     ];
 
     expect(countHabitsCompletedOnDate(habits, TODAY, TODAY)).toBe(2);
+  });
+
+  it('treats weekday habits as ineligible on Sunday and eligible on Monday', () => {
+    const habit = buildHabit({ frequency: 'weekdays' });
+
+    expect(isHabitEligibleOnDate(habit, SUNDAY)).toBe(false);
+    expect(isHabitEligibleOnDate(habit, MONDAY)).toBe(true);
+  });
+
+  it('excludes habits created after the target date from today eligibility', () => {
+    const habits = [
+      buildHabit({ status: 'completed' }),
+      buildHabit({
+        frequency: 'weekdays',
+        createdDateTime: '2026-04-14T08:00:00Z',
+        status: 'completed',
+      }),
+    ];
+
+    expect(countHabitsEligibleOnDate(habits, MONDAY)).toBe(1);
+  });
+
+  it('summarizes progress with a cadence-aware denominator', () => {
+    const habits = [
+      buildHabit({ status: 'completed' }),
+      buildHabit({ status: 'completed' }),
+      buildHabit({ status: 'completed' }),
+      buildHabit({ status: 'completed' }),
+      buildHabit({ status: 'completed' }),
+      buildHabit({ frequency: 'weekdays', createdDateTime: '2026-01-01T08:00:00Z' }),
+      buildHabit({
+        frequency: 'weekdays',
+        createdDateTime: '2026-01-01T08:00:00Z',
+      }),
+    ];
+
+    expect(summarizeHabitProgressOnDate(habits, SUNDAY, SUNDAY)).toEqual({
+      totalCount: 7,
+      eligibleCount: 5,
+      completedCount: 5,
+      completionRate: 100,
+    });
+    expect(summarizeHabitProgressOnDate(habits, MONDAY, MONDAY)).toEqual({
+      totalCount: 7,
+      eligibleCount: 7,
+      completedCount: 5,
+      completionRate: 71,
+    });
   });
 
   it('preserves source order when timestamps cannot be parsed', () => {

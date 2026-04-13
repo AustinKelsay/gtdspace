@@ -96,6 +96,56 @@ describe('DashboardOverview', () => {
     expect(screen.queryByText('100% success rate')).not.toBeInTheDocument();
   });
 
+  it('uses the cadence-aware denominator for weekend weekday habits and restores it on Monday', () => {
+    vi.setSystemTime(new Date('2026-04-12T12:00:00'));
+
+    const habits = [
+      buildHabit({ name: 'Habit 1', status: 'completed' }),
+      buildHabit({ name: 'Habit 2', status: 'completed', path: '/space/Habits/2.md' }),
+      buildHabit({ name: 'Habit 3', status: 'completed', path: '/space/Habits/3.md' }),
+      buildHabit({ name: 'Habit 4', status: 'completed', path: '/space/Habits/4.md' }),
+      buildHabit({ name: 'Habit 5', status: 'completed', path: '/space/Habits/5.md' }),
+      buildHabit({
+        name: 'Weekday Habit 1',
+        frequency: 'weekdays',
+        status: 'todo',
+        path: '/space/Habits/weekday-1.md',
+      }),
+      buildHabit({
+        name: 'Weekday Habit 2',
+        frequency: 'weekdays',
+        status: 'todo',
+        path: '/space/Habits/weekday-2.md',
+      }),
+    ];
+
+    const { rerender } = renderOverview({ habits });
+
+    expect(screen.getByText('5/5')).toBeInTheDocument();
+    expect(screen.getByText('100% completed today')).toBeInTheDocument();
+
+    vi.setSystemTime(new Date('2026-04-13T09:00:00'));
+    rerender(
+      <DashboardOverview
+        gtdSpace={gtdSpace}
+        projects={[]}
+        habits={habits}
+        actions={[]}
+        actionSummary={{
+          total: 0,
+          inProgress: 0,
+          completed: 0,
+          waiting: 0,
+        }}
+        horizonCounts={{}}
+        recentActivity={[]}
+      />
+    );
+
+    expect(screen.getByText('5/7')).toBeInTheDocument();
+    expect(screen.getByText('71% completed today')).toBeInTheDocument();
+  });
+
   it('recomputes today habit stats after midnight when the component rerenders', () => {
     const habits = [
       buildHabit({

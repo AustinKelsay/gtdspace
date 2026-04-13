@@ -66,7 +66,7 @@ export const formatAbsoluteDate = (
     case 'EEE':
       return formatWithIntl(date, { weekday: 'short' }, locale);
     case 'd':
-      return String(date.getDate());
+      return formatWithIntl(date, { day: 'numeric' }, locale);
     default:
       return '';
   }

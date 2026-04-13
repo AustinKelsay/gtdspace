@@ -127,4 +127,45 @@ describe('calendar drop target resolution', () => {
     expect(resolved?.newDate.getHours()).toBe(0);
     expect(resolved?.newDate.getMinutes()).toBe(0);
   });
+
+  it('prunes non-habit events that do not intersect the active view window', () => {
+    const events = __calendarViewInternals.buildCalendarEvents(
+      [
+        buildHabitItem(),
+        {
+          id: 'project-outside',
+          name: 'Outside due',
+          path: '/space/Projects/outside/README.md',
+          type: 'project',
+          status: 'in-progress',
+          dueDate: '2026-04-20',
+        },
+        {
+          id: 'action-inside',
+          name: 'Inside focus',
+          path: '/space/Projects/inside/task.md',
+          type: 'action',
+          status: 'in-progress',
+          focusDate: '2026-04-10T09:00:00',
+          effort: 'medium',
+        },
+        {
+          id: 'google-outside',
+          name: 'Outside meeting',
+          path: '/space/calendar/outside',
+          type: 'google-event',
+          status: 'confirmed',
+          focusDate: '2026-04-18T10:00:00',
+          endDate: '2026-04-18T11:00:00',
+        },
+      ],
+      new Date('2026-04-10T12:00:00'),
+      'day',
+      '2026-04-10'
+    );
+
+    expect(events.some((event) => event.id === '/space/Projects/outside/README.md-due')).toBe(false);
+    expect(events.some((event) => event.id === '/space/calendar/outside')).toBe(false);
+    expect(events.some((event) => event.id === '/space/Projects/inside/task.md-focus')).toBe(true);
+  });
 });

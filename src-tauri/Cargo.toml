@@ -59,7 +59,7 @@ sha2_010 = { package = "sha2", version = "0.10" }
 strsim = "0.11"
 rand = "0.10"
 aes-gcm = { version = "0.10.3", features = ["aes", "stream"] }
-pbkdf2 = "0.12"
+pbkdf2 = "0.13"
 flate2 = "1.1"
 tar = "0.4.45"
 walkdir = "2.5"

@@ -197,6 +197,18 @@ async fn mcp_server_exposes_resources_and_applies_project_change() -> Result<(),
 
     let client = start_client(&workspace_root).await?;
 
+    let server_info = client
+        .peer_info()
+        .expect("server should return initialization info");
+    assert!(
+        server_info.capabilities.tools.is_some(),
+        "server must advertise its tools capability"
+    );
+    assert!(
+        server_info.capabilities.resources.is_some(),
+        "server must advertise its resources capability"
+    );
+
     let resources = client.list_all_resources().await?;
     assert!(resources
         .iter()

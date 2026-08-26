@@ -119,6 +119,7 @@ vi.mock('@/hooks/useHabitsHistory', () => ({
     isLoading: false,
     summary: {
       total: 1,
+      eligibleToday: 1,
       completedToday: 0,
       streaksActive: 0,
       averageSuccessRate: 0,

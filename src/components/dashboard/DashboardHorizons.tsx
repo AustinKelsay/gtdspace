@@ -6,7 +6,6 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Collapsible,
   CollapsibleContent,
@@ -150,6 +149,10 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
   const [selectedNodePath, setSelectedNodePath] = useState<string | null>(null);
   const isLevelControlled = controlledSelectedLevel !== undefined;
   const selectedLevel = controlledSelectedLevel ?? uncontrolledSelectedLevel;
+  const activeProjectCount = useMemo(
+    () => projects.filter((project) => project.status === 'in-progress').length,
+    [projects]
+  );
 
   const setSelectedLevel = useCallback((value: string) => {
     onSelectedLevelChange?.(value);
@@ -157,6 +160,23 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
       setUncontrolledSelectedLevel(value);
     }
   }, [isLevelControlled, onSelectedLevelChange]);
+
+  const focusLevel = useCallback((value: string) => {
+    setSelectedLevel(value);
+
+    if (value === 'All') {
+      return;
+    }
+
+    setExpandedLevels((prev) => {
+      if (prev.has(value)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.add(value);
+      return next;
+    });
+  }, [setSelectedLevel]);
 
   // Toggle level expansion
   const toggleLevel = useCallback((levelName: string) => {
@@ -345,7 +365,7 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
           <CollapsibleContent>
             <CardContent className="pt-0">
               {fileCount === 0 ? (
-                <div className="text-center py-6 text-muted-foreground">
+                <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-8 text-center text-muted-foreground">
                   <p className="text-sm">No items at this level</p>
                   {level.name !== 'Projects' && (
                     <Button
@@ -369,11 +389,9 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
                   )}
                 </div>
               ) : (
-                <ScrollArea className="h-[300px]">
-                  <div className="space-y-2 pr-4">
-                    {files.map(file => renderHorizonFile(file, level))}
-                  </div>
-                </ScrollArea>
+                <div className="space-y-3">
+                  {files.map(file => renderHorizonFile(file, level))}
+                </div>
               )}
             </CardContent>
           </CollapsibleContent>
@@ -392,19 +410,19 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
       <div
         key={file.path}
         className={cn(
-          "border rounded-lg p-3 hover:bg-accent transition-colors",
+          'rounded-xl border border-border/70 bg-card/70 p-4 transition-colors hover:bg-accent/40',
           selectedNodePath === file.path && "border-primary bg-primary/5",
           hasRelationships && "border-primary/30"
         )}
       >
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex items-start gap-2">
               {hasRelationships && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-4 w-4 p-0"
+                  className="mt-0.5 h-6 w-6 p-0"
                   onClick={() => toggleFile(file.path)}
                 >
                   <ChevronRight className={cn(
@@ -413,24 +431,48 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
                   )} />
                 </Button>
               )}
-              <FileText className="h-4 w-4 text-muted-foreground" />
-              <span 
-                className="font-medium cursor-pointer hover:text-primary"
-                onClick={() => handleSelectFile(file)}
-              >
-                {file.name.replace('.md', '')}
-              </span>
-              {hasRelationships && (
-                <Link2 className="h-3 w-3 text-primary" />
-              )}
+              <FileText className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <button
+                  type="button"
+                  className="block text-left text-sm font-semibold leading-6 text-foreground transition-colors hover:text-primary"
+                  onClick={() => handleSelectFile(file)}
+                >
+                  {file.name.replace('.md', '')}
+                </button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className="text-[11px] font-medium">
+                    {level.altitude}
+                  </Badge>
+                  {hasRelationships && (
+                    <>
+                      <Badge variant="secondary" className="gap-1 text-[11px]">
+                        <Link2 className="h-3 w-3" />
+                        {relationships.linkedTo.length + relationships.linkedFrom.length} links
+                      </Badge>
+                      {relationships.linkedTo.length > 0 && (
+                        <Badge variant="outline" className="text-[11px]">
+                          {relationships.linkedTo.length} outward
+                        </Badge>
+                      )}
+                      {relationships.linkedFrom.length > 0 && (
+                        <Badge variant="outline" className="text-[11px]">
+                          {relationships.linkedFrom.length} incoming
+                        </Badge>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Show relationships if expanded */}
             {isExpanded && hasRelationships && (
-              <div className="mt-3 ml-6 space-y-2 text-sm">
+              <div className="ml-8 rounded-lg border border-border/60 bg-muted/20 p-3 text-sm">
                 {relationships.linkedTo.length > 0 && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Links to:</p>
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">Links to:</p>
                     <div className="space-y-1">
                       {relationships.linkedTo.map((rel, idx) => {
                         const targetLevel = HORIZON_LEVELS.find(l => l.name === rel.toLevel);
@@ -449,8 +491,8 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
                 )}
 
                 {relationships.linkedFrom.length > 0 && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Linked from:</p>
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs text-muted-foreground">Linked from:</p>
                     <div className="space-y-1">
                       {relationships.linkedFrom.map((rel, idx) => {
                         const sourceLevel = HORIZON_LEVELS.find(l => l.name === rel.fromLevel);
@@ -488,7 +530,7 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
 
         {/* Optional preview/description */}
         {file.description || file.content ? (
-          <p className="mt-2 ml-6 text-xs text-muted-foreground line-clamp-2">
+          <p className="ml-8 text-sm leading-6 text-muted-foreground line-clamp-2">
             {file.description || file.content}
           </p>
         ) : null}
@@ -497,183 +539,244 @@ export const DashboardHorizons: React.FC<DashboardHorizonsProps> = ({
   };
 
   return (
-    <div className={cn("space-y-4", className)}>
-      {/* Header with stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <Layers className="h-5 w-5 text-primary" />
-              <span className="text-2xl font-bold">{HORIZON_LEVELS.length}</span>
+    <div className={cn('space-y-6', className)}>
+      <Card className="border-border/70 bg-card/80 shadow-sm">
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="flex items-center gap-2">
+                  <Mountain className="h-5 w-5" />
+                  GTD Horizons of Focus
+                </CardTitle>
+                {selectedLevel !== 'All' && (
+                  <Badge variant="secondary">Focused on {selectedLevel}</Badge>
+                )}
+              </div>
+              <CardDescription>
+                Browse strategic altitude levels on the left while keeping the relationship map in view.
+              </CardDescription>
             </div>
-            <p className="text-sm font-medium">Horizon Levels</p>
-            <p className="text-xs text-muted-foreground mt-1">From runway to 50,000 ft</p>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <FileText className="h-5 w-5 text-blue-500" />
-              <span className="text-2xl font-bold">{stats.totalFiles}</span>
-            </div>
-            <p className="text-sm font-medium">Total Items</p>
-            <p className="text-xs text-muted-foreground mt-1">Across all levels</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <Link2 className="h-5 w-5 text-green-500" />
-              <span className="text-2xl font-bold">{stats.linkedFiles}</span>
-            </div>
-            <p className="text-sm font-medium">Linked Items</p>
-            <p className="text-xs text-muted-foreground mt-1">{stats.linkageRate}% connected</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <FolderOpen className="h-5 w-5 text-orange-500" />
-              <span className="text-2xl font-bold">{projects.filter(p => p.status === 'in-progress').length}</span>
-            </div>
-            <p className="text-sm font-medium">Active Projects</p>
-            <p className="text-xs text-muted-foreground mt-1">Currently in progress</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search and filters */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search across all horizons..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        
-        <Button
-          variant={showOnlyLinked ? "default" : "outline"}
-          onClick={() => setShowOnlyLinked(!showOnlyLinked)}
-        >
-          <Link2 className="h-4 w-4 mr-2" />
-          Linked Only
-        </Button>
-
-        <Select value={selectedLevel} onValueChange={setSelectedLevel}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="All levels" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="All">All levels</SelectItem>
-            {HORIZON_LEVELS.map(h => (
-              <SelectItem key={h.name} value={h.name}>{h.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={sortBy} onValueChange={(v) => setSortBy(v as 'name' | 'linked')}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="name">Name</SelectItem>
-            <SelectItem value="linked">Linkedness</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Mountain className="h-5 w-5" />
-            GTD Horizons of Focus
-          </CardTitle>
-          <CardDescription>
-            Navigate your complete productivity system from 50,000 ft to runway
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {/* Visual pyramid */}
-          <div className="mb-6">
-            <div className="relative">
-              {HORIZON_LEVELS.map((level, index) => {
-                const width = 100 - (index * 15);
-                const LevelIcon = level.icon;
-                const count = stats.levelCounts[level.name] || 0;
-                
-                return (
-                  <div
-                    key={level.name}
-                    className="relative mx-auto mb-1 rounded transition-all hover:scale-105 cursor-pointer"
-                    style={{ width: `${width}%` }}
-                    onClick={() => toggleLevel(level.name)}
-                  >
-                    <div className={cn(
-                      "p-3 rounded-lg flex items-center justify-between",
-                      "bg-gradient-to-r",
-                      level.color === 'text-purple-600' && "from-purple-100 to-purple-50 dark:from-purple-950/50 dark:to-purple-950/20",
-                      level.color === 'text-blue-600' && "from-blue-100 to-blue-50 dark:from-blue-950/50 dark:to-blue-950/20",
-                      level.color === 'text-green-600' && "from-green-100 to-green-50 dark:from-green-950/50 dark:to-green-950/20",
-                      level.color === 'text-orange-600' && "from-orange-100 to-orange-50 dark:from-orange-950/50 dark:to-orange-950/20",
-                      level.color === 'text-red-600' && "from-red-100 to-red-50 dark:from-red-950/50 dark:to-red-950/20"
-                    )}>
-                      <div className="flex items-center gap-2">
-                        <LevelIcon className={cn("h-4 w-4", level.color)} />
-                        <span className="font-medium text-sm">{level.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="text-xs">
-                          {level.altitude}
-                        </Badge>
-                        {count > 0 && (
-                          <Badge className="text-xs">{count}</Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:min-w-[30rem]">
+              <div className="rounded-xl border border-border/60 bg-muted/25 px-4 py-3">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  <Layers className="h-3.5 w-3.5" />
+                  Levels
+                </div>
+                <p className="mt-2 text-2xl font-semibold">{HORIZON_LEVELS.length}</p>
+                <p className="text-xs text-muted-foreground">Runway to 50,000 ft</p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/25 px-4 py-3">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  <FileText className="h-3.5 w-3.5 text-blue-500" />
+                  Items
+                </div>
+                <p className="mt-2 text-2xl font-semibold">{stats.totalFiles}</p>
+                <p className="text-xs text-muted-foreground">Across all levels</p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/25 px-4 py-3">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  <Link2 className="h-3.5 w-3.5 text-green-500" />
+                  Linked
+                </div>
+                <p className="mt-2 text-2xl font-semibold">{stats.linkedFiles}</p>
+                <p className="text-xs text-muted-foreground">{stats.linkageRate}% connected</p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/25 px-4 py-3">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  <FolderOpen className="h-3.5 w-3.5 text-orange-500" />
+                  Active
+                </div>
+                <p className="mt-2 text-2xl font-semibold">{activeProjectCount}</p>
+                <p className="text-xs text-muted-foreground">Runway projects</p>
+              </div>
             </div>
           </div>
+        </CardHeader>
 
-          {/* Horizon levels list */}
-          <div className="space-y-3">
-            {isLoading ? (
-              <div className="space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <Card key={i}>
-                    <CardHeader>
-                      <div className="h-6 w-48 bg-muted rounded animate-pulse" />
-                      <div className="h-4 w-32 bg-muted rounded animate-pulse mt-2" />
-                    </CardHeader>
-                  </Card>
+        <CardContent className="pt-0">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] xl:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]">
+            <div className="relative min-w-0">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search across all horizons..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            <Button
+              variant={showOnlyLinked ? 'default' : 'outline'}
+              onClick={() => setShowOnlyLinked(!showOnlyLinked)}
+              className="justify-center"
+            >
+              <Link2 className="mr-2 h-4 w-4" />
+              Linked Only
+            </Button>
+
+            <Select value={selectedLevel} onValueChange={focusLevel}>
+              <SelectTrigger className="w-full min-w-[12rem]">
+                <SelectValue placeholder="All levels" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All">All levels</SelectItem>
+                {HORIZON_LEVELS.map((horizon) => (
+                  <SelectItem key={horizon.name} value={horizon.name}>{horizon.name}</SelectItem>
                 ))}
-              </div>
-            ) : (
-              HORIZON_LEVELS
-                .filter(level => selectedLevel === 'All' || level.name === selectedLevel)
-                .map(level => renderHorizonLevel(level))
+              </SelectContent>
+            </Select>
+
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'name' | 'linked')}>
+              <SelectTrigger className="w-full min-w-[10rem]">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">Name</SelectItem>
+                <SelectItem value="linked">Linkedness</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {selectedLevel !== 'All' && (
+              <Button
+                variant="ghost"
+                onClick={() => focusLevel('All')}
+                className="justify-center"
+              >
+                Show all levels
+              </Button>
             )}
           </div>
         </CardContent>
       </Card>
 
-      <HorizonRelationshipMap
-        allFilesByLevel={filesByLevel}
-        visibleFilesByLevel={filteredHorizonFiles}
-        graph={graph}
-        selectedLevel={selectedLevel}
-        selectedNodePath={selectedNodePath}
-        findRelated={findRelated}
-        onSelectNode={setSelectedNodePath}
-        onOpenFile={(file) => handleSelectFile(file as HorizonFile)}
-      />
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Mountain className="h-5 w-5" />
+                Altitude Navigation
+              </CardTitle>
+              <CardDescription>
+                Focus a single horizon level or fan out across the full runway-to-purpose stack.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {HORIZON_LEVELS.map((level, index) => {
+                  const width = 100 - (index * 15);
+                  const LevelIcon = level.icon;
+                  const count = stats.levelCounts[level.name] || 0;
+                  const isFocused = selectedLevel === level.name;
+
+                  return (
+                    <button
+                      key={level.name}
+                      type="button"
+                      aria-label={`Focus ${level.name}`}
+                      aria-pressed={isFocused}
+                      className={cn(
+                        'relative mx-auto block rounded-xl text-left transition-all',
+                        isFocused ? 'scale-[1.01]' : 'hover:scale-[1.01]'
+                      )}
+                      style={{ width: `${width}%` }}
+                      onClick={() => focusLevel(level.name)}
+                    >
+                      <div className={cn(
+                        'rounded-xl border px-4 py-3 shadow-sm transition-colors',
+                        'bg-gradient-to-r',
+                        level.color === 'text-purple-600' && 'from-purple-100 to-purple-50 dark:from-purple-950/50 dark:to-purple-950/20',
+                        level.color === 'text-blue-600' && 'from-blue-100 to-blue-50 dark:from-blue-950/50 dark:to-blue-950/20',
+                        level.color === 'text-green-600' && 'from-green-100 to-green-50 dark:from-green-950/50 dark:to-green-950/20',
+                        level.color === 'text-orange-600' && 'from-orange-100 to-orange-50 dark:from-orange-950/50 dark:to-orange-950/20',
+                        level.color === 'text-red-600' && 'from-red-100 to-red-50 dark:from-red-950/50 dark:to-red-950/20',
+                        isFocused ? 'border-primary shadow-md' : 'border-border/60'
+                      )}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="rounded-lg border border-white/40 bg-white/50 p-2 dark:border-white/10 dark:bg-background/20">
+                              <LevelIcon className={cn('h-4 w-4', level.color)} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold">{level.name}</p>
+                              <p className="text-xs text-muted-foreground">{level.description}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Badge variant="secondary" className="text-[11px]">
+                              {level.altitude}
+                            </Badge>
+                            <Badge variant={isFocused ? 'default' : 'outline'} className="text-[11px]">
+                              {count}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Layers className="h-5 w-5" />
+                    Horizon Browser
+                  </CardTitle>
+                  <CardDescription>
+                    Explore the documents supporting each GTD altitude level.
+                  </CardDescription>
+                </div>
+                {selectedLevel !== 'All' && (
+                  <Button variant="outline" size="sm" onClick={() => focusLevel('All')}>
+                    Show all levels
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <Card key={i}>
+                        <CardHeader>
+                          <div className="h-6 w-48 rounded bg-muted animate-pulse" />
+                          <div className="mt-2 h-4 w-32 rounded bg-muted animate-pulse" />
+                        </CardHeader>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  HORIZON_LEVELS
+                    .filter((level) => selectedLevel === 'All' || level.name === selectedLevel)
+                    .map((level) => renderHorizonLevel(level))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="xl:sticky xl:top-6">
+          <HorizonRelationshipMap
+            allFilesByLevel={filesByLevel}
+            visibleFilesByLevel={filteredHorizonFiles}
+            graph={graph}
+            selectedLevel={selectedLevel}
+            selectedNodePath={selectedNodePath}
+            findRelated={findRelated}
+            onSelectNode={setSelectedNodePath}
+            onOpenFile={(file) => handleSelectFile(file as HorizonFile)}
+          />
+        </div>
+      </div>
     </div>
   );
 };

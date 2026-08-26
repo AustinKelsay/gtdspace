@@ -5,7 +5,7 @@ use rmcp::{
     model::AnnotateAble,
     model::{
         ListResourcesResult, PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResult,
-        Resource, ResourceContents, ServerInfo,
+        Resource, ResourceContents, ServerCapabilities, ServerInfo,
     },
     service::RequestContext,
     tool, tool_handler, tool_router, Json, ServerHandler, ServiceExt,
@@ -371,7 +371,12 @@ impl GtdMcpServer {
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for GtdMcpServer {
     fn get_info(&self) -> ServerInfo {
-        let mut info = ServerInfo::default();
+        let mut info = ServerInfo::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_resources()
+                .build(),
+        );
         info.instructions = Some(
             "Use GTD semantic tools by default. If a project path is ambiguous, call workspace_list_items with itemType=project first. All mutations require a dry-run tool call followed by change_apply."
                 .to_string(),

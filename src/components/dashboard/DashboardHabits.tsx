@@ -33,9 +33,12 @@ import { cn } from '@/lib/utils';
 import { formatCompactDate } from '@/utils/date-formatting';
 import { localISODate } from '@/utils/time';
 import {
-  countHabitsCompletedOnDate,
+  isHabitEligibleOnDate,
   isHabitCompletedOnDate,
+  summarizeHabitProgressOnDate,
 } from '@/utils/habit-progress';
+
+type HabitStatusFilter = 'all' | 'completed' | 'pending';
 
 interface DashboardHabitsProps {
   habits: HabitWithHistory[];
@@ -43,6 +46,7 @@ interface DashboardHabitsProps {
   onToggleHabit?: (habit: HabitWithHistory) => void;
   onEditHabit?: (habit: HabitWithHistory) => void;
   onCreateHabit?: () => void;
+  initialStatusFilter?: HabitStatusFilter;
   className?: string;
 }
 
@@ -64,11 +68,12 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
   onToggleHabit,
   onEditHabit,
   onCreateHabit,
+  initialStatusFilter = 'all',
   className = ''
 }) => {
   const [activeView, setActiveView] = useState<'current' | 'history' | 'analytics'>('current');
   const [frequencyFilter, setFrequencyFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<HabitStatusFilter>(initialStatusFilter);
   const [sortBy, setSortBy] = useState<'name' | 'frequency' | 'streak' | 'success'>('name');
   const [selectedHabit, setSelectedHabit] = useState<HabitWithHistory | null>(null);
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('month');
@@ -93,9 +98,15 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
     // Status filter (history-based, for today's completion)
     if (statusFilter !== 'all') {
       if (statusFilter === 'completed') {
-        filtered = filtered.filter((habit) => isHabitCompletedOnDate(habit, todayStr, todayStr));
+        filtered = filtered.filter((habit) =>
+          isHabitEligibleOnDate(habit, todayStr) &&
+          isHabitCompletedOnDate(habit, todayStr, todayStr)
+        );
       } else if (statusFilter === 'pending') {
-        filtered = filtered.filter((habit) => !isHabitCompletedOnDate(habit, todayStr, todayStr));
+        filtered = filtered.filter((habit) =>
+          isHabitEligibleOnDate(habit, todayStr) &&
+          !isHabitCompletedOnDate(habit, todayStr, todayStr)
+        );
       }
     }
 
@@ -122,9 +133,8 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
 
   // Calculate overall statistics
   const stats = useMemo(() => {
+    const todayProgress = summarizeHabitProgressOnDate(habits, todayStr, todayStr);
     const total = habits.length;
-    const completedToday = countHabitsCompletedOnDate(habits, todayStr, todayStr);
-    const completionRate = total > 0 ? Math.round((completedToday / total) * 100) : 0;
 
     const avgStreak = habits.reduce((acc, h) => acc + (h.currentStreak || 0), 0) / (total || 1);
     const avgSuccessRate = habits.reduce((acc, h) => acc + (h.successRate || 0), 0) / (total || 1);
@@ -136,8 +146,9 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
 
     return {
       total,
-      completedToday,
-      completionRate,
+      eligibleToday: todayProgress.eligibleCount,
+      completedToday: todayProgress.completedCount,
+      completionRate: todayProgress.completionRate,
       avgStreak: Math.round(avgStreak),
       avgSuccessRate: Math.round(avgSuccessRate),
       bestPerformer,
@@ -446,10 +457,16 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-2">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
-              <span className="text-2xl font-bold">{stats.completedToday}/{stats.total}</span>
+              <span className="text-2xl font-bold">
+                {stats.eligibleToday > 0 ? `${stats.completedToday}/${stats.eligibleToday}` : '—'}
+              </span>
             </div>
             <p className="text-sm font-medium">Completed Today</p>
-            <Progress value={stats.completionRate} className="mt-2 h-2" />
+            {stats.completionRate === null ? (
+              <p className="text-xs text-muted-foreground mt-2">No habits due today</p>
+            ) : (
+              <Progress value={stats.completionRate} className="mt-2 h-2" />
+            )}
           </CardContent>
         </Card>
 
@@ -508,7 +525,7 @@ export const DashboardHabits: React.FC<DashboardHabitsProps> = ({
           </SelectContent>
         </Select>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as HabitStatusFilter)}>
           <SelectTrigger className="w-[150px]">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>

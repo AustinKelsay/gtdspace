@@ -155,6 +155,38 @@ describe('DashboardHorizons', () => {
     expect(screen.getByText('No relationships match the current filters')).toBeInTheDocument();
   });
 
+  it('focuses a level from altitude navigation and resets back to all levels', () => {
+    render(
+      <DashboardHorizons
+        horizonFiles={{
+          'Purpose & Principles': [purpose],
+          'Vision': [],
+          'Goals': [goal],
+          'Areas of Focus': [],
+          'Projects': [project],
+        }}
+        projects={[]}
+        relationships={relationships}
+        graph={graph}
+        findRelated={vi.fn(() => ({ parents: [], children: [], siblings: [] }))}
+      />
+    );
+
+    const focusGoals = screen.getByRole('button', { name: 'Focus Goals' });
+    expect(focusGoals).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(focusGoals);
+
+    expect(screen.getAllByText('Focused on Goals').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByRole('button', { name: 'Show all levels' }).length).toBeGreaterThan(0);
+    expect(focusGoals).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Show all levels' })[0]);
+
+    expect(screen.queryAllByText('Focused on Goals')).toHaveLength(0);
+    expect(focusGoals).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('shows a workspace empty state when no horizon relationships exist', () => {
     render(
       <DashboardHorizons
